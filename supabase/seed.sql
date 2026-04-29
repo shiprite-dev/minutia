@@ -44,8 +44,21 @@ VALUES (
 )
 ON CONFLICT (id) DO NOTHING;
 
--- Profile is auto-created by the on_auth_user_created trigger.
--- Ensure it exists in case the trigger didn't fire (idempotent):
+INSERT INTO auth.identities (
+  id, user_id, provider_id, identity_data, provider, last_sign_in_at, created_at, updated_at
+)
+VALUES (
+  '00000000-0000-0000-0000-000000000001',
+  '00000000-0000-0000-0000-000000000001',
+  'test@example.com',
+  '{"sub": "00000000-0000-0000-0000-000000000001", "email": "test@example.com"}'::jsonb,
+  'email',
+  now(),
+  now(),
+  now()
+)
+ON CONFLICT (provider, provider_id) DO NOTHING;
+
 INSERT INTO public.profiles (id, email, name)
 VALUES ('00000000-0000-0000-0000-000000000001', 'test@example.com', 'Test User')
 ON CONFLICT (id) DO NOTHING;

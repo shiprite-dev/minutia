@@ -1,0 +1,6 @@
+Title,Status,Priority,Owner,Due Date,Category
+Refactor authentication module,In Progress,High,Alice,2026-06-15,Action
+Add dark mode toggle,Open,Medium,Bob,,Info
+Fix memory leak in worker pool,Todo,Critical,Carol,2026-05-20,Blocker
+Review Q3 budget proposal,Pending,Low,Dana,2026-07-01,Decision
+Update onboarding docs,Done,Medium,Eve,,Action

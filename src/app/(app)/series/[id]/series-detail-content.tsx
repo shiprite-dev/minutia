@@ -30,7 +30,8 @@ import {
 import { CADENCES } from "@/lib/constants";
 import { createSeriesSchema, type CreateSeriesInput } from "@/lib/schemas";
 import { ShareButton } from "@/components/minutia/share-button";
-import { ArrowLeft, Play, Settings, Loader2 } from "lucide-react";
+import { CsvImportDialog } from "@/components/minutia/csv-import-dialog";
+import { ArrowLeft, Play, Settings, Loader2, Upload } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Cadence, Issue } from "@/lib/types";
 import Link from "next/link";
@@ -56,6 +57,7 @@ export function SeriesDetailContent({ seriesId }: SeriesDetailContentProps) {
   const startMeeting = useStartMeeting();
 
   const [settingsOpen, setSettingsOpen] = React.useState(false);
+  const [importOpen, setImportOpen] = React.useState(false);
   const [startingMeeting, setStartingMeeting] = React.useState(false);
 
   // Filter open issues (not resolved/dropped)
@@ -145,6 +147,14 @@ export function SeriesDetailContent({ seriesId }: SeriesDetailContentProps) {
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <ShareButton resource_type="series" resource_id={seriesId} />
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setImportOpen(true)}
+              aria-label="Import CSV"
+            >
+              <Upload className="size-4" />
+            </Button>
             <Button
               variant="ghost"
               size="icon"
@@ -256,6 +266,16 @@ export function SeriesDetailContent({ seriesId }: SeriesDetailContentProps) {
         onOpenChange={setSettingsOpen}
         series={series}
       />
+
+      {/* CSV import dialog */}
+      {sortedMeetings[0] && (
+        <CsvImportDialog
+          open={importOpen}
+          onOpenChange={setImportOpen}
+          seriesId={seriesId}
+          meetingId={sortedMeetings[0].id}
+        />
+      )}
     </div>
   );
 }
