@@ -366,51 +366,62 @@ function OutstandingItems({
       </div>
       <p className="text-xs text-ink-4 mb-5">Grouped by series</p>
 
-      <div className="space-y-6">
-        {seriesList.map((series) => {
-          const seriesIssues = (grouped.get(series.id) ?? []).sort(sortedPriority);
-          if (seriesIssues.length === 0 && filter !== "all") return null;
+      {openIssues.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-12 text-center">
+          <p className="text-[13px] text-ink-2">Nothing outstanding. Enjoy the quiet.</p>
+          <div className="mt-3 flex gap-1 text-ink-4" aria-hidden="true">
+            {"— · — · — · — · —".split("").map((c, i) => (
+              <span key={i} className="font-display text-xs">{c}</span>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-6">
+          {seriesList.map((series) => {
+            const seriesIssues = (grouped.get(series.id) ?? []).sort(sortedPriority);
+            if (seriesIssues.length === 0 && filter !== "all") return null;
 
-          return (
-            <div key={series.id}>
-              <div className="flex items-center gap-3 mb-3">
-                <span className="size-2 rounded-full bg-accent" />
-                <Link
-                  href={`/series/${series.id}`}
-                  className="text-sm font-semibold text-ink hover:text-accent transition-colors"
-                >
-                  {series.name}
-                </Link>
-                <span className="text-xs text-ink-4 capitalize">
-                  {series.cadence === "adhoc" ? "Ad hoc" : series.cadence}
-                </span>
-                <span className="ml-auto text-xs text-ink-4 tabular-nums">
-                  {seriesIssues.length} item{seriesIssues.length !== 1 ? "s" : ""}
-                </span>
-              </div>
-
-              {seriesIssues.length === 0 ? (
-                <p className="text-xs text-ink-4 pl-5 mb-2">No matching items</p>
-              ) : (
-                <div className="space-y-1">
-                  {seriesIssues.map((issue, idx) => {
-                    const globalIdx = flatIssues.indexOf(issue);
-                    return (
-                      <IssueRow
-                        key={issue.id}
-                        issue={issue}
-                        index={idx}
-                        focused={globalIdx === focusedIdx}
-                        onStatusChange={onStatusChange}
-                      />
-                    );
-                  })}
+            return (
+              <div key={series.id}>
+                <div className="flex items-center gap-3 mb-3">
+                  <span className="size-2 rounded-full bg-accent" />
+                  <Link
+                    href={`/series/${series.id}`}
+                    className="text-sm font-semibold text-ink hover:text-accent transition-colors"
+                  >
+                    {series.name}
+                  </Link>
+                  <span className="text-xs text-ink-4 capitalize">
+                    {series.cadence === "adhoc" ? "Ad hoc" : series.cadence}
+                  </span>
+                  <span className="ml-auto text-xs text-ink-4 tabular-nums">
+                    {seriesIssues.length} item{seriesIssues.length !== 1 ? "s" : ""}
+                  </span>
                 </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
+
+                {seriesIssues.length === 0 ? (
+                  <p className="text-xs text-ink-4 pl-5 mb-2">No matching items</p>
+                ) : (
+                  <div className="space-y-1">
+                    {seriesIssues.map((issue, idx) => {
+                      const globalIdx = flatIssues.indexOf(issue);
+                      return (
+                        <IssueRow
+                          key={issue.id}
+                          issue={issue}
+                          index={idx}
+                          focused={globalIdx === focusedIdx}
+                          onStatusChange={onStatusChange}
+                        />
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
     </DashCard>
   );
 }
