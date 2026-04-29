@@ -3,7 +3,7 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "motion/react";
-import { useMeeting, useEndMeeting, useStartMeeting } from "@/lib/hooks/use-meetings";
+import { useMeeting, useEndMeeting, useStartMeeting, useUpdateMeetingNotes } from "@/lib/hooks/use-meetings";
 import { useSeriesDetail } from "@/lib/hooks/use-series";
 import { useIssues, useCreateIssue, useUpdateIssueStatus } from "@/lib/hooks/use-issues";
 import { useDecisions } from "@/lib/hooks/use-decisions";
@@ -379,11 +379,31 @@ export function MeetingDetailContent({
   const updateIssueStatus = useUpdateIssueStatus();
 
   const [notes, setNotes] = React.useState(meeting?.notes_markdown ?? "");
+  const updateNotes = useUpdateMeetingNotes();
   const timer = useLiveTimer(meeting?.status === "live" ? meeting.created_at : null);
 
   React.useEffect(() => {
     if (meeting?.notes_markdown) setNotes(meeting.notes_markdown);
   }, [meeting?.notes_markdown]);
+
+  // Auto-save notes with debounce
+  const saveTimerRef = React.useRef<ReturnType<typeof setTimeout>>(null);
+  const handleNotesChange = React.useCallback(
+    (value: string) => {
+      setNotes(value);
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = setTimeout(() => {
+        updateNotes.mutate({ meetingId, notes: value });
+      }, 1000);
+    },
+    [meetingId, updateNotes]
+  );
+
+  React.useEffect(() => {
+    return () => {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    };
+  }, []);
 
   if (meetingLoading) {
     return (
@@ -627,7 +647,7 @@ export function MeetingDetailContent({
               </div>
               <Textarea
                 value={notes}
-                onChange={(e) => setNotes(e.target.value)}
+                onChange={(e) => handleNotesChange(e.target.value)}
                 placeholder="Type meeting notes here..."
                 className="min-h-[300px] bg-card border-rule text-sm font-sans leading-relaxed resize-y"
               />
@@ -824,7 +844,7 @@ export function MeetingDetailContent({
           </h2>
           <Textarea
             value={notes}
-            onChange={(e) => setNotes(e.target.value)}
+            onChange={(e) => handleNotesChange(e.target.value)}
             placeholder="Meeting notes..."
             className="min-h-[120px] font-sans text-sm"
           />

@@ -171,6 +171,30 @@ export function useAllMeetings() {
 }
 
 // ---------------------------------------------------------------------------
+// useUpdateMeetingNotes - persist notes_markdown
+// ---------------------------------------------------------------------------
+export function useUpdateMeetingNotes() {
+  const supabase = createClient();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ meetingId, notes }: { meetingId: string; notes: string }) => {
+      const { error } = await supabase
+        .from("meetings")
+        .update({ notes_markdown: notes })
+        .eq("id", meetingId);
+
+      if (error) throw error;
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: meetingKeys.detail(variables.meetingId),
+      });
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
 export function useEndMeeting() {
   const supabase = createClient();
   const queryClient = useQueryClient();
