@@ -5,13 +5,13 @@ import { motion } from "motion/react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import type { Issue } from "@/lib/types";
-import { Send } from "lucide-react";
+import { Send, Copy, Check } from "lucide-react";
 
 interface BriefCardProps {
   seriesName: string;
   nextMeetingDate?: Date;
   pendingIssues: Issue[];
-  onSendBrief?: () => void;
+  attendees?: string[];
 }
 
 function formatTimeUntil(date: Date): string {
@@ -42,12 +42,72 @@ function isOverdue(date: Date | null): boolean {
   return new Date(date) < new Date();
 }
 
+function generateBriefText(
+  seriesName: string,
+  pendingIssues: Issue[],
+  nextMeetingDate?: Date
+): string {
+  const lines: string[] = [];
+  lines.push(`Pre-Meeting Brief: ${seriesName}`);
+  lines.push("");
+
+  if (nextMeetingDate) {
+    const dateStr = new Date(nextMeetingDate).toLocaleDateString("en-US", {
+      weekday: "long",
+      month: "long",
+      day: "numeric",
+    });
+    lines.push(`Next meeting: ${dateStr}`);
+    lines.push("");
+  }
+
+  if (pendingIssues.length === 0) {
+    lines.push("No pending items. All clear!");
+  } else {
+    lines.push(`${pendingIssues.length} item${pendingIssues.length === 1 ? "" : "s"} pending:`);
+    lines.push("");
+    for (const issue of pendingIssues) {
+      const parts: string[] = [`- ${issue.title}`];
+      if (issue.owner_name) parts.push(`(${issue.owner_name})`);
+      if (issue.due_date) {
+        const dueStr = formatDate(issue.due_date);
+        parts.push(isOverdue(issue.due_date) ? `OVERDUE ${dueStr}` : `due ${dueStr}`);
+      }
+      lines.push(parts.join("  "));
+    }
+  }
+
+  lines.push("");
+  lines.push("Sent via Minutia");
+  return lines.join("\n");
+}
+
 export function BriefCard({
   seriesName,
   nextMeetingDate,
   pendingIssues,
-  onSendBrief,
+  attendees = [],
 }: BriefCardProps) {
+  const [copied, setCopied] = React.useState(false);
+
+  const briefText = React.useMemo(
+    () => generateBriefText(seriesName, pendingIssues, nextMeetingDate),
+    [seriesName, pendingIssues, nextMeetingDate]
+  );
+
+  const subject = `Pre-Meeting Brief: ${seriesName}`;
+
+  function handleSendBrief() {
+    const mailto = `mailto:${attendees.join(",")}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(briefText)}`;
+    window.open(mailto, "_blank");
+  }
+
+  async function handleCopyBrief() {
+    await navigator.clipboard.writeText(briefText);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
   return (
     <motion.div
       initial={{ y: -30, opacity: 0 }}
@@ -115,20 +175,32 @@ export function BriefCard({
           <p className="text-sm text-ink-3">No pending issues.</p>
         )}
 
-        {/* Send button */}
-        {onSendBrief && (
-          <div className="mt-5 pt-4 border-t border-rule">
-            <Button
-              variant="default"
-              size="sm"
-              onClick={onSendBrief}
-              className="bg-accent text-white hover:bg-accent-hover"
-            >
-              <Send className="size-3.5" data-icon="inline-start" />
-              Send brief to attendees
-            </Button>
-          </div>
-        )}
+        {/* Send / Copy buttons */}
+        <div className="mt-5 pt-4 border-t border-rule flex items-center gap-2">
+          <Button
+            variant="default"
+            size="sm"
+            onClick={handleSendBrief}
+            className="bg-accent text-white hover:bg-accent-hover"
+            data-testid="send-brief-btn"
+          >
+            <Send className="size-3.5" data-icon="inline-start" />
+            Send brief to attendees
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleCopyBrief}
+            data-testid="copy-brief-btn"
+          >
+            {copied ? (
+              <Check className="size-3.5 text-green-500" />
+            ) : (
+              <Copy className="size-3.5" />
+            )}
+            {copied ? "Copied" : "Copy"}
+          </Button>
+        </div>
       </div>
     </motion.div>
   );
