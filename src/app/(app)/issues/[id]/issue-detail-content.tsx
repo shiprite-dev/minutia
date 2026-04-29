@@ -192,25 +192,48 @@ export function IssueDetailContent({ issueId }: IssueDetailContentProps) {
   const [updateNote, setUpdateNote] = React.useState("");
   const updateInputRef = React.useRef<HTMLTextAreaElement>(null);
 
-  // C shortcut to open the update form
+  const statusCycle: IssueStatus[] = ["open", "pending", "in_progress", "resolved"];
+
   React.useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
-      if (
-        e.key === "c" &&
-        !e.metaKey &&
-        !e.ctrlKey &&
-        !e.altKey &&
-        !(e.target instanceof HTMLInputElement) &&
-        !(e.target instanceof HTMLTextAreaElement) &&
-        !(e.target instanceof HTMLSelectElement)
-      ) {
-        e.preventDefault();
-        setShowUpdateForm(true);
+      const tag = (e.target as HTMLElement).tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+
+      switch (e.key) {
+        case "c":
+          e.preventDefault();
+          setShowUpdateForm(true);
+          break;
+        case "Escape":
+          e.preventDefault();
+          router.push("/");
+          break;
+        case "r":
+          if (issue) {
+            e.preventDefault();
+            handleStatusChange("resolved");
+          }
+          break;
+        case "d":
+          if (issue) {
+            e.preventDefault();
+            handleStatusChange("dropped");
+          }
+          break;
+        case "s":
+          if (issue) {
+            e.preventDefault();
+            const currentIdx = statusCycle.indexOf(issue.status);
+            const nextStatus = statusCycle[(currentIdx + 1) % statusCycle.length];
+            handleStatusChange(nextStatus);
+          }
+          break;
       }
     }
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, []);
+  }, [issue]);
 
   React.useEffect(() => {
     if (showUpdateForm) updateInputRef.current?.focus();
