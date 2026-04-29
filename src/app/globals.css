@@ -1,26 +1,170 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
 
+@custom-variant dark (&:is(.dark *));
+
+/* ─── Layer 1: Base Primitives (raw OKLCH values) ─── */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --paper:        oklch(0.975 0.005 75);
+  --paper-2:      oklch(0.945 0.008 75);
+  --paper-3:      oklch(0.915 0.010 75);
+  --ink:          oklch(0.150 0.010 75);
+  --ink-2:        oklch(0.350 0.012 70);
+  --ink-3:        oklch(0.530 0.010 70);
+  --ink-4:        oklch(0.720 0.008 70);
+  --rule:         oklch(0.900 0.008 75);
+  --rule-strong:  oklch(0.850 0.010 75);
+  --accent:       oklch(0.620 0.220 35);
+  --accent-hover: oklch(0.560 0.220 35);
+  --accent-soft:  oklch(0.920 0.050 50);
+  --success:      oklch(0.450 0.120 155);
+  --success-soft: oklch(0.920 0.040 155);
+  --warn:         oklch(0.550 0.140 85);
+  --warn-soft:    oklch(0.930 0.050 85);
+  --danger:       oklch(0.420 0.160 25);
+  --danger-soft:  oklch(0.930 0.040 25);
 }
 
+.dark {
+  --paper:        oklch(0.130 0.008 75);
+  --paper-2:      oklch(0.170 0.008 75);
+  --paper-3:      oklch(0.210 0.008 75);
+  --ink:          oklch(0.930 0.008 75);
+  --ink-2:        oklch(0.750 0.008 70);
+  --ink-3:        oklch(0.580 0.008 70);
+  --ink-4:        oklch(0.380 0.008 70);
+  --rule:         oklch(0.240 0.008 75);
+  --rule-strong:  oklch(0.300 0.008 75);
+  --accent:       oklch(0.660 0.200 35);
+  --accent-hover: oklch(0.720 0.200 35);
+  --accent-soft:  oklch(0.200 0.040 35);
+  --success:      oklch(0.550 0.120 155);
+  --success-soft: oklch(0.200 0.030 155);
+  --warn:         oklch(0.600 0.140 85);
+  --warn-soft:    oklch(0.200 0.030 85);
+  --danger:       oklch(0.520 0.160 25);
+  --danger-soft:  oklch(0.200 0.030 25);
+}
+
+/* ─── Layer 2: Semantic Tokens (map to shadcn slots) ─── */
+:root {
+  --background:           var(--paper);
+  --foreground:           var(--ink);
+  --card:                 var(--paper-2);
+  --card-foreground:      var(--ink);
+  --popover:              var(--paper);
+  --popover-foreground:   var(--ink);
+  --primary:              var(--ink);
+  --primary-foreground:   var(--paper);
+  --secondary:            var(--paper-2);
+  --secondary-foreground: var(--ink);
+  --muted:                var(--paper-2);
+  --muted-foreground:     var(--ink-3);
+  --accent:               var(--accent);
+  --accent-foreground:    oklch(1.000 0 0);
+  --destructive:          var(--danger);
+  --destructive-foreground: oklch(1.000 0 0);
+  --border:               var(--rule);
+  --input:                var(--rule);
+  --ring:                 var(--accent);
+
+  --sidebar:                    var(--paper);
+  --sidebar-foreground:         var(--ink-2);
+  --sidebar-primary:            var(--ink);
+  --sidebar-primary-foreground: var(--paper);
+  --sidebar-accent:             var(--accent);
+  --sidebar-accent-foreground:  oklch(1.000 0 0);
+  --sidebar-border:             var(--rule);
+  --sidebar-ring:               var(--accent);
+}
+
+/* ─── Layer 3: Component Tokens ─── */
+:root {
+  --radius-sharp:  2px;
+  --radius-soft:   6px;
+  --radius-md:     12px;
+  --radius-lg:     20px;
+  --radius-pill:   9999px;
+  --radius:        0.75rem;
+
+  --ease:          cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-in-out:   cubic-bezier(0.4, 0, 0.2, 1);
+  --duration-fast:  120ms;
+  --duration-base:  180ms;
+  --duration-slow:  320ms;
+}
+
+/* ─── Expose to Tailwind v4 ─── */
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-paper:        var(--paper);
+  --color-paper-2:      var(--paper-2);
+  --color-paper-3:      var(--paper-3);
+  --color-ink:          var(--ink);
+  --color-ink-2:        var(--ink-2);
+  --color-ink-3:        var(--ink-3);
+  --color-ink-4:        var(--ink-4);
+  --color-rule:         var(--rule);
+  --color-rule-strong:  var(--rule-strong);
+  --color-accent:       var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-soft:  var(--accent-soft);
+  --color-success:      var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-warn:         var(--warn);
+  --color-warn-soft:    var(--warn-soft);
+  --color-danger:       var(--danger);
+  --color-danger-soft:  var(--danger-soft);
+
+  --color-background:           var(--background);
+  --color-foreground:           var(--foreground);
+  --color-card:                 var(--card);
+  --color-card-foreground:      var(--card-foreground);
+  --color-popover:              var(--popover);
+  --color-popover-foreground:   var(--popover-foreground);
+  --color-primary:              var(--primary);
+  --color-primary-foreground:   var(--primary-foreground);
+  --color-secondary:            var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted:                var(--muted);
+  --color-muted-foreground:     var(--muted-foreground);
+  --color-destructive:          var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border:               var(--border);
+  --color-input:                var(--input);
+  --color-ring:                 var(--ring);
+
+  --color-sidebar:                    var(--sidebar);
+  --color-sidebar-foreground:         var(--sidebar-foreground);
+  --color-sidebar-primary:            var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent:             var(--sidebar-accent);
+  --color-sidebar-accent-foreground:  var(--sidebar-accent-foreground);
+  --color-sidebar-border:             var(--sidebar-border);
+  --color-sidebar-ring:               var(--sidebar-ring);
+
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+
+  --font-sans:    var(--font-satoshi, system-ui, sans-serif);
+  --font-display: var(--font-fraunces, Georgia, serif);
+  --font-mono:    var(--font-jetbrains, ui-monospace, monospace);
+  --font-heading: var(--font-fraunces, Georgia, serif);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
   }
-}
-
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+  }
 }
