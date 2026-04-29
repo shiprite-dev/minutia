@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import { motion } from "motion/react";
 import Link from "next/link";
 import {
@@ -275,7 +276,9 @@ function OutstandingItems({
   seriesList: (MeetingSeries & { open_issues_count: number })[];
   onStatusChange: (issueId: string, oldStatus: IssueStatus, newStatus: IssueStatus, seriesId: string) => void;
 }) {
+  const router = useRouter();
   const [filter, setFilter] = React.useState<"all" | "open" | "pending" | "overdue">("all");
+  const [focusedIdx, setFocusedIdx] = React.useState(-1);
 
   const openIssues = issues.filter(isOpen);
 
@@ -295,6 +298,39 @@ function OutstandingItems({
 
   const sortedPriority = (a: Issue, b: Issue) =>
     PRIORITY_CONFIG[a.priority].order - PRIORITY_CONFIG[b.priority].order;
+
+  // Flat list of visible issues for keyboard nav
+  const flatIssues = React.useMemo(() => {
+    const result: Issue[] = [];
+    for (const series of seriesList) {
+      const seriesIssues = (grouped.get(series.id) ?? []).sort(sortedPriority);
+      result.push(...seriesIssues);
+    }
+    return result;
+  }, [filtered, seriesList]);
+
+  React.useEffect(() => {
+    function handleKey(e: KeyboardEvent) {
+      const tag = (e.target as HTMLElement).tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+
+      if (e.key === "j" || e.key === "ArrowDown") {
+        e.preventDefault();
+        setFocusedIdx((prev) => Math.min(prev + 1, flatIssues.length - 1));
+      } else if (e.key === "k" || e.key === "ArrowUp") {
+        e.preventDefault();
+        setFocusedIdx((prev) => Math.max(prev - 1, 0));
+      } else if (e.key === "Enter" && focusedIdx >= 0 && focusedIdx < flatIssues.length) {
+        e.preventDefault();
+        router.push(`/issues/${flatIssues[focusedIdx].id}`);
+      }
+    }
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [flatIssues, focusedIdx, router]);
+
+  // Reset focus when filter changes
+  React.useEffect(() => { setFocusedIdx(-1); }, [filter]);
 
   const filters = [
     { key: "all" as const, label: "All" },
@@ -354,14 +390,18 @@ function OutstandingItems({
                 <p className="text-xs text-ink-4 pl-5 mb-2">No matching items</p>
               ) : (
                 <div className="space-y-1">
-                  {seriesIssues.map((issue, idx) => (
-                    <IssueRow
-                      key={issue.id}
-                      issue={issue}
-                      index={idx}
-                      onStatusChange={onStatusChange}
-                    />
-                  ))}
+                  {seriesIssues.map((issue, idx) => {
+                    const globalIdx = flatIssues.indexOf(issue);
+                    return (
+                      <IssueRow
+                        key={issue.id}
+                        issue={issue}
+                        index={idx}
+                        focused={globalIdx === focusedIdx}
+                        onStatusChange={onStatusChange}
+                      />
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -375,21 +415,34 @@ function OutstandingItems({
 function IssueRow({
   issue,
   index,
+  focused,
   onStatusChange,
 }: {
   issue: Issue;
   index: number;
+  focused?: boolean;
   onStatusChange: (issueId: string, oldStatus: IssueStatus, newStatus: IssueStatus, seriesId: string) => void;
 }) {
   const overdue = isOverdue(issue);
-  const age = daysBetween(issue.created_at, new Date());
+  const ref = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    if (focused && ref.current) {
+      ref.current.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }
+  }, [focused]);
 
   return (
     <motion.div
+      ref={ref}
       initial={{ opacity: 0, x: -8 }}
       animate={{ opacity: 1, x: 0 }}
       transition={{ delay: index * 0.04, duration: 0.3 }}
-      className="group flex items-center gap-3 rounded-lg px-3 py-2.5 hover:bg-paper-2 transition-colors"
+      data-focused={focused || undefined}
+      className={cn(
+        "group flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors",
+        focused ? "bg-paper-2 ring-1 ring-accent/30" : "hover:bg-paper-2"
+      )}
     >
       <CategoryBadge category={issue.category} size="sm" />
       <Link
