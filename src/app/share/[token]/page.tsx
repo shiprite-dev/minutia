@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { CATEGORY_CONFIG, STATUS_CONFIG } from "@/lib/constants";
 import type {
@@ -59,13 +60,44 @@ const priorityDotColor: Record<Priority, string> = {
 // Shared UI primitives (server-side, no "use client")
 // ---------------------------------------------------------------------------
 
-function ShareLayout({ children }: { children: React.ReactNode }) {
+function expiryLabel(expiresAt: Date | string | null): string | null {
+  if (!expiresAt) return null;
+  const diff = new Date(expiresAt).getTime() - Date.now();
+  if (diff <= 0) return "Expired";
+  const days = Math.ceil(diff / (1000 * 60 * 60 * 24));
+  return `Expires in ${days} day${days !== 1 ? "s" : ""}`;
+}
+
+function ShareLayout({
+  children,
+  sharedBy,
+  expiresAt,
+}: {
+  children: React.ReactNode;
+  sharedBy?: string;
+  expiresAt?: Date | string | null;
+}) {
+  const expiry = expiryLabel(expiresAt ?? null);
+
   return (
     <div className="min-h-screen bg-paper">
+      {/* Share banner */}
+      <div className="bg-paper-2 border-b border-rule">
+        <div className="mx-auto max-w-2xl px-4 py-2.5 sm:px-6 flex items-center justify-between text-xs text-ink-3">
+          <span>
+            {sharedBy ? `Shared by ${sharedBy}` : "Shared"} · view-only link
+          </span>
+          {expiry && (
+            <span className="font-mono text-ink-4">{expiry}</span>
+          )}
+        </div>
+      </div>
+
       {/* Header */}
       <header className="border-b border-rule">
-        <div className="mx-auto max-w-2xl px-4 py-4 sm:px-6">
-          <span className="font-display text-lg font-semibold text-ink">
+        <div className="mx-auto max-w-2xl px-4 py-4 sm:px-6 text-center">
+          <span className="font-display text-lg font-semibold text-ink inline-flex items-center gap-2">
+            <span className="size-2 rounded-full bg-accent inline-block" />
             minutia
           </span>
         </div>
@@ -177,7 +209,7 @@ function MeetingShareView({
   updatedAt: string;
 }) {
   return (
-    <ShareLayout>
+    <ShareLayout expiresAt={share.expires_at}>
       {/* Meta */}
       <div className="mb-6">
         <div className="flex items-center gap-2 text-xs text-ink-3">
@@ -295,7 +327,7 @@ function SeriesShareView({
   const recentMeetings = sortedMeetings.slice(0, 10);
 
   return (
-    <ShareLayout>
+    <ShareLayout expiresAt={share.expires_at}>
       {/* Meta */}
       <div className="mb-6">
         <div className="flex items-center gap-2 text-xs text-ink-3">
@@ -393,7 +425,7 @@ function IssueShareView({
   );
 
   return (
-    <ShareLayout>
+    <ShareLayout expiresAt={share.expires_at}>
       {/* Meta */}
       <div className="mb-6">
         <div className="flex items-center gap-2 text-xs text-ink-3">
@@ -566,6 +598,54 @@ export default async function GuestSharePage({
 }) {
   const { token } = await params;
   const supabase = await createClient();
+
+  // 0. If the visitor is a registered user, create a notification and redirect to inbox
+  const { data: { user } } = await supabase.auth.getUser();
+  if (user) {
+    const { data: existingShare } = await supabase
+      .from("guest_shares")
+      .select("id, resource_type, resource_id")
+      .eq("token", token)
+      .single();
+
+    if (existingShare) {
+      // Check if notification already exists for this share to avoid duplicates
+      const { count } = await supabase
+        .from("notifications")
+        .select("*", { count: "exact", head: true })
+        .eq("user_id", user.id)
+        .eq("type", "share_received")
+        .contains("metadata", { share_token: token });
+
+      if (!count || count === 0) {
+        await supabase.from("notifications").insert({
+          user_id: user.id,
+          type: "share_received" as const,
+          title: `Someone shared a ${existingShare.resource_type} with you`,
+          body: `View the shared ${existingShare.resource_type}`,
+          link: `/share/${token}`,
+          metadata: { share_token: token, resource_type: existingShare.resource_type, resource_id: existingShare.resource_id },
+        });
+      }
+
+      // Redirect to the actual resource in-app
+      let resourceUrl = `/issues/${existingShare.resource_id}`;
+      if (existingShare.resource_type === "series") {
+        resourceUrl = `/series/${existingShare.resource_id}`;
+      } else if (existingShare.resource_type === "meeting") {
+        const { data: mtg } = await supabase
+          .from("meetings")
+          .select("series_id")
+          .eq("id", existingShare.resource_id)
+          .single();
+        resourceUrl = mtg
+          ? `/series/${mtg.series_id}/meetings/${existingShare.resource_id}`
+          : `/`;
+      }
+
+      redirect(resourceUrl);
+    }
+  }
 
   // 1. Look up the guest share by token.
   //    NOTE: This runs as anon role. The guest_shares table needs an RLS policy
