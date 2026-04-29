@@ -23,17 +23,18 @@ interface FilterBarProps {
 }
 
 const groupByOptions = [
-  { value: "status", label: "Status" },
-  { value: "category", label: "Category" },
-  { value: "owner", label: "Owner" },
+  { value: "none", label: "None" },
   { value: "series", label: "Series" },
+  { value: "owner", label: "Owner" },
+  { value: "priority", label: "Priority" },
+  { value: "due", label: "Due Date" },
 ];
 
 const sortByOptions = [
   { value: "priority", label: "Priority" },
-  { value: "due_date", label: "Due Date" },
-  { value: "created_at", label: "Created" },
-  { value: "updated_at", label: "Updated" },
+  { value: "recency", label: "Recency" },
+  { value: "age", label: "Age" },
+  { value: "due", label: "Due Date" },
 ];
 
 export function FilterBar({

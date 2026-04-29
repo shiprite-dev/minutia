@@ -8,3 +8,7 @@ export { CaptureInput } from "./capture-input";
 export { FilterBar } from "./filter-bar";
 export { EmptyState } from "./empty-state";
 export { SyncIndicator } from "./sync-indicator";
+export { CreateSeriesDialog } from "./create-series-dialog";
+export { MeetingTimelineItem } from "./meeting-timeline-item";
+export { AppSidebar } from "./app-sidebar";
+export { AppHeader } from "./app-header";
