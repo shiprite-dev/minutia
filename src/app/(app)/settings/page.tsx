@@ -13,8 +13,10 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Sun, Moon, Monitor } from "lucide-react";
+import { Sun, Moon, Monitor, Download } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useIssues } from "@/lib/hooks/use-issues";
+import { issuesToCsv, issuesToJson, downloadFile } from "@/lib/export";
 
 const themeOptions = [
   { value: "light", label: "Light", icon: Sun },
@@ -26,6 +28,7 @@ export default function SettingsPage() {
   const { data: profile, isLoading } = useProfile();
   const updateProfile = useUpdateProfile();
   const { theme, setTheme } = useTheme();
+  const { data: allIssues } = useIssues();
 
   const [name, setName] = useState("");
   const [nameInitialized, setNameInitialized] = useState(false);
@@ -127,6 +130,57 @@ export default function SettingsPage() {
                 </Button>
               ))}
             </div>
+          </CardContent>
+        </Card>
+
+        {/* Export */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Export data</CardTitle>
+            <CardDescription>
+              Download all your issues as CSV or JSON.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={!allIssues?.length}
+                onClick={() => {
+                  if (!allIssues) return;
+                  downloadFile(
+                    issuesToCsv(allIssues),
+                    `minutia-issues-${new Date().toISOString().slice(0, 10)}.csv`,
+                    "text/csv"
+                  );
+                }}
+              >
+                <Download className="size-3.5" />
+                Export CSV
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={!allIssues?.length}
+                onClick={() => {
+                  if (!allIssues) return;
+                  downloadFile(
+                    issuesToJson(allIssues),
+                    `minutia-issues-${new Date().toISOString().slice(0, 10)}.json`,
+                    "application/json"
+                  );
+                }}
+              >
+                <Download className="size-3.5" />
+                Export JSON
+              </Button>
+            </div>
+            {allIssues && (
+              <p className="mt-2 text-xs text-ink-3">
+                {allIssues.length} issues available for export.
+              </p>
+            )}
           </CardContent>
         </Card>
       </div>
