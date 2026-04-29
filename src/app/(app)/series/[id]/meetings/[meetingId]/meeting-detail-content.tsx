@@ -16,7 +16,8 @@ import { CategoryBadge } from "@/components/minutia/category-badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
-import { ArrowLeft, Square, Play } from "lucide-react";
+import { ShareButton } from "@/components/minutia/share-button";
+import { ArrowLeft, Square, Play, Check, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { IssueCategory, IssueStatus, Issue } from "@/lib/types";
 import Link from "next/link";
@@ -42,6 +43,326 @@ function formatShortDate(date: Date | string): string {
   });
 }
 
+function formatCompactDate(date: Date | string): string {
+  return new Date(date).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Live timer hook
+// ---------------------------------------------------------------------------
+
+function useLiveTimer(startTime: Date | string | null) {
+  const [elapsed, setElapsed] = React.useState("00:00:00");
+
+  React.useEffect(() => {
+    if (!startTime) return;
+    const start = new Date(startTime).getTime();
+
+    function tick() {
+      const diff = Math.max(0, Date.now() - start);
+      const h = String(Math.floor(diff / 3600000)).padStart(2, "0");
+      const m = String(Math.floor((diff % 3600000) / 60000)).padStart(2, "0");
+      const s = String(Math.floor((diff % 60000) / 1000)).padStart(2, "0");
+      setElapsed(`${h}:${m}:${s}`);
+    }
+
+    tick();
+    const interval = setInterval(tick, 1000);
+    return () => clearInterval(interval);
+  }, [startTime]);
+
+  return elapsed;
+}
+
+// ---------------------------------------------------------------------------
+// Attendee avatar
+// ---------------------------------------------------------------------------
+
+function AttendeeAvatar({ name, className }: { name: string; className?: string }) {
+  const initial = name.charAt(0).toUpperCase();
+  const colors = [
+    "bg-accent text-white",
+    "bg-ink text-paper",
+    "bg-success text-white",
+    "bg-warn text-white",
+  ];
+  const colorIdx = name.charCodeAt(0) % colors.length;
+
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center justify-center size-7 rounded-full text-[11px] font-medium font-mono ring-2 ring-paper",
+        colors[colorIdx],
+        className
+      )}
+      title={name}
+    >
+      {initial}
+    </span>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Keyboard-hint carried issue card
+// ---------------------------------------------------------------------------
+
+function CarriedIssueCard({
+  issue,
+  onStatusChange,
+  index,
+  done,
+}: {
+  issue: Issue;
+  onStatusChange: (issueId: string, newStatus: IssueStatus) => void;
+  index: number;
+  done?: boolean;
+}) {
+  const [selected, setSelected] = React.useState(false);
+  const [hovered, setHovered] = React.useState(false);
+  const [justChanged, setJustChanged] = React.useState<string | null>(null);
+  const ref = React.useRef<HTMLDivElement>(null);
+
+  const showActions = !done && (selected || hovered);
+
+  function handleKey(e: React.KeyboardEvent) {
+    if (done) return;
+    if (e.key === "Escape") {
+      setSelected(false);
+      return;
+    }
+    const keyMap: Record<string, IssueStatus> = {
+      r: "resolved",
+      p: "in_progress",
+      x: "dropped",
+      o: "open",
+    };
+    const newStatus = keyMap[e.key.toLowerCase()];
+    if (newStatus && newStatus !== issue.status) {
+      e.preventDefault();
+      setJustChanged(newStatus);
+      onStatusChange(issue.id, newStatus);
+      setTimeout(() => setJustChanged(null), 600);
+    }
+  }
+
+  function handleActionClick(newStatus: IssueStatus) {
+    if (newStatus === issue.status) return;
+    setJustChanged(newStatus);
+    onStatusChange(issue.id, newStatus);
+    setTimeout(() => setJustChanged(null), 600);
+  }
+
+  return (
+    <motion.div
+      ref={ref}
+      layout
+      initial={{ opacity: 0, x: -8 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: 8, transition: { duration: 0.2 } }}
+      transition={{ delay: index * 0.04, duration: 0.25 }}
+      tabIndex={done ? undefined : 0}
+      onClick={done ? undefined : () => setSelected((s) => !s)}
+      onFocus={done ? undefined : () => setSelected(true)}
+      onBlur={done ? undefined : (e) => {
+        if (!ref.current?.contains(e.relatedTarget as Node)) {
+          setSelected(false);
+        }
+      }}
+      onMouseEnter={done ? undefined : () => setHovered(true)}
+      onMouseLeave={done ? undefined : () => setHovered(false)}
+      onKeyDown={handleKey}
+      className={cn(
+        "group relative flex items-center gap-3 rounded-lg py-3 transition-all outline-none",
+        done
+          ? "px-4 opacity-50"
+          : "px-4 cursor-pointer border border-transparent",
+        !done && selected && "border-accent/40 bg-card ring-1 ring-accent/20",
+        !done && !selected && hovered && "border-rule bg-card",
+      )}
+    >
+      {/* Selected accent bar */}
+      {selected && !done && (
+        <motion.div
+          layoutId="carried-select-bar"
+          className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 bg-accent rounded-sm"
+        />
+      )}
+
+      {/* Status indicator */}
+      {done ? (
+        <span className={cn(
+          "inline-flex items-center justify-center size-4 rounded-full shrink-0",
+          issue.status === "resolved" ? "bg-success/20" : "bg-ink-4/20"
+        )}>
+          {issue.status === "resolved"
+            ? <Check className="size-2.5 text-success" />
+            : <X className="size-2.5 text-ink-4" />
+          }
+        </span>
+      ) : (
+        <span
+          className={cn(
+            "size-2 rounded-full shrink-0 transition-colors",
+            issue.status === "in_progress" ? "bg-accent" :
+            issue.status === "resolved" ? "bg-success" :
+            issue.status === "dropped" ? "bg-ink-4" :
+            "bg-ink"
+          )}
+        />
+      )}
+
+      {/* Content */}
+      <div className="flex-1 min-w-0">
+        <Link
+          href={`/issues/${issue.id}`}
+          onClick={(e) => e.stopPropagation()}
+          className={cn(
+            "text-sm font-medium transition-all hover:text-accent",
+            done ? "line-through text-ink-3 hover:text-ink-3" : "text-ink"
+          )}
+        >
+          {issue.title}
+        </Link>
+        <div className="flex items-center gap-2 mt-0.5">
+          <CategoryBadge category={issue.category} size="sm" />
+          {issue.owner_name && (
+            <span className="text-xs text-ink-4">{issue.owner_name}</span>
+          )}
+          {issue.due_date && (
+            <span className={cn(
+              "text-xs font-mono tabular-nums",
+              !done && new Date(issue.due_date) < new Date() ? "text-accent" : "text-ink-4"
+            )}>
+              {formatCompactDate(issue.due_date)}
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Done badge */}
+      {done && (
+        <span className={cn(
+          "text-[10px] font-medium px-2 py-0.5 rounded-full shrink-0",
+          issue.status === "resolved" ? "bg-success/10 text-success" : "bg-paper-2 text-ink-4"
+        )}>
+          {issue.status === "resolved" ? "Resolved" : "Dropped"}
+        </span>
+      )}
+
+      {/* Action buttons (visible on hover/focus/select) */}
+      <AnimatePresence>
+        {showActions && !justChanged && (
+          <motion.div
+            initial={{ opacity: 0, x: 4 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 4 }}
+            transition={{ duration: 0.12 }}
+            className="flex items-center gap-1 shrink-0"
+          >
+            <ActionButton letter="R" label="Resolve" onClick={() => handleActionClick("resolved")} />
+            <ActionButton letter="P" label="Progress" onClick={() => handleActionClick("in_progress")} />
+            <ActionButton letter="X" label="Drop" onClick={() => handleActionClick("dropped")} />
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Flash confirmation */}
+      <AnimatePresence>
+        {justChanged && (
+          <motion.span
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0 }}
+            className={cn(
+              "text-xs font-medium px-2 py-0.5 rounded-full",
+              justChanged === "resolved" && "bg-success-soft text-success",
+              justChanged === "in_progress" && "bg-accent-soft text-accent",
+              justChanged === "dropped" && "bg-paper-2 text-ink-3"
+            )}
+          >
+            {justChanged === "resolved" ? "Resolved" :
+             justChanged === "in_progress" ? "In Progress" :
+             justChanged === "dropped" ? "Dropped" : justChanged}
+          </motion.span>
+        )}
+      </AnimatePresence>
+    </motion.div>
+  );
+}
+
+function ActionButton({ letter, label, onClick }: { letter: string; label: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={(e) => { e.stopPropagation(); onClick(); }}
+      className="flex items-center gap-1 px-1.5 py-1 rounded hover:bg-paper-2 transition-colors"
+      title={`${letter} to ${label}`}
+    >
+      <kbd className={cn(
+        "inline-flex items-center justify-center size-5 rounded text-[10px] font-mono font-medium",
+        "bg-paper-2 text-ink-3 border border-rule"
+      )}>
+        {letter}
+      </kbd>
+      <span className="text-[10px] text-ink-4 hidden lg:inline">{label}</span>
+    </button>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Today's capture item
+// ---------------------------------------------------------------------------
+
+function CapturedItem({
+  issue,
+  index,
+  onStatusChange,
+}: {
+  issue: Issue;
+  index: number;
+  onStatusChange: (issueId: string, newStatus: IssueStatus) => void;
+}) {
+  return (
+    <motion.div
+      layout
+      initial={{ opacity: 0, y: -10 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, x: -20 }}
+      transition={{ duration: 0.18 }}
+      className="flex items-center gap-3 rounded-lg px-4 py-3 hover:bg-card transition-colors group"
+    >
+      <span className="text-xs font-mono text-ink-4 tabular-nums w-5 text-right shrink-0">
+        {String(index + 1).padStart(2, "0")}
+      </span>
+      <CategoryBadge category={issue.category} size="sm" />
+      <Link
+        href={`/issues/${issue.id}`}
+        className="flex-1 min-w-0 text-sm font-medium text-ink group-hover:text-accent transition-colors truncate"
+      >
+        {issue.title}
+      </Link>
+      {issue.owner_name && (
+        <span className="text-xs text-ink-4">{issue.owner_name}</span>
+      )}
+      {issue.due_date && (
+        <span className={cn(
+          "text-xs font-mono tabular-nums",
+          new Date(issue.due_date) < new Date() ? "text-accent" : "text-ink-4"
+        )}>
+          {formatCompactDate(issue.due_date)}
+        </span>
+      )}
+    </motion.div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Main component
+// ---------------------------------------------------------------------------
+
 export function MeetingDetailContent({
   seriesId,
   meetingId,
@@ -57,12 +378,12 @@ export function MeetingDetailContent({
   const createIssue = useCreateIssue();
   const updateIssueStatus = useUpdateIssueStatus();
 
-  const [notes, setNotes] = React.useState(meeting?.summary ?? "");
+  const [notes, setNotes] = React.useState(meeting?.notes_markdown ?? "");
+  const timer = useLiveTimer(meeting?.status === "live" ? meeting.created_at : null);
 
-  // Sync notes when meeting data loads
   React.useEffect(() => {
-    if (meeting?.summary) setNotes(meeting.summary);
-  }, [meeting?.summary]);
+    if (meeting?.notes_markdown) setNotes(meeting.notes_markdown);
+  }, [meeting?.notes_markdown]);
 
   if (meetingLoading) {
     return (
@@ -88,29 +409,27 @@ export function MeetingDetailContent({
 
   const meetingIssues = meeting.issues ?? [];
   const meetingDecisions = meeting.decisions ?? decisions ?? [];
-
-  // Issues from this meeting
   const raisedInThisMeeting = meetingIssues;
 
-  // Carried (open issues from this series that were NOT raised in this meeting)
-  const carriedIssues = (seriesIssues ?? []).filter(
+  const allCarriedIssues = (seriesIssues ?? []).filter(
+    (issue) => issue.raised_in_meeting_id !== meetingId
+  );
+  const carriedIssues = allCarriedIssues.filter(
+    (issue) => issue.status !== "resolved" && issue.status !== "dropped"
+  );
+  const doneThisMeeting = allCarriedIssues.filter(
     (issue) =>
-      issue.meeting_id !== meetingId &&
-      issue.status !== "resolved" &&
-      issue.status !== "dropped"
+      (issue.status === "resolved" || issue.status === "dropped") &&
+      issue.resolved_in_meeting_id === meetingId
   );
 
-  // Compute meeting sequence from series
   const meetingSequence = series?.meetings
     ? [...series.meetings]
         .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
         .findIndex((m) => m.id === meetingId) + 1
     : null;
 
-  // ---------------------------------------------------------------------------
   // Handlers
-  // ---------------------------------------------------------------------------
-
   async function handleCapture(text: string, category: IssueCategory) {
     await createIssue.mutateAsync({
       title: text,
@@ -143,150 +462,197 @@ export function MeetingDetailContent({
     await startMeeting.mutateAsync(meetingId);
   }
 
-  // ---------------------------------------------------------------------------
-  // LIVE mode
-  // ---------------------------------------------------------------------------
+  // =========================================================================
+  // LIVE MODE
+  // =========================================================================
   if (meeting.status === "live") {
     return (
       <div className="min-h-full bg-paper">
         <SyncIndicator status="synced" />
 
-        <div className="mx-auto max-w-3xl px-4 py-6 sm:px-6 lg:px-8">
-          {/* Header */}
-          <div className="flex items-center justify-between mb-6">
+        {/* Header bar */}
+        <div className="border-b border-rule">
+          <div className="mx-auto max-w-7xl px-6 py-3 flex items-center gap-4">
             <div className="flex items-center gap-3">
-              <Link
-                href={`/series/${seriesId}`}
-                className="text-ink-3 hover:text-ink transition-colors"
-              >
-                <ArrowLeft className="size-5" />
-              </Link>
+              <span className="inline-flex items-center gap-1.5 bg-accent text-white text-[10px] font-semibold px-2.5 py-1 rounded-full uppercase tracking-wider">
+                <span className="size-1.5 rounded-full bg-white animate-pulse" />
+                Live
+              </span>
               <div>
-                <div className="flex items-center gap-2">
-                  <span className="inline-flex items-center gap-1.5 bg-accent text-white text-[10px] font-medium px-2 py-0.5 rounded-full">
-                    <span
-                      className="size-1.5 rounded-full bg-white animate-pulse"
-                      aria-hidden="true"
-                    />
-                    LIVE
-                  </span>
-                  <span className="text-sm text-ink-2">{series?.name}</span>
+                <h1 className="font-display text-base font-semibold text-ink leading-tight">
+                  {series?.name}
                   {meetingSequence && (
-                    <span className="text-xs font-mono text-ink-4">
-                      M-{meetingSequence}
-                    </span>
+                    <span className="text-ink-3 font-normal"> — M-{meetingSequence}</span>
                   )}
-                </div>
-                <h1 className="font-display text-xl font-semibold text-ink mt-1">
-                  {meeting.title}
                 </h1>
+                <p className="text-xs text-ink-4">
+                  {formatCompactDate(meeting.date)} · {meeting.attendees?.length ?? 0} attendees present
+                </p>
               </div>
             </div>
 
-            <Button
-              onClick={handleEndMeeting}
-              disabled={endMeeting.isPending}
-              variant="outline"
-              className="text-danger border-danger/30 hover:bg-danger-soft"
-            >
-              <Square className="size-3.5" data-icon="inline-start" />
-              End meeting
-            </Button>
-          </div>
+            <div className="ml-auto flex items-center gap-4">
+              <span className="text-sm font-mono text-ink-2 tabular-nums tracking-wider">
+                {timer}
+              </span>
 
-          {/* Capture input */}
-          <div className="mb-8 bg-card border border-rule rounded-md p-4">
-            <CaptureInput onSubmit={handleCapture} />
-          </div>
+              {/* Attendee avatars */}
+              {meeting.attendees && meeting.attendees.length > 0 && (
+                <div className="flex -space-x-1.5">
+                  {meeting.attendees.slice(0, 5).map((name) => (
+                    <AttendeeAvatar key={name} name={name} />
+                  ))}
+                  {meeting.attendees.length > 5 && (
+                    <span className="inline-flex items-center justify-center size-7 rounded-full bg-paper-2 text-[10px] font-medium text-ink-3 ring-2 ring-paper">
+                      +{meeting.attendees.length - 5}
+                    </span>
+                  )}
+                </div>
+              )}
 
-          {/* Today's capture */}
-          <section className="mb-8">
-            <h2 className="font-display text-lg font-medium text-ink mb-4">
-              Today&apos;s capture
-            </h2>
-            {raisedInThisMeeting.length === 0 ? (
-              <p className="text-sm text-ink-3 py-4">
-                Start capturing items above.
-              </p>
-            ) : (
-              <div className="space-y-3">
-                <AnimatePresence mode="popLayout">
-                  {raisedInThisMeeting.map((issue) => (
-                    <motion.div
-                      key={issue.id}
-                      layout
-                      initial={{ opacity: 0, y: -10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, x: -20 }}
-                      transition={{ duration: 0.18 }}
-                    >
-                      <IssueCard
+              <Button
+                onClick={handleEndMeeting}
+                disabled={endMeeting.isPending}
+                variant="outline"
+                className="text-ink border-rule hover:bg-paper-2"
+              >
+                <Square className="size-3" />
+                End meeting
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        {/* Two-column layout */}
+        <div className="mx-auto max-w-7xl px-6 py-6 flex gap-6">
+          {/* Main column */}
+          <div className="flex-1 min-w-0">
+            {/* Capture input */}
+            <div className="mb-8 rounded-xl border border-rule bg-card p-5">
+              <CaptureInput onSubmit={handleCapture} />
+            </div>
+
+            {/* Carried from last meeting */}
+            {(carriedIssues.length > 0 || doneThisMeeting.length > 0) && (
+              <section className="mb-8">
+                <div className="flex items-center gap-3 mb-3">
+                  <h2 className="text-[11px] font-mono uppercase tracking-wider text-ink-4 font-medium">
+                    Carried from last meeting
+                  </h2>
+                  <span className="text-[11px] font-mono text-ink-4 tabular-nums">
+                    {carriedIssues.length}
+                  </span>
+                  <div className="flex-1 border-t border-dashed border-rule" />
+                </div>
+                <div>
+                  <AnimatePresence mode="popLayout">
+                    {carriedIssues.map((issue, idx) => (
+                      <CarriedIssueCard
+                        key={issue.id}
                         issue={issue}
+                        index={idx}
                         onStatusChange={handleStatusChange}
                       />
-                    </motion.div>
-                  ))}
-                </AnimatePresence>
-              </div>
-            )}
-          </section>
+                    ))}
+                  </AnimatePresence>
+                </div>
 
-          {/* Carried from last meeting */}
-          {carriedIssues.length > 0 && (
-            <section>
-              <h2 className="font-display text-lg font-medium text-ink mb-4">
-                Carried from previous ({carriedIssues.length})
-              </h2>
-              <div className="space-y-3">
-                {carriedIssues.map((issue) => (
-                  <div
-                    key={issue.id}
-                    className="flex items-center justify-between bg-card border border-rule rounded-md p-4"
-                  >
-                    <div className="flex-1 min-w-0 mr-3">
-                      <p className="text-sm font-medium text-ink truncate">
-                        {issue.title}
-                      </p>
-                      <div className="flex items-center gap-2 mt-1">
-                        <CategoryBadge category={issue.category} />
-                        {issue.owner_name && (
-                          <span className="text-xs text-ink-3">
-                            {issue.owner_name}
-                          </span>
-                        )}
-                        {issue.due_date && (
-                          <span
-                            className={cn(
-                              "text-xs font-mono",
-                              new Date(issue.due_date) < new Date()
-                                ? "text-accent"
-                                : "text-ink-4"
-                            )}
-                          >
-                            {formatShortDate(issue.due_date)}
-                          </span>
-                        )}
-                      </div>
+                {doneThisMeeting.length > 0 && (
+                  <div className="mt-4">
+                    <div className="flex items-center gap-3 mb-2">
+                      <span className="text-[10px] font-mono uppercase tracking-wider text-ink-4/60">
+                        Done this meeting
+                      </span>
+                      <span className="text-[10px] font-mono text-ink-4/60 tabular-nums">
+                        {doneThisMeeting.length}
+                      </span>
+                      <div className="flex-1 border-t border-dashed border-rule/50" />
                     </div>
-                    <StatusChip
-                      status={issue.status}
-                      onChange={(newStatus) =>
-                        handleStatusChange(issue.id, newStatus)
-                      }
-                    />
+                    <div>
+                      {doneThisMeeting.map((issue, idx) => (
+                        <CarriedIssueCard
+                          key={issue.id}
+                          issue={issue}
+                          index={idx}
+                          onStatusChange={handleStatusChange}
+                          done
+                        />
+                      ))}
+                    </div>
                   </div>
-                ))}
+                )}
+              </section>
+            )}
+
+            {/* Today's capture */}
+            <section>
+              <div className="flex items-center gap-3 mb-3">
+                <h2 className="text-[11px] font-mono uppercase tracking-wider text-ink-4 font-medium">
+                  Today&apos;s capture
+                </h2>
+                <span className="text-[11px] font-mono text-ink-4 tabular-nums">
+                  {raisedInThisMeeting.length}
+                </span>
+                <div className="flex-1 border-t border-dashed border-rule" />
               </div>
+              {raisedInThisMeeting.length === 0 ? (
+                <p className="text-sm text-ink-4 py-6 text-center">
+                  Start capturing items above. Press A, D, I, or R + space to set category.
+                </p>
+              ) : (
+                <div>
+                  <AnimatePresence mode="popLayout">
+                    {raisedInThisMeeting.map((issue, idx) => (
+                      <CapturedItem
+                        key={issue.id}
+                        issue={issue}
+                        index={idx}
+                        onStatusChange={handleStatusChange}
+                      />
+                    ))}
+                  </AnimatePresence>
+                </div>
+              )}
             </section>
-          )}
+          </div>
+
+          {/* Notes sidebar */}
+          <div className="w-80 shrink-0 hidden lg:block">
+            <div className="sticky top-6">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-[11px] font-mono uppercase tracking-wider text-ink-4 font-medium">
+                  Freeform notes
+                </h3>
+                <span className="text-[10px] text-ink-4">Autosaved</span>
+              </div>
+              <Textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Type meeting notes here..."
+                className="min-h-[300px] bg-card border-rule text-sm font-sans leading-relaxed resize-y"
+              />
+              <div className="mt-4 pt-4 border-t border-rule">
+                <h3 className="text-[11px] font-mono uppercase tracking-wider text-ink-4 font-medium mb-3">
+                  Sync status
+                </h3>
+                <div className="flex items-center gap-2">
+                  <span className="size-2 rounded-full bg-success" />
+                  <span className="text-xs text-ink-3">Synced · just now</span>
+                </div>
+                <p className="text-[10px] text-ink-4 mt-1.5">
+                  Offline capture buffered locally; auto-syncs when connection returns.
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     );
   }
 
-  // ---------------------------------------------------------------------------
-  // UPCOMING mode
-  // ---------------------------------------------------------------------------
+  // =========================================================================
+  // UPCOMING MODE
+  // =========================================================================
   if (meeting.status === "upcoming") {
     const openIssues = (seriesIssues ?? []).filter(
       (issue) => issue.status !== "resolved" && issue.status !== "dropped"
@@ -295,7 +661,6 @@ export function MeetingDetailContent({
     return (
       <div className="min-h-full bg-paper">
         <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6 lg:px-8">
-          {/* Header */}
           <div className="flex items-center gap-3 mb-6">
             <Link
               href={`/series/${seriesId}`}
@@ -321,12 +686,11 @@ export function MeetingDetailContent({
               disabled={startMeeting.isPending}
               className="bg-accent text-white hover:bg-accent-hover"
             >
-              <Play className="size-4" data-icon="inline-start" />
+              <Play className="size-4" />
               Start meeting
             </Button>
           </div>
 
-          {/* Pre-meeting brief */}
           <div className="mb-8">
             <BriefCard
               seriesName={series?.name ?? ""}
@@ -335,7 +699,6 @@ export function MeetingDetailContent({
             />
           </div>
 
-          {/* Attendees */}
           {meeting.attendees && meeting.attendees.length > 0 && (
             <section>
               <h2 className="font-display text-lg font-medium text-ink mb-3">
@@ -358,13 +721,12 @@ export function MeetingDetailContent({
     );
   }
 
-  // ---------------------------------------------------------------------------
-  // COMPLETED mode (Meeting Summary)
-  // ---------------------------------------------------------------------------
+  // =========================================================================
+  // COMPLETED MODE
+  // =========================================================================
   return (
     <div className="min-h-full bg-paper">
       <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6 lg:px-8">
-        {/* Header */}
         <div className="flex items-center gap-3 mb-6">
           <Link
             href={`/series/${seriesId}`}
@@ -388,9 +750,9 @@ export function MeetingDetailContent({
               {formatMeetingDate(meeting.date)}
             </p>
           </div>
+          <ShareButton resource_type="meeting" resource_id={meetingId} />
         </div>
 
-        {/* Attendees */}
         {meeting.attendees && meeting.attendees.length > 0 && (
           <div className="flex flex-wrap gap-2 mb-6">
             {meeting.attendees.map((attendee) => (
@@ -404,7 +766,6 @@ export function MeetingDetailContent({
           </div>
         )}
 
-        {/* Items raised */}
         <section className="mb-8">
           <h2 className="font-display text-lg font-medium text-ink mb-4">
             Items raised ({raisedInThisMeeting.length})
@@ -420,7 +781,6 @@ export function MeetingDetailContent({
           )}
         </section>
 
-        {/* Decisions */}
         {meetingDecisions.length > 0 && (
           <section className="mb-8">
             <h2 className="font-display text-lg font-medium text-ink mb-4">
@@ -458,7 +818,6 @@ export function MeetingDetailContent({
           </section>
         )}
 
-        {/* Notes */}
         <section>
           <h2 className="font-display text-lg font-medium text-ink mb-4">
             Notes

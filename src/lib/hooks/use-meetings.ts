@@ -56,7 +56,7 @@ export function useMeeting(id: string) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("meetings")
-        .select("*, issues(*), decisions(*)")
+        .select("*, issues:issues!raised_in_meeting_id(*), decisions(*)")
         .eq("id", id)
         .single();
 
@@ -137,6 +137,39 @@ export function useStartMeeting() {
 
 // ---------------------------------------------------------------------------
 // useEndMeeting - set status to 'completed', set completed_at
+// ---------------------------------------------------------------------------
+// useAllMeetings - recent meetings across all series (for dashboard charts)
+// ---------------------------------------------------------------------------
+export function useAllMeetings() {
+  const supabase = createClient();
+
+  return useQuery<(Meeting & { issues_raised: number; issues_resolved: number })[]>({
+    queryKey: [...meetingKeys.all, "dashboard"],
+    queryFn: async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
+
+      const { data, error } = await supabase
+        .from("meetings")
+        .select("*, series:meeting_series!inner(owner_id), raised_issues:issues!raised_in_meeting_id(count), resolved_issues:issues!resolved_in_meeting_id(count)")
+        .eq("series.owner_id", user.id)
+        .order("date", { ascending: true })
+        .limit(20);
+
+      if (error) throw error;
+
+      return (data ?? []).map((m: any) => ({
+        ...m,
+        series: undefined,
+        issues_raised: m.raised_issues?.[0]?.count ?? 0,
+        issues_resolved: m.resolved_issues?.[0]?.count ?? 0,
+      }));
+    },
+  });
+}
+
 // ---------------------------------------------------------------------------
 export function useEndMeeting() {
   const supabase = createClient();

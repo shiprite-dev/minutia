@@ -3,6 +3,7 @@
 import * as React from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { cn } from "@/lib/utils";
+import Link from "next/link";
 import type { Issue, IssueStatus, IssueUpdate } from "@/lib/types";
 import { StatusChip } from "./status-chip";
 import { CategoryBadge } from "./category-badge";
@@ -67,13 +68,12 @@ export function IssueCard({
           <PriorityIndicator priority={issue.priority} />
         </div>
         <div className="flex-1 min-w-0">
-          <button
-            type="button"
+          <Link
+            href={`/issues/${issue.id}`}
             className="text-left font-sans font-medium text-ink hover:text-ink-2 transition-colors cursor-pointer"
-            onClick={handleExpand}
           >
             {issue.title}
-          </button>
+          </Link>
         </div>
       </div>
 

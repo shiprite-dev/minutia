@@ -11,6 +11,9 @@ import { motion } from "motion/react";
 
 type FormState = "idle" | "loading" | "sent" | "error";
 
+const GUEST_LOGIN_ERROR_MESSAGE =
+  "Guest login is unavailable because the local test user is missing or out of sync. Run `supabase db reset` to reseed test@example.com.";
+
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [formState, setFormState] = useState<FormState>("idle");
@@ -50,6 +53,27 @@ export default function LoginPage() {
     if (error) {
       setFormState("error");
       setErrorMessage(error.message);
+    }
+  }
+
+  async function handleGuestLogin() {
+    setFormState("loading");
+    setErrorMessage("");
+
+    const { error } = await supabase.auth.signInWithPassword({
+      email: "test@example.com",
+      password: "password123",
+    });
+
+    if (error) {
+      setFormState("error");
+      setErrorMessage(
+        error.message.toLowerCase().includes("invalid login credentials")
+          ? GUEST_LOGIN_ERROR_MESSAGE
+          : error.message
+      );
+    } else {
+      window.location.href = "/";
     }
   }
 
@@ -167,6 +191,23 @@ export default function LoginPage() {
             >
               <GoogleIcon />
               Google
+            </Button>
+
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={handleGuestLogin}
+              disabled={formState === "loading"}
+              className="h-10 w-full rounded-[12px] font-sans text-sm text-ink-3 hover:bg-paper-3 hover:text-ink-2"
+            >
+              {formState === "loading" ? (
+                <span className="flex items-center gap-2">
+                  <LoadingDots />
+                  Signing in
+                </span>
+              ) : (
+                "Sign in as Guest"
+              )}
             </Button>
           </>
         )}

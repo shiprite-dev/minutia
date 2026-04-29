@@ -26,6 +26,20 @@ export const metadata: Metadata = {
   title: "Minutia",
   description:
     "The open-source meeting memory system. Track outstanding issues, decisions, and action items across recurring meetings.",
+  icons: {
+    icon: { url: "/icon.svg", type: "image/svg+xml" },
+    apple: "/icon.svg",
+  },
+  manifest: "/manifest.json",
+  openGraph: {
+    title: "Minutia",
+    description:
+      "The open-source Outstanding Issues Log for recurring meetings.",
+    type: "website",
+  },
+  other: {
+    "theme-color": "#FF5B14",
+  },
 };
 
 export default function RootLayout({

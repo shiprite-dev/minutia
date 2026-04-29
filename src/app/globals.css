@@ -61,7 +61,6 @@
   --secondary-foreground: var(--ink);
   --muted:                var(--paper-2);
   --muted-foreground:     var(--ink-3);
-  --accent:               var(--accent);
   --accent-foreground:    oklch(1.000 0 0);
   --destructive:          var(--danger);
   --destructive-foreground: oklch(1.000 0 0);
@@ -73,8 +72,8 @@
   --sidebar-foreground:         var(--ink-2);
   --sidebar-primary:            var(--ink);
   --sidebar-primary-foreground: var(--paper);
-  --sidebar-accent:             var(--accent);
-  --sidebar-accent-foreground:  oklch(1.000 0 0);
+  --sidebar-accent:             var(--paper-2);
+  --sidebar-accent-foreground:  var(--ink);
   --sidebar-border:             var(--rule);
   --sidebar-ring:               var(--accent);
 }

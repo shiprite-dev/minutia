@@ -88,9 +88,9 @@ export function TimelineNode({
         {/* Update content */}
         {update && (
           <div className="mt-1">
-            {update.old_status !== update.new_status && (
+            {update.previous_status && update.new_status && update.previous_status !== update.new_status && (
               <span className="text-xs text-ink-2">
-                {STATUS_CONFIG[update.old_status].label}
+                {STATUS_CONFIG[update.previous_status].label}
                 {" "}
                 &rarr;
                 {" "}

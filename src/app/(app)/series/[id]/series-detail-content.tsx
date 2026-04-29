@@ -29,6 +29,7 @@ import {
 } from "@/components/ui/dialog";
 import { CADENCES } from "@/lib/constants";
 import { createSeriesSchema, type CreateSeriesInput } from "@/lib/schemas";
+import { ShareButton } from "@/components/minutia/share-button";
 import { ArrowLeft, Play, Settings, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Cadence, Issue } from "@/lib/types";
@@ -143,6 +144,7 @@ export function SeriesDetailContent({ seriesId }: SeriesDetailContentProps) {
             )}
           </div>
           <div className="flex items-center gap-2 shrink-0">
+            <ShareButton resource_type="series" resource_id={seriesId} />
             <Button
               variant="ghost"
               size="icon"
@@ -209,7 +211,7 @@ export function SeriesDetailContent({ seriesId }: SeriesDetailContentProps) {
             <div>
               {sortedMeetings.map((meeting, i) => {
                 const meetingIssues = (issues ?? []).filter(
-                  (iss) => iss.meeting_id === meeting.id
+                  (iss) => iss.raised_in_meeting_id === meeting.id
                 );
                 const raised = meetingIssues.length;
                 const resolved = meetingIssues.filter(

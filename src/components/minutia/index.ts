@@ -12,3 +12,5 @@ export { CreateSeriesDialog } from "./create-series-dialog";
 export { MeetingTimelineItem } from "./meeting-timeline-item";
 export { AppSidebar } from "./app-sidebar";
 export { AppHeader } from "./app-header";
+export { CommandPalette } from "./command-palette";
+export { ShareButton } from "./share-button";

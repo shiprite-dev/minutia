@@ -42,31 +42,31 @@ export interface MeetingSeries {
 export interface Meeting {
   id: string;
   series_id: string;
+  sequence_number: number;
   title: string;
   date: Date;
   status: MeetingStatus;
   attendees: string[];
-  transcript_url: string | null;
-  summary: string | null;
+  notes_markdown: string;
+  transcript_raw: string | null;
   created_at: Date;
-  updated_at: Date;
+  completed_at: Date | null;
 }
 
 export interface Issue {
   id: string;
-  meeting_id: string;
+  raised_in_meeting_id: string;
   series_id: string;
   title: string;
   description: string | null;
   category: IssueCategory;
   status: IssueStatus;
   priority: Priority;
-  owner_id: string | null;
+  owner_user_id: string | null;
   owner_name: string | null;
   source: ItemSource;
   due_date: Date | null;
-  resolved_at: Date | null;
-  created_by: string;
+  resolved_in_meeting_id: string | null;
   created_at: Date;
   updated_at: Date;
 }
@@ -74,12 +74,12 @@ export interface Issue {
 export interface IssueUpdate {
   id: string;
   issue_id: string;
-  meeting_id: string | null;
-  author_id: string | null;
-  author_type: AuthorType;
-  old_status: IssueStatus;
-  new_status: IssueStatus;
+  meeting_id: string;
+  previous_status: IssueStatus | null;
+  new_status: IssueStatus | null;
   note: string | null;
+  author_type: AuthorType;
+  updated_by: string;
   created_at: Date;
 }
 

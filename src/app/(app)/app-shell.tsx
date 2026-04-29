@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/minutia/app-sidebar";
 import { AppHeader } from "@/components/minutia/app-header";
+import { CommandPalette } from "@/components/minutia/command-palette";
 import type { Profile } from "@/lib/types";
 
 interface AppShellProps {
@@ -21,6 +22,7 @@ export function AppShell({ profile, children }: AppShellProps) {
           {children}
         </main>
       </SidebarInset>
+      <CommandPalette />
     </SidebarProvider>
   );
 }

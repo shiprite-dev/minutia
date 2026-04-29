@@ -75,23 +75,26 @@ export function CreateSeriesDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle className="font-display">Create series</DialogTitle>
-          <DialogDescription>
-            A series groups your recurring meetings together.
-          </DialogDescription>
-        </DialogHeader>
+      <DialogContent className="sm:max-w-lg p-0" showCloseButton>
+        <div className="px-8 pt-8 pb-2">
+          <DialogHeader className="space-y-1.5 mb-0">
+            <DialogTitle className="font-display text-xl">Create series</DialogTitle>
+            <DialogDescription className="text-sm text-ink-3">
+              A series groups your recurring meetings together.
+            </DialogDescription>
+          </DialogHeader>
+        </div>
 
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+        <form onSubmit={handleSubmit(onSubmit)} className="px-8 pb-8 space-y-6">
           {/* Name */}
-          <div className="space-y-1.5">
-            <Label htmlFor="series-name">Name</Label>
+          <div className="space-y-2">
+            <Label htmlFor="series-name" className="text-sm font-semibold text-ink">Name</Label>
             <Input
               id="series-name"
               placeholder="e.g. Weekly Standup"
               {...register("name")}
               aria-invalid={!!errors.name}
+              className="h-11"
             />
             {errors.name && (
               <p className="text-xs text-danger">{errors.name.message}</p>
@@ -99,20 +102,20 @@ export function CreateSeriesDialog({
           </div>
 
           {/* Description */}
-          <div className="space-y-1.5">
-            <Label htmlFor="series-description">Description</Label>
+          <div className="space-y-2">
+            <Label htmlFor="series-description" className="text-sm font-semibold text-ink">Description</Label>
             <Textarea
               id="series-description"
               placeholder="Optional description"
               {...register("description")}
-              className="min-h-[60px]"
+              className="min-h-[100px]"
             />
           </div>
 
           {/* Cadence */}
-          <div className="space-y-1.5">
-            <Label>Cadence</Label>
-            <div className="flex flex-wrap gap-1.5" role="radiogroup">
+          <div className="space-y-2.5">
+            <Label className="text-sm font-semibold text-ink">Cadence</Label>
+            <div className="flex flex-wrap gap-2" role="radiogroup">
               {CADENCES.map((cadence) => (
                 <button
                   key={cadence}
@@ -120,7 +123,7 @@ export function CreateSeriesDialog({
                   role="radio"
                   aria-checked={selectedCadence === cadence}
                   className={cn(
-                    "rounded-full px-3 py-1 text-xs font-medium transition-colors",
+                    "rounded-full px-4 py-1.5 text-sm font-medium transition-colors",
                     selectedCadence === cadence
                       ? "bg-ink text-paper"
                       : "bg-paper-2 text-ink-3 hover:text-ink-2 hover:bg-paper-3"
@@ -134,28 +137,29 @@ export function CreateSeriesDialog({
           </div>
 
           {/* Default attendees */}
-          <div className="space-y-1.5">
-            <Label htmlFor="series-attendees">Default attendees</Label>
+          <div className="space-y-2">
+            <Label htmlFor="series-attendees" className="text-sm font-semibold text-ink">Default attendees</Label>
             <Input
               id="series-attendees"
               placeholder="email@example.com, another@example.com"
               onChange={handleAttendeesChange}
+              className="h-11"
             />
-            <p className="text-[10px] text-ink-4">Comma-separated emails</p>
+            <p className="text-xs text-ink-4">Comma-separated emails</p>
           </div>
 
-          <DialogFooter>
+          <div className="border-t border-rule pt-6 flex justify-end">
             <Button
               type="submit"
               disabled={createSeries.isPending}
-              className="bg-accent text-white hover:bg-accent-hover"
+              className="bg-accent text-white hover:bg-accent-hover px-6 h-10"
             >
               {createSeries.isPending && (
                 <Loader2 className="size-3.5 animate-spin" />
               )}
               Create series
             </Button>
-          </DialogFooter>
+          </div>
         </form>
       </DialogContent>
     </Dialog>
