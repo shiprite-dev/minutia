@@ -13,6 +13,7 @@ import {
 import { signOut } from "@/lib/supabase/auth-actions";
 import { useSeries } from "@/lib/hooks/use-series";
 import { useIssues } from "@/lib/hooks/use-issues";
+import { useUnreadCount } from "@/lib/hooks/use-notifications";
 import {
   Sidebar,
   SidebarContent,
@@ -72,6 +73,7 @@ export function AppSidebar({ profile }: AppSidebarProps) {
   const pathname = usePathname();
   const { data: seriesList } = useSeries();
   const { data: issues } = useIssues();
+  const { data: unreadCount } = useUnreadCount();
 
   const openIssues = (issues ?? []).filter(
     (i) => i.status !== "resolved" && i.status !== "dropped"
@@ -85,7 +87,7 @@ export function AppSidebar({ profile }: AppSidebarProps) {
     { label: "Outstanding", href: "/", icon: CircleDot, count: outstandingCount },
     { label: "Series", href: "/series", icon: SquareStack, count: 0 },
     { label: "My actions", href: "/actions", icon: CheckSquare, count: myActionsCount },
-    { label: "Inbox", href: "/inbox", icon: Bell, count: 0 },
+    { label: "Inbox", href: "/inbox", icon: Bell, count: unreadCount ?? 0 },
   ] as const;
 
   return (

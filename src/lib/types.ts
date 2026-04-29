@@ -106,6 +106,26 @@ export interface GuestShare {
   created_at: Date;
 }
 
+export type NotificationType =
+  | "issue_assigned"
+  | "issue_status_changed"
+  | "meeting_starting"
+  | "meeting_completed"
+  | "brief_ready"
+  | "share_received";
+
+export interface Notification {
+  id: string;
+  user_id: string;
+  type: NotificationType;
+  title: string;
+  body: string | null;
+  read: boolean;
+  link: string | null;
+  metadata: Record<string, unknown>;
+  created_at: Date;
+}
+
 export type IssueWithUpdates = Issue & {
   updates: IssueUpdate[];
   raised_in_meeting: Meeting;

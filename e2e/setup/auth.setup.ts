@@ -1,58 +1,14 @@
 import { test as setup, expect } from "@playwright/test";
 
-setup("authenticate", async ({ page, context, request }) => {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+const SUPABASE_URL = "http://127.0.0.1:54321";
+const SUPABASE_ANON_KEY =
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0";
 
-  // Sign in via Supabase Auth API directly
-  const response = await request.post(
-    `${supabaseUrl}/auth/v1/token?grant_type=password`,
-    {
-      headers: {
-        apikey: supabaseKey,
-        "Content-Type": "application/json",
-      },
-      data: {
-        email: "test@example.com",
-        password: "password123",
-      },
-    },
-  );
-
-  if (!response.ok()) {
-    throw new Error(`Auth setup failed: ${await response.text()}`);
-  }
-
-  const data = await response.json();
-
-  const session = {
-    access_token: data.access_token,
-    refresh_token: data.refresh_token,
-    expires_in: data.expires_in,
-    expires_at: Math.floor(Date.now() / 1000) + data.expires_in,
-    token_type: data.token_type,
-    user: data.user,
-  };
-
-  // Compute the cookie name Supabase SSR expects
-  const hostname = new URL(supabaseUrl).hostname;
-  const storageKey = `sb-${hostname.split(".")[0]}-auth-token`;
-
-  // Set the auth cookie so the app recognizes the session
-  await context.addCookies([
-    {
-      name: storageKey,
-      value: JSON.stringify(session),
-      domain: "localhost",
-      path: "/",
-      httpOnly: false,
-      secure: false,
-      sameSite: "Lax",
-    },
-  ]);
-
-  // Navigate to verify the session works
-  await page.goto("/");
+setup("authenticate", async ({ page }) => {
+  // Use the app's own login flow (Guest button calls signInWithPassword)
+  await page.goto("/login");
+  await page.getByRole("button", { name: "Sign in as Guest" }).click();
+  await page.waitForURL("/", { timeout: 10000 });
   await expect(page).toHaveURL("/");
 
   // Save storage state for reuse across test files

@@ -149,7 +149,18 @@ VALUES
 ON CONFLICT (id) DO NOTHING;
 
 -- ---------------------------------------------------------------------------
--- 7. Guest shares (for testing the share flow)
+-- 7. Notifications (for testing the inbox)
+-- ---------------------------------------------------------------------------
+INSERT INTO public.notifications (id, user_id, type, title, body, read, link, metadata) VALUES
+  ('70000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000001', 'issue_status_changed', 'Set up staging environment monitoring changed to in progress', NULL, false, '/issues/30000000-0000-0000-0000-000000000002', '{"issue_id": "30000000-0000-0000-0000-000000000002", "old_status": "open", "new_status": "in_progress"}'),
+  ('70000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-000000000001', 'issue_assigned', 'You were assigned: Migrate CI from Jenkins to GitHub Actions', NULL, false, '/issues/30000000-0000-0000-0000-000000000001', '{"issue_id": "30000000-0000-0000-0000-000000000001", "series_id": "10000000-0000-0000-0000-000000000001"}'),
+  ('70000000-0000-0000-0000-000000000003', '00000000-0000-0000-0000-000000000001', 'meeting_starting', 'Platform Team Standup is starting now', 'M-4 is live', true, '/series/10000000-0000-0000-0000-000000000001/meetings/20000000-0000-0000-0000-000000000004', '{}'),
+  ('70000000-0000-0000-0000-000000000004', '00000000-0000-0000-0000-000000000001', 'brief_ready', 'Brief ready for Product Review', '3 items pending since last meeting', true, '/series/10000000-0000-0000-0000-000000000002', '{}'),
+  ('70000000-0000-0000-0000-000000000005', '00000000-0000-0000-0000-000000000001', 'share_received', 'Pratik shared meeting notes with you', 'Platform Standup #2', false, '/share/test-share-meeting-abc123', '{}')
+ON CONFLICT (id) DO NOTHING;
+
+-- ---------------------------------------------------------------------------
+-- 8. Guest shares (for testing the share flow)
 -- ---------------------------------------------------------------------------
 INSERT INTO public.guest_shares (id, resource_type, resource_id, token, expires_at, permissions, created_by)
 VALUES
