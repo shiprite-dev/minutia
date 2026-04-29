@@ -130,52 +130,60 @@ export function SeriesDetailContent({ seriesId }: SeriesDetailContentProps) {
     <div className="min-h-full bg-paper">
       <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6 lg:px-8">
         {/* Header */}
-        <div className="flex items-center gap-3 mb-6">
-          <Link
-            href="/series"
-            className="text-ink-3 hover:text-ink transition-colors"
-          >
-            <ArrowLeft className="size-5" />
-          </Link>
-          <div className="flex-1 min-w-0">
-            <h1 className="font-display text-2xl font-semibold text-ink truncate">
-              {series.name}
-            </h1>
-            {series.description && (
-              <p className="text-sm text-ink-2 mt-1">{series.description}</p>
-            )}
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <ShareButton resource_type="series" resource_id={seriesId} />
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setImportOpen(true)}
-              aria-label="Import CSV"
+        <div className="mb-6">
+          <div className="flex items-start gap-3">
+            <Link
+              href="/series"
+              className="text-ink-3 hover:text-ink transition-colors mt-1"
             >
-              <Upload className="size-4" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setSettingsOpen(true)}
-              aria-label="Series settings"
-            >
-              <Settings className="size-4" />
-            </Button>
-            <Button
-              onClick={handleStartMeeting}
-              disabled={startingMeeting}
-              className="bg-accent text-white hover:bg-accent-hover"
-            >
-              {startingMeeting ? (
-                <Loader2 className="size-4 animate-spin" />
-              ) : (
-                <Play className="size-4" data-icon="inline-start" />
+              <ArrowLeft className="size-5" />
+            </Link>
+            <div className="flex-1 min-w-0">
+              <h1 className="font-display text-2xl font-semibold text-ink truncate">
+                {series.name}
+              </h1>
+              {series.description && (
+                <p className="text-sm text-ink-2 mt-1 hidden sm:block">{series.description}</p>
               )}
-              Start meeting
-            </Button>
+            </div>
+            <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+              <ShareButton resource_type="series" resource_id={seriesId} />
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setImportOpen(true)}
+                aria-label="Import CSV"
+                className="hidden sm:inline-flex"
+              >
+                <Upload className="size-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setSettingsOpen(true)}
+                aria-label="Series settings"
+              >
+                <Settings className="size-4" />
+              </Button>
+              <Button
+                onClick={handleStartMeeting}
+                disabled={startingMeeting}
+                className="bg-accent text-white hover:bg-accent-hover"
+                size="sm"
+              >
+                {startingMeeting ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Play className="size-4" data-icon="inline-start" />
+                )}
+                <span className="hidden sm:inline">Start meeting</span>
+                <span className="sm:hidden">Start</span>
+              </Button>
+            </div>
           </div>
+          {series.description && (
+            <p className="text-sm text-ink-2 mt-2 sm:hidden pl-8">{series.description}</p>
+          )}
         </div>
 
         {/* Pre-Meeting Brief */}

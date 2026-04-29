@@ -344,9 +344,9 @@ function OutstandingItems({
 
   return (
     <DashCard className="col-span-2">
-      <div className="flex items-center justify-between mb-1">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-1">
         <h3 className="font-display text-lg font-semibold text-ink">Outstanding items</h3>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1 overflow-x-auto">
           {filters.map((f) => (
             <button
               key={f.key}
