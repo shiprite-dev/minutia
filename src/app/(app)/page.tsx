@@ -468,9 +468,9 @@ function IssueRow({
   return (
     <motion.div
       ref={ref}
-      initial={{ opacity: 0, x: -8 }}
+      initial={{ opacity: 0, x: 20 }}
       animate={{ opacity: 1, x: 0 }}
-      transition={{ delay: index * 0.04, duration: 0.3 }}
+      transition={{ delay: index * 0.06, duration: 0.32, ease: [0.2, 0.8, 0.2, 1] }}
       data-focused={focused || undefined}
       className={cn(
         "group flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors",
