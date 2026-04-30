@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { CATEGORY_CONFIG, STATUS_CONFIG } from "@/lib/constants";
@@ -585,6 +586,29 @@ function ShareIssueCard({ issue }: { issue: Issue }) {
       </div>
     </div>
   );
+}
+
+// ---------------------------------------------------------------------------
+// Metadata
+// ---------------------------------------------------------------------------
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ token: string }>;
+}): Promise<Metadata> {
+  const { token } = await params;
+  const supabase = await createClient();
+  const { data: share } = await supabase
+    .from("guest_shares")
+    .select("resource_type")
+    .eq("token", token)
+    .single();
+
+  const type = share?.resource_type ?? "resource";
+  return {
+    title: `Shared ${type} | Minutia`,
+  };
 }
 
 // ---------------------------------------------------------------------------

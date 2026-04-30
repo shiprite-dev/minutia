@@ -23,7 +23,10 @@ const jetbrains = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "Minutia",
+  title: {
+    default: "Minutia",
+    template: "%s | Minutia",
+  },
   description:
     "The open-source meeting memory system. Track outstanding issues, decisions, and action items across recurring meetings.",
   icons: {
