@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { motion } from "motion/react";
+import { motion, AnimatePresence } from "motion/react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import type { Issue } from "@/lib/types";
@@ -227,13 +227,35 @@ export function BriefCard({
             size="sm"
             onClick={handleCopyBrief}
             data-testid="copy-brief-btn"
+            className="relative overflow-hidden"
           >
-            {copied ? (
-              <Check className="size-3.5 text-green-500" />
-            ) : (
-              <Copy className="size-3.5" />
-            )}
-            {copied ? "Copied" : "Copy"}
+            <AnimatePresence mode="wait" initial={false}>
+              {copied ? (
+                <motion.span
+                  key="copied"
+                  initial={{ opacity: 0, scale: 0.8 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.8 }}
+                  transition={{ duration: 0.16 }}
+                  className="inline-flex items-center gap-1"
+                >
+                  <Check className="size-3.5 text-success" />
+                  Copied
+                </motion.span>
+              ) : (
+                <motion.span
+                  key="copy"
+                  initial={{ opacity: 0, scale: 0.8 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.8 }}
+                  transition={{ duration: 0.16 }}
+                  className="inline-flex items-center gap-1"
+                >
+                  <Copy className="size-3.5" />
+                  Copy
+                </motion.span>
+              )}
+            </AnimatePresence>
           </Button>
         </div>
       </div>
