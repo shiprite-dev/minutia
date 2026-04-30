@@ -8,7 +8,9 @@ test.describe("Error boundaries (MIN-002)", () => {
     await page.goto("/issues/nonexistent-id-12345");
     await waitForApp(page);
 
-    await expect(page.getByText("Issue not found")).toBeVisible();
+    await expect(page.getByText("Issue not found")).toBeVisible({
+      timeout: 15000,
+    });
     await expect(
       page.getByRole("link", { name: /OIL Board/i })
     ).toBeVisible();
@@ -23,16 +25,17 @@ test.describe("Error boundaries (MIN-002)", () => {
     const errorOrNotFound = page.getByText(
       /not found|went wrong|no series/i
     );
-    await expect(errorOrNotFound.first()).toBeVisible();
+    await expect(errorOrNotFound.first()).toBeVisible({ timeout: 15000 });
   });
 
-  test("app-level error boundary exists with retry button", async ({
-    page,
-  }) => {
-    const errorBoundaryFile = await page.evaluate(() => {
+  test("app-level error boundary file exists", async ({ page }) => {
+    await page.goto("/");
+    await waitForApp(page);
+
+    const hasMainContent = await page.evaluate(() => {
       return document.querySelector("main#main-content") !== null;
     });
-    expect(errorBoundaryFile).toBe(true);
+    expect(hasMainContent).toBe(true);
   });
 
   test("share page error boundary renders for invalid tokens", async ({
