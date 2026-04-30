@@ -5,7 +5,7 @@ import { motion } from "motion/react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import type { Issue } from "@/lib/types";
-import { Send, Copy, Check } from "lucide-react";
+import { Send, Copy, Check, Mail } from "lucide-react";
 
 interface BriefCardProps {
   seriesName: string;
@@ -89,6 +89,8 @@ export function BriefCard({
   attendees = [],
 }: BriefCardProps) {
   const [copied, setCopied] = React.useState(false);
+  const [sent, setSent] = React.useState(false);
+  const mailtoRef = React.useRef<HTMLAnchorElement>(null);
 
   const briefText = React.useMemo(
     () => generateBriefText(seriesName, pendingIssues, nextMeetingDate),
@@ -96,10 +98,22 @@ export function BriefCard({
   );
 
   const subject = `Pre-Meeting Brief: ${seriesName}`;
+  const emailAttendees = attendees.filter((a) => a.includes("@"));
+  const hasEmails = emailAttendees.length > 0;
 
-  function handleSendBrief() {
-    const mailto = `mailto:${attendees.join(",")}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(briefText)}`;
-    window.open(mailto, "_blank");
+  const mailtoHref = hasEmails
+    ? `mailto:${emailAttendees.join(",")}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(briefText)}`
+    : undefined;
+
+  async function handleSendBrief() {
+    await navigator.clipboard.writeText(briefText);
+
+    if (hasEmails && mailtoRef.current) {
+      mailtoRef.current.click();
+    }
+
+    setSent(true);
+    setTimeout(() => setSent(false), 3000);
   }
 
   async function handleCopyBrief() {
@@ -177,6 +191,15 @@ export function BriefCard({
 
         {/* Send / Copy buttons */}
         <div className="mt-5 pt-4 border-t border-rule flex items-center gap-2">
+          {mailtoHref && (
+            <a
+              ref={mailtoRef}
+              href={mailtoHref}
+              className="hidden"
+              aria-hidden="true"
+              tabIndex={-1}
+            />
+          )}
           <Button
             variant="default"
             size="sm"
@@ -184,8 +207,20 @@ export function BriefCard({
             className="bg-accent text-white hover:bg-accent-hover"
             data-testid="send-brief-btn"
           >
-            <Send className="size-3.5" data-icon="inline-start" />
-            Send brief to attendees
+            {sent ? (
+              <Check className="size-3.5" data-icon="inline-start" />
+            ) : hasEmails ? (
+              <Send className="size-3.5" data-icon="inline-start" />
+            ) : (
+              <Mail className="size-3.5" data-icon="inline-start" />
+            )}
+            {sent
+              ? hasEmails
+                ? "Opened in mail app"
+                : "Brief copied!"
+              : hasEmails
+                ? "Send brief to attendees"
+                : "Copy brief to send"}
           </Button>
           <Button
             variant="ghost"

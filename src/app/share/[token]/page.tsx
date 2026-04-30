@@ -683,7 +683,7 @@ export default async function GuestSharePage({
     // Fetch meeting with issues and decisions
     const { data: meeting, error: meetingError } = await supabase
       .from("meetings")
-      .select("*, issues(*), decisions(*)")
+      .select("*, issues!issues_raised_in_meeting_id_fkey(*), decisions(*)")
       .eq("id", guestShare.resource_id)
       .single();
 
