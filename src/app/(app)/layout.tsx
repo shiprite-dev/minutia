@@ -1,5 +1,13 @@
+import type { Metadata } from "next";
 import { createClient } from "@/lib/supabase/server";
 import { AppShell } from "./app-shell";
+
+export const metadata: Metadata = {
+  title: {
+    default: "OIL Board",
+    template: "%s | Minutia",
+  },
+};
 
 export default async function AppLayout({
   children,
