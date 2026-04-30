@@ -19,9 +19,9 @@ test.describe("Reduced motion support (MIN-003)", () => {
       };
     });
 
-    expect(durations.fast).toBe("0ms");
-    expect(durations.base).toBe("0ms");
-    expect(durations.slow).toBe("0ms");
+    for (const [key, val] of Object.entries(durations)) {
+      expect(val === "0ms" || val === "0s", `${key} should be zero: got "${val}"`).toBe(true);
+    }
   });
 
   test("CSS transitions complete instantly with reduced motion", async ({
@@ -50,10 +50,12 @@ test.describe("Reduced motion support (MIN-003)", () => {
     await page.goto("/");
     await waitForApp(page);
 
-    await expect(page.getByText("Outstanding")).toBeVisible();
+    await expect(
+      page.getByRole("link", { name: "Outstanding" })
+    ).toBeVisible();
 
-    await page.getByRole("link", { name: "Series" }).click();
+    await page.locator("nav[aria-label='Main navigation']").getByRole("link", { name: "Series" }).click();
     await waitForApp(page);
-    await expect(page.getByText("Series").first()).toBeVisible();
+    await expect(page).toHaveTitle(/Series.*Minutia/i);
   });
 });
