@@ -69,6 +69,7 @@ export interface Issue {
   resolved_in_meeting_id: string | null;
   created_at: Date;
   updated_at: Date;
+  update_count?: number;
 }
 
 export interface IssueUpdate {
