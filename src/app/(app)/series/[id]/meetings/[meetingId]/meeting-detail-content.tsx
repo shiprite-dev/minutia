@@ -106,19 +106,35 @@ function MeetingSummaryCard({
         <button
           type="button"
           onClick={handleCopy}
-          className="inline-flex items-center gap-1.5 text-xs text-ink-3 hover:text-ink transition-colors"
+          className="inline-flex items-center gap-1.5 text-xs text-ink-3 hover:text-ink transition-colors overflow-hidden"
         >
-          {copied ? (
-            <>
-              <CheckCheck className="size-3.5" />
-              Copied
-            </>
-          ) : (
-            <>
-              <Copy className="size-3.5" />
-              Copy summary
-            </>
-          )}
+          <AnimatePresence mode="wait" initial={false}>
+            {copied ? (
+              <motion.span
+                key="copied"
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.8 }}
+                transition={{ duration: 0.16 }}
+                className="inline-flex items-center gap-1.5"
+              >
+                <CheckCheck className="size-3.5" />
+                Copied
+              </motion.span>
+            ) : (
+              <motion.span
+                key="copy"
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.8 }}
+                transition={{ duration: 0.16 }}
+                className="inline-flex items-center gap-1.5"
+              >
+                <Copy className="size-3.5" />
+                Copy summary
+              </motion.span>
+            )}
+          </AnimatePresence>
         </button>
       </div>
       <div className="grid grid-cols-4 gap-3">

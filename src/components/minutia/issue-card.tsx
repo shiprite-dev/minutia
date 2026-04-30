@@ -51,12 +51,18 @@ export function IssueCard({
     }
   }
 
+  const isDone = issue.status === "resolved" || issue.status === "dropped";
+
   return (
     <motion.article
       initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.32, ease: [0.2, 0.8, 0.2, 1] }}
-      className="bg-card border border-rule rounded-md p-5"
+      animate={{
+        opacity: isDone ? 0.6 : 1,
+        y: 0,
+        backgroundColor: isDone ? "var(--paper-3)" : "var(--card)",
+      }}
+      transition={{ duration: 0.2, ease: [0.2, 0.8, 0.2, 1] }}
+      className="border border-rule rounded-md p-5"
       tabIndex={0}
       onKeyDown={handleKeyDown}
       role="article"
@@ -70,7 +76,10 @@ export function IssueCard({
         <div className="flex-1 min-w-0">
           <Link
             href={`/issues/${issue.id}`}
-            className="text-left font-sans font-medium text-ink hover:text-ink-2 transition-colors cursor-pointer"
+            className={cn(
+              "text-left font-sans font-medium transition-colors cursor-pointer",
+              isDone ? "text-ink-3 line-through" : "text-ink hover:text-ink-2"
+            )}
           >
             {issue.title}
           </Link>
@@ -109,10 +118,18 @@ export function IssueCard({
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.18, ease: [0.2, 0.8, 0.2, 1] }}
+            transition={{ duration: 0.22, ease: [0.2, 0.8, 0.2, 1] }}
             className="overflow-hidden"
           >
-            <div className="pt-4 mt-4 border-t border-rule">
+            <div className="relative pt-4 mt-4 pl-4">
+              <motion.div
+                initial={{ scaleY: 0 }}
+                animate={{ scaleY: 1 }}
+                exit={{ scaleY: 0 }}
+                transition={{ duration: 0.3, ease: [0.2, 0.8, 0.2, 1] }}
+                className="absolute left-0 top-4 bottom-0 w-px bg-accent origin-top"
+                aria-hidden="true"
+              />
               {issue.description && (
                 <p className="text-sm text-ink-2 leading-relaxed">
                   {issue.description}
