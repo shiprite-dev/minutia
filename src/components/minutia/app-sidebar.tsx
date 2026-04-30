@@ -100,6 +100,7 @@ export function AppSidebar({ profile }: AppSidebarProps) {
       </SidebarHeader>
 
       <SidebarContent>
+        <nav aria-label="Main navigation">
         <SidebarGroup className="px-3">
           <SidebarGroupContent>
             <SidebarMenu className="gap-0.5">
@@ -163,6 +164,7 @@ export function AppSidebar({ profile }: AppSidebarProps) {
             </SidebarGroupContent>
           </SidebarGroup>
         )}
+        </nav>
       </SidebarContent>
 
       <SidebarFooter className="border-t border-rule px-3 py-4">
