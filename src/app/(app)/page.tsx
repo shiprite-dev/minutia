@@ -18,6 +18,7 @@ import {
 } from "@/lib/hooks/use-issues";
 import { useSeries } from "@/lib/hooks/use-series";
 import { useAllMeetings, useMeetings } from "@/lib/hooks/use-meetings";
+import { useDecisions } from "@/lib/hooks/use-decisions";
 import { PRIORITY_CONFIG } from "@/lib/constants";
 import { StatusChip } from "@/components/minutia/status-chip";
 import { CategoryBadge } from "@/components/minutia/category-badge";
@@ -29,6 +30,7 @@ import type {
   Issue,
   IssueStatus,
   MeetingSeries,
+  Decision,
 } from "@/lib/types";
 
 // ---------------------------------------------------------------------------
@@ -50,6 +52,23 @@ function formatShortDate(date: Date | string): string {
     month: "short",
     day: "numeric",
   });
+}
+
+function formatRelativeDue(date: Date | string): { label: string; overdue: boolean } {
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  const due = new Date(date);
+  due.setHours(0, 0, 0, 0);
+  const diffDays = Math.round((due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+
+  if (diffDays < 0) {
+    const absDays = Math.abs(diffDays);
+    return { label: `Overdue by ${absDays}d`, overdue: true };
+  }
+  if (diffDays === 0) return { label: "Due today", overdue: false };
+  if (diffDays === 1) return { label: "Due tomorrow", overdue: false };
+  if (diffDays <= 7) return { label: `Due in ${diffDays}d`, overdue: false };
+  return { label: `Due ${formatShortDate(date)}`, overdue: false };
 }
 
 function formatWeekday(date: Date | string): string {
@@ -474,11 +493,19 @@ function IssueRow({
           {issue.owner_name.charAt(0).toUpperCase()}
         </span>
       )}
-      {issue.due_date && (
-        <span className={cn("text-xs tabular-nums shrink-0", overdue ? "text-accent font-medium" : "text-ink-4")}>
-          {overdue ? "Due " : ""}{formatShortDate(issue.due_date)}
+      {(issue.update_count ?? 0) > 0 && (
+        <span className="hidden sm:inline text-[11px] text-ink-4 tabular-nums shrink-0">
+          {issue.update_count} update{issue.update_count !== 1 ? "s" : ""}
         </span>
       )}
+      {issue.due_date && (() => {
+        const rel = formatRelativeDue(issue.due_date);
+        return (
+          <span className={cn("text-xs tabular-nums shrink-0", rel.overdue ? "text-accent font-medium" : "text-ink-4")}>
+            {rel.label}
+          </span>
+        );
+      })()}
     </motion.div>
   );
 }
@@ -536,6 +563,48 @@ function AgeCard({ issues }: { issues: Issue[] }) {
             </div>
           </div>
         ))}
+      </div>
+    </DashCard>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Recent decisions card
+// ---------------------------------------------------------------------------
+
+function RecentDecisions({
+  decisions,
+  seriesMap,
+}: {
+  decisions: Decision[];
+  seriesMap: Map<string, MeetingSeries & { open_issues_count: number }>;
+}) {
+  const recent = decisions.slice(0, 5);
+  if (recent.length === 0) return null;
+
+  return (
+    <DashCard>
+      <h3 className="font-display text-base font-semibold text-ink mb-4">
+        Recent decisions
+      </h3>
+      <div className="space-y-1">
+        {recent.map((d) => {
+          const series = seriesMap.get(d.series_id);
+          return (
+            <div
+              key={d.id}
+              className="flex items-start gap-2.5 rounded-lg px-3 py-2 hover:bg-paper-2 transition-colors"
+            >
+              <span className="text-accent text-xs mt-0.5 shrink-0">&#9670;</span>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm text-ink truncate">{d.title}</p>
+                {series && (
+                  <p className="text-[11px] text-ink-4 mt-0.5">{series.name}</p>
+                )}
+              </div>
+            </div>
+          );
+        })}
       </div>
     </DashCard>
   );
@@ -743,6 +812,7 @@ export default function Dashboard() {
   const { data: issues, isLoading: issuesLoading } = useIssues();
   const { data: seriesList, isLoading: seriesLoading } = useSeries();
   const { data: meetings, isLoading: meetingsLoading } = useAllMeetings();
+  const { data: allDecisions } = useDecisions();
   const updateStatus = useUpdateIssueStatus();
 
   const isLoading = issuesLoading || seriesLoading || meetingsLoading;
@@ -796,6 +866,7 @@ export default function Dashboard() {
             />
             <div className="space-y-5">
               <SeriesQuickList seriesList={seriesList ?? []} />
+              <RecentDecisions decisions={allDecisions ?? []} seriesMap={seriesMap} />
               <AgeCard issues={issues ?? []} />
             </div>
           </div>

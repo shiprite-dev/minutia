@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { useMeeting, useEndMeeting, useStartMeeting, useUpdateMeetingNotes } from "@/lib/hooks/use-meetings";
 import { useSeriesDetail } from "@/lib/hooks/use-series";
 import { useIssues, useCreateIssue, useUpdateIssueStatus } from "@/lib/hooks/use-issues";
-import { useDecisions } from "@/lib/hooks/use-decisions";
+import { useDecisions, useCreateDecision } from "@/lib/hooks/use-decisions";
 import { SyncIndicator } from "@/components/minutia/sync-indicator";
 import { CaptureInput } from "@/components/minutia/capture-input";
 import { IssueCard } from "@/components/minutia/issue-card";
@@ -17,10 +17,123 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { ShareButton } from "@/components/minutia/share-button";
-import { ArrowLeft, Square, Play, Check, X } from "lucide-react";
+import { ArrowLeft, Square, Play, Check, X, Copy, CheckCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { IssueCategory, IssueStatus, Issue } from "@/lib/types";
+import type { IssueCategory, IssueStatus, Issue, Decision, Meeting } from "@/lib/types";
 import Link from "next/link";
+
+// ---------------------------------------------------------------------------
+// Post-meeting summary card
+// ---------------------------------------------------------------------------
+
+function MeetingSummaryCard({
+  meeting,
+  seriesName,
+  raisedCount,
+  decisionsCount,
+  resolvedCount,
+  stillOpenCount,
+  raisedIssues,
+  decisions,
+  doneIssues,
+}: {
+  meeting: Meeting;
+  seriesName: string;
+  raisedCount: number;
+  decisionsCount: number;
+  resolvedCount: number;
+  stillOpenCount: number;
+  raisedIssues: Issue[];
+  decisions: Decision[];
+  doneIssues: Issue[];
+}) {
+  const [copied, setCopied] = React.useState(false);
+
+  const summaryText = React.useMemo(() => {
+    const lines: string[] = [];
+    lines.push(`${meeting.title} - ${seriesName}`);
+    lines.push(formatMeetingDate(meeting.date));
+    if (meeting.attendees?.length) {
+      lines.push(`Attendees: ${meeting.attendees.join(", ")}`);
+    }
+    lines.push("");
+    lines.push(`Items raised: ${raisedCount}`);
+    if (raisedIssues.length > 0) {
+      for (const issue of raisedIssues) {
+        lines.push(`  - ${issue.title} [${issue.category}]`);
+      }
+    }
+    lines.push("");
+    lines.push(`Decisions made: ${decisionsCount}`);
+    if (decisions.length > 0) {
+      for (const d of decisions) {
+        lines.push(`  - ${d.title}`);
+      }
+    }
+    if (resolvedCount > 0) {
+      lines.push("");
+      lines.push(`Resolved/dropped this meeting: ${resolvedCount}`);
+      for (const issue of doneIssues) {
+        lines.push(`  - ${issue.title} [${issue.status}]`);
+      }
+    }
+    if (stillOpenCount > 0) {
+      lines.push("");
+      lines.push(`Still open (carried): ${stillOpenCount}`);
+    }
+    return lines.join("\n");
+  }, [meeting, seriesName, raisedCount, decisionsCount, resolvedCount, stillOpenCount, raisedIssues, decisions, doneIssues]);
+
+  async function handleCopy() {
+    await navigator.clipboard.writeText(summaryText);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  const stats = [
+    { label: "Raised", value: raisedCount },
+    { label: "Decisions", value: decisionsCount },
+    { label: "Resolved", value: resolvedCount },
+    { label: "Still open", value: stillOpenCount },
+  ];
+
+  return (
+    <div className="mb-8 rounded-xl border border-rule bg-paper-2 p-5">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="font-display text-base font-semibold text-ink">
+          Meeting summary
+        </h2>
+        <button
+          type="button"
+          onClick={handleCopy}
+          className="inline-flex items-center gap-1.5 text-xs text-ink-3 hover:text-ink transition-colors"
+        >
+          {copied ? (
+            <>
+              <CheckCheck className="size-3.5" />
+              Copied
+            </>
+          ) : (
+            <>
+              <Copy className="size-3.5" />
+              Copy summary
+            </>
+          )}
+        </button>
+      </div>
+      <div className="grid grid-cols-4 gap-3">
+        {stats.map((stat) => (
+          <div key={stat.label} className="text-center">
+            <p className="font-display text-2xl font-bold text-ink tabular-nums">
+              {stat.value}
+            </p>
+            <p className="text-[11px] text-ink-3 mt-0.5">{stat.label}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 interface MeetingDetailContentProps {
   seriesId: string;
@@ -376,6 +489,7 @@ export function MeetingDetailContent({
   const endMeeting = useEndMeeting();
   const startMeeting = useStartMeeting();
   const createIssue = useCreateIssue();
+  const createDecision = useCreateDecision();
   const updateIssueStatus = useUpdateIssueStatus();
 
   const [notes, setNotes] = React.useState(meeting?.notes_markdown ?? "");
@@ -451,13 +565,21 @@ export function MeetingDetailContent({
 
   // Handlers
   async function handleCapture(text: string, category: IssueCategory) {
-    await createIssue.mutateAsync({
-      title: text,
-      category,
-      priority: "medium",
-      meeting_id: meetingId,
-      series_id: seriesId,
-    });
+    if (category === "decision") {
+      await createDecision.mutateAsync({
+        title: text,
+        meeting_id: meetingId,
+        series_id: seriesId,
+      });
+    } else {
+      await createIssue.mutateAsync({
+        title: text,
+        category,
+        priority: "medium",
+        meeting_id: meetingId,
+        series_id: seriesId,
+      });
+    }
   }
 
   function handleStatusChange(issueId: string, newStatus: IssueStatus) {
@@ -634,6 +756,33 @@ export function MeetingDetailContent({
                 </div>
               )}
             </section>
+
+            {/* Decisions */}
+            {(decisions ?? []).length > 0 && (
+              <section>
+                <div className="flex items-center gap-3 mb-3">
+                  <h2 className="text-[11px] font-mono uppercase tracking-wider text-ink-4 font-medium">
+                    Decisions
+                  </h2>
+                  <span className="text-[11px] font-mono text-ink-4 tabular-nums">
+                    {(decisions ?? []).length}
+                  </span>
+                  <div className="flex-1 border-t border-dashed border-rule" />
+                </div>
+                <div className="space-y-1">
+                  {(decisions ?? []).map((d) => (
+                    <div
+                      key={d.id}
+                      className="flex items-center gap-3 rounded-lg px-3 py-2.5 hover:bg-paper-2 transition-colors"
+                    >
+                      <span className="text-accent text-xs">&#9670;</span>
+                      <span className="flex-1 text-sm text-ink">{d.title}</span>
+                      <span className="text-[10px] text-ink-4 font-medium uppercase tracking-wider">Decision</span>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
           </div>
 
           {/* Notes sidebar */}
@@ -785,6 +934,18 @@ export function MeetingDetailContent({
             ))}
           </div>
         )}
+
+        <MeetingSummaryCard
+          meeting={meeting}
+          seriesName={series?.name ?? ""}
+          raisedCount={raisedInThisMeeting.length}
+          decisionsCount={meetingDecisions.length}
+          resolvedCount={doneThisMeeting.length}
+          stillOpenCount={carriedIssues.length}
+          raisedIssues={raisedInThisMeeting}
+          decisions={meetingDecisions}
+          doneIssues={doneThisMeeting}
+        />
 
         <section className="mb-8">
           <h2 className="font-display text-lg font-medium text-ink mb-4">

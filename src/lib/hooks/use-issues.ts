@@ -38,7 +38,7 @@ export function useIssues(seriesId?: string) {
     queryFn: async () => {
       let query = supabase
         .from("issues")
-        .select("*")
+        .select("*, issue_updates(count)")
         .order("created_at", { ascending: false });
 
       if (seriesId) {
@@ -47,7 +47,11 @@ export function useIssues(seriesId?: string) {
 
       const { data, error } = await query;
       if (error) throw error;
-      return data as Issue[];
+      return (data ?? []).map((row: any) => ({
+        ...row,
+        update_count: row.issue_updates?.[0]?.count ?? 0,
+        issue_updates: undefined,
+      })) as Issue[];
     },
   });
 }
