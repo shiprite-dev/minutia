@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/command";
 import { useIssues } from "@/lib/hooks/use-issues";
 import { useSeries } from "@/lib/hooks/use-series";
+import { useDecisions } from "@/lib/hooks/use-decisions";
 import { CATEGORY_CONFIG, STATUS_CONFIG } from "@/lib/constants";
 import type { IssueCategory } from "@/lib/types";
 
@@ -35,6 +36,7 @@ export function CommandPalette() {
   const router = useRouter();
   const { data: issues } = useIssues();
   const { data: seriesList } = useSeries();
+  const { data: decisions } = useDecisions();
 
   // Cmd+K / Ctrl+K listener
   useEffect(() => {
@@ -130,6 +132,23 @@ export function CommandPalette() {
                 </CommandItem>
               );
             })}
+          </CommandGroup>
+        )}
+        {/* Decisions */}
+        {decisions && decisions.length > 0 && (
+          <CommandGroup heading="Decisions">
+            {decisions.slice(0, 5).map((d) => (
+              <CommandItem
+                key={d.id}
+                value={`decision ${d.title}`}
+              >
+                <span className="shrink-0 text-xs leading-none text-accent">&#9670;</span>
+                <span className="truncate">{d.title}</span>
+                <span className="ml-auto shrink-0 text-xs text-muted-foreground">
+                  Decision
+                </span>
+              </CommandItem>
+            ))}
           </CommandGroup>
         )}
       </CommandList>
