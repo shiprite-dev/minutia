@@ -50,7 +50,7 @@ test.describe("Semantic HTML landmarks and page titles (MIN-046)", () => {
     await page.goto(`/series/${SERIES.platformStandup}`);
     await waitForApp(page);
 
-    await expect(page).toHaveTitle(/Series.*Minutia/i);
+    await expect(page).toHaveTitle(/Platform Team Standup.*Minutia/i);
   });
 
   test("main content landmark exists", async ({ page }) => {
