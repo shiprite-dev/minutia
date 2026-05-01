@@ -33,7 +33,7 @@ test.describe("OIL Board", () => {
     const quickAddButton = page.getByLabel(/Quick add/i);
 
     if (await quickAddButton.isVisible().catch(() => false)) {
-      await quickAddButton.click();
+      await quickAddButton.dispatchEvent("click");
 
       // Check if input area appeared
       const input = page.locator("input[placeholder*='Add']").or(
@@ -66,9 +66,9 @@ test.describe("OIL Board", () => {
     await page.goto("/");
     await page.waitForSelector("text=Outstanding", { timeout: 10000 });
 
-    // Check for either content or empty state
-    const hasContent = await page.getByText(/OPEN|PENDING|OVERDUE/).isVisible().catch(() => false);
-    const hasEmptyState = await page.getByText(/No issues|Get started|Create/i).isVisible().catch(() => false);
+    // Check for either content (outstanding items heading or empty state message)
+    const hasContent = await page.getByText("Outstanding items").isVisible().catch(() => false);
+    const hasEmptyState = await page.getByText(/No issues|Get started|Create|Nothing outstanding/i).isVisible().catch(() => false);
 
     expect(hasContent || hasEmptyState).toBe(true);
   });

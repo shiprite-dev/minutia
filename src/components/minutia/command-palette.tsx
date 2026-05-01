@@ -58,7 +58,7 @@ export function CommandPalette() {
     []
   );
 
-  const displayedIssues = (issues ?? []).slice(0, 10);
+  const displayedIssues = issues ?? [];
 
   return (
     <CommandDialog
