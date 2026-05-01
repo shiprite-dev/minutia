@@ -7,7 +7,7 @@ test.describe("My Actions Page", () => {
     await page.goto("/actions");
 
     await expect(
-      page.getByRole("heading", { name: "My Actions" })
+      page.getByRole("heading", { name: "My Actions" }).first()
     ).toBeVisible();
   });
 
@@ -109,7 +109,7 @@ test.describe("My Actions Page", () => {
     await actionsLink.click();
     await expect(page).toHaveURL("/actions");
     await expect(
-      page.getByRole("heading", { name: "My Actions" })
+      page.getByRole("heading", { name: "My Actions" }).first()
     ).toBeVisible();
   });
 

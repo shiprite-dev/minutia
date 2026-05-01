@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { Search } from "lucide-react";
+import { Search, Calendar, PanelRightClose, PanelRightOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { useUIStore } from "@/lib/stores/ui-store";
@@ -65,6 +65,8 @@ interface AppHeaderProps {
 export function AppHeader({ profile }: AppHeaderProps) {
   const pathname = usePathname();
   const openCommandPalette = useUIStore((s) => s.openCommandPalette);
+  const calendarSidebarOpen = useUIStore((s) => s.calendarSidebarOpen);
+  const toggleCalendarSidebar = useUIStore((s) => s.toggleCalendarSidebar);
   const title = resolveTitle(pathname);
 
   return (
@@ -96,6 +98,32 @@ export function AppHeader({ profile }: AppHeaderProps) {
       >
         <Search className="size-4" />
         <span className="sr-only">Search</span>
+      </Button>
+
+      {/* Desktop: panel toggle */}
+      <Button
+        variant="ghost"
+        size="icon"
+        className="hidden size-8 text-ink-3 hover:text-ink md:flex"
+        onClick={toggleCalendarSidebar}
+        aria-label={calendarSidebarOpen ? "Close calendar" : "Open calendar"}
+      >
+        {calendarSidebarOpen ? (
+          <PanelRightClose className="size-4" />
+        ) : (
+          <PanelRightOpen className="size-4" />
+        )}
+      </Button>
+
+      {/* Mobile: calendar icon */}
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        className="text-ink-3 hover:text-ink md:hidden"
+        onClick={toggleCalendarSidebar}
+        aria-label="Open calendar"
+      >
+        <Calendar className="size-4" />
       </Button>
 
       {profile && (
