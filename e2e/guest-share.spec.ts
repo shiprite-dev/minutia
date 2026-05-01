@@ -49,7 +49,11 @@ test.describe("Guest Share Page", () => {
     expect(hasContent).toBe(true);
   });
 
-  test("expired share shows error state", async ({ page }) => {
+  test("expired share shows error state", async ({ browser }) => {
+    const context = await browser.newContext({
+      storageState: { cookies: [], origins: [] },
+    });
+    const page = await context.newPage();
     await page.goto("/share/test-share-expired-xyz000");
 
     const hasExpired = await page
@@ -58,6 +62,7 @@ test.describe("Guest Share Page", () => {
       .isVisible({ timeout: 10000 })
       .catch(() => false);
 
+    await context.close();
     expect(hasExpired).toBe(true);
   });
 
