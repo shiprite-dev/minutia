@@ -12,10 +12,11 @@ import {
   useStartMeeting,
 } from "@/lib/hooks/use-meetings";
 import { useIssues } from "@/lib/hooks/use-issues";
+import { useDecisions } from "@/lib/hooks/use-decisions";
 import { BriefCard } from "@/components/minutia/brief-card";
 import { EmptyState } from "@/components/minutia/empty-state";
 import { IssueCard } from "@/components/minutia/issue-card";
-import { MeetingTimelineItem } from "@/components/minutia/meeting-timeline-item";
+import { DateAnchoredTimeline } from "@/components/minutia/date-anchored-timeline";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
@@ -59,6 +60,7 @@ export function SeriesDetailContent({ seriesId }: SeriesDetailContentProps) {
   const { data: series, isLoading: seriesLoading } = useSeriesDetail(seriesId);
   const { data: meetings, isLoading: meetingsLoading } = useMeetings(seriesId);
   const { data: issues } = useIssues(seriesId);
+  const { data: decisions } = useDecisions(undefined, seriesId);
 
   const createMeeting = useCreateMeeting();
   const startMeeting = useStartMeeting();
@@ -93,6 +95,18 @@ export function SeriesDetailContent({ seriesId }: SeriesDetailContentProps) {
     openIssues.length > 0 ||
     (nextMeeting &&
       new Date(nextMeeting.date).getTime() - Date.now() < 24 * 60 * 60 * 1000);
+
+  const timelineMeetings = React.useMemo(() => {
+    return sortedMeetings.map((meeting) => ({
+      ...meeting,
+      issues: (issues ?? []).filter(
+        (iss) => iss.raised_in_meeting_id === meeting.id
+      ),
+      decisions: (decisions ?? []).filter(
+        (dec) => dec.meeting_id === meeting.id
+      ),
+    }));
+  }, [sortedMeetings, issues, decisions]);
 
   async function handleStartMeeting() {
     if (!series) return;
@@ -208,7 +222,7 @@ export function SeriesDetailContent({ seriesId }: SeriesDetailContentProps) {
         {/* Meeting history timeline */}
         <section className="mb-8">
           <h2 className="font-display text-lg font-medium text-ink mb-4">
-            Meeting history
+            Timeline
           </h2>
 
           {meetingsLoading && (
@@ -229,31 +243,11 @@ export function SeriesDetailContent({ seriesId }: SeriesDetailContentProps) {
             <EmptyState variant="no-meetings" />
           )}
 
-          {!meetingsLoading && sortedMeetings.length > 0 && (
-            <div>
-              {sortedMeetings.map((meeting, i) => {
-                const meetingIssues = (issues ?? []).filter(
-                  (iss) => iss.raised_in_meeting_id === meeting.id
-                );
-                const raised = meetingIssues.length;
-                const resolved = meetingIssues.filter(
-                  (iss) => iss.status === "resolved"
-                ).length;
-
-                return (
-                  <MeetingTimelineItem
-                    key={meeting.id}
-                    meeting={meeting}
-                    seriesId={seriesId}
-                    sequence={sortedMeetings.length - i}
-                    itemsRaised={raised}
-                    itemsResolved={resolved}
-                    isLast={i === sortedMeetings.length - 1}
-                    index={i}
-                  />
-                );
-              })}
-            </div>
+          {!meetingsLoading && timelineMeetings.length > 0 && (
+            <DateAnchoredTimeline
+              meetings={timelineMeetings}
+              seriesId={seriesId}
+            />
           )}
         </section>
 
