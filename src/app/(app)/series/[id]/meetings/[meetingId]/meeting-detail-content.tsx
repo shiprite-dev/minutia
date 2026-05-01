@@ -666,7 +666,9 @@ export function MeetingDetailContent({
   const carriedIssues = allCarriedIssues.filter(
     (issue) => issue.status !== "resolved" && issue.status !== "dropped"
   );
-  const doneThisMeeting = allCarriedIssues.filter(
+  // Issues resolved/dropped during this meeting (both carried AND raised here)
+  const allSeriesIssues = seriesIssues ?? [];
+  const doneThisMeeting = allSeriesIssues.filter(
     (issue) =>
       (issue.status === "resolved" || issue.status === "dropped") &&
       issue.resolved_in_meeting_id === meetingId
@@ -728,7 +730,7 @@ export function MeetingDetailContent({
   }
 
   function handleStatusChange(issueId: string, newStatus: IssueStatus) {
-    const issue = [...raisedInThisMeeting, ...carriedIssues].find(
+    const issue = [...raisedInThisMeeting, ...allSeriesIssues].find(
       (i) => i.id === issueId
     );
     if (!issue) return;
@@ -1122,6 +1124,21 @@ export function MeetingDetailContent({
             onAddItem={handleInlineAdd}
           />
         </section>
+
+        {doneThisMeeting.length > 0 && (
+          <section className="mb-8">
+            <h2 className="font-display text-lg font-medium text-ink mb-4">
+              Resolved this meeting ({doneThisMeeting.length})
+            </h2>
+            <InlineTaskList
+              issues={doneThisMeeting}
+              attendees={meeting.attendees ?? series?.default_attendees ?? []}
+              onStatusChange={handleStatusChange}
+              onTitleChange={handleTitleChange}
+              onAssigneeChange={handleAssigneeChange}
+            />
+          </section>
+        )}
 
         {meetingDecisions.length > 0 && (
           <section className="mb-8">
