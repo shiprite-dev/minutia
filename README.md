@@ -137,6 +137,23 @@ Minutia is AI-optional. The data model is AI-ready from day one, but AI features
 
 Self-hosters bring their own API key (Claude, OpenAI, Ollama). Cloud users get AI included.
 
+## Roadmap
+
+### In Progress
+- Onboarding flow for first-time users
+- Email digests and pre-meeting nudges (Resend + SMTP)
+
+### Planned
+- `/api/v1/ingest` REST endpoint for transcript ingestion
+- AI auto-classification and smart pre-meeting briefs
+- Real-time collaboration (Supabase Realtime subscriptions)
+- Team/org management (multi-user beyond single profile)
+- Drag-to-reorder issue priority
+- PDF export
+- Landing page and marketing site
+
+---
+
 ## Keyboard Shortcuts
 
 | Key | Action |
@@ -161,10 +178,10 @@ Self-hosters bring their own API key (Claude, OpenAI, Ollama). Cloud users get A
 | Styling | Tailwind CSS v4 + OKLCH color system |
 | Components | shadcn/ui (Radix primitives) |
 | Database | Postgres via Supabase (RLS on every table) |
-| Auth | Supabase Auth (email/password) |
+| Auth | Supabase Auth (email/password, Google OAuth) |
 | State | TanStack React Query + Zustand |
 | Animation | Motion v12 |
-| Testing | Playwright (114+ E2E tests) |
+| Testing | Playwright (120+ E2E tests) |
 
 ### Project Structure
 
