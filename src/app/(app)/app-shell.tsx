@@ -7,6 +7,7 @@ import { AppHeader } from "@/components/minutia/app-header";
 import { CommandPalette } from "@/components/minutia/command-palette";
 import { KeyboardShortcutsDialog } from "@/components/minutia/keyboard-shortcuts-dialog";
 import { GotoShortcuts } from "@/components/minutia/goto-shortcuts";
+import { CalendarSidebar } from "@/components/minutia/calendar-sidebar";
 import type { Profile } from "@/lib/types";
 
 interface AppShellProps {
@@ -26,9 +27,12 @@ export function AppShell({ profile, children }: AppShellProps) {
       <AppSidebar profile={profile} />
       <SidebarInset>
         <AppHeader profile={profile} />
-        <main id="main-content" className="flex flex-1 flex-col overflow-y-auto bg-paper">
-          {children}
-        </main>
+        <div className="flex flex-1 overflow-hidden">
+          <main id="main-content" className="flex flex-1 flex-col overflow-y-auto bg-paper">
+            {children}
+          </main>
+          <CalendarSidebar />
+        </div>
       </SidebarInset>
       <CommandPalette />
       <KeyboardShortcutsDialog />
