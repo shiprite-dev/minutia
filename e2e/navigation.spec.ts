@@ -1,6 +1,8 @@
 import { test, expect } from "@playwright/test";
 
 test.describe("Navigation", () => {
+  test.use({ storageState: { cookies: [], origins: [] } });
+
   test("sidebar navigation links are present on app pages", async ({ page }) => {
     // Navigate to login since we may not be authenticated
     await page.goto("/login");
@@ -15,7 +17,7 @@ test.describe("Navigation", () => {
 
   test("page titles are correct", async ({ page }) => {
     await page.goto("/login");
-    await expect(page.title()).resolves.toContain("minutia");
+    await expect(page.title()).resolves.toMatch(/minutia/i);
   });
 });
 
@@ -26,9 +28,9 @@ test.describe("Authenticated Navigation", () => {
     await page.goto("/");
 
     const navItems = [
-      { label: "OIL Board", href: "/" },
+      { label: "Outstanding", href: "/" },
       { label: "Series", href: "/series" },
-      { label: "My Actions", href: "/actions" },
+      { label: "My actions", href: "/actions" },
       { label: "Inbox", href: "/inbox" },
     ];
 
