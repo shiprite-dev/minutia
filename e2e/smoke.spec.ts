@@ -40,24 +40,39 @@ test.describe("Smoke Tests", () => {
     }
   });
 
-  test("responsive layout renders on mobile", async ({ page }) => {
-    await page.setViewportSize({ width: 375, height: 667 });
+  test("responsive layout renders on mobile", async ({ browser }) => {
+    const context = await browser.newContext({
+      storageState: { cookies: [], origins: [] },
+      viewport: { width: 375, height: 667 },
+    });
+    const page = await context.newPage();
     await page.goto("/login");
 
     await expect(page.getByRole("heading", { name: "minutia" })).toBeVisible();
+    await context.close();
   });
 
-  test("responsive layout renders on tablet", async ({ page }) => {
-    await page.setViewportSize({ width: 768, height: 1024 });
+  test("responsive layout renders on tablet", async ({ browser }) => {
+    const context = await browser.newContext({
+      storageState: { cookies: [], origins: [] },
+      viewport: { width: 768, height: 1024 },
+    });
+    const page = await context.newPage();
     await page.goto("/login");
 
     await expect(page.getByRole("heading", { name: "minutia" })).toBeVisible();
+    await context.close();
   });
 
-  test("responsive layout renders on desktop", async ({ page }) => {
-    await page.setViewportSize({ width: 1440, height: 900 });
+  test("responsive layout renders on desktop", async ({ browser }) => {
+    const context = await browser.newContext({
+      storageState: { cookies: [], origins: [] },
+      viewport: { width: 1440, height: 900 },
+    });
+    const page = await context.newPage();
     await page.goto("/login");
 
     await expect(page.getByRole("heading", { name: "minutia" })).toBeVisible();
+    await context.close();
   });
 });
