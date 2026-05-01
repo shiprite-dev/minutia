@@ -7,6 +7,7 @@ import {
   Check,
   Plus,
   ChevronDown,
+  ExternalLink,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CATEGORY_CONFIG } from "@/lib/constants";
@@ -187,27 +188,17 @@ function InlineTaskItem({
             className="w-full bg-transparent text-sm text-ink outline-none border-b border-accent py-0.5"
           />
         ) : (
-          <Link
-            href={`/issues/${issue.id}`}
-            onClick={(e) => {
-              if (!readOnly) {
-                e.preventDefault();
-                setEditing(true);
-              }
-            }}
-            onDoubleClick={(e) => {
-              e.preventDefault();
-              setEditing(true);
+          <span
+            onDoubleClick={() => {
+              if (!readOnly) setEditing(true);
             }}
             className={cn(
-              "text-sm transition-colors block truncate",
-              isChecked
-                ? "line-through text-ink-3"
-                : "text-ink hover:text-accent",
+              "text-sm transition-colors block truncate cursor-default",
+              isChecked ? "line-through text-ink-3" : "text-ink",
             )}
           >
             {issue.title}
-          </Link>
+          </span>
         )}
 
         {/* @mention dropdown */}
@@ -252,6 +243,15 @@ function InlineTaskItem({
           </div>
         )}
       </div>
+
+      {/* Open detail */}
+      <Link
+        href={`/issues/${issue.id}`}
+        className="shrink-0 flex items-center justify-center size-6 rounded-full text-ink-4 hover:text-accent hover:bg-paper-3 transition-colors opacity-0 group-hover:opacity-100"
+        aria-label="Open issue detail"
+      >
+        <ExternalLink className="size-3" />
+      </Link>
 
       {/* Category pill */}
       <span
