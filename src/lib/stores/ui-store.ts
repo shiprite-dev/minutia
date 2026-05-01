@@ -27,6 +27,13 @@ interface UIState {
   // Sidebar
   sidebarOpen: boolean;
   toggleSidebar: () => void;
+
+  // Calendar sidebar (right panel)
+  calendarSidebarOpen: boolean;
+  toggleCalendarSidebar: () => void;
+  setCalendarSidebarOpen: (open: boolean) => void;
+  selectedDate: Date;
+  setSelectedDate: (date: Date) => void;
 }
 
 export const useUIStore = create<UIState>((set) => ({
@@ -53,4 +60,19 @@ export const useUIStore = create<UIState>((set) => ({
   sidebarOpen: true,
   toggleSidebar: () =>
     set((state) => ({ sidebarOpen: !state.sidebarOpen })),
+
+  // Calendar sidebar (persisted to localStorage, hydrated via useEffect in CalendarSidebar)
+  calendarSidebarOpen: false,
+  toggleCalendarSidebar: () =>
+    set((state) => {
+      const next = !state.calendarSidebarOpen;
+      try { localStorage.setItem("minutia:calendar-sidebar", String(next)); } catch {}
+      return { calendarSidebarOpen: next };
+    }),
+  setCalendarSidebarOpen: (open) => {
+    try { localStorage.setItem("minutia:calendar-sidebar", String(open)); } catch {}
+    set({ calendarSidebarOpen: open });
+  },
+  selectedDate: new Date(),
+  setSelectedDate: (date) => set({ selectedDate: date }),
 }));

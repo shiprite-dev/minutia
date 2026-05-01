@@ -65,7 +65,9 @@ export async function middleware(request: NextRequest) {
   }
 
   if (pathname === "/login" || pathname === "/auth/callback") {
-    if (isRateLimited(`auth:${ip}`, 10, 60_000)) {
+    // Use a higher limit in development to avoid blocking parallel test workers.
+    const authRateLimit = process.env.NODE_ENV === "production" ? 10 : 200;
+    if (isRateLimited(`auth:${ip}`, authRateLimit, 60_000)) {
       return new NextResponse("Too Many Requests", { status: 429 });
     }
   }
