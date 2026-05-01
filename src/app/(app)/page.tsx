@@ -301,6 +301,8 @@ function OutstandingItems({
   const router = useRouter();
   const [filter, setFilter] = React.useState<"all" | "open" | "pending" | "overdue">("all");
   const [focusedIdx, setFocusedIdx] = React.useState(-1);
+  const [expandedSeries, setExpandedSeries] = React.useState<Set<string>>(new Set());
+  const PREVIEW_COUNT = 3;
 
   const openIssues = issues.filter(isOpen);
 
@@ -321,15 +323,18 @@ function OutstandingItems({
   const sortedPriority = (a: Issue, b: Issue) =>
     PRIORITY_CONFIG[a.priority].order - PRIORITY_CONFIG[b.priority].order;
 
-  // Flat list of visible issues for keyboard nav
+  // Flat list of visible issues for keyboard nav (respects collapsed state)
   const flatIssues = React.useMemo(() => {
     const result: Issue[] = [];
     for (const series of seriesList) {
       const seriesIssues = (grouped.get(series.id) ?? []).sort(sortedPriority);
-      result.push(...seriesIssues);
+      const visible = expandedSeries.has(series.id)
+        ? seriesIssues
+        : seriesIssues.slice(0, PREVIEW_COUNT);
+      result.push(...visible);
     }
     return result;
-  }, [filtered, seriesList]);
+  }, [filtered, seriesList, expandedSeries]);
 
   React.useEffect(() => {
     function handleKey(e: KeyboardEvent) {
@@ -423,22 +428,63 @@ function OutstandingItems({
 
                 {seriesIssues.length === 0 ? (
                   <p className="text-xs text-ink-4 pl-5 mb-2">No matching items</p>
-                ) : (
-                  <div className="space-y-1">
-                    {seriesIssues.map((issue, idx) => {
-                      const globalIdx = flatIssues.indexOf(issue);
-                      return (
-                        <IssueRow
-                          key={issue.id}
-                          issue={issue}
-                          index={idx}
-                          focused={globalIdx === focusedIdx}
-                          onStatusChange={onStatusChange}
-                        />
-                      );
-                    })}
-                  </div>
-                )}
+                ) : (() => {
+                  const isExpanded = expandedSeries.has(series.id);
+                  const visible = isExpanded ? seriesIssues : seriesIssues.slice(0, PREVIEW_COUNT);
+                  const hiddenCount = seriesIssues.length - PREVIEW_COUNT;
+
+                  return (
+                    <div className="space-y-1">
+                      {visible.map((issue, idx) => {
+                        const globalIdx = flatIssues.indexOf(issue);
+                        return (
+                          <IssueRow
+                            key={issue.id}
+                            issue={issue}
+                            index={idx}
+                            focused={globalIdx === focusedIdx}
+                            onStatusChange={onStatusChange}
+                          />
+                        );
+                      })}
+                      {hiddenCount > 0 && !isExpanded && (
+                        <div className="flex items-center gap-3 pl-3 pt-1">
+                          <button
+                            type="button"
+                            onClick={() => setExpandedSeries((prev) => {
+                              const next = new Set(prev);
+                              next.add(series.id);
+                              return next;
+                            })}
+                            className="text-xs font-medium text-ink-3 hover:text-accent transition-colors cursor-pointer"
+                          >
+                            +{hiddenCount} more
+                          </button>
+                          <span className="text-ink-4">·</span>
+                          <Link
+                            href={`/series/${series.id}`}
+                            className="text-xs font-medium text-ink-3 hover:text-accent transition-colors"
+                          >
+                            View series
+                          </Link>
+                        </div>
+                      )}
+                      {isExpanded && hiddenCount > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setExpandedSeries((prev) => {
+                            const next = new Set(prev);
+                            next.delete(series.id);
+                            return next;
+                          })}
+                          className="text-xs font-medium text-ink-3 hover:text-accent transition-colors pl-3 pt-1 cursor-pointer"
+                        >
+                          Show less
+                        </button>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
             );
           })}
