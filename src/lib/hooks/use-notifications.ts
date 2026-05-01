@@ -23,7 +23,7 @@ export function useNotifications() {
         .from("notifications")
         .select("*")
         .order("created_at", { ascending: false })
-        .limit(50);
+        .limit(200);
 
       if (error) throw error;
       return data as Notification[];

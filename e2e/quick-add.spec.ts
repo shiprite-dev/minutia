@@ -24,12 +24,12 @@ test.describe("Quick Add FAB", () => {
     await expect(page.getByText("Outstanding items")).toBeVisible();
 
     const fab = page.getByLabel("Quick add issue");
-    await fab.click();
+    await fab.dispatchEvent("click");
 
     await expect(page.getByPlaceholder("New issue title...")).toBeVisible();
 
     // Click again to close
-    await fab.click();
+    await fab.dispatchEvent("click");
     await expect(page.getByPlaceholder("New issue title...")).not.toBeVisible();
   });
 

@@ -32,11 +32,13 @@ import { StaleItemsWidget } from "@/components/minutia/widgets/stale-items-widge
 import { SeriesHealthWidget } from "@/components/minutia/widgets/series-health-widget";
 import { MeetingTriageWidget } from "@/components/minutia/widgets/meeting-triage-widget";
 import { WorkloadWidget } from "@/components/minutia/widgets/workload-widget";
+import { useCalendarEvents } from "@/lib/hooks/use-google-calendar";
 import type {
   Issue,
   IssueStatus,
   MeetingSeries,
   Decision,
+  GoogleCalendarEvent,
 } from "@/lib/types";
 
 // ---------------------------------------------------------------------------
@@ -232,13 +234,22 @@ function NextMeetingWidget({
   id,
   widgetIndex,
   seriesList,
+  calendarEvents,
 }: {
   id: string;
   widgetIndex: number;
   seriesList: (MeetingSeries & { open_issues_count: number })[];
+  calendarEvents?: GoogleCalendarEvent[];
 }) {
   const nextSeries = seriesList[0];
   if (!nextSeries) return null;
+
+  const nextEvent = calendarEvents?.[0];
+  const eventTime = nextEvent?.start?.dateTime
+    ? new Date(nextEvent.start.dateTime)
+    : nextEvent?.start?.date
+      ? new Date(nextEvent.start.date)
+      : null;
 
   return (
     <WidgetShell id={id} index={widgetIndex}>
@@ -251,9 +262,25 @@ function NextMeetingWidget({
       <h3 className="font-display text-lg font-semibold text-ink mb-1">
         {nextSeries.name}
       </h3>
-      <p className="text-sm text-ink-2 capitalize mb-4">
-        {nextSeries.cadence === "adhoc" ? "Ad hoc" : nextSeries.cadence}
-      </p>
+      {eventTime ? (
+        <div className="mb-4">
+          <p className="text-sm font-medium text-ink-2">
+            {eventTime.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
+            {nextEvent?.start?.dateTime && (
+              <span className="text-ink-3">
+                {" "}at {eventTime.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+              </span>
+            )}
+          </p>
+          {nextEvent?.summary && nextEvent.summary !== nextSeries.name && (
+            <p className="text-xs text-ink-3 mt-0.5 truncate">{nextEvent.summary}</p>
+          )}
+        </div>
+      ) : (
+        <p className="text-sm text-ink-2 capitalize mb-4">
+          {nextSeries.cadence === "adhoc" ? "Ad hoc" : nextSeries.cadence}
+        </p>
+      )}
       {nextSeries.open_issues_count > 0 && (
         <p className="text-sm text-ink-2 mb-5">
           <span className="text-accent font-medium"><span className="font-mono">{nextSeries.open_issues_count}</span> items pending</span> from last meeting.
@@ -871,6 +898,7 @@ function WidgetRenderer({
   pendingCount,
   overdueCount,
   onStatusChange,
+  calendarEvents,
 }: {
   widgetId: string;
   widgetType: string;
@@ -884,6 +912,7 @@ function WidgetRenderer({
   pendingCount: number;
   overdueCount: number;
   onStatusChange: (issueId: string, oldStatus: IssueStatus, newStatus: IssueStatus, seriesId: string) => void;
+  calendarEvents?: GoogleCalendarEvent[];
 }) {
   switch (widgetType) {
     case "hero":
@@ -904,6 +933,7 @@ function WidgetRenderer({
           id={widgetId}
           widgetIndex={widgetIndex}
           seriesList={seriesList}
+          calendarEvents={calendarEvents}
         />
       );
     case "outstanding":
@@ -996,6 +1026,9 @@ export default function Dashboard() {
   const { data: allDecisions } = useDecisions();
   const updateStatus = useUpdateIssueStatus();
   const widgets = useWidgetStore((s) => s.widgets);
+
+  const firstSeriesId = seriesList?.[0]?.gcal_sync_enabled ? seriesList[0].id : undefined;
+  const { data: calendarEvents } = useCalendarEvents(firstSeriesId);
 
   const isLoading = issuesLoading || seriesLoading || meetingsLoading;
 
@@ -1091,6 +1124,7 @@ export default function Dashboard() {
     pendingCount,
     overdueCount,
     onStatusChange: handleStatusChange,
+    calendarEvents: calendarEvents ?? undefined,
   };
 
   return (

@@ -13,10 +13,14 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Sun, Moon, Monitor, Download } from "lucide-react";
+import { Sun, Moon, Monitor, Download, Calendar, Unplug } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useIssues } from "@/lib/hooks/use-issues";
 import { issuesToCsv, issuesToJson, downloadFile } from "@/lib/export";
+import {
+  useGoogleCalendarStatus,
+  useDisconnectGoogle,
+} from "@/lib/hooks/use-google-calendar";
 
 const themeOptions = [
   { value: "light", label: "Light", icon: Sun },
@@ -29,6 +33,8 @@ export default function SettingsPage() {
   const updateProfile = useUpdateProfile();
   const { theme, setTheme } = useTheme();
   const { data: allIssues } = useIssues();
+  const { data: gcalStatus } = useGoogleCalendarStatus();
+  const disconnectGoogle = useDisconnectGoogle();
 
   const [name, setName] = useState("");
   const [nameInitialized, setNameInitialized] = useState(false);
@@ -129,6 +135,50 @@ export default function SettingsPage() {
                   {option.label}
                 </Button>
               ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Connected accounts */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Connected accounts</CardTitle>
+            <CardDescription>
+              Link external services to enhance your workflow.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="flex items-center justify-center size-9 rounded-lg bg-paper-2">
+                  <Calendar className="size-4 text-ink-2" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-ink">Google Calendar</p>
+                  {gcalStatus?.connected ? (
+                    <p className="text-xs text-ink-3">{gcalStatus.googleEmail}</p>
+                  ) : (
+                    <p className="text-xs text-ink-3">
+                      Show real meeting times on your dashboard.
+                    </p>
+                  )}
+                </div>
+              </div>
+              {gcalStatus?.connected ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => disconnectGoogle.mutate()}
+                  disabled={disconnectGoogle.isPending}
+                >
+                  <Unplug className="size-3.5" />
+                  {disconnectGoogle.isPending ? "Disconnecting..." : "Disconnect"}
+                </Button>
+              ) : (
+                <Button variant="outline" size="sm" asChild>
+                  <a href="/api/auth/google">Connect</a>
+                </Button>
+              )}
             </div>
           </CardContent>
         </Card>
