@@ -58,13 +58,18 @@ export async function GET(request: NextRequest) {
   });
   const userinfo = userinfoRes.ok ? await userinfoRes.json() : { email: "unknown" };
 
-  await storeTokens(
-    userId,
-    tokens.access_token,
-    tokens.refresh_token,
-    tokens.expires_in,
-    userinfo.email
-  );
+  try {
+    await storeTokens(
+      userId,
+      tokens.access_token,
+      tokens.refresh_token,
+      tokens.expires_in,
+      userinfo.email
+    );
+  } catch (err) {
+    console.error("Failed to store Google tokens:", err);
+    return NextResponse.redirect(new URL("/settings?gcal=error&reason=store_failed", request.url));
+  }
 
   return NextResponse.redirect(new URL("/settings?gcal=connected", request.url));
 }
