@@ -116,7 +116,8 @@ export function StatusChip({ status, onChange, readonly }: StatusChipProps) {
           aria-expanded={isInteractive ? expanded : undefined}
           aria-label={`Status: ${config.label}`}
           className={cn(
-            "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors",
+            "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors outline-none",
+            "focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-paper",
             colors.bg,
             colors.text,
             isInteractive && "cursor-pointer hover:opacity-80",

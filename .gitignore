@@ -48,3 +48,6 @@ next-env.d.ts
 # internal project management (not for public repo)
 tasks.json
 MINUTIA-PRD-*.md
+GTM-STRATEGY.md
+minutia-prototype.html
+CLAUDE.md

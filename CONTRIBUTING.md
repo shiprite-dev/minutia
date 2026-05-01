@@ -12,7 +12,7 @@ Thank you for your interest in contributing to Minutia. This guide covers everyt
 ## Development Setup
 
 ```bash
-git clone https://github.com/minutia-app/minutia.git
+git clone https://github.com/shiprite-dev/minutia.git
 cd minutia
 cp .env.example .env.local
 # Fill in your Supabase keys in .env.local
