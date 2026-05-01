@@ -405,13 +405,13 @@ function OutstandingItems({
           </div>
         </div>
       ) : (
-        <div className="space-y-6">
+        <div className="divide-y divide-rule">
           {seriesList.map((series) => {
             const seriesIssues = (grouped.get(series.id) ?? []).sort(sortedPriority);
             if (seriesIssues.length === 0 && filter !== "all") return null;
 
             return (
-              <div key={series.id}>
+              <div key={series.id} className="py-5 first:pt-0 last:pb-0">
                 <div className="flex items-center gap-3 mb-3">
                   <span className="size-2 rounded-full bg-accent" />
                   <Link
@@ -436,7 +436,7 @@ function OutstandingItems({
                   const hiddenCount = seriesIssues.length - PREVIEW_COUNT;
 
                   return (
-                    <div className="space-y-1">
+                    <div className="space-y-1.5">
                       {visible.map((issue, idx) => {
                         const globalIdx = flatIssues.indexOf(issue);
                         return (
