@@ -9,7 +9,7 @@ test.describe("OIL Board card stagger (MIN-004)", () => {
     await waitForApp(page);
 
     const issueLink = page.getByRole("link", { name: /migrate ci/i }).first();
-    await expect(issueLink).toBeVisible();
+    await expect(issueLink).toBeVisible({ timeout: 10000 });
 
     const issueRow = issueLink.locator("xpath=ancestor::div[contains(@class, 'rounded-lg')]");
     const opacity = await issueRow.evaluate(

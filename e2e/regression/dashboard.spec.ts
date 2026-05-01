@@ -42,12 +42,12 @@ test.describe("OIL Board Dashboard", () => {
 
     const filters = ["All", "Open", "Pending", "Overdue"];
     for (const label of filters) {
-      const btn = page.getByRole("button", { name: label, exact: true });
-      await expect(btn).toBeVisible();
+      const tab = page.getByRole("tab", { name: label, exact: true });
+      await expect(tab).toBeVisible();
     }
 
     await page
-      .getByRole("button", { name: "Overdue", exact: true })
+      .getByRole("tab", { name: "Overdue", exact: true })
       .click();
 
     await expect(
@@ -58,14 +58,14 @@ test.describe("OIL Board Dashboard", () => {
         .first()
     ).toBeVisible();
 
-    await page.getByRole("button", { name: "All", exact: true }).click();
+    await page.getByRole("tab", { name: "All", exact: true }).click();
   });
 
   test("next meeting card displays series info", async ({ page }) => {
     await page.goto("/");
     await waitForApp(page);
 
-    await expect(page.getByText("Next meeting")).toBeVisible();
+    await expect(page.getByText("Next meeting", { exact: true }).first()).toBeVisible();
     await expect(
       page.getByRole("button", { name: "Open series" })
     ).toBeVisible();
@@ -147,7 +147,7 @@ test.describe("Overdue Issue Highlighting", () => {
     await waitForApp(page);
 
     await page
-      .getByRole("button", { name: "Overdue", exact: true })
+      .getByRole("tab", { name: "Overdue", exact: true })
       .click();
 
     await expect(
