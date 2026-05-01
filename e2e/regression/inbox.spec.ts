@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { waitForApp } from "./seed-data";
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "http://127.0.0.1:54321";
+const SUPABASE_URL = process.env.SUPABASE_URL ?? "http://127.0.0.1:54321";
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
 
 const SEED_NOTIFICATION_UNREAD = [
@@ -16,9 +16,11 @@ const SEED_NOTIFICATION_READ = [
 ];
 
 // Reset seed notifications to original state: restore read flags and bump
-// created_at so they appear at the top of the list regardless of how many
-// test-created notifications exist in the DB.
-async function resetSeedNotifications(request: Parameters<Parameters<typeof test>[2]>[0]["request"]) {
+// created_at so they appear at the top of the paginated list regardless of
+// how many test-created notifications exist in the DB.
+async function resetSeedNotifications(
+  request: Parameters<Parameters<typeof test>[2]>[0]["request"]
+) {
   const headers = {
     apikey: SERVICE_KEY,
     Authorization: `Bearer ${SERVICE_KEY}`,
