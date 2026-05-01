@@ -4,7 +4,6 @@ import * as React from "react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "motion/react";
 import {
-  Inbox,
   Bell,
   CheckCheck,
   ArrowRight,
@@ -192,13 +191,9 @@ export default function InboxPage() {
 
       {isEmpty ? (
         <div className="flex flex-col items-center justify-center py-20 text-center">
-          <div className="flex size-12 items-center justify-center rounded-full bg-paper-2 mb-4">
-            <Inbox className="size-6 text-ink-4" />
-          </div>
-          <p className="text-sm text-ink-2 mb-1">All caught up.</p>
-          <p className="text-xs text-ink-4 max-w-xs">
-            Notifications for status changes, assignments, and meeting updates
-            will appear here.
+          <p className="font-display text-base font-medium text-ink mb-1.5">All caught up.</p>
+          <p className="text-[13px] text-ink-3 italic max-w-xs">
+            When something needs your attention, it will appear here.
           </p>
         </div>
       ) : (

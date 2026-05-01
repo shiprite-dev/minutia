@@ -13,6 +13,7 @@ import {
 } from "@/lib/hooks/use-meetings";
 import { useIssues } from "@/lib/hooks/use-issues";
 import { BriefCard } from "@/components/minutia/brief-card";
+import { EmptyState } from "@/components/minutia/empty-state";
 import { IssueCard } from "@/components/minutia/issue-card";
 import { MeetingTimelineItem } from "@/components/minutia/meeting-timeline-item";
 import { Button } from "@/components/ui/button";
@@ -219,11 +220,7 @@ export function SeriesDetailContent({ seriesId }: SeriesDetailContentProps) {
           )}
 
           {!meetingsLoading && sortedMeetings.length === 0 && (
-            <div className="py-8 text-center">
-              <p className="text-sm text-ink-3">
-                No meetings yet. Start your first one above.
-              </p>
-            </div>
+            <EmptyState variant="no-meetings" />
           )}
 
           {!meetingsLoading && sortedMeetings.length > 0 && (
