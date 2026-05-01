@@ -7,7 +7,6 @@ import Link from "next/link";
 import {
   ArrowRight,
   Calendar,
-  Clock,
   Plus,
   X,
 } from "lucide-react";
@@ -22,10 +21,17 @@ import { useDecisions } from "@/lib/hooks/use-decisions";
 import { PRIORITY_CONFIG, STATUS_CONFIG } from "@/lib/constants";
 import { StatusChip } from "@/components/minutia/status-chip";
 import { CategoryBadge } from "@/components/minutia/category-badge";
-import { PriorityIndicator } from "@/components/minutia/priority-indicator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { useWidgetStore } from "@/lib/stores/widget-store";
+import { getWidgetMeta } from "@/components/minutia/widgets/widget-registry";
+import { WidgetShell } from "@/components/minutia/widgets/widget-shell";
+import { AddWidgetButton } from "@/components/minutia/widgets/add-widget";
+import { StaleItemsWidget } from "@/components/minutia/widgets/stale-items-widget";
+import { SeriesHealthWidget } from "@/components/minutia/widgets/series-health-widget";
+import { MeetingTriageWidget } from "@/components/minutia/widgets/meeting-triage-widget";
+import { WorkloadWidget } from "@/components/minutia/widgets/workload-widget";
 import type {
   Issue,
   IssueStatus,
@@ -95,44 +101,20 @@ function ageGroup(days: number): string {
 }
 
 // ---------------------------------------------------------------------------
-// Card wrapper
+// Hero summary widget
 // ---------------------------------------------------------------------------
 
-function DashCard({
-  children,
-  className,
-  index = 0,
-}: {
-  children: React.ReactNode;
-  className?: string;
-  index?: number;
-}) {
-  return (
-    <motion.div
-      initial={{ opacity: 0, x: -20 }}
-      animate={{ opacity: 1, x: 0 }}
-      transition={{ delay: index * 0.06, duration: 0.32, ease: [0.2, 0.8, 0.2, 1] }}
-      className={cn(
-        "rounded-xl border border-rule bg-card p-6",
-        className
-      )}
-    >
-      {children}
-    </motion.div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Hero summary card
-// ---------------------------------------------------------------------------
-
-function HeroCard({
+function HeroWidget({
+  id,
+  widgetIndex,
   openCount,
   pendingCount,
   overdueCount,
   seriesCount,
   meetings,
 }: {
+  id: string;
+  widgetIndex: number;
   openCount: number;
   pendingCount: number;
   overdueCount: number;
@@ -149,7 +131,7 @@ function HeroCard({
     : 0;
 
   return (
-    <DashCard className="col-span-2" index={0}>
+    <WidgetShell id={id} index={widgetIndex}>
       <p className="text-[11px] font-mono uppercase tracking-wider text-ink-4 mb-3">
         {formatWeekday(new Date())}
       </p>
@@ -238,24 +220,28 @@ function HeroCard({
           </div>
         </div>
       )}
-    </DashCard>
+    </WidgetShell>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Next meeting card
+// Next meeting widget
 // ---------------------------------------------------------------------------
 
-function NextMeetingCard({
+function NextMeetingWidget({
+  id,
+  widgetIndex,
   seriesList,
 }: {
+  id: string;
+  widgetIndex: number;
   seriesList: (MeetingSeries & { open_issues_count: number })[];
 }) {
   const nextSeries = seriesList[0];
   if (!nextSeries) return null;
 
   return (
-    <DashCard index={1}>
+    <WidgetShell id={id} index={widgetIndex}>
       <div className="flex items-center gap-2 mb-4">
         <span className="inline-flex items-center gap-1.5 text-xs font-medium text-accent">
           <span className="size-1.5 rounded-full bg-accent animate-pulse" />
@@ -281,20 +267,24 @@ function NextMeetingCard({
           </Button>
         </Link>
       </div>
-    </DashCard>
+    </WidgetShell>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Outstanding items (grouped by series)
+// Outstanding items widget
 // ---------------------------------------------------------------------------
 
-function OutstandingItems({
+function OutstandingWidget({
+  id,
+  widgetIndex,
   issues,
   seriesMap,
   seriesList,
   onStatusChange,
 }: {
+  id: string;
+  widgetIndex: number;
   issues: Issue[];
   seriesMap: Map<string, MeetingSeries & { open_issues_count: number }>;
   seriesList: (MeetingSeries & { open_issues_count: number })[];
@@ -325,7 +315,6 @@ function OutstandingItems({
   const sortedPriority = (a: Issue, b: Issue) =>
     PRIORITY_CONFIG[a.priority].order - PRIORITY_CONFIG[b.priority].order;
 
-  // Flat list of visible issues for keyboard nav (respects collapsed state)
   const flatIssues = React.useMemo(() => {
     const result: Issue[] = [];
     for (const series of seriesList) {
@@ -358,7 +347,6 @@ function OutstandingItems({
     return () => window.removeEventListener("keydown", handleKey);
   }, [flatIssues, focusedIdx, router]);
 
-  // Reset focus when filter changes
   React.useEffect(() => { setFocusedIdx(-1); }, [filter]);
 
   const filters = [
@@ -369,7 +357,7 @@ function OutstandingItems({
   ];
 
   return (
-    <DashCard className="col-span-2" index={2}>
+    <WidgetShell id={id} index={widgetIndex}>
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-1">
         <h3 className="font-display text-lg font-semibold text-ink">Outstanding items</h3>
         <div className="flex items-center gap-1 overflow-x-auto" role="tablist" aria-label="Filter outstanding items">
@@ -492,7 +480,7 @@ function OutstandingItems({
           })}
         </div>
       )}
-    </DashCard>
+    </WidgetShell>
   );
 }
 
@@ -564,10 +552,10 @@ function IssueRow({
 }
 
 // ---------------------------------------------------------------------------
-// Age of open items card
+// Age card widget
 // ---------------------------------------------------------------------------
 
-function AgeCard({ issues }: { issues: Issue[] }) {
+function AgeWidget({ id, widgetIndex, issues }: { id: string; widgetIndex: number; issues: Issue[] }) {
   const openIssues = issues.filter(isOpen);
   const buckets = new Map<string, number>();
   const order = ["0–7d", "8–14d", "15–30d", "30d+"];
@@ -593,7 +581,7 @@ function AgeCard({ issues }: { issues: Issue[] }) {
     : 0;
 
   return (
-    <DashCard index={5}>
+    <WidgetShell id={id} index={widgetIndex}>
       <div className="flex items-center justify-between mb-4">
         <h3 className="font-display text-base font-semibold text-ink">Age of open items</h3>
         <span className="text-[11px] text-ink-4">oldest first</span>
@@ -617,63 +605,74 @@ function AgeCard({ issues }: { issues: Issue[] }) {
           </div>
         ))}
       </div>
-    </DashCard>
+    </WidgetShell>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Recent decisions card
+// Recent decisions widget
 // ---------------------------------------------------------------------------
 
-function RecentDecisions({
+function DecisionsWidget({
+  id,
+  widgetIndex,
   decisions,
   seriesMap,
 }: {
+  id: string;
+  widgetIndex: number;
   decisions: Decision[];
   seriesMap: Map<string, MeetingSeries & { open_issues_count: number }>;
 }) {
   const recent = decisions.slice(0, 5);
-  if (recent.length === 0) return null;
 
   return (
-    <DashCard index={4}>
+    <WidgetShell id={id} index={widgetIndex}>
       <h3 className="font-display text-base font-semibold text-ink mb-4">
         Recent decisions
       </h3>
-      <div className="space-y-1">
-        {recent.map((d) => {
-          const series = seriesMap.get(d.series_id);
-          return (
-            <div
-              key={d.id}
-              className="flex items-start gap-2.5 rounded-lg px-3 py-2 hover:bg-paper-2 transition-colors"
-            >
-              <span className="text-accent text-xs mt-0.5 shrink-0">&#9670;</span>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm text-ink truncate">{d.title}</p>
-                {series && (
-                  <p className="text-[11px] text-ink-4 mt-0.5">{series.name}</p>
-                )}
+      {recent.length === 0 ? (
+        <p className="text-xs text-ink-3">No decisions recorded yet.</p>
+      ) : (
+        <div className="space-y-1">
+          {recent.map((d) => {
+            const series = seriesMap.get(d.series_id);
+            return (
+              <div
+                key={d.id}
+                className="flex items-start gap-2.5 rounded-lg px-3 py-2 hover:bg-paper-2 transition-colors"
+              >
+                <span className="text-accent text-xs mt-0.5 shrink-0">&#9670;</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-ink truncate">{d.title}</p>
+                  {series && (
+                    <p className="text-[11px] text-ink-4 mt-0.5">{series.name}</p>
+                  )}
+                </div>
               </div>
-            </div>
-          );
-        })}
-      </div>
-    </DashCard>
+            );
+          })}
+        </div>
+      )}
+    </WidgetShell>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Series summary card
+// Series quick list widget
 // ---------------------------------------------------------------------------
 
-function SeriesQuickList({
+function SeriesWidget({
+  id,
+  widgetIndex,
   seriesList,
 }: {
+  id: string;
+  widgetIndex: number;
   seriesList: (MeetingSeries & { open_issues_count: number })[];
 }) {
   return (
-    <DashCard index={3}>
+    <WidgetShell id={id} index={widgetIndex}>
       <div className="flex items-center justify-between mb-4">
         <h3 className="font-display text-base font-semibold text-ink">Your series</h3>
         <Link href="/series" className="text-xs text-ink-3 hover:text-accent transition-colors">
@@ -681,7 +680,7 @@ function SeriesQuickList({
         </Link>
       </div>
       <div className="space-y-1">
-        {seriesList.map((series, idx) => (
+        {seriesList.map((series) => (
           <Link
             key={series.id}
             href={`/series/${series.id}`}
@@ -697,7 +696,7 @@ function SeriesQuickList({
           </Link>
         ))}
       </div>
-    </DashCard>
+    </WidgetShell>
   );
 }
 
@@ -735,7 +734,6 @@ function QuickAddButton({
     }
   }, [seriesList, selectedSeriesId]);
 
-  // N key shortcut
   React.useEffect(() => {
     function handleKey(e: KeyboardEvent) {
       const tag = (e.target as HTMLElement).tagName;
@@ -772,7 +770,6 @@ function QuickAddButton({
 
   return (
     <>
-      {/* FAB */}
       <motion.button
         type="button"
         aria-label="Quick add issue"
@@ -788,7 +785,6 @@ function QuickAddButton({
         {open ? <X className="size-5" /> : <Plus className="size-5" />}
       </motion.button>
 
-      {/* Popover form */}
       <AnimatePresence>
         {open && (
           <motion.div
@@ -859,6 +855,137 @@ function DashboardSkeleton() {
 }
 
 // ---------------------------------------------------------------------------
+// Widget renderer
+// ---------------------------------------------------------------------------
+
+function WidgetRenderer({
+  widgetId,
+  widgetType,
+  widgetIndex,
+  issues,
+  seriesList,
+  seriesMap,
+  meetings,
+  decisions,
+  openCount,
+  pendingCount,
+  overdueCount,
+  onStatusChange,
+}: {
+  widgetId: string;
+  widgetType: string;
+  widgetIndex: number;
+  issues: Issue[];
+  seriesList: (MeetingSeries & { open_issues_count: number })[];
+  seriesMap: Map<string, MeetingSeries & { open_issues_count: number }>;
+  meetings: (any & { issues_raised: number; issues_resolved: number })[];
+  decisions: Decision[];
+  openCount: number;
+  pendingCount: number;
+  overdueCount: number;
+  onStatusChange: (issueId: string, oldStatus: IssueStatus, newStatus: IssueStatus, seriesId: string) => void;
+}) {
+  switch (widgetType) {
+    case "hero":
+      return (
+        <HeroWidget
+          id={widgetId}
+          widgetIndex={widgetIndex}
+          openCount={openCount}
+          pendingCount={pendingCount}
+          overdueCount={overdueCount}
+          seriesCount={seriesList.length}
+          meetings={meetings}
+        />
+      );
+    case "next-meeting":
+      return (
+        <NextMeetingWidget
+          id={widgetId}
+          widgetIndex={widgetIndex}
+          seriesList={seriesList}
+        />
+      );
+    case "outstanding":
+      return (
+        <OutstandingWidget
+          id={widgetId}
+          widgetIndex={widgetIndex}
+          issues={issues}
+          seriesMap={seriesMap}
+          seriesList={seriesList}
+          onStatusChange={onStatusChange}
+        />
+      );
+    case "series":
+      return (
+        <SeriesWidget
+          id={widgetId}
+          widgetIndex={widgetIndex}
+          seriesList={seriesList}
+        />
+      );
+    case "decisions":
+      return (
+        <DecisionsWidget
+          id={widgetId}
+          widgetIndex={widgetIndex}
+          decisions={decisions}
+          seriesMap={seriesMap}
+        />
+      );
+    case "age":
+      return (
+        <AgeWidget
+          id={widgetId}
+          widgetIndex={widgetIndex}
+          issues={issues}
+        />
+      );
+    case "stale-items":
+      return (
+        <StaleItemsWidget
+          id={widgetId}
+          index={widgetIndex}
+          issues={issues}
+        />
+      );
+    case "series-health":
+      return (
+        <SeriesHealthWidget
+          id={widgetId}
+          index={widgetIndex}
+          issues={issues}
+          seriesList={seriesList}
+        />
+      );
+    case "meeting-triage":
+      return (
+        <MeetingTriageWidget
+          id={widgetId}
+          index={widgetIndex}
+          issues={issues}
+          meetings={meetings}
+          seriesList={seriesList}
+          onStatusChange={onStatusChange}
+        />
+      );
+    case "workload":
+      return (
+        <WorkloadWidget
+          id={widgetId}
+          index={widgetIndex}
+          issues={issues}
+          seriesList={seriesList}
+          onStatusChange={onStatusChange}
+        />
+      );
+    default:
+      return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Dashboard page
 // ---------------------------------------------------------------------------
 
@@ -868,6 +995,7 @@ export default function Dashboard() {
   const { data: meetings, isLoading: meetingsLoading } = useAllMeetings();
   const { data: allDecisions } = useDecisions();
   const updateStatus = useUpdateIssueStatus();
+  const widgets = useWidgetStore((s) => s.widgets);
 
   const isLoading = issuesLoading || seriesLoading || meetingsLoading;
 
@@ -894,36 +1022,144 @@ export default function Dashboard() {
     updateStatus.mutate({ issueId, seriesId, oldStatus, newStatus });
   }
 
+  // Pack widgets into rows of 3 columns.
+  // Wide = 2 cols, narrow = 1 col. Narrow widgets stack in the remaining column.
+  // Strategy: scan widgets, pair each wide with adjacent narrows.
+  // If narrows precede a wide, attach them to that wide's row.
+  type IndexedWidget = (typeof widgets)[number] & { _idx: number };
+  const rows = React.useMemo(() => {
+    const indexed: (IndexedWidget & { span: number })[] = widgets.map((w, i) => ({
+      ...w,
+      _idx: i,
+      span: getWidgetMeta(w.type)?.span ?? 1,
+    }));
+
+    type Row = { wide: IndexedWidget | null; narrows: IndexedWidget[] };
+    const result: Row[] = [];
+    let pendingNarrows: IndexedWidget[] = [];
+
+    for (const w of indexed) {
+      if (w.span === 2) {
+        // If there are pending narrows that don't fill a complete 3-col row,
+        // attach them to this wide widget's row
+        if (pendingNarrows.length > 0 && pendingNarrows.length < 3) {
+          result.push({ wide: w, narrows: pendingNarrows });
+          pendingNarrows = [];
+        } else {
+          // Flush any full narrow rows first
+          if (pendingNarrows.length >= 3) {
+            result.push({ wide: null, narrows: pendingNarrows });
+            pendingNarrows = [];
+          }
+          result.push({ wide: w, narrows: [] });
+        }
+      } else {
+        pendingNarrows.push(w);
+        // Flush when we have 3 narrows (fills a full row)
+        if (pendingNarrows.length === 3) {
+          result.push({ wide: null, narrows: pendingNarrows });
+          pendingNarrows = [];
+        }
+      }
+    }
+
+    // Flush remaining narrows
+    if (pendingNarrows.length > 0) {
+      result.push({ wide: null, narrows: pendingNarrows });
+    }
+
+    // Second pass: wide widgets with no narrows can absorb narrows from the next row
+    for (let i = 0; i < result.length - 1; i++) {
+      const row = result[i];
+      const next = result[i + 1];
+      if (row.wide && row.narrows.length === 0 && !next.wide && next.narrows.length > 0) {
+        row.narrows = next.narrows;
+        result.splice(i + 1, 1);
+      }
+    }
+
+    return result;
+  }, [widgets]);
+
+  const sharedProps = {
+    issues: issues ?? [],
+    seriesList: seriesList ?? [],
+    seriesMap,
+    meetings: meetings ?? [],
+    decisions: allDecisions ?? [],
+    openCount,
+    pendingCount,
+    overdueCount,
+    onStatusChange: handleStatusChange,
+  };
+
   return (
     <div className="min-h-screen bg-paper">
       <div className="mx-auto max-w-6xl px-6 py-8">
         {isLoading ? (
           <DashboardSkeleton />
         ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-            {/* Row 1: Hero + Next meeting */}
-            <HeroCard
-              openCount={openCount}
-              pendingCount={pendingCount}
-              overdueCount={overdueCount}
-              seriesCount={seriesList?.length ?? 0}
-              meetings={meetings ?? []}
-            />
-            <NextMeetingCard seriesList={seriesList ?? []} />
-
-            {/* Row 2: Outstanding items + sidebar */}
-            <OutstandingItems
-              issues={issues ?? []}
-              seriesMap={seriesMap}
-              seriesList={seriesList ?? []}
-              onStatusChange={handleStatusChange}
-            />
-            <div className="space-y-5">
-              <SeriesQuickList seriesList={seriesList ?? []} />
-              <RecentDecisions decisions={allDecisions ?? []} seriesMap={seriesMap} />
-              <AgeCard issues={issues ?? []} />
+          <>
+            <div className="flex items-center justify-end mb-5">
+              <AddWidgetButton />
             </div>
-          </div>
+            <div className="space-y-5">
+              {rows.map((row, rowIdx) => {
+                if (row.wide && row.narrows.length > 0) {
+                  return (
+                    <div key={rowIdx} className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+                      <div className="lg:col-span-2">
+                        <WidgetRenderer
+                          widgetId={row.wide.id}
+                          widgetType={row.wide.type}
+                          widgetIndex={row.wide._idx}
+                          {...sharedProps}
+                        />
+                      </div>
+                      <div className="space-y-5">
+                        {row.narrows.map((w) => (
+                          <WidgetRenderer
+                            key={w.id}
+                            widgetId={w.id}
+                            widgetType={w.type}
+                            widgetIndex={w._idx}
+                            {...sharedProps}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  );
+                }
+
+                if (row.wide) {
+                  return (
+                    <div key={rowIdx}>
+                      <WidgetRenderer
+                        widgetId={row.wide.id}
+                        widgetType={row.wide.type}
+                        widgetIndex={row.wide._idx}
+                        {...sharedProps}
+                      />
+                    </div>
+                  );
+                }
+
+                return (
+                  <div key={rowIdx} className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+                    {row.narrows.map((w) => (
+                      <WidgetRenderer
+                        key={w.id}
+                        widgetId={w.id}
+                        widgetType={w.type}
+                        widgetIndex={w._idx}
+                        {...sharedProps}
+                      />
+                    ))}
+                  </div>
+                );
+              })}
+            </div>
+          </>
         )}
         <QuickAddButton seriesList={seriesList ?? []} />
       </div>
