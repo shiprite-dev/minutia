@@ -14,3 +14,5 @@ export { AppSidebar } from "./app-sidebar";
 export { AppHeader } from "./app-header";
 export { CommandPalette } from "./command-palette";
 export { ShareButton } from "./share-button";
+export { KeyboardShortcutsDialog } from "./keyboard-shortcuts-dialog";
+export { GotoShortcuts } from "./goto-shortcuts";

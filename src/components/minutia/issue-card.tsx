@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
 import type { Issue, IssueStatus, IssueUpdate } from "@/lib/types";
+import { STATUS_CONFIG } from "@/lib/constants";
 import { StatusChip } from "./status-chip";
 import { CategoryBadge } from "./category-badge";
 import { PriorityIndicator } from "./priority-indicator";
@@ -62,11 +63,11 @@ export function IssueCard({
         backgroundColor: isDone ? "var(--paper-3)" : "var(--card)",
       }}
       transition={{ duration: 0.2, ease: [0.2, 0.8, 0.2, 1] }}
-      className="border border-rule rounded-md p-5"
+      className="border border-rule rounded-md p-5 focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-paper outline-none"
       tabIndex={0}
       onKeyDown={handleKeyDown}
       role="article"
-      aria-label={issue.title}
+      aria-label={`${issue.title}, ${STATUS_CONFIG[issue.status].label}`}
     >
       {/* Header row: priority + title */}
       <div className="flex items-start gap-3">

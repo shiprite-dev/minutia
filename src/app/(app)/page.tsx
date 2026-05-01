@@ -19,7 +19,7 @@ import {
 import { useSeries } from "@/lib/hooks/use-series";
 import { useAllMeetings, useMeetings } from "@/lib/hooks/use-meetings";
 import { useDecisions } from "@/lib/hooks/use-decisions";
-import { PRIORITY_CONFIG } from "@/lib/constants";
+import { PRIORITY_CONFIG, STATUS_CONFIG } from "@/lib/constants";
 import { StatusChip } from "@/components/minutia/status-chip";
 import { CategoryBadge } from "@/components/minutia/category-badge";
 import { PriorityIndicator } from "@/components/minutia/priority-indicator";
@@ -365,14 +365,17 @@ function OutstandingItems({
     <DashCard className="col-span-2">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-1">
         <h3 className="font-display text-lg font-semibold text-ink">Outstanding items</h3>
-        <div className="flex items-center gap-1 overflow-x-auto">
+        <div className="flex items-center gap-1 overflow-x-auto" role="tablist" aria-label="Filter outstanding items">
           {filters.map((f) => (
             <button
               key={f.key}
               type="button"
+              role="tab"
+              aria-selected={filter === f.key}
               onClick={() => setFilter(f.key)}
               className={cn(
-                "rounded-full px-3 py-1 text-xs font-medium transition-colors",
+                "rounded-full px-3 py-1 text-xs font-medium transition-colors outline-none",
+                "focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-paper",
                 filter === f.key
                   ? "bg-ink text-paper"
                   : "bg-paper-2 text-ink-3 hover:text-ink-2"
@@ -472,15 +475,17 @@ function IssueRow({
       animate={{ opacity: 1, x: 0 }}
       transition={{ delay: index * 0.06, duration: 0.32, ease: [0.2, 0.8, 0.2, 1] }}
       data-focused={focused || undefined}
+      aria-label={`${issue.title}, ${STATUS_CONFIG[issue.status].label}${overdue ? ", overdue" : ""}`}
       className={cn(
-        "group flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors",
+        "group flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg px-3 py-2.5 transition-colors outline-none",
+        "focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-paper",
         focused ? "bg-paper-2 ring-1 ring-accent/30" : "hover:bg-paper-2"
       )}
     >
       <CategoryBadge category={issue.category} size="sm" />
       <Link
         href={`/issues/${issue.id}`}
-        className="flex-1 min-w-0 text-sm font-medium text-ink group-hover:text-accent transition-colors truncate"
+        className="flex-1 min-w-0 text-sm font-medium text-ink group-hover:text-accent transition-colors truncate basis-[120px]"
       >
         {issue.title}
       </Link>
@@ -749,6 +754,7 @@ function QuickAddButton({
               <select
                 value={selectedSeriesId}
                 onChange={(e) => setSelectedSeriesId(e.target.value)}
+                aria-label="Select series"
                 className="w-full rounded-md border border-rule bg-paper px-3 py-1.5 text-sm text-ink"
               >
                 {seriesList.map((s) => (
@@ -792,10 +798,10 @@ function QuickAddButton({
 
 function DashboardSkeleton() {
   return (
-    <div className="grid grid-cols-3 gap-5">
-      <Skeleton className="h-40 col-span-2 rounded-xl" />
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+      <Skeleton className="h-40 lg:col-span-2 rounded-xl" />
       <Skeleton className="h-40 rounded-xl" />
-      <Skeleton className="h-80 col-span-2 rounded-xl" />
+      <Skeleton className="h-80 lg:col-span-2 rounded-xl" />
       <div className="space-y-5">
         <Skeleton className="h-36 rounded-xl" />
         <Skeleton className="h-36 rounded-xl" />

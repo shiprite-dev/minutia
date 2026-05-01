@@ -10,7 +10,7 @@
 
 **Do not open a public GitHub issue for security vulnerabilities.**
 
-Email **security@minutia.app** with:
+Email **security@shiprite.dev** with:
 
 - Description of the vulnerability
 - Steps to reproduce

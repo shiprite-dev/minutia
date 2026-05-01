@@ -1,0 +1,30 @@
+# =============================================================================
+# Development overrides for Minutia
+#
+# This file is automatically loaded by `docker compose up` alongside
+# docker-compose.yml. It adds:
+#   - Source volume mount for Next.js hot reload
+#   - Direct Postgres port access for database tools
+#
+# To run production-only (without these overrides):
+#   docker compose -f docker-compose.yml up -d
+# =============================================================================
+
+services:
+  minutia-web:
+    build:
+      context: .
+      target: deps
+    volumes:
+      - ./src:/app/src
+      - ./public:/app/public
+      - ./next.config.ts:/app/next.config.ts
+      - ./tailwind.config.ts:/app/tailwind.config.ts:ro
+      - ./tsconfig.json:/app/tsconfig.json:ro
+    environment:
+      - NODE_ENV=development
+    command: ["pnpm", "dev"]
+
+  supabase-db:
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
