@@ -5,12 +5,13 @@ import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "motion/react";
 import { useMeeting, useEndMeeting, useStartMeeting, useUpdateMeetingNotes } from "@/lib/hooks/use-meetings";
 import { useSeriesDetail } from "@/lib/hooks/use-series";
-import { useIssues, useCreateIssue, useUpdateIssueStatus } from "@/lib/hooks/use-issues";
+import { useIssues, useCreateIssue, useUpdateIssueStatus, useUpdateIssue } from "@/lib/hooks/use-issues";
 import { useDecisions, useCreateDecision } from "@/lib/hooks/use-decisions";
 import { SyncIndicator } from "@/components/minutia/sync-indicator";
 import { useOfflineSync } from "@/lib/hooks/use-offline-sync";
 import { addPendingItem } from "@/lib/offline-buffer";
 import { CaptureInput } from "@/components/minutia/capture-input";
+import { InlineTaskList } from "@/components/minutia/inline-task-list";
 import { IssueCard } from "@/components/minutia/issue-card";
 import { BriefCard } from "@/components/minutia/brief-card";
 import { StatusChip } from "@/components/minutia/status-chip";
@@ -602,6 +603,7 @@ export function MeetingDetailContent({
   const createIssue = useCreateIssue();
   const createDecision = useCreateDecision();
   const updateIssueStatus = useUpdateIssueStatus();
+  const updateIssue = useUpdateIssue();
 
   const { isOnline, pendingCount, syncStatus, refreshCount } = useOfflineSync();
 
@@ -747,6 +749,18 @@ export function MeetingDetailContent({
     await startMeeting.mutateAsync(meetingId);
   }
 
+  function handleTitleChange(issueId: string, title: string) {
+    updateIssue.mutate({ issueId, title });
+  }
+
+  function handleAssigneeChange(issueId: string, ownerName: string | null) {
+    updateIssue.mutate({ issueId, owner_name: ownerName });
+  }
+
+  async function handleInlineAdd(title: string, category: IssueCategory) {
+    await handleCapture(title, category);
+  }
+
   // =========================================================================
   // LIVE MODE
   // =========================================================================
@@ -880,24 +894,16 @@ export function MeetingDetailContent({
                 </span>
                 <div className="flex-1 border-t border-dashed border-rule" />
               </div>
-              {raisedInThisMeeting.length === 0 ? (
-                <p className="text-sm text-ink-4 py-6 text-center">
-                  Start capturing items above. Press A, D, I, or R + space to set category.
-                </p>
-              ) : (
-                <div aria-live="polite" aria-relevant="additions">
-                  <AnimatePresence mode="popLayout">
-                    {raisedInThisMeeting.map((issue, idx) => (
-                      <CapturedItem
-                        key={issue.id}
-                        issue={issue}
-                        index={idx}
-                        onStatusChange={handleStatusChange}
-                      />
-                    ))}
-                  </AnimatePresence>
-                </div>
-              )}
+              <div aria-live="polite" aria-relevant="additions">
+                <InlineTaskList
+                  issues={raisedInThisMeeting}
+                  attendees={meeting.attendees ?? series?.default_attendees ?? []}
+                  onStatusChange={handleStatusChange}
+                  onTitleChange={handleTitleChange}
+                  onAssigneeChange={handleAssigneeChange}
+                  onAddItem={handleInlineAdd}
+                />
+              </div>
             </section>
 
             {/* Decisions */}
@@ -1107,15 +1113,14 @@ export function MeetingDetailContent({
           <h2 className="font-display text-lg font-medium text-ink mb-4">
             Items raised ({raisedInThisMeeting.length})
           </h2>
-          {raisedInThisMeeting.length === 0 ? (
-            <p className="text-sm text-ink-3">No items were captured.</p>
-          ) : (
-            <div className="space-y-3">
-              {raisedInThisMeeting.map((issue) => (
-                <IssueCard key={issue.id} issue={issue} />
-              ))}
-            </div>
-          )}
+          <InlineTaskList
+            issues={raisedInThisMeeting}
+            attendees={meeting.attendees ?? series?.default_attendees ?? []}
+            onStatusChange={handleStatusChange}
+            onTitleChange={handleTitleChange}
+            onAssigneeChange={handleAssigneeChange}
+            onAddItem={handleInlineAdd}
+          />
         </section>
 
         {meetingDecisions.length > 0 && (

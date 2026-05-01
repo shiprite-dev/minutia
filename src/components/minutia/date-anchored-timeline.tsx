@@ -69,7 +69,7 @@ function MeetingSection({
   isFuture: boolean;
   scrollTargetRef?: React.RefObject<HTMLDivElement | null>;
 }) {
-  const [expanded, setExpanded] = React.useState(!isFuture && meeting.status === "completed");
+  const [expanded, setExpanded] = React.useState(index === 0 && !isFuture);
   const [showAllIssues, setShowAllIssues] = React.useState(false);
   const meetingDate = new Date(meeting.date);
   const issueCount = meeting.issues.length;
@@ -257,6 +257,8 @@ function MeetingSection({
   );
 }
 
+const INITIAL_DISPLAY_COUNT = 5;
+
 export function DateAnchoredTimeline({
   meetings,
   seriesId,
@@ -266,19 +268,20 @@ export function DateAnchoredTimeline({
   const selectedDate = useUIStore((s) => s.selectedDate);
   const scrollRef = React.useRef<HTMLDivElement | null>(null);
   const todayRef = React.useRef<HTMLDivElement | null>(null);
+  const [showAll, setShowAll] = React.useState(false);
 
-  // Sort chronologically (oldest first for natural timeline reading)
+  // Sort descending (newest first)
   const sorted = React.useMemo(
     () =>
       [...meetings].sort(
-        (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
+        (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
       ),
     [meetings]
   );
 
-  // Find the index where "today" divider should appear
+  // Find the index where "today" divider should appear (first meeting older than today)
   const todayIndex = sorted.findIndex(
-    (m) => new Date(m.date).getTime() >= today.getTime()
+    (m) => new Date(m.date).getTime() < today.getTime()
   );
 
   // Scroll to today on mount
@@ -318,6 +321,9 @@ export function DateAnchoredTimeline({
 
   if (sorted.length === 0) return null;
 
+  const displayed = showAll ? sorted : sorted.slice(0, INITIAL_DISPLAY_COUNT);
+  const hasMore = sorted.length > INITIAL_DISPLAY_COUNT;
+
   return (
     <div ref={scrollRef} className="relative">
       {/* Vertical timeline line */}
@@ -327,33 +333,21 @@ export function DateAnchoredTimeline({
       />
 
       <div className="space-y-0">
-        {sorted.map((meeting, i) => {
+        {displayed.map((meeting, i) => {
           const meetingDate = new Date(meeting.date);
           meetingDate.setHours(0, 0, 0, 0);
           const isFuture = meetingDate.getTime() > today.getTime();
           const isToday = isSameDay(meetingDate, today);
+          // In descending order: show Today divider before the first past meeting
           const showTodayBefore =
             todayIndex === i &&
             !isToday &&
-            (i === 0 || new Date(sorted[i - 1].date).getTime() < today.getTime());
+            (i === 0 || new Date(sorted[i - 1].date).getTime() >= today.getTime());
 
           return (
             <React.Fragment key={meeting.id}>
               {/* Today divider */}
-              {showTodayBefore && (
-                <div
-                  ref={todayRef}
-                  className="flex items-center gap-3 py-3"
-                >
-                  <div className="size-2 rounded-full bg-accent shrink-0 ml-[11px]" />
-                  <div className="h-px flex-1 bg-accent/30" />
-                  <span className="text-[10px] font-mono uppercase tracking-wider text-accent font-bold shrink-0 pr-1">
-                    Today
-                  </span>
-                </div>
-              )}
-
-              {isToday && i === todayIndex && (
+              {(showTodayBefore || (isToday && i === todayIndex)) && (
                 <div
                   ref={todayRef}
                   className="flex items-center gap-3 py-3"
@@ -378,6 +372,16 @@ export function DateAnchoredTimeline({
           );
         })}
       </div>
+
+      {hasMore && !showAll && (
+        <button
+          type="button"
+          onClick={() => setShowAll(true)}
+          className="mt-3 ml-10 text-xs text-accent hover:underline"
+        >
+          View all {sorted.length} meetings
+        </button>
+      )}
     </div>
   );
 }
