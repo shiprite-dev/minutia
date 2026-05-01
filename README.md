@@ -65,6 +65,10 @@ Series detail pages feature a date-anchored timeline with expandable meeting sec
 
 Meeting items render as interactive checklist items with checkbox status toggles, inline title editing, colored category pills, and @mention assignee selection from attendees. Add new items inline with Enter. The meeting detail page becomes an active workspace, not a passive record.
 
+### Draggable Widgets
+
+The OIL Board dashboard is fully customizable. Drag widgets to reorder, resize between narrow and wide layouts, add or remove from a widget picker, and reset to defaults. Your layout persists across sessions via localStorage.
+
 ### And more
 
 - **Guest Sharing** - Share read-only links with external collaborators. No account required.

@@ -6,6 +6,7 @@ import { persist } from "zustand/middleware";
 export interface WidgetInstance {
   id: string;
   type: string;
+  span?: 1 | 2;
 }
 
 const DEFAULT_WIDGETS: WidgetInstance[] = [
@@ -22,6 +23,7 @@ interface WidgetState {
   addWidget: (type: string) => void;
   removeWidget: (id: string) => void;
   moveWidget: (fromIndex: number, toIndex: number) => void;
+  toggleSpan: (id: string) => void;
   resetToDefault: () => void;
 }
 
@@ -50,6 +52,13 @@ export const useWidgetStore = create<WidgetState>()(
           next.splice(toIndex, 0, moved);
           return { widgets: next };
         }),
+
+      toggleSpan: (id) =>
+        set((state) => ({
+          widgets: state.widgets.map((w) =>
+            w.id === id ? { ...w, span: w.span === 1 ? 2 : 1 } : w
+          ),
+        })),
 
       resetToDefault: () => set({ widgets: DEFAULT_WIDGETS }),
     }),
