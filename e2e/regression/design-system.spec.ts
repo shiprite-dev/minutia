@@ -354,7 +354,7 @@ test.describe("Brief card", () => {
 });
 
 test.describe("OKLCH color system", () => {
-  test("page background uses warm paper color, not pure white/black", async ({
+  test("page background uses neutral paper color, not pure white/black", async ({
     page,
   }) => {
     await page.goto("/");
