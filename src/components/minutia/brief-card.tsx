@@ -140,7 +140,7 @@ export function BriefCard({
               className="inline-block size-2 rounded-full bg-accent"
               aria-hidden="true"
             />
-            <span className="text-xs font-medium tracking-wider uppercase text-ink-3">
+            <span className="text-xs font-mono font-medium tracking-wider uppercase text-ink-3">
               Brief
             </span>
           </div>

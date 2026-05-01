@@ -453,7 +453,7 @@ function CarriedIssueCard({
         <div className="flex items-center gap-2 mt-0.5">
           <CategoryBadge category={issue.category} size="sm" />
           {issue.owner_name && (
-            <span className="text-xs text-ink-4">{issue.owner_name}</span>
+            <span className="text-xs font-mono text-ink-4">{issue.owner_name}</span>
           )}
           {issue.due_date && (
             <span className={cn(
@@ -569,7 +569,7 @@ function CapturedItem({
         {issue.title}
       </Link>
       {issue.owner_name && (
-        <span className="text-xs text-ink-4">{issue.owner_name}</span>
+        <span className="text-xs font-mono text-ink-4">{issue.owner_name}</span>
       )}
       {issue.due_date && (
         <span className={cn(
@@ -770,7 +770,7 @@ export function MeetingDetailContent({
                     <span className="text-ink-3 font-normal"> — M-{meetingSequence}</span>
                   )}
                 </h1>
-                <p className="text-xs text-ink-4">
+                <p className="text-xs font-mono text-ink-4">
                   {formatCompactDate(meeting.date)} · {meeting.attendees?.length ?? 0} attendees present
                 </p>
               </div>

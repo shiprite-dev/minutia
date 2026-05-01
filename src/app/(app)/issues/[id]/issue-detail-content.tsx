@@ -446,7 +446,7 @@ export function IssueDetailContent({ issueId }: IssueDetailContentProps) {
 
         {/* Description (inline editable) */}
         <div className="mb-8">
-          <h2 className="text-xs font-medium text-ink-3 uppercase tracking-wider mb-2">
+          <h2 className="text-xs font-mono font-medium text-ink-3 uppercase tracking-wider mb-2">
             Description
           </h2>
           <InlineEditText
