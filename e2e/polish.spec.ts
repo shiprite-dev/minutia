@@ -108,9 +108,9 @@ test.describe("Navigation Polish", () => {
     await page.goto("/");
 
     const routes = [
-      { name: "OIL Board", url: "/" },
+      { name: "Outstanding", url: "/" },
       { name: "Series", url: "/series" },
-      { name: "My Actions", url: "/actions" },
+      { name: "My actions", url: "/actions" },
       { name: "Settings", url: "/settings" },
     ];
 

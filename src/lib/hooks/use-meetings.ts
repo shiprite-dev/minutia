@@ -171,6 +171,45 @@ export function useAllMeetings() {
 }
 
 // ---------------------------------------------------------------------------
+// useMeetingsByMonth - all meetings for a calendar month (for sidebar)
+// ---------------------------------------------------------------------------
+export type MeetingWithSeries = Meeting & { series_name: string; series_id: string };
+
+export function useMeetingsByMonth(year: number, month: number) {
+  const supabase = createClient();
+
+  return useQuery<MeetingWithSeries[]>({
+    queryKey: [...meetingKeys.all, "month", year, month],
+    queryFn: async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
+
+      const start = new Date(year, month, 1);
+      const end = new Date(year, month + 1, 0, 23, 59, 59);
+
+      const { data, error } = await supabase
+        .from("meetings")
+        .select("*, series:meeting_series!inner(owner_id, name)")
+        .eq("series.owner_id", user.id)
+        .gte("date", start.toISOString())
+        .lte("date", end.toISOString())
+        .order("date", { ascending: true });
+
+      if (error) throw error;
+
+      return (data ?? []).map((m: any) => ({
+        ...m,
+        series_name: m.series?.name ?? "Unknown",
+        series: undefined,
+      }));
+    },
+    staleTime: 2 * 60 * 1000,
+  });
+}
+
+// ---------------------------------------------------------------------------
 // useUpdateMeetingNotes - persist notes_markdown
 // ---------------------------------------------------------------------------
 export function useUpdateMeetingNotes() {
