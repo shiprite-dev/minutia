@@ -212,6 +212,8 @@ function Sidebar({
       data-variant={variant}
       data-side={side}
       data-slot="sidebar"
+      role="complementary"
+      aria-label="Sidebar"
     >
       {/* This is what handles the sidebar gap on desktop */}
       <div
