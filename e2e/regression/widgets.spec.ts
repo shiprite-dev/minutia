@@ -94,4 +94,92 @@ test.describe("Widget system", () => {
     await page.keyboard.press("Escape");
     await expect(healthLabel).not.toBeVisible();
   });
+
+  test("drag handle appears on widget hover", async ({ page }) => {
+    const heroWidget = page.locator("[data-testid='widget-hero-1']").first();
+    if (await heroWidget.count() === 0) {
+      const widget = page.getByText("Open items across your series").locator("../..");
+      await widget.hover();
+      await expect(page.getByLabel("Drag to reorder").first()).toBeVisible();
+    } else {
+      await heroWidget.hover();
+      await expect(page.getByLabel("Drag to reorder").first()).toBeVisible();
+    }
+  });
+
+  test("resize toggle appears on widget hover", async ({ page }) => {
+    const widget = page.getByText("Open items across your series").locator("../..");
+    await widget.hover();
+    await expect(page.getByLabel(/Make narrow|Make wide/).first()).toBeVisible();
+  });
+
+  test("resize toggle changes widget span", async ({ page }) => {
+    const widget = page.getByText("Open items across your series").locator("../..");
+    await widget.hover();
+    const resizeBtn = page.getByLabel("Make narrow").first();
+    await resizeBtn.click();
+
+    const stored = await page.evaluate(() => {
+      const raw = localStorage.getItem("minutia-widgets");
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      return parsed.state?.widgets?.find((w: any) => w.type === "hero")?.span;
+    });
+    expect(stored).toBe(1);
+  });
+
+  test("resize persists across reload", async ({ page }) => {
+    const widget = page.getByText("Open items across your series").locator("../..");
+    await widget.hover();
+    await page.getByLabel("Make narrow").first().click();
+
+    await page.reload();
+    await waitForApp(page);
+
+    const stored = await page.evaluate(() => {
+      const raw = localStorage.getItem("minutia-widgets");
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      return parsed.state?.widgets?.find((w: any) => w.type === "hero")?.span;
+    });
+    expect(stored).toBe(1);
+  });
+
+  test("widget reorder persists in localStorage across reload", async ({ page }) => {
+    const reordered = [
+      { id: "next-meeting-1", type: "next-meeting" },
+      { id: "hero-1", type: "hero" },
+      { id: "outstanding-1", type: "outstanding" },
+      { id: "series-1", type: "series" },
+      { id: "decisions-1", type: "decisions" },
+      { id: "age-1", type: "age" },
+    ];
+    await page.evaluate((widgets) => {
+      localStorage.setItem(
+        "minutia-widgets",
+        JSON.stringify({ state: { widgets }, version: 0 })
+      );
+    }, reordered);
+
+    await page.reload();
+    await waitForApp(page);
+
+    const stored = await page.evaluate(() => {
+      const raw = localStorage.getItem("minutia-widgets");
+      return raw ? JSON.parse(raw).state?.widgets?.[0]?.type : null;
+    });
+    expect(stored).toBe("next-meeting");
+  });
+
+  test("remove widget button still works with drag handle present", async ({ page }) => {
+    await page.getByRole("button", { name: "Add widget" }).click();
+    await page.getByRole("button", { name: /Stale Items/ }).first().click();
+    await expect(page.getByText("Needs attention")).toBeVisible();
+
+    const staleWidget = page.getByText("Needs attention").locator("../..");
+    await staleWidget.hover();
+    await page.getByLabel("Remove widget").last().click();
+
+    await expect(page.getByText("Needs attention")).not.toBeVisible();
+  });
 });
