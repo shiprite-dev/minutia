@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
 
   const { data: series } = await supabase
     .from("meeting_series")
-    .select("gcal_calendar_id, gcal_sync_enabled")
+    .select("gcal_calendar_id, gcal_sync_enabled, name")
     .eq("id", seriesId)
     .eq("owner_id", user.id)
     .single();
@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
 
   try {
     const token = await getValidAccessToken(user.id);
-    const events = await listUpcomingEvents(token, series.gcal_calendar_id);
+    const events = await listUpcomingEvents(token, series.gcal_calendar_id, 5, series.name);
     return NextResponse.json(events);
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 400 });
