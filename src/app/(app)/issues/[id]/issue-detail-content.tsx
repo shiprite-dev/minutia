@@ -207,7 +207,7 @@ export function IssueDetailContent({ issueId }: IssueDetailContentProps) {
           break;
         case "Escape":
           e.preventDefault();
-          router.push("/");
+          router.back();
           break;
         case "r":
           if (issue) {
@@ -339,13 +339,14 @@ export function IssueDetailContent({ issueId }: IssueDetailContentProps) {
     <div className="min-h-full bg-paper">
       <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6 lg:px-8">
         {/* Back button */}
-        <Link
-          href="/"
+        <button
+          type="button"
+          onClick={() => router.back()}
           className="inline-flex items-center gap-1.5 text-sm text-ink-3 hover:text-ink transition-colors mb-6"
         >
           <ArrowLeft className="size-4" />
-          OIL Board
-        </Link>
+          Back
+        </button>
 
         {/* Title (inline editable) */}
         <InlineEditText
