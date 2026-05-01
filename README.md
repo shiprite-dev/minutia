@@ -5,6 +5,8 @@
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL_3.0-blue.svg)](LICENSE)
 [![CI](https://github.com/shiprite-dev/minutia/actions/workflows/ci.yml/badge.svg)](https://github.com/shiprite-dev/minutia/actions/workflows/ci.yml)
 
+![Minutia OIL Board](public/screenshots/oil-board-hero.png)
+
 ---
 
 ## The Problem
@@ -23,15 +25,43 @@ Minutia is a purpose-built **Outstanding Issues Log (OIL)** for recurring meetin
 
 ## What You Get
 
-- **OIL Board** - Your outstanding issues dashboard. Filter, sort, group by series/owner/priority. Keyboard-navigable (J/K to move, S to cycle status, N to add).
-- **Meeting Series** - Recurring meetings with cadence, attendees, and automatic pre-meeting briefs showing what's still open.
-- **Live Capture** - Raise issues during meetings in real-time. Type `a ` for action, `d ` for decision, `i ` for info, `r ` for risk. Works offline.
-- **Issue Lifecycle** - Every issue has a full timeline: when it was raised, every status change, every update, across every meeting it was discussed in.
-- **Pre-Meeting Brief** - 24 hours before your meeting, see exactly what's pending. Send a one-click summary to attendees.
+### OIL Board
+
+Your outstanding issues dashboard. Filter, sort, group by series/owner/priority. Keyboard-navigable (J/K to move, S to cycle status, N to add).
+
+![OIL Board - Dark Mode](public/screenshots/oil-board-dark.png)
+
+### Meeting Series & Pre-Meeting Briefs
+
+Recurring meetings with cadence, attendees, and automatic pre-meeting briefs. See what's pending before your meeting, send a one-click summary to attendees.
+
+![Series Detail with Brief](public/screenshots/series-detail.png)
+
+### Live Capture
+
+Raise issues during meetings in real-time. Type `a ` for action, `d ` for decision, `i ` for info, `r ` for risk. Carried items from the last meeting are pre-populated. Works offline with auto-sync.
+
+![Live Capture Mode](public/screenshots/meeting-detail.png)
+
+### Issue Lifecycle
+
+Every issue has a full timeline: when it was raised, every status change, every update, across every meeting it was discussed in.
+
+![Issue Detail with Lifecycle](public/screenshots/issue-detail.png)
+
+### My Actions
+
+See everything you owe across all your meeting series, prioritized by urgency.
+
+![My Actions](public/screenshots/my-actions.png)
+
+### And more
+
 - **Guest Sharing** - Share read-only links with external collaborators. No account required.
 - **Command Palette** - Cmd+K to search across all issues and series instantly.
 - **CSV Import/Export** - Migrate from your spreadsheet in seconds. Export anytime.
 - **Dark Mode** - Both modes are first-class, not afterthoughts.
+- **Self-hostable** - One-command Docker Compose deployment.
 
 ## Get Started in 60 Seconds
 
