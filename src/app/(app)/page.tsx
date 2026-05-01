@@ -268,7 +268,7 @@ function NextMeetingCard({
       </p>
       {nextSeries.open_issues_count > 0 && (
         <p className="text-sm text-ink-2 mb-5">
-          <span className="text-accent font-medium">{nextSeries.open_issues_count} items pending</span> from last meeting.
+          <span className="text-accent font-medium"><span className="font-mono">{nextSeries.open_issues_count}</span> items pending</span> from last meeting.
         </p>
       )}
       <div className="flex items-center gap-3">
@@ -499,14 +499,14 @@ function IssueRow({
         </span>
       )}
       {(issue.update_count ?? 0) > 0 && (
-        <span className="hidden sm:inline text-[11px] text-ink-4 tabular-nums shrink-0">
+        <span className="hidden sm:inline text-[11px] font-mono text-ink-4 tabular-nums shrink-0">
           {issue.update_count} update{issue.update_count !== 1 ? "s" : ""}
         </span>
       )}
       {issue.due_date && (() => {
         const rel = formatRelativeDue(issue.due_date);
         return (
-          <span className={cn("text-xs tabular-nums shrink-0", rel.overdue ? "text-accent font-medium" : "text-ink-4")}>
+          <span className={cn("text-xs font-mono tabular-nums shrink-0", rel.overdue ? "text-accent font-medium" : "text-ink-4")}>
             {rel.label}
           </span>
         );

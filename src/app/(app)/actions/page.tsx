@@ -63,10 +63,10 @@ function Section({
             open ? "" : "-rotate-90"
           }`}
         />
-        <h2 className="text-xs font-medium uppercase tracking-wider text-ink-3">
+        <h2 className="text-xs font-mono font-medium uppercase tracking-wider text-ink-3">
           {title}
         </h2>
-        <span className="text-xs text-ink-4 tabular-nums">{count}</span>
+        <span className="text-xs font-mono text-ink-4 tabular-nums">{count}</span>
       </button>
 
       <AnimatePresence initial={false}>
