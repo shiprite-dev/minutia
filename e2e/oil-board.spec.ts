@@ -64,12 +64,14 @@ test.describe("OIL Board", () => {
 
   test("empty state renders when no data", async ({ page }) => {
     await page.goto("/");
-    await page.waitForSelector("text=Outstanding", { timeout: 10000 });
+    await page.waitForLoadState("networkidle");
 
-    // Check for either content (outstanding items heading or empty state message)
-    const hasContent = await page.getByText("Outstanding items").isVisible().catch(() => false);
-    const hasEmptyState = await page.getByText(/No issues|Get started|Create|Nothing outstanding/i).isVisible().catch(() => false);
-
-    expect(hasContent || hasEmptyState).toBe(true);
+    // The outstanding widget always renders either the items list or an empty state.
+    // Wait for either the widget heading or the empty state text to be visible.
+    await expect(
+      page.getByText("Outstanding items").or(
+        page.getByText(/No issues|Get started|Create|Nothing outstanding/i)
+      ).first()
+    ).toBeVisible({ timeout: 10000 });
   });
 });
