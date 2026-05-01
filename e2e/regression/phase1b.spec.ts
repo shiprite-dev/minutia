@@ -10,9 +10,9 @@ test.describe("Post-meeting summary (MIN-042)", () => {
     );
     await waitForApp(page);
 
-    await expect(page.getByText("Meeting summary")).toBeVisible();
+    await expect(page.getByText("Meeting complete")).toBeVisible();
     await expect(page.getByText("Copy summary")).toBeVisible();
-    await expect(page.getByText("Still open")).toBeVisible();
+    await expect(page.getByText("Carried", { exact: true }).first()).toBeVisible();
   });
 
   test("summary card has copy button", async ({ page }) => {
@@ -31,7 +31,7 @@ test.describe("Post-meeting summary (MIN-042)", () => {
     );
     await waitForApp(page);
 
-    await expect(page.getByText("Meeting summary")).not.toBeVisible();
+    await expect(page.getByText("Meeting complete")).not.toBeVisible();
   });
 });
 
