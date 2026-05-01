@@ -8,6 +8,7 @@ import { CommandPalette } from "@/components/minutia/command-palette";
 import { KeyboardShortcutsDialog } from "@/components/minutia/keyboard-shortcuts-dialog";
 import { GotoShortcuts } from "@/components/minutia/goto-shortcuts";
 import { CalendarSidebar } from "@/components/minutia/calendar-sidebar";
+import { OnboardingWizard } from "@/components/minutia/onboarding-wizard";
 import type { Profile } from "@/lib/types";
 
 interface AppShellProps {
@@ -16,6 +17,12 @@ interface AppShellProps {
 }
 
 export function AppShell({ profile, children }: AppShellProps) {
+  if (profile && !profile.has_completed_onboarding) {
+    return (
+      <OnboardingWizard userName={profile.name} userEmail={profile.email} />
+    );
+  }
+
   return (
     <SidebarProvider>
       <a

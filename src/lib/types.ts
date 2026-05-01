@@ -14,6 +14,7 @@ export interface Profile {
   email: string;
   name: string | null;
   avatar_url: string | null;
+  has_completed_onboarding: boolean;
   created_at: Date;
   updated_at: Date;
 }
