@@ -129,7 +129,8 @@ export interface CalendarEvent {
 export async function listUpcomingEvents(
   accessToken: string,
   calendarId: string,
-  maxResults = 5
+  maxResults = 5,
+  searchQuery?: string
 ): Promise<CalendarEvent[]> {
   const params = new URLSearchParams({
     timeMin: new Date().toISOString(),
@@ -137,6 +138,9 @@ export async function listUpcomingEvents(
     singleEvents: "true",
     orderBy: "startTime",
   });
+  if (searchQuery) {
+    params.set("q", searchQuery);
+  }
 
   const res = await fetch(
     `${GOOGLE_CALENDAR_API}/calendars/${encodeURIComponent(calendarId)}/events?${params}`,
