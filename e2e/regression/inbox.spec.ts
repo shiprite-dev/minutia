@@ -1,7 +1,50 @@
 import { test, expect } from "@playwright/test";
 import { waitForApp } from "./seed-data";
 
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "http://127.0.0.1:54321";
+const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
+
+const SEED_NOTIFICATION_UNREAD = [
+  "70000000-0000-0000-0000-000000000001",
+  "70000000-0000-0000-0000-000000000002",
+  "70000000-0000-0000-0000-000000000005",
+];
+
+const SEED_NOTIFICATION_READ = [
+  "70000000-0000-0000-0000-000000000003",
+  "70000000-0000-0000-0000-000000000004",
+];
+
+// Reset seed notifications to original state: restore read flags and bump
+// created_at so they appear at the top of the list regardless of how many
+// test-created notifications exist in the DB.
+async function resetSeedNotifications(request: Parameters<Parameters<typeof test>[2]>[0]["request"]) {
+  const headers = {
+    apikey: SERVICE_KEY,
+    Authorization: `Bearer ${SERVICE_KEY}`,
+    "Content-Type": "application/json",
+    Prefer: "return=minimal",
+  };
+
+  // Bump all seed notifications to now so they appear in any paginated fetch.
+  const allIds = [...SEED_NOTIFICATION_UNREAD, ...SEED_NOTIFICATION_READ];
+  await request.patch(
+    `${SUPABASE_URL}/rest/v1/notifications?id=in.(${allIds.join(",")})`,
+    { headers, data: { created_at: new Date().toISOString() } }
+  );
+
+  // Restore unread state for the unread seed notifications.
+  await request.patch(
+    `${SUPABASE_URL}/rest/v1/notifications?id=in.(${SEED_NOTIFICATION_UNREAD.join(",")})`,
+    { headers, data: { read: false } }
+  );
+}
+
 test.describe("Inbox Page", () => {
+  test.beforeEach(async ({ request }) => {
+    await resetSeedNotifications(request);
+  });
+
   test("renders heading with unread count", async ({ page }) => {
     await page.goto("/inbox");
     await waitForApp(page);
