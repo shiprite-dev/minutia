@@ -154,11 +154,11 @@ ON CONFLICT (id) DO NOTHING;
 -- ---------------------------------------------------------------------------
 -- 6. Decisions
 -- ---------------------------------------------------------------------------
-INSERT INTO public.decisions (id, meeting_id, series_id, title, rationale, made_by)
+INSERT INTO public.decisions (id, meeting_id, series_id, title, rationale, made_by, created_by)
 VALUES
-  ('50000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000001', 'Use GitHub Actions for CI/CD', 'Better integration with our existing GitHub workflow. Jenkins maintenance overhead too high.', 'Bob'),
-  ('50000000-0000-0000-0000-000000000002', '20000000-0000-0000-0000-000000000010', '10000000-0000-0000-0000-000000000002', 'Prioritize mobile app over desktop', 'User research shows 72% of target users prefer mobile. Desktop can wait for v2.', 'Dana'),
-  ('50000000-0000-0000-0000-000000000003', '20000000-0000-0000-0000-000000000020', '10000000-0000-0000-0000-000000000003', 'Implement circuit breaker for DB connections', 'Prevent cascading failures during connection pool exhaustion.', 'Frank')
+  ('50000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000001', 'Use GitHub Actions for CI/CD', 'Better integration with our existing GitHub workflow. Jenkins maintenance overhead too high.', 'Bob', '00000000-0000-0000-0000-000000000001'),
+  ('50000000-0000-0000-0000-000000000002', '20000000-0000-0000-0000-000000000010', '10000000-0000-0000-0000-000000000002', 'Prioritize mobile app over desktop', 'User research shows 72% of target users prefer mobile. Desktop can wait for v2.', 'Dana', '00000000-0000-0000-0000-000000000001'),
+  ('50000000-0000-0000-0000-000000000003', '20000000-0000-0000-0000-000000000020', '10000000-0000-0000-0000-000000000003', 'Implement circuit breaker for DB connections', 'Prevent cascading failures during connection pool exhaustion.', 'Frank', '00000000-0000-0000-0000-000000000001')
 ON CONFLICT (id) DO NOTHING;
 
 -- ---------------------------------------------------------------------------

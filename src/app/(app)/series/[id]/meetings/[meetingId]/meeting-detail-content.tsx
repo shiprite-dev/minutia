@@ -8,6 +8,8 @@ import { useSeriesDetail } from "@/lib/hooks/use-series";
 import { useIssues, useCreateIssue, useUpdateIssueStatus } from "@/lib/hooks/use-issues";
 import { useDecisions, useCreateDecision } from "@/lib/hooks/use-decisions";
 import { SyncIndicator } from "@/components/minutia/sync-indicator";
+import { useOfflineSync } from "@/lib/hooks/use-offline-sync";
+import { addPendingItem } from "@/lib/offline-buffer";
 import { CaptureInput } from "@/components/minutia/capture-input";
 import { IssueCard } from "@/components/minutia/issue-card";
 import { BriefCard } from "@/components/minutia/brief-card";
@@ -508,6 +510,8 @@ export function MeetingDetailContent({
   const createDecision = useCreateDecision();
   const updateIssueStatus = useUpdateIssueStatus();
 
+  const { isOnline, pendingCount, syncStatus, refreshCount } = useOfflineSync();
+
   const [notes, setNotes] = React.useState(meeting?.notes_markdown ?? "");
   const updateNotes = useUpdateMeetingNotes();
   const timer = useLiveTimer(meeting?.status === "live" ? meeting.created_at : null);
@@ -581,20 +585,50 @@ export function MeetingDetailContent({
 
   // Handlers
   async function handleCapture(text: string, category: IssueCategory) {
-    if (category === "decision") {
-      await createDecision.mutateAsync({
-        title: text,
-        meeting_id: meetingId,
-        series_id: seriesId,
-      });
+    if (isOnline) {
+      try {
+        if (category === "decision") {
+          await createDecision.mutateAsync({
+            title: text,
+            meeting_id: meetingId,
+            series_id: seriesId,
+          });
+        } else {
+          await createIssue.mutateAsync({
+            title: text,
+            category,
+            priority: "medium",
+            meeting_id: meetingId,
+            series_id: seriesId,
+          });
+        }
+      } catch {
+        // Online but request failed; buffer locally
+        await addPendingItem({
+          id: crypto.randomUUID(),
+          type: category === "decision" ? "decision" : "issue",
+          title: text,
+          category: category === "decision" ? undefined : category,
+          priority: category === "decision" ? undefined : "medium",
+          meeting_id: meetingId,
+          series_id: seriesId,
+          created_at: new Date().toISOString(),
+        });
+        await refreshCount();
+      }
     } else {
-      await createIssue.mutateAsync({
+      // Offline; buffer immediately
+      await addPendingItem({
+        id: crypto.randomUUID(),
+        type: category === "decision" ? "decision" : "issue",
         title: text,
-        category,
-        priority: "medium",
+        category: category === "decision" ? undefined : category,
+        priority: category === "decision" ? undefined : "medium",
         meeting_id: meetingId,
         series_id: seriesId,
+        created_at: new Date().toISOString(),
       });
+      await refreshCount();
     }
   }
 
@@ -626,7 +660,7 @@ export function MeetingDetailContent({
   if (meeting.status === "live") {
     return (
       <div className="min-h-full bg-paper">
-        <SyncIndicator status="synced" />
+        <SyncIndicator status={syncStatus} pendingCount={pendingCount} />
 
         {/* Header bar */}
         <div className="border-b border-rule">
@@ -758,7 +792,7 @@ export function MeetingDetailContent({
                   Start capturing items above. Press A, D, I, or R + space to set category.
                 </p>
               ) : (
-                <div>
+                <div aria-live="polite" aria-relevant="additions">
                   <AnimatePresence mode="popLayout">
                     {raisedInThisMeeting.map((issue, idx) => (
                       <CapturedItem
@@ -821,8 +855,21 @@ export function MeetingDetailContent({
                   Sync status
                 </h3>
                 <div className="flex items-center gap-2">
-                  <span className="size-2 rounded-full bg-success" />
-                  <span className="text-xs text-ink-3">Synced · just now</span>
+                  <span className={cn(
+                    "size-2 rounded-full",
+                    syncStatus === "synced" ? "bg-success" :
+                    syncStatus === "syncing" ? "bg-warn animate-pulse" :
+                    "bg-warn"
+                  )} />
+                  <span className="text-xs text-ink-3">
+                    {syncStatus === "synced" && "Synced"}
+                    {syncStatus === "syncing" && "Syncing..."}
+                    {syncStatus === "offline" && (
+                      pendingCount > 0
+                        ? `${pendingCount} item${pendingCount === 1 ? "" : "s"} buffered`
+                        : "Offline"
+                    )}
+                  </span>
                 </div>
                 <p className="text-[10px] text-ink-4 mt-1.5">
                   Offline capture buffered locally; auto-syncs when connection returns.

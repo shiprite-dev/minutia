@@ -114,7 +114,8 @@ export function CaptureInput({ onSubmit, onCancel }: CaptureInputProps) {
                 aria-label={config.label}
                 title={`${config.label} (${config.shortcut})`}
                 className={cn(
-                  "size-7 flex items-center justify-center rounded text-xs font-medium transition-colors",
+                  "size-7 flex items-center justify-center rounded text-xs font-medium transition-colors outline-none",
+                  "focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-paper",
                   isSelected
                     ? "bg-ink text-paper"
                     : "bg-paper-2 text-ink-3 hover:text-ink-2 hover:bg-paper-3"

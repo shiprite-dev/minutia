@@ -39,20 +39,19 @@ export function ShareButton({ resource_type, resource_id }: ShareButtonProps) {
 
   return (
     <Button
-      variant="outline"
-      size="sm"
+      variant="ghost"
+      size="icon"
       onClick={handleClick}
       disabled={createShare.isPending}
-      className="gap-1.5"
+      aria-label={copied ? "Link copied" : "Share link"}
     >
       {createShare.isPending ? (
-        <Loader2 className="size-3.5 animate-spin" />
+        <Loader2 className="size-4 animate-spin" />
       ) : copied ? (
-        <Check className="size-3.5 text-success" />
+        <Check className="size-4 text-success" />
       ) : (
-        <Link2 className="size-3.5" />
+        <Link2 className="size-4" />
       )}
-      {copied ? "Link copied" : "Share"}
     </Button>
   );
 }

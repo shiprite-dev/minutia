@@ -12,7 +12,7 @@
   --ink:          oklch(0.150 0.010 75);
   --ink-2:        oklch(0.350 0.012 70);
   --ink-3:        oklch(0.450 0.010 70);
-  --ink-4:        oklch(0.580 0.008 70);
+  --ink-4:        oklch(0.530 0.008 70);
   --rule:         oklch(0.900 0.008 75);
   --rule-strong:  oklch(0.850 0.010 75);
   --accent:       oklch(0.620 0.220 35);
@@ -32,8 +32,8 @@
   --paper-3:      oklch(0.210 0.008 75);
   --ink:          oklch(0.930 0.008 75);
   --ink-2:        oklch(0.750 0.008 70);
-  --ink-3:        oklch(0.580 0.008 70);
-  --ink-4:        oklch(0.380 0.008 70);
+  --ink-3:        oklch(0.620 0.008 70);
+  --ink-4:        oklch(0.500 0.008 70);
   --rule:         oklch(0.240 0.008 75);
   --rule-strong:  oklch(0.300 0.008 75);
   --accent:       oklch(0.660 0.200 35);

@@ -204,21 +204,20 @@ export default function MyActionsPage() {
           ease: [0.2, 0.8, 0.2, 1],
         }}
       >
-        <div className="relative">
+        <div>
+          {seriesName && (
+            <div className="mb-1 ml-1">
+              <span className="inline-flex items-center rounded-full bg-paper-2 border border-rule px-2 py-0.5 text-[10px] font-medium text-ink-3">
+                {seriesName}
+              </span>
+            </div>
+          )}
           <IssueCard
             issue={issue}
             onStatusChange={handleStatusChange}
             onExpand={handleExpand}
             expanded={expandedIssueId === issue.id}
           />
-          {/* Series tag overlay */}
-          {seriesName && (
-            <div className="absolute top-3 right-3">
-              <span className="inline-flex items-center rounded-full bg-paper-2 border border-rule px-2 py-0.5 text-[10px] font-medium text-ink-3">
-                {seriesName}
-              </span>
-            </div>
-          )}
         </div>
       </motion.div>
     );

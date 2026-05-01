@@ -1,8 +1,37 @@
 {
   "name": "minutia",
   "version": "0.1.0",
+  "description": "Open-source Outstanding Issues Log (OIL) for recurring meetings. Track what was raised, decided, and owed.",
   "license": "AGPL-3.0-only",
   "private": true,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/shiprite-dev/minutia.git"
+  },
+  "bugs": {
+    "url": "https://github.com/shiprite-dev/minutia/issues"
+  },
+  "homepage": "https://github.com/shiprite-dev/minutia#readme",
+  "keywords": [
+    "meeting-tracker",
+    "outstanding-issues-log",
+    "oil-tracker",
+    "meeting-notes",
+    "meeting-management",
+    "action-item-tracker",
+    "meeting-action-items",
+    "issue-tracker",
+    "meeting-follow-up",
+    "recurring-meetings",
+    "meeting-minutes",
+    "meeting-agenda",
+    "decision-log",
+    "accountability-tracker",
+    "open-source",
+    "self-hosted",
+    "next-js",
+    "supabase"
+  ],
   "scripts": {
     "dev": "next dev",
     "build": "next build",
