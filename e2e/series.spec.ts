@@ -6,7 +6,7 @@ test.describe("Series", () => {
   test("series list page loads", async ({ page }) => {
     await page.goto("/series");
 
-    await expect(page.getByRole("heading", { name: /Series/i })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /Series/i }).first()).toBeVisible();
   });
 
   test("series detail page loads with correct structure", async ({ page }) => {

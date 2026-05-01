@@ -35,8 +35,29 @@ export interface MeetingSeries {
   description: string | null;
   cadence: Cadence;
   default_attendees: string[];
+  gcal_calendar_id: string | null;
+  gcal_sync_enabled: boolean;
   created_at: Date;
   updated_at: Date;
+}
+
+export interface GoogleCalendarEntry {
+  id: string;
+  summary: string;
+  primary: boolean;
+}
+
+export interface GoogleCalendarEvent {
+  id: string;
+  summary: string;
+  start: { dateTime?: string; date?: string };
+  end: { dateTime?: string; date?: string };
+  htmlLink?: string;
+}
+
+export interface GoogleCalendarStatus {
+  connected: boolean;
+  googleEmail: string | null;
 }
 
 export interface Meeting {

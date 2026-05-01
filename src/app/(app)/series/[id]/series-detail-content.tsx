@@ -32,9 +32,15 @@ import { CADENCES } from "@/lib/constants";
 import { createSeriesSchema, type CreateSeriesInput } from "@/lib/schemas";
 import { ShareButton } from "@/components/minutia/share-button";
 import { CsvImportDialog } from "@/components/minutia/csv-import-dialog";
-import { ArrowLeft, Play, Settings, Loader2, Upload } from "lucide-react";
+import { ArrowLeft, Play, Settings, Loader2, Upload, Calendar, X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { Cadence, Issue } from "@/lib/types";
+import type { Cadence, Issue, GoogleCalendarEntry } from "@/lib/types";
+import {
+  useGoogleCalendarStatus,
+  useCalendarList,
+  useLinkCalendar,
+  useUnlinkCalendar,
+} from "@/lib/hooks/use-google-calendar";
 import Link from "next/link";
 
 const cadenceLabels: Record<Cadence, string> = {
@@ -297,9 +303,13 @@ function SeriesSettingsDialog({
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  series: { id: string; name: string; description: string | null; cadence: Cadence; default_attendees: string[] };
+  series: { id: string; name: string; description: string | null; cadence: Cadence; default_attendees: string[]; gcal_calendar_id: string | null; gcal_sync_enabled: boolean };
 }) {
   const updateSeries = useUpdateSeries();
+  const { data: gcalStatus } = useGoogleCalendarStatus();
+  const { data: calendarList } = useCalendarList();
+  const linkCalendar = useLinkCalendar();
+  const unlinkCalendar = useUnlinkCalendar();
 
   const {
     register,
@@ -386,6 +396,52 @@ function SeriesSettingsDialog({
               }}
             />
             <p className="text-[10px] text-ink-4">Comma-separated emails</p>
+          </div>
+
+          {/* Google Calendar */}
+          <div className="space-y-1.5">
+            <Label className="flex items-center gap-1.5">
+              <Calendar className="size-3.5" />
+              Google Calendar
+            </Label>
+            {!gcalStatus?.connected ? (
+              <p className="text-xs text-ink-3">
+                <a href="/settings" className="text-accent hover:underline">Connect Google Calendar</a> in Settings to link a calendar to this series.
+              </p>
+            ) : series.gcal_calendar_id && series.gcal_sync_enabled ? (
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-ink-2 truncate flex-1">
+                  {calendarList?.find((c) => c.id === series.gcal_calendar_id)?.summary ?? series.gcal_calendar_id}
+                </span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => unlinkCalendar.mutate(series.id)}
+                  disabled={unlinkCalendar.isPending}
+                >
+                  <X className="size-3.5" />
+                  Unlink
+                </Button>
+              </div>
+            ) : (
+              <select
+                className="w-full rounded-md border border-rule bg-paper px-3 py-2 text-sm text-ink"
+                defaultValue=""
+                onChange={(e) => {
+                  if (e.target.value) {
+                    linkCalendar.mutate({ seriesId: series.id, calendarId: e.target.value });
+                  }
+                }}
+              >
+                <option value="" disabled>Select a calendar</option>
+                {(calendarList ?? []).map((cal) => (
+                  <option key={cal.id} value={cal.id}>
+                    {cal.summary}{cal.primary ? " (primary)" : ""}
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
 
           <DialogFooter>
