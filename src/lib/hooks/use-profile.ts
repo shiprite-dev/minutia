@@ -43,6 +43,33 @@ export function useProfile() {
 }
 
 // ---------------------------------------------------------------------------
+// useCompleteOnboarding - mark onboarding as done
+// ---------------------------------------------------------------------------
+export function useCompleteOnboarding() {
+  const supabase = createClient();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
+
+      const { error } = await supabase
+        .from("profiles")
+        .update({ has_completed_onboarding: true })
+        .eq("id", user.id);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: profileKeys.current });
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
 // useUpdateProfile - update name and optionally user_settings
 // ---------------------------------------------------------------------------
 export function useUpdateProfile() {
