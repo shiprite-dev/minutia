@@ -16,7 +16,7 @@ test.describe("Meeting Detail (Completed)", () => {
       page.getByRole("heading", { name: "Platform Standup #2" })
     ).toBeVisible();
 
-    await expect(page.getByText(/April 8, 2026/i)).toBeVisible();
+    await expect(page.getByText(/April 8, 2026/i).first()).toBeVisible();
 
     await expect(page.getByText("Alice").first()).toBeVisible();
     await expect(page.getByText("Bob").first()).toBeVisible();
