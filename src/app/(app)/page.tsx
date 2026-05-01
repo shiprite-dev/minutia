@@ -101,15 +101,17 @@ function ageGroup(days: number): string {
 function DashCard({
   children,
   className,
+  index = 0,
 }: {
   children: React.ReactNode;
   className?: string;
+  index?: number;
 }) {
   return (
     <motion.div
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4, ease: [0.2, 0.8, 0.2, 1] }}
+      initial={{ opacity: 0, x: -20 }}
+      animate={{ opacity: 1, x: 0 }}
+      transition={{ delay: index * 0.06, duration: 0.32, ease: [0.2, 0.8, 0.2, 1] }}
       className={cn(
         "rounded-xl border border-rule bg-card p-6",
         className
@@ -147,7 +149,7 @@ function HeroCard({
     : 0;
 
   return (
-    <DashCard className="col-span-2">
+    <DashCard className="col-span-2" index={0}>
       <p className="text-[11px] font-mono uppercase tracking-wider text-ink-4 mb-3">
         {formatWeekday(new Date())}
       </p>
@@ -253,7 +255,7 @@ function NextMeetingCard({
   if (!nextSeries) return null;
 
   return (
-    <DashCard>
+    <DashCard index={1}>
       <div className="flex items-center gap-2 mb-4">
         <span className="inline-flex items-center gap-1.5 text-xs font-medium text-accent">
           <span className="size-1.5 rounded-full bg-accent animate-pulse" />
@@ -367,7 +369,7 @@ function OutstandingItems({
   ];
 
   return (
-    <DashCard className="col-span-2">
+    <DashCard className="col-span-2" index={2}>
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-1">
         <h3 className="font-display text-lg font-semibold text-ink">Outstanding items</h3>
         <div className="flex items-center gap-1 overflow-x-auto" role="tablist" aria-label="Filter outstanding items">
@@ -591,7 +593,7 @@ function AgeCard({ issues }: { issues: Issue[] }) {
     : 0;
 
   return (
-    <DashCard>
+    <DashCard index={5}>
       <div className="flex items-center justify-between mb-4">
         <h3 className="font-display text-base font-semibold text-ink">Age of open items</h3>
         <span className="text-[11px] text-ink-4">oldest first</span>
@@ -634,7 +636,7 @@ function RecentDecisions({
   if (recent.length === 0) return null;
 
   return (
-    <DashCard>
+    <DashCard index={4}>
       <h3 className="font-display text-base font-semibold text-ink mb-4">
         Recent decisions
       </h3>
@@ -671,7 +673,7 @@ function SeriesQuickList({
   seriesList: (MeetingSeries & { open_issues_count: number })[];
 }) {
   return (
-    <DashCard>
+    <DashCard index={3}>
       <div className="flex items-center justify-between mb-4">
         <h3 className="font-display text-base font-semibold text-ink">Your series</h3>
         <Link href="/series" className="text-xs text-ink-3 hover:text-accent transition-colors">
