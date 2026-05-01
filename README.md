@@ -55,6 +55,16 @@ See everything you owe across all your meeting series, prioritized by urgency.
 
 ![My Actions](public/screenshots/my-actions.png)
 
+### Calendar Sidebar & Timeline
+
+A persistent calendar panel (desktop inline, mobile bottom sheet) with mini-calendar, month navigation, and day agenda showing all meetings. Click any date to scroll the series timeline to that point. Toggle with Ctrl+. or the header button.
+
+Series detail pages feature a date-anchored timeline with expandable meeting sections, status icons (completed/live/upcoming), a Today divider, and inline issue and decision previews.
+
+### Inline Tasks
+
+Meeting items render as interactive checklist items with checkbox status toggles, inline title editing, colored category pills, and @mention assignee selection from attendees. Add new items inline with Enter. The meeting detail page becomes an active workspace, not a passive record.
+
 ### And more
 
 - **Guest Sharing** - Share read-only links with external collaborators. No account required.
@@ -131,6 +141,7 @@ Self-hosters bring their own API key (Claude, OpenAI, Ollama). Cloud users get A
 | `S` | Cycle issue status |
 | `C` | Add update/comment |
 | `Cmd+K` | Command palette |
+| `Ctrl+.` | Toggle calendar sidebar |
 | `?` | Show all shortcuts |
 
 ---
@@ -148,7 +159,7 @@ Self-hosters bring their own API key (Claude, OpenAI, Ollama). Cloud users get A
 | Auth | Supabase Auth (email/password) |
 | State | TanStack React Query + Zustand |
 | Animation | Motion v12 |
-| Testing | Playwright (134 E2E tests) |
+| Testing | Playwright (114+ E2E tests) |
 
 ### Project Structure
 
