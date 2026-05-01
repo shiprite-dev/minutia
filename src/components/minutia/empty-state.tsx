@@ -1,104 +1,103 @@
 "use client";
 
 import * as React from "react";
+import { motion } from "motion/react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { ArrowRight } from "lucide-react";
 
 interface EmptyStateProps {
-  variant: "no-series" | "no-issues" | "no-actions";
+  variant: "no-series" | "no-issues" | "no-actions" | "no-meetings";
   onAction?: () => void;
 }
 
 const config: Record<
   EmptyStateProps["variant"],
-  { message: string; cta?: string }
+  { message: string; sub?: string; cta?: string }
 > = {
   "no-series": {
     message: "Every good log starts with one meeting.",
+    sub: "Create a series to start tracking what matters.",
     cta: "Create your first series",
   },
   "no-issues": {
-    message: "Nothing outstanding. Enjoy the quiet.",
+    message: "Nothing outstanding.",
+    sub: "Enjoy the quiet.",
   },
   "no-actions": {
-    message: "You owe nobody anything right now. Keep it that way.",
+    message: "You owe nobody anything right now.",
+    sub: "Keep it that way.",
+  },
+  "no-meetings": {
+    message: "No meetings yet.",
+    sub: "Start your first one above.",
   },
 };
 
-function NoSeriesGlyph() {
+function RuleDivider() {
   return (
-    <svg
-      width="48"
-      height="48"
-      viewBox="0 0 48 48"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      className="text-ink-4 mb-4"
+    <motion.div
+      className="flex items-center gap-1 mb-5"
       aria-hidden="true"
+      initial={{ opacity: 0, scaleX: 0 }}
+      animate={{ opacity: 1, scaleX: 1 }}
+      transition={{ duration: 0.5, ease: [0.2, 0.8, 0.2, 1] }}
     >
-      {/* Spreadsheet grid (crossed out) */}
-      <rect x="8" y="8" width="32" height="32" rx="4" stroke="currentColor" strokeWidth="1.5" strokeDasharray="3 2" opacity="0.4" />
-      <line x1="8" y1="18" x2="40" y2="18" stroke="currentColor" strokeWidth="1" opacity="0.3" />
-      <line x1="8" y1="28" x2="40" y2="28" stroke="currentColor" strokeWidth="1" opacity="0.3" />
-      <line x1="20" y1="8" x2="20" y2="40" stroke="currentColor" strokeWidth="1" opacity="0.3" />
-      <line x1="32" y1="8" x2="32" y2="40" stroke="currentColor" strokeWidth="1" opacity="0.3" />
-      {/* Diagonal strike */}
-      <line x1="10" y1="10" x2="38" y2="38" stroke="currentColor" strokeWidth="1.5" opacity="0.5" />
-      {/* Flame */}
-      <path
-        d="M34 14c0 4-3 7-3 7s-1-2-1-4c0 3-2.5 6-2.5 6S26 20 26 17c0 4-3 8-3 8"
-        stroke="var(--accent)"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        fill="none"
-        opacity="0.7"
-      />
-    </svg>
-  );
-}
-
-function QuietDashes() {
-  return (
-    <div className="flex items-center gap-1.5 mb-3" aria-hidden="true">
-      {Array.from({ length: 7 }).map((_, i) => (
-        <span
-          key={i}
-          className="inline-block h-px bg-ink-4/30"
-          style={{ width: `${12 + Math.sin(i * 1.2) * 6}px` }}
-        />
-      ))}
-    </div>
+      <span className="h-px w-8 bg-rule-strong" />
+      <span className="size-1 rounded-full bg-accent" />
+      <span className="h-px w-8 bg-rule-strong" />
+    </motion.div>
   );
 }
 
 export function EmptyState({ variant, onAction }: EmptyStateProps) {
-  const { message, cta } = config[variant];
+  const { message, sub, cta } = config[variant];
 
   return (
     <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
-      {variant === "no-series" && <NoSeriesGlyph />}
-      {variant === "no-issues" && <QuietDashes />}
+      <RuleDivider />
 
-      <p
-        className={cn(
-          "text-ink-2 max-w-sm",
-          variant === "no-issues" ? "text-[13px]" : "text-sm"
-        )}
+      <motion.p
+        className="font-display text-base font-medium text-ink max-w-sm"
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.15, duration: 0.4, ease: [0.2, 0.8, 0.2, 1] }}
       >
         {message}
-      </p>
+      </motion.p>
+
+      {sub && (
+        <motion.p
+          className={cn(
+            "text-ink-3 max-w-sm mt-1.5",
+            variant === "no-issues" || variant === "no-actions"
+              ? "text-[13px] italic"
+              : "text-sm"
+          )}
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.35, duration: 0.4, ease: [0.2, 0.8, 0.2, 1] }}
+        >
+          {sub}
+        </motion.p>
+      )}
 
       {cta && onAction && (
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={onAction}
-          className="mt-4 text-accent hover:text-accent-hover gap-1"
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.55, duration: 0.3 }}
         >
-          {cta}
-          <ArrowRight className="size-3.5" />
-        </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onAction}
+            className="mt-5 text-accent hover:text-accent-hover gap-1"
+          >
+            {cta}
+            <ArrowRight className="size-3.5" />
+          </Button>
+        </motion.div>
       )}
     </div>
   );
