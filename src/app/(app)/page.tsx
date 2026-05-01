@@ -3,6 +3,22 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "motion/react";
+import {
+  DndContext,
+  DragOverlay,
+  PointerSensor,
+  KeyboardSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragStartEvent,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  rectSortingStrategy,
+} from "@dnd-kit/sortable";
 import Link from "next/link";
 import {
   ArrowRight,
@@ -1026,6 +1042,29 @@ export default function Dashboard() {
   const { data: allDecisions } = useDecisions();
   const updateStatus = useUpdateIssueStatus();
   const widgets = useWidgetStore((s) => s.widgets);
+  const moveWidget = useWidgetStore((s) => s.moveWidget);
+
+  const [activeId, setActiveId] = React.useState<string | null>(null);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
+
+  function handleDragStart(event: DragStartEvent) {
+    setActiveId(String(event.active.id));
+  }
+
+  function handleDragEnd(event: DragEndEvent) {
+    setActiveId(null);
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const fromIndex = widgets.findIndex((w) => w.id === active.id);
+    const toIndex = widgets.findIndex((w) => w.id === over.id);
+    if (fromIndex !== -1 && toIndex !== -1) {
+      moveWidget(fromIndex, toIndex);
+    }
+  }
 
   const firstSeriesId = seriesList?.[0]?.gcal_sync_enabled ? seriesList[0].id : undefined;
   const { data: calendarEvents } = useCalendarEvents(firstSeriesId);
@@ -1055,64 +1094,16 @@ export default function Dashboard() {
     updateStatus.mutate({ issueId, seriesId, oldStatus, newStatus });
   }
 
-  // Pack widgets into rows of 3 columns.
-  // Wide = 2 cols, narrow = 1 col. Narrow widgets stack in the remaining column.
-  // Strategy: scan widgets, pair each wide with adjacent narrows.
-  // If narrows precede a wide, attach them to that wide's row.
-  type IndexedWidget = (typeof widgets)[number] & { _idx: number };
-  const rows = React.useMemo(() => {
-    const indexed: (IndexedWidget & { span: number })[] = widgets.map((w, i) => ({
-      ...w,
-      _idx: i,
-      span: getWidgetMeta(w.type)?.span ?? 1,
-    }));
+  const widgetIds = React.useMemo(() => widgets.map((w) => w.id), [widgets]);
 
-    type Row = { wide: IndexedWidget | null; narrows: IndexedWidget[] };
-    const result: Row[] = [];
-    let pendingNarrows: IndexedWidget[] = [];
-
-    for (const w of indexed) {
-      if (w.span === 2) {
-        // If there are pending narrows that don't fill a complete 3-col row,
-        // attach them to this wide widget's row
-        if (pendingNarrows.length > 0 && pendingNarrows.length < 3) {
-          result.push({ wide: w, narrows: pendingNarrows });
-          pendingNarrows = [];
-        } else {
-          // Flush any full narrow rows first
-          if (pendingNarrows.length >= 3) {
-            result.push({ wide: null, narrows: pendingNarrows });
-            pendingNarrows = [];
-          }
-          result.push({ wide: w, narrows: [] });
-        }
-      } else {
-        pendingNarrows.push(w);
-        // Flush when we have 3 narrows (fills a full row)
-        if (pendingNarrows.length === 3) {
-          result.push({ wide: null, narrows: pendingNarrows });
-          pendingNarrows = [];
-        }
-      }
-    }
-
-    // Flush remaining narrows
-    if (pendingNarrows.length > 0) {
-      result.push({ wide: null, narrows: pendingNarrows });
-    }
-
-    // Second pass: wide widgets with no narrows can absorb narrows from the next row
-    for (let i = 0; i < result.length - 1; i++) {
-      const row = result[i];
-      const next = result[i + 1];
-      if (row.wide && row.narrows.length === 0 && !next.wide && next.narrows.length > 0) {
-        row.narrows = next.narrows;
-        result.splice(i + 1, 1);
-      }
-    }
-
-    return result;
-  }, [widgets]);
+  const widgetSpans = React.useMemo(
+    () =>
+      widgets.map((w) => ({
+        ...w,
+        _span: w.span ?? getWidgetMeta(w.type)?.span ?? 1,
+      })),
+    [widgets]
+  );
 
   const sharedProps = {
     issues: issues ?? [],
@@ -1137,62 +1128,39 @@ export default function Dashboard() {
             <div className="flex items-center justify-end mb-5">
               <AddWidgetButton />
             </div>
-            <div className="space-y-5">
-              {rows.map((row, rowIdx) => {
-                if (row.wide && row.narrows.length > 0) {
-                  return (
-                    <div key={rowIdx} className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-                      <div className="lg:col-span-2">
-                        <WidgetRenderer
-                          widgetId={row.wide.id}
-                          widgetType={row.wide.type}
-                          widgetIndex={row.wide._idx}
-                          {...sharedProps}
-                        />
-                      </div>
-                      <div className="space-y-5">
-                        {row.narrows.map((w) => (
-                          <WidgetRenderer
-                            key={w.id}
-                            widgetId={w.id}
-                            widgetType={w.type}
-                            widgetIndex={w._idx}
-                            {...sharedProps}
-                          />
-                        ))}
-                      </div>
-                    </div>
-                  );
-                }
-
-                if (row.wide) {
-                  return (
-                    <div key={rowIdx}>
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragStart={handleDragStart}
+              onDragEnd={handleDragEnd}
+            >
+              <SortableContext items={widgetIds} strategy={rectSortingStrategy}>
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+                  {widgetSpans.map((w, i) => (
+                    <div
+                      key={w.id}
+                      className={cn(w._span === 2 && "lg:col-span-2")}
+                    >
                       <WidgetRenderer
-                        widgetId={row.wide.id}
-                        widgetType={row.wide.type}
-                        widgetIndex={row.wide._idx}
-                        {...sharedProps}
-                      />
-                    </div>
-                  );
-                }
-
-                return (
-                  <div key={rowIdx} className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-                    {row.narrows.map((w) => (
-                      <WidgetRenderer
-                        key={w.id}
                         widgetId={w.id}
                         widgetType={w.type}
-                        widgetIndex={w._idx}
+                        widgetIndex={i}
                         {...sharedProps}
                       />
-                    ))}
+                    </div>
+                  ))}
+                </div>
+              </SortableContext>
+              <DragOverlay>
+                {activeId ? (
+                  <div className="rounded-xl border border-accent/50 bg-card/80 p-6 shadow-xl backdrop-blur-sm opacity-90">
+                    <p className="text-sm font-medium text-ink">
+                      {getWidgetMeta(widgets.find((w) => w.id === activeId)?.type ?? "")?.name ?? "Widget"}
+                    </p>
                   </div>
-                );
-              })}
-            </div>
+                ) : null}
+              </DragOverlay>
+            </DndContext>
           </>
         )}
         <QuickAddButton seriesList={seriesList ?? []} />
