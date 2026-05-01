@@ -71,6 +71,7 @@ The OIL Board dashboard is fully customizable. Drag widgets to reorder, resize b
 
 ### And more
 
+- **Google Sign-In** - One-click OAuth login alongside magic link and guest auth.
 - **Guest Sharing** - Share read-only links with external collaborators. No account required.
 - **Command Palette** - Cmd+K to search across all issues and series instantly.
 - **CSV Import/Export** - Migrate from your spreadsheet in seconds. Export anytime.
