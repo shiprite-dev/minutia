@@ -28,6 +28,51 @@ import Link from "next/link";
 // Post-meeting summary card
 // ---------------------------------------------------------------------------
 
+function AnimatedNumber({ value, delay = 0 }: { value: number; delay?: number }) {
+  const [display, setDisplay] = React.useState(0);
+
+  React.useEffect(() => {
+    if (value === 0) return;
+    const timeout = setTimeout(() => {
+      const duration = 600;
+      const start = performance.now();
+      function tick(now: number) {
+        const elapsed = now - start;
+        const progress = Math.min(elapsed / duration, 1);
+        const eased = 1 - Math.pow(1 - progress, 3);
+        setDisplay(Math.round(eased * value));
+        if (progress < 1) requestAnimationFrame(tick);
+      }
+      requestAnimationFrame(tick);
+    }, delay);
+    return () => clearTimeout(timeout);
+  }, [value, delay]);
+
+  return <>{display}</>;
+}
+
+function getInsightLine(raisedCount: number, decisionsCount: number, resolvedCount: number, stillOpenCount: number): string | null {
+  const total = raisedCount + decisionsCount;
+  if (total === 0) return null;
+
+  if (resolvedCount > 0 && stillOpenCount === 0) {
+    return "Clean slate. Every item accounted for.";
+  }
+  if (resolvedCount > raisedCount && resolvedCount > 0) {
+    return `You closed more than you opened. Net progress: ${resolvedCount - raisedCount} items cleared.`;
+  }
+  if (stillOpenCount > 0 && raisedCount > 0) {
+    return `${raisedCount} new items tracked. ${stillOpenCount} carried forward with accountability.`;
+  }
+  if (raisedCount > 0 && decisionsCount > 0) {
+    return `${raisedCount} items captured, ${decisionsCount} decisions logged. Nothing lost.`;
+  }
+  if (raisedCount > 0) {
+    return `${raisedCount} items captured. Each one tracked until resolved.`;
+  }
+  return null;
+}
+
 function MeetingSummaryCard({
   meeting,
   seriesName,
@@ -92,23 +137,38 @@ function MeetingSummaryCard({
     setTimeout(() => setCopied(false), 2000);
   }
 
+  const insightLine = getInsightLine(raisedCount, decisionsCount, resolvedCount, stillOpenCount);
+  const totalTracked = raisedCount + decisionsCount + resolvedCount;
+
   const stats = [
-    { label: "Raised", value: raisedCount },
-    { label: "Decisions", value: decisionsCount },
-    { label: "Resolved", value: resolvedCount },
-    { label: "Still open", value: stillOpenCount },
+    { label: "Raised", value: raisedCount, color: "text-ink" },
+    { label: "Decisions", value: decisionsCount, color: "text-ink" },
+    { label: "Resolved", value: resolvedCount, color: "text-success" },
+    { label: "Carried", value: stillOpenCount, color: stillOpenCount > 0 ? "text-warn" : "text-ink" },
   ];
 
   return (
-    <div className="mb-8 rounded-xl border border-rule bg-paper-2 p-5">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="font-display text-base font-semibold text-ink">
-          Meeting summary
-        </h2>
+    <motion.div
+      initial={{ opacity: 0, y: -12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4, ease: [0.2, 0.8, 0.2, 1] }}
+      className="mb-8 rounded-xl border-2 border-accent/20 bg-paper-2 p-6 relative overflow-hidden"
+    >
+      <div className="absolute top-0 left-0 right-0 h-[2px] bg-accent" />
+
+      <div className="flex items-center justify-between mb-5">
+        <div>
+          <h2 className="font-display text-lg font-semibold text-ink">
+            Meeting complete
+          </h2>
+          <p className="text-xs font-mono text-ink-4 mt-0.5">
+            {formatMeetingDate(meeting.date)}
+          </p>
+        </div>
         <button
           type="button"
           onClick={handleCopy}
-          className="inline-flex items-center gap-1.5 text-xs text-ink-3 hover:text-ink transition-colors overflow-hidden"
+          className="inline-flex items-center gap-1.5 text-xs text-ink-3 hover:text-ink transition-colors overflow-hidden rounded-md px-2.5 py-1.5 border border-rule hover:border-rule-strong"
         >
           <AnimatePresence mode="wait" initial={false}>
             {copied ? (
@@ -120,7 +180,7 @@ function MeetingSummaryCard({
                 transition={{ duration: 0.16 }}
                 className="inline-flex items-center gap-1.5"
               >
-                <CheckCheck className="size-3.5" />
+                <CheckCheck className="size-3.5 text-success" />
                 Copied
               </motion.span>
             ) : (
@@ -139,17 +199,50 @@ function MeetingSummaryCard({
           </AnimatePresence>
         </button>
       </div>
-      <div className="grid grid-cols-4 gap-3">
-        {stats.map((stat) => (
-          <div key={stat.label} className="text-center">
-            <p className="font-display text-2xl font-bold text-ink tabular-nums">
-              {stat.value}
+
+      <div className="grid grid-cols-4 gap-4 mb-5">
+        {stats.map((stat, i) => (
+          <motion.div
+            key={stat.label}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, delay: 0.15 + i * 0.08 }}
+            className="text-center"
+          >
+            <p className={cn("font-display text-3xl font-bold tabular-nums", stat.color)}>
+              <AnimatedNumber value={stat.value} delay={200 + i * 80} />
             </p>
-            <p className="text-[11px] text-ink-3 mt-0.5">{stat.label}</p>
-          </div>
+            <p className="text-[11px] text-ink-3 mt-1 tracking-wide uppercase">
+              {stat.label}
+            </p>
+          </motion.div>
         ))}
       </div>
-    </div>
+
+      {insightLine && (
+        <motion.p
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.5, delay: 0.8 }}
+          className="text-sm text-ink-2 text-center py-3 border-t border-rule"
+        >
+          {insightLine}
+        </motion.p>
+      )}
+
+      {totalTracked > 0 && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.4, delay: 1.1 }}
+          className="text-center pt-2"
+        >
+          <p className="text-[11px] text-ink-4">
+            In a spreadsheet, {totalTracked === 1 ? "this item" : `these ${totalTracked} items`} would be copy-pasted into cells and forgotten by next meeting.
+          </p>
+        </motion.div>
+      )}
+    </motion.div>
   );
 }
 
