@@ -37,11 +37,11 @@ Recurring meetings with cadence, attendees, and automatic pre-meeting briefs. Se
 
 ![Series Detail with Brief](public/screenshots/series-detail.png)
 
-### Live Capture
+### Meeting Complete & Inline Tasks
 
-Raise issues during meetings in real-time. Type `a ` for action, `d ` for decision, `i ` for info, `r ` for risk. Carried items from the last meeting are pre-populated. Works offline with auto-sync.
+After a meeting ends, see a summary of raised items, decisions, and carried-forward issues. Items render as interactive checklists with colored category pills (Action, Blocker, Decision, Info, Risk) and assignee avatars.
 
-![Live Capture Mode](public/screenshots/meeting-detail.png)
+![Meeting Complete](public/screenshots/meeting-detail.png)
 
 ### Issue Lifecycle
 
@@ -55,26 +55,21 @@ See everything you owe across all your meeting series, prioritized by urgency.
 
 ![My Actions](public/screenshots/my-actions.png)
 
-### Calendar Sidebar & Timeline
+### Settings & Integrations
 
-A persistent calendar panel (desktop inline, mobile bottom sheet) with mini-calendar, month navigation, and day agenda showing all meetings. Click any date to scroll the series timeline to that point. Toggle with Ctrl+. or the header button.
+Connect Google Calendar for read-only calendar sync, manage your profile, choose light/dark/system theme, and export all your data as CSV or JSON.
 
-Series detail pages feature a date-anchored timeline with expandable meeting sections, status icons (completed/live/upcoming), a Today divider, and inline issue and decision previews.
-
-### Inline Tasks
-
-Meeting items render as interactive checklist items with checkbox status toggles, inline title editing, colored category pills, and @mention assignee selection from attendees. Add new items inline with Enter. The meeting detail page becomes an active workspace, not a passive record.
-
-### Draggable Widgets
-
-The OIL Board dashboard is fully customizable. Drag widgets to reorder, resize between narrow and wide layouts, add or remove from a widget picker, and reset to defaults. Your layout persists across sessions via localStorage.
+![Settings](public/screenshots/settings.png)
 
 ### And more
 
-- **Google Sign-In** - One-click OAuth login alongside magic link and guest auth.
+- **Live Capture** - Raise issues in real-time with type prefixes (`a ` for action, `d ` for decision, `r ` for risk). Carried items from last meeting pre-populated. Works offline with auto-sync.
+- **Calendar Sidebar** - Persistent mini-calendar panel (Ctrl+.), month navigation, day agenda with meeting links, scroll-to-date integration on series timeline.
+- **Google Sign-In** - One-click OAuth login alongside email/password and guest auth.
 - **Guest Sharing** - Share read-only links with external collaborators. No account required.
 - **Command Palette** - Cmd+K to search across all issues and series instantly.
 - **CSV Import/Export** - Migrate from your spreadsheet in seconds. Export anytime.
+- **Draggable Widgets** - Drag-to-reorder and resize dashboard widgets. Layout persists via localStorage.
 - **Dark Mode** - Both modes are first-class, not afterthoughts.
 - **Self-hostable** - One-command Docker Compose deployment.
 
@@ -125,7 +120,7 @@ pnpm dev
 | AI required | No (opt-in) | Yes (core dependency) | No | No |
 | Calendar required | No | Yes | No | No |
 | Cross-meeting continuity | Core feature | Carry-forward | Manual linking | Manual copy-paste |
-| Price | Free (self-host) / $5/mo (Cloud) | $7-25/seat/mo | Free-$10/seat | Free |
+| Price | Free (self-host) | $7-25/seat/mo | Free-$10/seat | Free |
 
 ## AI Strategy
 
@@ -140,7 +135,6 @@ Self-hosters bring their own API key (Claude, OpenAI, Ollama). Cloud users get A
 ## Roadmap
 
 ### In Progress
-- Onboarding flow for first-time users
 - Email digests and pre-meeting nudges (Resend + SMTP)
 
 ### Planned
@@ -150,7 +144,7 @@ Self-hosters bring their own API key (Claude, OpenAI, Ollama). Cloud users get A
 - Team/org management (multi-user beyond single profile)
 - Drag-to-reorder issue priority
 - PDF export
-- Landing page and marketing site
+- Enterprise SSO (SAML / OIDC)
 
 ---
 
