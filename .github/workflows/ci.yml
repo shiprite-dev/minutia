@@ -71,13 +71,13 @@ jobs:
 
       - name: Set Supabase env vars
         run: |
-          SUPABASE_OUTPUT=$(npx supabase status -o env)
-          echo "NEXT_PUBLIC_SUPABASE_URL=$(echo "$SUPABASE_OUTPUT" | grep SUPABASE_URL | cut -d= -f2-)" >> "$GITHUB_ENV"
-          echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$(echo "$SUPABASE_OUTPUT" | grep ANON_KEY | cut -d= -f2-)" >> "$GITHUB_ENV"
-          echo "SUPABASE_SERVICE_ROLE_KEY=$(echo "$SUPABASE_OUTPUT" | grep SERVICE_ROLE_KEY | cut -d= -f2-)" >> "$GITHUB_ENV"
+          eval "$(npx supabase status -o env)"
+          echo "NEXT_PUBLIC_SUPABASE_URL=$API_URL" >> "$GITHUB_ENV"
+          echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$ANON_KEY" >> "$GITHUB_ENV"
+          echo "SUPABASE_SERVICE_ROLE_KEY=$SERVICE_ROLE_KEY" >> "$GITHUB_ENV"
 
       - name: Apply migrations
-        run: npx supabase db push
+        run: npx supabase db push --local
 
       - name: Run E2E tests
         run: pnpm test:e2e
