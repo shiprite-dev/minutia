@@ -59,8 +59,8 @@ VALUES (
 )
 ON CONFLICT (provider, provider_id) DO NOTHING;
 
-INSERT INTO public.profiles (id, email, name)
-VALUES ('00000000-0000-0000-0000-000000000001', 'test@example.com', 'Test User')
+INSERT INTO public.profiles (id, email, name, has_completed_onboarding)
+VALUES ('00000000-0000-0000-0000-000000000001', 'test@example.com', 'Test User', true)
 ON CONFLICT (id) DO NOTHING;
 
 -- ---------------------------------------------------------------------------
