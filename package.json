@@ -4,6 +4,7 @@
   "description": "Open-source Outstanding Issues Log (OIL) for recurring meetings. Track what was raised, decided, and owed.",
   "license": "AGPL-3.0-only",
   "private": true,
+  "packageManager": "pnpm@10.33.2",
   "repository": {
     "type": "git",
     "url": "https://github.com/shiprite-dev/minutia.git"
