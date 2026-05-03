@@ -8,15 +8,26 @@ export type AuthorType = "human" | "ai" | "system";
 export type SharePermission = "view" | "comment";
 export type ShareResourceType = "meeting" | "series" | "issue";
 export type Theme = "light" | "dark" | "system";
+export type UserRole = "user" | "admin";
 
 export interface Profile {
   id: string;
   email: string;
   name: string | null;
   avatar_url: string | null;
+  role: UserRole;
   has_completed_onboarding: boolean;
   created_at: Date;
   updated_at: Date;
+}
+
+export interface InstanceConfig {
+  id: string;
+  key: string;
+  value: string | null;
+  encrypted: boolean;
+  updated_at: Date;
+  updated_by: string | null;
 }
 
 export interface UserSettings {
