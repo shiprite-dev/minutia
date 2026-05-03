@@ -23,6 +23,7 @@ import { TimelineNode } from "@/components/minutia/timeline-node";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { daysBetween } from "@/lib/date-utils";
 import { PRIORITIES, STATUS_CONFIG } from "@/lib/constants";
 import type { IssueStatus, Priority, IssueUpdate, Meeting } from "@/lib/types";
 
@@ -40,13 +41,6 @@ function formatDate(date: Date | string): string {
 
 function formatISODate(date: Date | string): string {
   return new Date(date).toISOString().split("T")[0];
-}
-
-function daysBetween(a: Date | string, b: Date | string): number {
-  const msPerDay = 1000 * 60 * 60 * 24;
-  return Math.round(
-    Math.abs(new Date(b).getTime() - new Date(a).getTime()) / msPerDay
-  );
 }
 
 function sourceBadgeLabel(source: string): string {

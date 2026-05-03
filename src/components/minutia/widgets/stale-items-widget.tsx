@@ -5,11 +5,7 @@ import Link from "next/link";
 import { AlertTriangle } from "lucide-react";
 import { WidgetShell } from "./widget-shell";
 import type { Issue } from "@/lib/types";
-
-function daysSince(date: Date | string): number {
-  const ms = Date.now() - new Date(date).getTime();
-  return Math.round(ms / (1000 * 60 * 60 * 24));
-}
+import { daysSince } from "@/lib/date-utils";
 
 export function StaleItemsWidget({
   id,
