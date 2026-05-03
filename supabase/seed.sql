@@ -183,3 +183,8 @@ VALUES
   -- Expired share for testing expiry handling
   ('60000000-0000-0000-0000-000000000004', 'meeting', '20000000-0000-0000-0000-000000000001', 'test-share-expired-xyz000', '2025-01-01T00:00:00Z', 'view', '00000000-0000-0000-0000-000000000001')
 ON CONFLICT (id) DO NOTHING;
+
+-- ---------------------------------------------------------------------------
+-- 9. Instance config: mark setup as completed so E2E auth works
+-- ---------------------------------------------------------------------------
+UPDATE public.instance_config SET value = 'true' WHERE key = 'setup_completed';

@@ -1,4 +1,5 @@
 import { createServerClient } from "@supabase/ssr";
+import { createClient as createSupabaseAdmin } from "@supabase/supabase-js";
 import { NextResponse, type NextRequest } from "next/server";
 
 const SECURITY_HEADERS: Record<string, string> = {
@@ -8,6 +9,37 @@ const SECURITY_HEADERS: Record<string, string> = {
   "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
   "X-DNS-Prefetch-Control": "on",
 };
+
+// ---------------------------------------------------------------------------
+// Setup completion cache (avoids DB hit on every request after setup)
+// ---------------------------------------------------------------------------
+let setupCompletedCache: boolean | null = null;
+
+async function isSetupCompleted(): Promise<boolean> {
+  if (setupCompletedCache === true) return true;
+
+  try {
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!url || !key) return true;
+
+    const admin = createSupabaseAdmin(url, key, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
+
+    const { data } = await admin
+      .from("instance_config")
+      .select("value")
+      .eq("key", "setup_completed")
+      .single();
+
+    const completed = data?.value === "true";
+    if (completed) setupCompletedCache = true;
+    return completed;
+  } catch {
+    return true;
+  }
+}
 
 const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
 
@@ -72,6 +104,20 @@ export async function middleware(request: NextRequest) {
     }
   }
 
+  // Setup guard: redirect to /setup if instance hasn't been configured
+  const setupExemptPaths = ["/setup", "/api/setup", "/api/admin"];
+  const isSetupExempt = setupExemptPaths.some((p) => pathname.startsWith(p));
+
+  if (!isSetupExempt) {
+    const completed = await isSetupCompleted();
+    if (!completed) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/setup";
+      const redirect = NextResponse.redirect(url);
+      return applySecurityHeaders(redirect);
+    }
+  }
+
   let supabaseResponse = NextResponse.next({ request });
 
   const supabase = createServerClient(
@@ -99,7 +145,7 @@ export async function middleware(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const publicPaths = ["/login", "/auth/callback", "/share"];
+  const publicPaths = ["/login", "/auth/callback", "/share", "/setup"];
   const isPublicPath = publicPaths.some((p) => pathname.startsWith(p));
 
   if (!user && !isPublicPath) {
