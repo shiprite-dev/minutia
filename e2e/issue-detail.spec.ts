@@ -119,7 +119,7 @@ test.describe("Issue Detail Page", () => {
     if (await issueLink.isVisible({ timeout: 5000 }).catch(() => false)) {
       await issueLink.click();
       await expect(page).toHaveURL(`/issues/${ISSUE_ID}`);
-      await expect(page.getByText(ISSUE_TITLE)).toBeVisible();
+      await expect(page.getByText(ISSUE_TITLE).first()).toBeVisible();
     }
   });
 });

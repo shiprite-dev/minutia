@@ -176,8 +176,8 @@ test.describe("Widget system", () => {
     await page.getByRole("button", { name: /Stale Items/ }).first().click();
     await expect(page.getByText("Needs attention")).toBeVisible();
 
-    const staleWidget = page.getByText("Needs attention").locator("../..");
-    await staleWidget.hover();
+    const widget = page.locator(".rounded-xl", { has: page.getByText("Needs attention") }).first();
+    await widget.hover();
     await page.getByLabel("Remove widget").last().click();
 
     await expect(page.getByText("Needs attention")).not.toBeVisible({ timeout: 10000 });
