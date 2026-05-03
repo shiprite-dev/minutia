@@ -7,12 +7,7 @@ import { StatusChip } from "@/components/minutia/status-chip";
 import { CategoryBadge } from "@/components/minutia/category-badge";
 import { cn } from "@/lib/utils";
 import type { Issue, IssueStatus, MeetingSeries } from "@/lib/types";
-
-function isOverdue(issue: Issue): boolean {
-  if (issue.status === "resolved" || issue.status === "dropped") return false;
-  if (!issue.due_date) return false;
-  return new Date(issue.due_date) < new Date();
-}
+import { isOverdue } from "@/lib/issue-utils";
 
 interface OwnerGroup {
   name: string;

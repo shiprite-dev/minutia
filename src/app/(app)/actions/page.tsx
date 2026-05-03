@@ -10,16 +10,11 @@ import { PRIORITY_CONFIG } from "@/lib/constants";
 import { IssueCard, EmptyState } from "@/components/minutia";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { Issue, IssueStatus } from "@/lib/types";
+import { isOverdue } from "@/lib/issue-utils";
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-function isOverdue(issue: Issue): boolean {
-  if (issue.status === "resolved" || issue.status === "dropped") return false;
-  if (!issue.due_date) return false;
-  return new Date(issue.due_date) < new Date();
-}
 
 function sortByPriorityThenDue(a: Issue, b: Issue): number {
   const pDiff =

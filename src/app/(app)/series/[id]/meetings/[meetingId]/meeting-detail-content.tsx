@@ -22,6 +22,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { ShareButton } from "@/components/minutia/share-button";
 import { ArrowLeft, Square, Play, Check, X, Copy, CheckCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { formatShortDate } from "@/lib/date-utils";
 import type { IssueCategory, IssueStatus, Issue, Decision, Meeting } from "@/lib/types";
 import Link from "next/link";
 
@@ -265,19 +266,6 @@ function formatMeetingDate(date: Date | string): string {
   });
 }
 
-function formatShortDate(date: Date | string): string {
-  return new Date(date).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-  });
-}
-
-function formatCompactDate(date: Date | string): string {
-  return new Date(date).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-  });
-}
 
 // ---------------------------------------------------------------------------
 // Live timer hook
@@ -465,7 +453,7 @@ function CarriedIssueCard({
               "text-xs font-mono tabular-nums",
               !done && new Date(issue.due_date) < new Date() ? "text-accent" : "text-ink-4"
             )}>
-              {formatCompactDate(issue.due_date)}
+              {formatShortDate(issue.due_date)}
             </span>
           )}
         </div>
@@ -581,7 +569,7 @@ function CapturedItem({
           "text-xs font-mono tabular-nums",
           new Date(issue.due_date) < new Date() ? "text-accent" : "text-ink-4"
         )}>
-          {formatCompactDate(issue.due_date)}
+          {formatShortDate(issue.due_date)}
         </span>
       )}
     </motion.div>
@@ -791,7 +779,7 @@ export function MeetingDetailContent({
                   )}
                 </h1>
                 <p className="text-xs font-mono text-ink-4">
-                  {formatCompactDate(meeting.date)} · {meeting.attendees?.length ?? 0} attendees present
+                  {formatShortDate(meeting.date)} · {meeting.attendees?.length ?? 0} attendees present
                 </p>
               </div>
             </div>

@@ -7,11 +7,7 @@ import { StatusChip } from "@/components/minutia/status-chip";
 import { CategoryBadge } from "@/components/minutia/category-badge";
 import { cn } from "@/lib/utils";
 import type { Issue, IssueStatus, Meeting, MeetingSeries } from "@/lib/types";
-
-function daysSince(date: Date | string): number {
-  const ms = Date.now() - new Date(date).getTime();
-  return Math.round(ms / (1000 * 60 * 60 * 24));
-}
+import { daysSince } from "@/lib/date-utils";
 
 export function MeetingTriageWidget({
   id,
