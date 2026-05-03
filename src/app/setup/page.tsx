@@ -114,7 +114,6 @@ export default function SetupPage() {
 
   const envReady =
     envCheck &&
-    envCheck.env.jwt_secret === "ok" &&
     envCheck.env.anon_key === "ok" &&
     envCheck.env.service_role_key === "ok" &&
     envCheck.db.connected;
