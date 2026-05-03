@@ -9,6 +9,7 @@ import { STATUS_CONFIG } from "@/lib/constants";
 import { StatusChip } from "./status-chip";
 import { CategoryBadge } from "./category-badge";
 import { PriorityIndicator } from "./priority-indicator";
+import { isDateOverdue, formatShortDate } from "@/lib/date-utils";
 
 interface IssueCardProps {
   issue: Issue;
@@ -17,25 +18,13 @@ interface IssueCardProps {
   expanded?: boolean;
 }
 
-function isOverdue(dueDate: Date | null): boolean {
-  if (!dueDate) return false;
-  return new Date(dueDate) < new Date();
-}
-
-function formatDate(date: Date): string {
-  return new Date(date).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-  });
-}
-
 export function IssueCard({
   issue,
   onStatusChange,
   onExpand,
   expanded,
 }: IssueCardProps) {
-  const overdue = issue.status !== "resolved" && isOverdue(issue.due_date);
+  const overdue = issue.status !== "resolved" && isDateOverdue(issue.due_date);
 
   function handleStatusChange(newStatus: IssueStatus) {
     onStatusChange?.(issue.id, newStatus);
@@ -107,7 +96,7 @@ export function IssueCard({
             )}
           >
             {overdue && "Overdue: "}
-            {formatDate(issue.due_date)}
+            {formatShortDate(issue.due_date)}
           </span>
         )}
       </div>

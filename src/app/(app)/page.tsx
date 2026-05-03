@@ -32,7 +32,7 @@ import {
   useCreateIssue,
 } from "@/lib/hooks/use-issues";
 import { useSeries } from "@/lib/hooks/use-series";
-import { useAllMeetings, useMeetings } from "@/lib/hooks/use-meetings";
+import { useAllMeetings } from "@/lib/hooks/use-meetings";
 import { useDecisions } from "@/lib/hooks/use-decisions";
 import { PRIORITY_CONFIG, STATUS_CONFIG } from "@/lib/constants";
 import { StatusChip } from "@/components/minutia/status-chip";
@@ -40,6 +40,8 @@ import { CategoryBadge } from "@/components/minutia/category-badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { formatShortDate, daysBetween } from "@/lib/date-utils";
+import { isOpen, isOverdue } from "@/lib/issue-utils";
 import { useWidgetStore } from "@/lib/stores/widget-store";
 import { getWidgetMeta } from "@/components/minutia/widgets/widget-registry";
 import { WidgetShell } from "@/components/minutia/widgets/widget-shell";
@@ -60,23 +62,6 @@ import type {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-function isOverdue(issue: Issue): boolean {
-  if (issue.status === "resolved" || issue.status === "dropped") return false;
-  if (!issue.due_date) return false;
-  return new Date(issue.due_date) < new Date();
-}
-
-function isOpen(issue: Issue): boolean {
-  return issue.status !== "resolved" && issue.status !== "dropped";
-}
-
-function formatShortDate(date: Date | string): string {
-  return new Date(date).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-  });
-}
 
 function formatRelativeDue(date: Date | string): { label: string; overdue: boolean } {
   const now = new Date();
@@ -102,13 +87,6 @@ function formatWeekday(date: Date | string): string {
     day: "numeric",
     year: "numeric",
   }).toUpperCase();
-}
-
-function daysBetween(a: Date | string, b: Date | string): number {
-  const msPerDay = 1000 * 60 * 60 * 24;
-  return Math.round(
-    Math.abs(new Date(b).getTime() - new Date(a).getTime()) / msPerDay
-  );
 }
 
 function ageGroup(days: number): string {
@@ -749,8 +727,10 @@ function SeriesWidget({
 
 function QuickAddButton({
   seriesList,
+  allMeetings,
 }: {
   seriesList: (MeetingSeries & { open_issues_count: number })[];
+  allMeetings: { id: string; series_id: string; date: Date | string }[];
 }) {
   const [open, setOpen] = React.useState(false);
   const [title, setTitle] = React.useState("");
@@ -758,14 +738,14 @@ function QuickAddButton({
   const inputRef = React.useRef<HTMLInputElement>(null);
   const createIssue = useCreateIssue();
 
-  const { data: meetings } = useMeetings(selectedSeriesId);
   const latestMeetingId = React.useMemo(() => {
-    if (!meetings?.length) return null;
-    const sorted = [...meetings].sort(
+    const seriesMeetings = allMeetings.filter(m => m.series_id === selectedSeriesId);
+    if (!seriesMeetings.length) return null;
+    const sorted = [...seriesMeetings].sort(
       (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
     );
     return sorted[0].id;
-  }, [meetings]);
+  }, [allMeetings, selectedSeriesId]);
 
   React.useEffect(() => {
     if (open && inputRef.current) inputRef.current.focus();
@@ -1163,7 +1143,7 @@ export default function Dashboard() {
             </DndContext>
           </>
         )}
-        <QuickAddButton seriesList={seriesList ?? []} />
+        <QuickAddButton seriesList={seriesList ?? []} allMeetings={meetings ?? []} />
       </div>
     </div>
   );
