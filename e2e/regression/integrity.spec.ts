@@ -82,7 +82,7 @@ test.describe("Mobile Layout", () => {
     await expect(
       page.getByRole("button", { name: "Start" })
     ).toBeVisible();
-    await expect(page.getByText("Meeting history")).toBeVisible();
+    await expect(page.getByText("Timeline")).toBeVisible();
   });
 
   test("issue detail renders on mobile", async ({ page }) => {

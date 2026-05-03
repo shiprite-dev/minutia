@@ -4,19 +4,31 @@ import { waitForApp } from "./seed-data";
 const SUPABASE_URL = process.env.SUPABASE_URL ?? "http://127.0.0.1:54321";
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
 
-async function setOnboardingFlag(
-  request: Parameters<Parameters<typeof test>[2]>[0]["request"],
-  value: boolean
-) {
-  const headers = {
+function supabaseHeaders() {
+  return {
     apikey: SERVICE_KEY,
     Authorization: `Bearer ${SERVICE_KEY}`,
     "Content-Type": "application/json",
     Prefer: "return=minimal",
   };
+}
+
+async function setOnboardingFlag(
+  request: Parameters<Parameters<typeof test>[2]>[0]["request"],
+  value: boolean
+) {
   await request.patch(
     `${SUPABASE_URL}/rest/v1/profiles?email=eq.test@example.com`,
-    { headers, data: { has_completed_onboarding: value } }
+    { headers: supabaseHeaders(), data: { has_completed_onboarding: value } }
+  );
+}
+
+async function deleteOnboardingSeries(
+  request: Parameters<Parameters<typeof test>[2]>[0]["request"],
+) {
+  await request.delete(
+    `${SUPABASE_URL}/rest/v1/meeting_series?name=eq.E2E Onboarding Series`,
+    { headers: supabaseHeaders() }
   );
 }
 
@@ -31,6 +43,7 @@ test.describe("Onboarding wizard", () => {
 
   test.afterEach(async ({ request }) => {
     await setOnboardingFlag(request, true);
+    await deleteOnboardingSeries(request);
   });
 
   test("shows onboarding wizard for new users", async ({ page }) => {

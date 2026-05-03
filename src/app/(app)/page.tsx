@@ -1135,7 +1135,7 @@ export default function Dashboard() {
               onDragEnd={handleDragEnd}
             >
               <SortableContext items={widgetIds} strategy={rectSortingStrategy}>
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 [grid-auto-flow:dense]">
                   {widgetSpans.map((w, i) => (
                     <div
                       key={w.id}

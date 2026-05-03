@@ -104,12 +104,10 @@ test.describe("Inline Tasks", () => {
     await expect(input).toBeVisible();
   });
 
-  test("clicking title enters edit mode", async ({ page }) => {
-    // Click on an issue title to edit it
+  test("double-clicking title enters edit mode", async ({ page }) => {
     const title = page.getByText("Fix flaky integration tests").first();
-    await title.click();
+    await title.dblclick();
 
-    // Should show an input field
     await expect(page.locator("input[type='text']").first()).toBeVisible();
   });
 });

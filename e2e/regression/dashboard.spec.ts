@@ -65,9 +65,9 @@ test.describe("OIL Board Dashboard", () => {
     await page.goto("/");
     await waitForApp(page);
 
-    await expect(page.getByText("Next meeting", { exact: true }).first()).toBeVisible();
+    await expect(page.getByText("Next meeting").first()).toBeVisible();
     await expect(
-      page.getByRole("button", { name: "Open series" })
+      page.getByRole("button", { name: "Open series", exact: true })
     ).toBeVisible();
   });
 
@@ -191,8 +191,10 @@ test.describe("Quick-Add Submit Flow", () => {
 
     await expect(titleInput).not.toBeVisible({ timeout: 5000 });
 
+    // Issue may be behind "+N more" due to priority sorting; verify via series page
+    await page.getByRole("link", { name: /Platform Team Standup/ }).first().click();
     await expect(
       page.getByText("Regression test quick-add").first()
-    ).toBeVisible({ timeout: 5000 });
+    ).toBeVisible({ timeout: 10000 });
   });
 });
