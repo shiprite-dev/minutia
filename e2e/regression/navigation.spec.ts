@@ -102,11 +102,16 @@ test.describe("Full Navigation Flow", () => {
       .first()
       .click();
     await expect(page).toHaveURL(`/series/${SERIES.platformStandup}`);
-    await expect(page.getByText("Meeting history")).toBeVisible({
+    await expect(page.getByText("Timeline")).toBeVisible({
       timeout: 10000,
     });
 
-    await page.getByText("Platform Standup #2").click();
+    // Expand a collapsed meeting in the timeline
+    await page.getByText("Platform Standup #2").first().click();
+    const openDetails = page.getByText("Open meeting details");
+    await expect(openDetails.first()).toBeVisible({ timeout: 5000 });
+    // Click the last "Open meeting details" link (for the newly expanded #2)
+    await openDetails.last().click();
     await expect(page).toHaveURL(
       `/series/${SERIES.platformStandup}/meetings/${MEETINGS.standup2}`
     );
@@ -117,14 +122,14 @@ test.describe("Full Navigation Flow", () => {
       .click();
     await expect(page).toHaveURL(`/series/${SERIES.platformStandup}`);
 
-    // Navigate to an issue directly (avoids dependency on OIL board state)
+    // Navigate to an issue directly
     await page.goto(`/issues/${ISSUES.userResearch}`);
     await waitForApp(page);
     await expect(
       page.getByText("Write user research summary for Q2 features")
     ).toBeVisible();
 
-    await page.getByText("OIL Board").click();
+    await page.getByRole("link", { name: "Outstanding" }).click();
     await expect(page).toHaveURL("/");
   });
 });

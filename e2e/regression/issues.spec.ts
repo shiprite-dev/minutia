@@ -8,7 +8,7 @@ test.describe("Issue Detail", () => {
     await page.goto(url);
     await waitForApp(page);
 
-    await expect(page.getByText("OIL Board")).toBeVisible();
+    await expect(page.getByRole("button", { name: /Back/ })).toBeVisible();
 
     await expect(
       page.getByText("Migrate CI from Jenkins to GitHub Actions")
@@ -103,7 +103,8 @@ test.describe("Issue Detail", () => {
     ).not.toBeVisible();
   });
 
-  test("Escape key navigates back to OIL Board", async ({ page }) => {
+  test("Escape key navigates back", async ({ page }) => {
+    await page.goto("/");
     await page.goto(url);
     await waitForApp(page);
 
@@ -177,6 +178,22 @@ test.describe("Issue Detail", () => {
 });
 
 test.describe("Issue Detail Keyboard Shortcuts", () => {
+  const SUPABASE_URL = process.env.SUPABASE_URL ?? "http://127.0.0.1:54321";
+  const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
+
+  test.afterAll(async () => {
+    await fetch(`${SUPABASE_URL}/rest/v1/issues?id=eq.${ISSUES.migrateCI}`, {
+      method: "PATCH",
+      headers: {
+        apikey: SERVICE_KEY,
+        Authorization: `Bearer ${SERVICE_KEY}`,
+        "Content-Type": "application/json",
+        Prefer: "return=minimal",
+      },
+      body: JSON.stringify({ status: "open" }),
+    });
+  });
+
   test("S key cycles status", async ({ page }) => {
     await page.goto(`/issues/${ISSUES.migrateCI}`);
     await waitForApp(page);

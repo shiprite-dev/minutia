@@ -77,11 +77,11 @@ test.describe("Series Detail Page", () => {
     ).toBeVisible();
   });
 
-  test("meeting history section lists meetings in order", async ({ page }) => {
+  test("timeline section lists meetings in order", async ({ page }) => {
     await page.goto(url);
     await waitForApp(page);
 
-    await expect(page.getByText("Meeting history")).toBeVisible();
+    await expect(page.getByText("Timeline")).toBeVisible();
 
     await expect(page.getByText("Platform Standup #1")).toBeVisible();
     await expect(page.getByText("Platform Standup #2")).toBeVisible();
@@ -133,7 +133,15 @@ test.describe("Series Detail Page", () => {
     await page.goto(url);
     await waitForApp(page);
 
-    await page.getByText("Platform Standup #1").click();
+    const standup1 = page.getByText("Platform Standup #1").first();
+    await standup1.click();
+
+    const detailLink = page.locator(
+      `a[href*="${MEETINGS.standup1}"]`,
+      { hasText: "Open meeting details" }
+    );
+    await expect(detailLink).toBeVisible({ timeout: 5000 });
+    await detailLink.click();
     await expect(page).toHaveURL(
       `/series/${SERIES.platformStandup}/meetings/${MEETINGS.standup1}`
     );
@@ -168,7 +176,7 @@ test.describe("Product Review Series", () => {
     await expect(
       page.getByRole("heading", { name: "Product Review" }).first()
     ).toBeVisible();
-    await expect(page.getByText("Meeting history")).toBeVisible();
+    await expect(page.getByText("Timeline")).toBeVisible();
 
     await expect(
       page.getByText("Product Review Q2 Kick-off")
