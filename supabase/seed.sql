@@ -188,4 +188,3 @@ ON CONFLICT (id) DO NOTHING;
 -- 9. Instance config: mark setup as completed so E2E auth works
 -- ---------------------------------------------------------------------------
 UPDATE public.instance_config SET value = 'true' WHERE key = 'setup_completed';
-UPDATE public.profiles SET role = 'admin' WHERE id = '00000000-0000-0000-0000-000000000001';

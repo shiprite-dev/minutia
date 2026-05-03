@@ -9,6 +9,21 @@ const createAdminSchema = z.object({
 });
 
 export async function POST(request: NextRequest) {
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
+
+  const parsed = createAdminSchema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: parsed.error.issues[0].message },
+      { status: 400 }
+    );
+  }
+
   const supabase = createServiceRoleClient();
 
   const { data: existingAdmins, error: checkError } = await supabase
@@ -28,21 +43,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       { error: "An admin account already exists" },
       { status: 409 }
-    );
-  }
-
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
-  }
-
-  const parsed = createAdminSchema.safeParse(body);
-  if (!parsed.success) {
-    return NextResponse.json(
-      { error: parsed.error.issues[0].message },
-      { status: 400 }
     );
   }
 
