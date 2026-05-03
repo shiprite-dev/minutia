@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import type { Issue } from "@/lib/types";
 import { Send, Copy, Check, Mail } from "lucide-react";
+import { isDateOverdue } from "@/lib/date-utils";
 
 interface BriefCardProps {
   seriesName: string;
@@ -37,10 +38,6 @@ function formatDate(date: Date): string {
   });
 }
 
-function isOverdue(date: Date | null): boolean {
-  if (!date) return false;
-  return new Date(date) < new Date();
-}
 
 function generateBriefText(
   seriesName: string,
@@ -71,7 +68,7 @@ function generateBriefText(
       if (issue.owner_name) parts.push(`(${issue.owner_name})`);
       if (issue.due_date) {
         const dueStr = formatDate(issue.due_date);
-        parts.push(isOverdue(issue.due_date) ? `OVERDUE ${dueStr}` : `due ${dueStr}`);
+        parts.push(isDateOverdue(issue.due_date) ? `OVERDUE ${dueStr}` : `due ${dueStr}`);
       }
       lines.push(parts.join("  "));
     }
@@ -183,7 +180,7 @@ export function BriefCard({
                     <span
                       className={cn(
                         "text-xs font-mono",
-                        isOverdue(issue.due_date) ? "text-accent" : "text-ink-3"
+                        isDateOverdue(issue.due_date) ? "text-accent" : "text-ink-3"
                       )}
                     >
                       {formatDate(issue.due_date)}
