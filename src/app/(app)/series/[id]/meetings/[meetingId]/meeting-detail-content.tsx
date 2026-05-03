@@ -133,7 +133,11 @@ function MeetingSummaryCard({
   }, [meeting, seriesName, raisedCount, decisionsCount, resolvedCount, stillOpenCount, raisedIssues, decisions, doneIssues]);
 
   async function handleCopy() {
-    await navigator.clipboard.writeText(summaryText);
+    try {
+      await navigator.clipboard.writeText(summaryText);
+    } catch {
+      // Clipboard API unavailable (e.g. headless browser)
+    }
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }
