@@ -31,7 +31,11 @@ export function ShareButton({ resource_type, resource_id }: ShareButtonProps) {
     });
 
     const url = getShareUrl(share.token);
-    await navigator.clipboard.writeText(url);
+    try {
+      await navigator.clipboard.writeText(url);
+    } catch {
+      // Clipboard API unavailable (e.g. headless browser)
+    }
 
     setCopied(true);
     timeoutRef.current = setTimeout(() => setCopied(false), 2000);
