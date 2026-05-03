@@ -65,8 +65,12 @@ export function WidgetShell({
       onMouseLeave={() => setHovered(false)}
       {...attributes}
     >
-      {hovered && (
-        <div className="absolute top-2.5 right-2.5 z-10 flex items-center gap-1">
+      <div
+        className={cn(
+          "absolute top-2.5 right-2.5 z-10 flex items-center gap-1 transition-opacity",
+          hovered ? "opacity-100" : "opacity-0 pointer-events-none"
+        )}
+      >
           <button
             ref={setActivatorNodeRef}
             type="button"
@@ -99,7 +103,6 @@ export function WidgetShell({
             <X className="size-3" />
           </button>
         </div>
-      )}
       {children}
     </motion.div>
   );
