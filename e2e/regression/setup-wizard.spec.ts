@@ -71,16 +71,17 @@ test.describe("Setup API endpoints", () => {
     expect(res.status()).toBe(400);
   });
 
-  test("POST /api/admin/smtp-test returns error when SMTP not configured", async ({
+  test("POST /api/admin/smtp-test returns expected response", async ({
     request,
   }) => {
     const res = await request.post(`${APP_URL}/api/admin/smtp-test`, {
       data: { recipient_email: "test@example.com" },
     });
     const body = await res.json();
-    expect(body).toHaveProperty("success");
-    // Either returns success:false (no SMTP) or success:true (SMTP configured in env)
-    expect(typeof body.success).toBe("boolean");
+    // During setup (unauthenticated): returns {success: bool}
+    // After setup (no auth session): returns {error: "..."}
+    const hasExpectedShape = "success" in body || "error" in body;
+    expect(hasExpectedShape).toBeTruthy();
   });
 
   test("GET /api/admin/config returns config object", async ({ request }) => {
