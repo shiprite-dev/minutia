@@ -50,7 +50,8 @@ test.describe("Quick Add FAB", () => {
     // Form should close after submission
     await expect(titleInput).not.toBeVisible({ timeout: 5000 });
 
-    // New issue should appear in the Outstanding items list
-    await expect(page.getByText(testTitle)).toBeVisible({ timeout: 5000 });
+    // Issue may be behind "+N more" due to priority sorting; verify via series page
+    await page.getByRole("link", { name: /Platform Team Standup/ }).first().click();
+    await expect(page.getByText(testTitle).first()).toBeVisible({ timeout: 10000 });
   });
 });

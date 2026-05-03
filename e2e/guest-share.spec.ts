@@ -1,10 +1,12 @@
 import { test, expect } from "@playwright/test";
 
 test.describe("Guest Share Page", () => {
+  test.use({ storageState: { cookies: [], origins: [] } });
+
   test("meeting share page renders with valid token", async ({ page }) => {
     await page.goto("/share/test-share-meeting-abc123");
 
-    await expect(page.getByText("minutia")).toBeVisible();
+    await expect(page.getByText("minutia", { exact: true })).toBeVisible();
 
     const hasContent = await page
       .getByText(/Platform Standup|Standup/i)
@@ -24,7 +26,7 @@ test.describe("Guest Share Page", () => {
   test("series share page renders with valid token", async ({ page }) => {
     await page.goto("/share/test-share-series-def456");
 
-    await expect(page.getByText("minutia")).toBeVisible();
+    await expect(page.getByText("minutia", { exact: true })).toBeVisible();
 
     const hasContent = await page
       .getByText(/Platform Team Standup/i)
@@ -38,7 +40,7 @@ test.describe("Guest Share Page", () => {
   test("issue share page renders with valid token", async ({ page }) => {
     await page.goto("/share/test-share-issue-ghi789");
 
-    await expect(page.getByText("minutia")).toBeVisible();
+    await expect(page.getByText("minutia", { exact: true })).toBeVisible();
 
     const hasContent = await page
       .getByText(/Migrate CI|Jenkins|GitHub Actions/i)
@@ -86,7 +88,7 @@ test.describe("Guest Share Page", () => {
 
     await page.goto("/share/test-share-meeting-abc123");
 
-    await expect(page.getByText("minutia")).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText("minutia", { exact: true })).toBeVisible({ timeout: 10000 });
 
     await expect(page).not.toHaveURL(/\/login/);
 

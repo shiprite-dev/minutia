@@ -80,18 +80,20 @@ jobs:
         run: npx supabase db push --local
 
       - name: Run E2E tests
+        id: e2e
         run: pnpm test:e2e
         env:
           CI: true
           SITE_URL: http://localhost:3000
 
       - name: Upload Playwright report
-        if: failure()
+        if: steps.e2e.outcome == 'failure'
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report
           path: playwright-report/
           retention-days: 14
+          if-no-files-found: ignore
 
   audit:
     name: Dependency Audit

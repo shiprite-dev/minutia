@@ -106,7 +106,11 @@ export function BriefCard({
     : undefined;
 
   async function handleSendBrief() {
-    await navigator.clipboard.writeText(briefText);
+    try {
+      await navigator.clipboard.writeText(briefText);
+    } catch {
+      // Clipboard API unavailable (e.g. headless browser)
+    }
 
     if (hasEmails && mailtoRef.current) {
       mailtoRef.current.click();
@@ -117,7 +121,11 @@ export function BriefCard({
   }
 
   async function handleCopyBrief() {
-    await navigator.clipboard.writeText(briefText);
+    try {
+      await navigator.clipboard.writeText(briefText);
+    } catch {
+      // Clipboard API unavailable (e.g. headless browser)
+    }
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }

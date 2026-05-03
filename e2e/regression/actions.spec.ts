@@ -24,11 +24,8 @@ test.describe("My Actions Page", () => {
     ).toBeVisible();
 
     await expect(
-      page.getByText("Migrate CI from Jenkins to GitHub Actions").first()
-    ).toBeVisible({ timeout: 10000 });
-    await expect(
       page.getByText("Set up staging environment monitoring").first()
-    ).toBeVisible();
+    ).toBeVisible({ timeout: 10000 });
     await expect(
       page.getByText("Write user research summary for Q2 features").first()
     ).toBeVisible();

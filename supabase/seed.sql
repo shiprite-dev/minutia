@@ -61,7 +61,7 @@ ON CONFLICT (provider, provider_id) DO NOTHING;
 
 INSERT INTO public.profiles (id, email, name, has_completed_onboarding)
 VALUES ('00000000-0000-0000-0000-000000000001', 'test@example.com', 'Test User', true)
-ON CONFLICT (id) DO NOTHING;
+ON CONFLICT (id) DO UPDATE SET has_completed_onboarding = EXCLUDED.has_completed_onboarding;
 
 -- ---------------------------------------------------------------------------
 -- 2. Meeting series
