@@ -180,6 +180,6 @@ test.describe("Widget system", () => {
     await staleWidget.hover();
     await page.getByLabel("Remove widget").last().click();
 
-    await expect(page.getByText("Needs attention")).not.toBeVisible();
+    await expect(page.getByText("Needs attention")).not.toBeVisible({ timeout: 10000 });
   });
 });

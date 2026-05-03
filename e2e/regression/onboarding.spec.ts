@@ -39,6 +39,7 @@ test.describe("Onboarding wizard", () => {
     await setOnboardingFlag(request, false);
     await page.goto("/", { waitUntil: "commit" });
     await page.reload({ waitUntil: "networkidle" });
+    await expect(page.getByText("Welcome to Minutia")).toBeVisible({ timeout: 15000 });
   });
 
   test.afterEach(async ({ request }) => {
