@@ -37,7 +37,7 @@ test.describe("Onboarding wizard", () => {
 
   test.beforeEach(async ({ request, page }) => {
     await setOnboardingFlag(request, false);
-    await page.goto("/", { waitUntil: "commit" });
+    await page.goto("/dashboard", { waitUntil: "commit" });
     await page.reload({ waitUntil: "networkidle" });
     await expect(page.getByText("Welcome to Minutia")).toBeVisible({ timeout: 15000 });
   });
@@ -108,7 +108,7 @@ test.describe("Onboarding wizard", () => {
 
   test("skip setup goes directly to dashboard", async ({ page }) => {
     await page.getByText("Skip setup").click();
-    await page.waitForURL("**/");
+    await page.waitForURL("**/dashboard");
     await waitForApp(page);
     await expect(page.getByText("OIL Board")).toBeVisible();
     await expect(page.getByText("Outstanding items")).toBeVisible();
@@ -119,7 +119,7 @@ test.describe("Onboarding wizard", () => {
     request,
   }) => {
     await page.getByText("Skip setup").click();
-    await page.waitForURL("**/");
+    await page.waitForURL("**/dashboard");
     await waitForApp(page);
 
     await page.reload();
