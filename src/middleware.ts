@@ -162,6 +162,12 @@ export async function middleware(request: NextRequest) {
     return applySecurityHeaders(redirect);
   }
 
+  if (user && pathname === "/dashboard") {
+    const url = request.nextUrl.clone();
+    url.pathname = "/";
+    return applySecurityHeaders(NextResponse.rewrite(url));
+  }
+
   return applySecurityHeaders(supabaseResponse);
 }
 
