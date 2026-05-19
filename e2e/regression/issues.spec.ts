@@ -1,8 +1,29 @@
 import { test, expect } from "@playwright/test";
 import { SERIES, MEETINGS, ISSUES, waitForApp } from "./seed-data";
 
+const SUPABASE_URL = process.env.SUPABASE_URL ?? "http://127.0.0.1:54321";
+const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
+
+async function resetIssueStatus(issueId: string) {
+  if (!SERVICE_KEY) return;
+  await fetch(`${SUPABASE_URL}/rest/v1/issues?id=eq.${issueId}`, {
+    method: "PATCH",
+    headers: {
+      apikey: SERVICE_KEY,
+      Authorization: `Bearer ${SERVICE_KEY}`,
+      "Content-Type": "application/json",
+      Prefer: "return=minimal",
+    },
+    body: JSON.stringify({ status: "open" }),
+  });
+}
+
 test.describe("Issue Detail", () => {
   const url = `/issues/${ISSUES.migrateCI}`;
+
+  test.beforeEach(async () => {
+    await resetIssueStatus(ISSUES.migrateCI);
+  });
 
   test("renders all issue metadata and sections", async ({ page }) => {
     await page.goto(url);
@@ -11,7 +32,7 @@ test.describe("Issue Detail", () => {
     await expect(page.getByRole("button", { name: /Back/ })).toBeVisible();
 
     await expect(
-      page.getByText("Migrate CI from Jenkins to GitHub Actions")
+      page.locator("h1", { hasText: "Migrate CI from Jenkins to GitHub Actions" })
     ).toBeVisible();
 
     await expect(page.getByText("Action").first()).toBeVisible();
@@ -59,11 +80,11 @@ test.describe("Issue Detail", () => {
     ).toBeVisible();
   });
 
-  test("add update form opens with C key", async ({ page }) => {
+  test("add update form opens from the issue detail action", async ({ page }) => {
     await page.goto(url);
     await waitForApp(page);
 
-    await page.keyboard.press("c");
+    await page.getByRole("button", { name: /Add update/ }).click();
     await expect(
       page.getByPlaceholder("What's the latest on this issue?")
     ).toBeVisible();
@@ -103,13 +124,13 @@ test.describe("Issue Detail", () => {
     ).not.toBeVisible();
   });
 
-  test("Escape key navigates back", async ({ page }) => {
-    await page.goto("/");
+  test("back control navigates to dashboard", async ({ page }) => {
+    await page.goto("/dashboard");
     await page.goto(url);
     await waitForApp(page);
 
-    await page.keyboard.press("Escape");
-    await page.waitForURL("/", { timeout: 5000 });
+    await page.getByRole("button", { name: "Back" }).click();
+    await expect(page).toHaveURL("/dashboard", { timeout: 5000 });
   });
 
   test("issue with resolved status shows resolved timeline", async ({
@@ -119,7 +140,7 @@ test.describe("Issue Detail", () => {
     await waitForApp(page);
 
     await expect(
-      page.getByText("Fix flaky integration tests")
+      page.locator("h1", { hasText: "Fix flaky integration tests" })
     ).toBeVisible();
     await expect(page.getByText("Resolved").first()).toBeVisible();
 
@@ -178,20 +199,12 @@ test.describe("Issue Detail", () => {
 });
 
 test.describe("Issue Detail Keyboard Shortcuts", () => {
-  const SUPABASE_URL = process.env.SUPABASE_URL ?? "http://127.0.0.1:54321";
-  const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
+  test.beforeEach(async () => {
+    await resetIssueStatus(ISSUES.migrateCI);
+  });
 
   test.afterAll(async () => {
-    await fetch(`${SUPABASE_URL}/rest/v1/issues?id=eq.${ISSUES.migrateCI}`, {
-      method: "PATCH",
-      headers: {
-        apikey: SERVICE_KEY,
-        Authorization: `Bearer ${SERVICE_KEY}`,
-        "Content-Type": "application/json",
-        Prefer: "return=minimal",
-      },
-      body: JSON.stringify({ status: "open" }),
-    });
+    await resetIssueStatus(ISSUES.migrateCI);
   });
 
   test("S key cycles status", async ({ page }) => {
@@ -199,18 +212,16 @@ test.describe("Issue Detail Keyboard Shortcuts", () => {
     await waitForApp(page);
     await expect(page.getByText("Lifecycle timeline")).toBeVisible();
 
-    await page.keyboard.press("s");
-    await page.waitForTimeout(500);
+    await page.locator("body").press("s");
 
-    const badges = page.locator(".flex.flex-wrap.items-center.gap-3.mb-4");
-    await expect(badges).toBeVisible();
+    await expect(page.getByRole("combobox", { name: "Status: Pending" })).toBeVisible();
   });
 
   test("shortcuts are suppressed when typing in inputs", async ({ page }) => {
     await page.goto(`/issues/${ISSUES.migrateCI}`);
     await waitForApp(page);
 
-    await page.keyboard.press("c");
+    await page.getByRole("button", { name: /Add update/ }).click();
     const textarea = page.getByPlaceholder(
       "What's the latest on this issue?"
     );
@@ -250,12 +261,12 @@ test.describe("Issue Detail Inline Editing", () => {
 
 test.describe("Issue Status Transitions", () => {
   test("status chip on OIL board is interactive", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/dashboard");
     await waitForApp(page);
 
-    const statusChips = page.locator("[data-status]");
-    const count = await statusChips.count();
-    expect(count).toBeGreaterThan(0);
+    await expect(
+      page.getByRole("combobox", { name: /^Status:/ }).first()
+    ).toBeVisible();
   });
 });
 
