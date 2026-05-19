@@ -1,5 +1,72 @@
-import { test, expect } from "@playwright/test";
+import { randomUUID } from "node:crypto";
+import { test, expect, type APIRequestContext } from "@playwright/test";
 import { SERIES, MEETINGS, waitForApp } from "./seed-data";
+
+const SUPABASE_URL = process.env.SUPABASE_URL ?? "http://127.0.0.1:54321";
+const HAS_SERVICE_ROLE = !!process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+function serviceHeaders() {
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!key) throw new Error("SUPABASE_SERVICE_ROLE_KEY is required for this test");
+  return {
+    apikey: key,
+    Authorization: `Bearer ${key}`,
+    "Content-Type": "application/json",
+    Prefer: "return=representation",
+  };
+}
+
+async function getSeedOwnerId(request: APIRequestContext) {
+  const response = await request.get(
+    `${SUPABASE_URL}/rest/v1/meeting_series?id=eq.${SERIES.platformStandup}&select=owner_id`,
+    { headers: serviceHeaders() }
+  );
+  expect(response.ok()).toBeTruthy();
+  const [series] = await response.json();
+  return series.owner_id as string;
+}
+
+async function createTempSeries(
+  request: APIRequestContext,
+  overrides: Record<string, unknown> = {}
+) {
+  const id = randomUUID();
+  const data = {
+    id,
+    name: `Series coverage ${Date.now()}`,
+    description: "Created by series functional coverage.",
+    cadence: "weekly",
+    default_attendees: ["ceo@example.com", "eng@example.com"],
+    owner_id: await getSeedOwnerId(request),
+    ...overrides,
+  };
+  const response = await request.post(`${SUPABASE_URL}/rest/v1/meeting_series`, {
+    headers: serviceHeaders(),
+    data,
+  });
+  expect(response.ok()).toBeTruthy();
+  return { id, name: data.name as string };
+}
+
+async function deleteSeries(request: APIRequestContext, id: string) {
+  const response = await request.delete(
+    `${SUPABASE_URL}/rest/v1/meeting_series?id=eq.${id}`,
+    { headers: serviceHeaders() }
+  );
+  expect(response.ok()).toBeTruthy();
+}
+
+async function deleteSeriesByName(request: APIRequestContext, name: string) {
+  const response = await request.delete(
+    `${SUPABASE_URL}/rest/v1/meeting_series?name=eq.${encodeURIComponent(name)}`,
+    { headers: serviceHeaders() }
+  );
+  expect(response.ok()).toBeTruthy();
+}
+
+function seriesIdFromUrl(url: string) {
+  return url.match(/\/series\/([^/?#]+)/)?.[1];
+}
 
 test.describe("Series List Page", () => {
   test("renders header, create button, and series cards", async ({ page }) => {
@@ -40,8 +107,58 @@ test.describe("Series List Page", () => {
     await expect(dialog.getByText("Cadence")).toBeVisible();
     await expect(dialog.getByLabel("Default attendees")).toBeVisible();
     await expect(
-      dialog.getByRole("button", { name: "Create" })
+      dialog.getByRole("button", { name: "Create series" })
     ).toBeVisible();
+  });
+
+  test("creates a series and opens its configured detail", async ({
+    page,
+    request,
+  }) => {
+    test.skip(!HAS_SERVICE_ROLE, "Requires service role cleanup for isolated series data");
+
+    const name = `Series create coverage ${Date.now()}`;
+    let createdSeriesId: string | undefined;
+
+    try {
+      await page.goto("/series");
+      await waitForApp(page);
+
+      await page.getByRole("button", { name: "Create series" }).click();
+
+      const dialog = page.locator("[role='dialog']");
+      await dialog.getByLabel("Name").fill(name);
+      await dialog
+        .getByLabel("Description")
+        .fill("Validates the complete create series workflow.");
+      await dialog.getByRole("radio", { name: "Monthly" }).click();
+      await dialog
+        .getByLabel("Default attendees")
+        .fill("founder@example.com, ops@example.com");
+      await dialog.getByRole("button", { name: "Create series" }).click();
+
+      await expect(dialog).not.toBeVisible();
+      const card = page
+        .locator('main a[href^="/series/"]')
+        .filter({ hasText: name });
+      await expect(card).toBeVisible();
+
+      await card.click();
+      await expect(page.getByRole("heading", { name }).first()).toBeVisible();
+      createdSeriesId = seriesIdFromUrl(page.url());
+
+      await page.getByRole("button", { name: "Series settings" }).click();
+      const settings = page.locator("[role='dialog']");
+      await expect(
+        settings.getByRole("radio", { name: "Monthly" })
+      ).toHaveAttribute("aria-checked", "true");
+      await expect(settings.getByLabel("Default attendees")).toHaveValue(
+        "founder@example.com, ops@example.com"
+      );
+    } finally {
+      if (createdSeriesId) await deleteSeries(request, createdSeriesId);
+      await deleteSeriesByName(request, name);
+    }
   });
 
   test("series card links to series detail", async ({ page }) => {
@@ -127,6 +244,87 @@ test.describe("Series Detail Page", () => {
     await expect(
       dialog.getByRole("radio", { name: "Ad hoc" })
     ).toBeVisible();
+  });
+
+  test("saves settings changes and keeps them after reload", async ({
+    page,
+    request,
+  }) => {
+    test.skip(!HAS_SERVICE_ROLE, "Requires service role cleanup for isolated series data");
+
+    const series = await createTempSeries(request, {
+      name: `Series settings coverage ${Date.now()}`,
+    });
+    const updatedName = `${series.name} updated`;
+
+    try {
+      await page.goto(`/series/${series.id}`);
+      await waitForApp(page);
+
+      await page.getByRole("button", { name: "Series settings" }).click();
+      let dialog = page.locator("[role='dialog']");
+      await dialog.getByLabel("Name").fill(updatedName);
+      await dialog
+        .getByLabel("Description")
+        .fill("Updated through the settings dialog.");
+      await dialog.getByRole("radio", { name: "Biweekly" }).click();
+      await dialog
+        .getByLabel("Default attendees")
+        .fill("updated-one@example.com, updated-two@example.com");
+      await dialog.getByRole("button", { name: "Save changes" }).click();
+
+      await expect(dialog).not.toBeVisible();
+      await expect(
+        page.getByRole("heading", { name: updatedName }).first()
+      ).toBeVisible();
+      await expect(
+        page.getByText("Updated through the settings dialog.").first()
+      ).toBeVisible();
+
+      await page.reload();
+      await waitForApp(page);
+      await expect(
+        page.getByRole("heading", { name: updatedName }).first()
+      ).toBeVisible();
+
+      await page.getByRole("button", { name: "Series settings" }).click();
+      dialog = page.locator("[role='dialog']");
+      await expect(
+        dialog.getByRole("radio", { name: "Biweekly" })
+      ).toHaveAttribute("aria-checked", "true");
+      await expect(dialog.getByLabel("Default attendees")).toHaveValue(
+        "updated-one@example.com, updated-two@example.com"
+      );
+    } finally {
+      await deleteSeries(request, series.id);
+    }
+  });
+
+  test("starts a live meeting from series detail", async ({ page, request }) => {
+    test.skip(!HAS_SERVICE_ROLE, "Requires service role cleanup for isolated series data");
+
+    const series = await createTempSeries(request, {
+      name: `Series start coverage ${Date.now()}`,
+    });
+
+    try {
+      await page.goto(`/series/${series.id}`);
+      await waitForApp(page);
+
+      await page.getByRole("button", { name: "Start meeting" }).click();
+
+      await expect(page).toHaveURL(
+        new RegExp(`/series/${series.id}/meetings/[0-9a-f-]+`),
+        { timeout: 10000 }
+      );
+      await expect(page.getByText("Live").first()).toBeVisible();
+      await expect(
+        page.getByRole("heading", { name: new RegExp(series.name) }).first()
+      ).toBeVisible();
+      await expect(page.getByText("2 attendees present")).toBeVisible();
+    } finally {
+      await deleteSeries(request, series.id);
+    }
   });
 
   test("meeting timeline items link to meeting detail", async ({ page }) => {
