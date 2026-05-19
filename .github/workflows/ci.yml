@@ -38,6 +38,7 @@ jobs:
   e2e:
     name: E2E Tests
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
 
@@ -96,6 +97,7 @@ jobs:
         env:
           CI: true
           SITE_URL: http://localhost:3000
+          PLAYWRIGHT_WORKERS: 1
 
       - name: Upload Playwright report
         if: steps.e2e.outcome == 'failure'
