@@ -19,7 +19,7 @@ test.describe("Error & 404 Pages", () => {
     const homeLink = page.getByRole("link", { name: /home|back|OIL Board/i });
     if (await homeLink.isVisible({ timeout: 5000 }).catch(() => false)) {
       await homeLink.click();
-      await expect(page).toHaveURL("/");
+      await expect(page).toHaveURL(/\/(?:dashboard)?$/);
     }
   });
 });
@@ -66,7 +66,7 @@ test.describe("Responsive Design", () => {
 
   test("mobile viewport renders OIL Board correctly", async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 667 });
-    await page.goto("/");
+    await page.goto("/dashboard");
 
     await expect(
       page.getByRole("heading", { name: "Outstanding" })
@@ -75,7 +75,7 @@ test.describe("Responsive Design", () => {
 
   test("tablet viewport renders OIL Board correctly", async ({ page }) => {
     await page.setViewportSize({ width: 768, height: 1024 });
-    await page.goto("/");
+    await page.goto("/dashboard");
 
     await expect(
       page.getByRole("heading", { name: "Outstanding" })
@@ -84,7 +84,7 @@ test.describe("Responsive Design", () => {
 
   test("desktop viewport renders OIL Board with sidebar", async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
-    await page.goto("/");
+    await page.goto("/dashboard");
 
     await expect(
       page.getByRole("heading", { name: "Outstanding" })
@@ -105,10 +105,10 @@ test.describe("Navigation Polish", () => {
   test.use({ storageState: "e2e/.auth/user.json" });
 
   test("all sidebar nav items are functional", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/dashboard");
 
     const routes = [
-      { name: "Outstanding", url: "/" },
+      { name: "Outstanding", url: "/dashboard" },
       { name: "Series", url: "/series" },
       { name: "My actions", url: "/actions" },
       { name: "Settings", url: "/settings" },
@@ -122,7 +122,7 @@ test.describe("Navigation Polish", () => {
   });
 
   test("keyboard navigation works between pages", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/dashboard");
     await page.waitForLoadState("networkidle");
 
     await page.keyboard.press("Tab");
