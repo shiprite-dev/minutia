@@ -3,7 +3,7 @@ import { SERIES, MEETINGS, ISSUES, waitForApp } from "./seed-data";
 
 test.describe("Typography: Fraunces on headings", () => {
   test("app header title uses font-display", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/dashboard");
     await waitForApp(page);
 
     const header = page.locator("header h1");
@@ -15,7 +15,7 @@ test.describe("Typography: Fraunces on headings", () => {
   });
 
   test("OIL board section headings use font-display", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/dashboard");
     await waitForApp(page);
 
     const outstandingHeading = page.getByText("Outstanding items");
@@ -56,10 +56,10 @@ test.describe("Typography: Fraunces on headings", () => {
 
 test.describe("Typography: JetBrains Mono on metadata", () => {
   test("due dates use font-mono", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/dashboard");
     await waitForApp(page);
 
-    const dueLabel = page.getByText(/Due May/).first();
+    const dueLabel = page.getByText(/Due (tomorrow|today|May|Jun)/).first();
     await expect(dueLabel).toBeVisible();
     const fontFamily = await dueLabel.evaluate(
       (el) => getComputedStyle(el).fontFamily
@@ -68,7 +68,7 @@ test.describe("Typography: JetBrains Mono on metadata", () => {
   });
 
   test("update counts use font-mono", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/dashboard");
     await waitForApp(page);
 
     const updateCount = page.getByText(/\d+ updates?/).first();
@@ -94,7 +94,7 @@ test.describe("Typography: JetBrains Mono on metadata", () => {
 
 test.describe("Typography: no Inter anywhere", () => {
   test("body text uses Satoshi, not Inter", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/dashboard");
     await waitForApp(page);
 
     const body = page.locator("body");
@@ -108,7 +108,7 @@ test.describe("Typography: no Inter anywhere", () => {
 
 test.describe("Outstanding items collapse", () => {
   test("series with >3 items shows expand button", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/dashboard");
     await waitForApp(page);
 
     const moreButton = page.getByText(/\+\d+ more/);
@@ -116,7 +116,7 @@ test.describe("Outstanding items collapse", () => {
   });
 
   test("clicking expand shows all items", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/dashboard");
     await waitForApp(page);
 
     const moreButton = page.getByText(/\+\d+ more/).first();
@@ -128,7 +128,7 @@ test.describe("Outstanding items collapse", () => {
   });
 
   test("clicking show less collapses back", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/dashboard");
     await waitForApp(page);
 
     const moreButton = page.getByText(/\+\d+ more/).first();
@@ -143,7 +143,7 @@ test.describe("Outstanding items collapse", () => {
   });
 
   test("view series link navigates to series detail", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/dashboard");
     await waitForApp(page);
 
     const viewSeriesLink = page.getByText("View series").first();
@@ -252,16 +252,19 @@ test.describe("Empty states", () => {
     await page.goto("/actions");
     await waitForApp(page);
 
-    const hasItems = await page
-      .getByText("Needs attention")
-      .isVisible()
-      .catch(() => false);
+    const emptyState = page.getByText("You owe nobody anything right now.");
+    const firstAction = page.locator("article").first();
 
-    if (!hasItems) {
-      await expect(
-        page.getByText("You owe nobody anything right now.")
-      ).toBeVisible();
+    await Promise.race([
+      emptyState.waitFor({ state: "visible" }).catch(() => undefined),
+      firstAction.waitFor({ state: "visible" }).catch(() => undefined),
+    ]);
+
+    if (await emptyState.isVisible().catch(() => false)) {
+      await expect(emptyState).toBeVisible();
       await expect(page.getByText("Keep it that way.")).toBeVisible();
+    } else {
+      await expect(firstAction).toBeVisible();
     }
   });
 });
@@ -270,7 +273,7 @@ test.describe("Card cascade animation", () => {
   test("dashboard cards are visible after cascade animation", async ({
     page,
   }) => {
-    await page.goto("/");
+    await page.goto("/dashboard");
     await waitForApp(page);
 
     const heroCard = page.getByText("Open items across your series");
@@ -291,7 +294,7 @@ test.describe("Status chip inline expand", () => {
   test("clicking status chip expands alternatives inline", async ({
     page,
   }) => {
-    await page.goto("/");
+    await page.goto("/dashboard");
     await waitForApp(page);
 
     const chip = page.getByRole("combobox", { name: /Status:/ }).first();
@@ -321,7 +324,7 @@ test.describe("Status chip inline expand", () => {
   });
 
   test("pressing Escape closes expanded chip", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/dashboard");
     await waitForApp(page);
 
     const chip = page.getByRole("combobox", { name: /Status:/ }).first();
@@ -357,7 +360,7 @@ test.describe("OKLCH color system", () => {
   test("page background uses neutral paper color, not pure white/black", async ({
     page,
   }) => {
-    await page.goto("/");
+    await page.goto("/dashboard");
     await waitForApp(page);
 
     const bgColor = await page.evaluate(() => {

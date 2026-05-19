@@ -47,6 +47,7 @@ export function WidgetShell({
   return (
     <motion.div
       ref={setNodeRef}
+      data-testid={`widget-${id}`}
       style={style}
       initial={{ opacity: 0, x: -20 }}
       animate={{ opacity: isDragging ? 0.5 : 1, x: 0 }}
