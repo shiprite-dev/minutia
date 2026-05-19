@@ -25,10 +25,10 @@ test.describe("Authenticated Navigation", () => {
   test.use({ storageState: "e2e/.auth/user.json" });
 
   test("navigate through main pages via sidebar", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/dashboard");
 
     const navItems = [
-      { label: "Outstanding", href: "/" },
+      { label: "Outstanding", href: "/dashboard" },
       { label: "Series", href: "/series" },
       { label: "My actions", href: "/actions" },
       { label: "Inbox", href: "/inbox" },
@@ -43,7 +43,7 @@ test.describe("Authenticated Navigation", () => {
   });
 
   test("settings page is accessible", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/dashboard");
     await page.getByRole("link", { name: "Settings" }).click();
     await expect(page).toHaveURL("/settings");
   });

@@ -5,17 +5,17 @@ test.describe("OIL Board card stagger (MIN-004)", () => {
   test("issue rows are visible after stagger animation completes", async ({
     page,
   }) => {
-    await page.goto("/");
+    await page.goto("/dashboard");
     await waitForApp(page);
 
-    const issueLink = page.getByRole("link", { name: /migrate ci/i }).first();
+    // Use any visible issue link on the OIL board
+    const issueLink = page.locator('[aria-label*=","] a[href^="/issues/"]').first();
     await expect(issueLink).toBeVisible({ timeout: 10000 });
 
     const issueRow = issueLink.locator("xpath=ancestor::div[contains(@class, 'rounded-lg')]");
-    const opacity = await issueRow.evaluate(
-      (el) => getComputedStyle(el).opacity
-    );
-    expect(parseFloat(opacity)).toBeGreaterThan(0.99);
+    await expect
+      .poll(() => issueRow.evaluate((el) => Number(getComputedStyle(el).opacity)))
+      .toBeGreaterThan(0.99);
   });
 });
 
@@ -52,7 +52,7 @@ test.describe("Issue lifecycle timeline animation (MIN-006)", () => {
 
 test.describe("Button micro-interactions (MIN-023)", () => {
   test("button has active scale transform class", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/dashboard");
     await waitForApp(page);
 
     const button = page.locator("[data-slot='button']").first();
@@ -63,7 +63,7 @@ test.describe("Button micro-interactions (MIN-023)", () => {
   });
 
   test("button has hover brightness class", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/dashboard");
     await waitForApp(page);
 
     const button = page.locator("[data-slot='button']").first();

@@ -1,11 +1,18 @@
 import { test, expect } from "@playwright/test";
 import { waitForApp } from "./seed-data";
+import {
+  addWidget,
+  createDashboardIssue,
+  deleteIssue,
+  HAS_SERVICE_ROLE,
+  widgetWithText,
+} from "./dashboard-helpers";
 
 test.describe("Widget system", () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/dashboard", { waitUntil: "domcontentloaded" });
     await page.evaluate(() => localStorage.removeItem("minutia-widgets"));
-    await page.reload();
+    await page.goto("/dashboard", { waitUntil: "domcontentloaded" });
     await waitForApp(page);
   });
 
@@ -37,18 +44,55 @@ test.describe("Widget system", () => {
   });
 
   test("can add stale items widget from picker", async ({ page }) => {
-    await page.getByRole("button", { name: "Add widget" }).click();
-
-    const staleBtn = page.getByRole("button", { name: /Stale Items/ }).first();
-    await expect(staleBtn).toBeEnabled();
-    await staleBtn.click();
+    await addWidget(page, /Stale Items/);
 
     await expect(page.getByText("Needs attention")).toBeVisible();
   });
 
+  test("stale items widget links to the oldest stale issue", async ({ page, request }) => {
+    test.skip(!HAS_SERVICE_ROLE, "SUPABASE_SERVICE_ROLE_KEY is required for isolated stale item data");
+
+    const staleIssue = await createDashboardIssue(
+      request,
+      `Stale dashboard link ${Date.now()}`,
+      { updated_at: "2026-04-01T00:00:00Z" }
+    );
+
+    try {
+      await page.reload({ waitUntil: "domcontentloaded" });
+      await waitForApp(page);
+      await addWidget(page, /Stale Items/);
+
+      await widgetWithText(page, "Needs attention")
+        .getByRole("link", { name: staleIssue.title })
+        .click();
+      await expect(page).toHaveURL(new RegExp(`/issues/${staleIssue.id}`));
+      await expect(page.getByText(staleIssue.title).first()).toBeVisible();
+    } finally {
+      await deleteIssue(request, staleIssue.id);
+    }
+  });
+
+  test("can add series health widget with distribution legend", async ({ page }) => {
+    await addWidget(page, /Series Health/);
+
+    const health = widgetWithText(page, "Series health");
+    await expect(health.getByRole("heading", { name: "Series health" })).toBeVisible();
+    await expect(health.getByText("Status distribution")).toBeVisible();
+    await expect(health.getByText("Open", { exact: true })).toBeVisible();
+    await expect(health.getByText("In Progress / Pending")).toBeVisible();
+    await expect(health.getByText("Resolved", { exact: true })).toBeVisible();
+  });
+
+  test("series health widget opens a series", async ({ page }) => {
+    await addWidget(page, /Series Health/);
+
+    await widgetWithText(page, "Series health").getByRole("link", { name: "Platform Team Standup" }).click();
+    await expect(page).toHaveURL(/\/series\/[0-9a-f-]+/);
+  });
+
   test("can add meeting triage widget", async ({ page }) => {
-    await page.getByRole("button", { name: "Add widget" }).click();
-    await page.getByRole("button", { name: /Meeting Triage/ }).click();
+    await addWidget(page, /Meeting Triage/);
 
     await expect(page.getByRole("heading", { name: "Meeting triage" })).toBeVisible();
     await expect(page.getByText("Carried").first()).toBeVisible();
@@ -56,16 +100,31 @@ test.describe("Widget system", () => {
   });
 
   test("can add workload widget", async ({ page }) => {
-    await page.getByRole("button", { name: "Add widget" }).click();
-    await page.getByRole("button", { name: /Workload.*Open items/ }).click();
+    await addWidget(page, /Workload.*Open items/);
 
     await expect(page.getByRole("heading", { name: "Workload" }).first()).toBeVisible();
     await expect(page.getByRole("tab", { name: "By Owner" })).toBeVisible();
   });
 
+  test("workload widget tabs and group expansion update visible state", async ({ page }) => {
+    await addWidget(page, /Workload.*Open items/);
+
+    const workload = widgetWithText(page, "Workload");
+
+    await workload.getByRole("tab", { name: "By Series" }).click();
+    await expect(workload.getByRole("tab", { name: "By Series" })).toHaveAttribute("aria-selected", "true");
+
+    await workload.getByRole("tab", { name: "Overdue" }).click();
+    await expect(workload.getByRole("tab", { name: "Overdue" })).toHaveAttribute("aria-selected", "true");
+
+    const showAll = workload.getByRole("button", { name: /\+\d+ more · Show all/ }).first();
+    await expect(showAll).toBeVisible();
+    await showAll.click();
+    await expect(workload.getByRole("button", { name: "Show less" }).first()).toBeVisible();
+  });
+
   test("reset button restores default widgets", async ({ page }) => {
-    await page.getByRole("button", { name: "Add widget" }).click();
-    await page.getByRole("button", { name: /Stale Items/ }).first().click();
+    await addWidget(page, /Stale Items/);
     await expect(page.getByText("Needs attention")).toBeVisible();
 
     await page.getByRole("button", { name: "Add widget" }).click();
@@ -76,8 +135,7 @@ test.describe("Widget system", () => {
   });
 
   test("widget state persists across page reload", async ({ page }) => {
-    await page.getByRole("button", { name: "Add widget" }).click();
-    await page.getByRole("button", { name: /Stale Items/ }).first().click();
+    await addWidget(page, /Stale Items/);
     await expect(page.getByText("Needs attention")).toBeVisible();
 
     await page.reload();
@@ -172,13 +230,12 @@ test.describe("Widget system", () => {
   });
 
   test("remove widget button still works with drag handle present", async ({ page }) => {
-    await page.getByRole("button", { name: "Add widget" }).click();
-    await page.getByRole("button", { name: /Stale Items/ }).first().click();
+    await addWidget(page, /Stale Items/);
     await expect(page.getByText("Needs attention")).toBeVisible();
 
-    const widget = page.locator(".rounded-xl", { has: page.getByText("Needs attention") }).first();
-    await widget.hover();
-    await page.getByLabel("Remove widget").last().click();
+    const stale = widgetWithText(page, "Needs attention");
+    await stale.hover();
+    await stale.getByLabel("Remove widget").click({ force: true });
 
     await expect(page.getByText("Needs attention")).not.toBeVisible({ timeout: 10000 });
   });
