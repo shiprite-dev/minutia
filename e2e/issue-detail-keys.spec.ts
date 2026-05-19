@@ -6,7 +6,7 @@ const SUPABASE_URL = process.env.SUPABASE_URL ?? "http://127.0.0.1:54321";
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
 
 test.describe.serial("Issue Detail Keyboard Shortcuts", () => {
-  test.afterAll(async () => {
+  async function resetIssueStatus() {
     await fetch(`${SUPABASE_URL}/rest/v1/issues?id=eq.${ISSUE_ID}`, {
       method: "PATCH",
       headers: {
@@ -17,13 +17,16 @@ test.describe.serial("Issue Detail Keyboard Shortcuts", () => {
       },
       body: JSON.stringify({ status: "open" }),
     });
-  });
+  }
+
+  test.beforeEach(resetIssueStatus);
+  test.afterAll(resetIssueStatus);
 
   test("C key opens the update form", async ({ page }) => {
     await page.goto(ISSUE_URL);
     await expect(page.getByText("Lifecycle timeline")).toBeVisible();
 
-    await page.keyboard.press("c");
+    await page.locator("body").press("c");
     await expect(page.getByPlaceholder("What's the latest on this issue?")).toBeVisible();
   });
 
@@ -31,28 +34,26 @@ test.describe.serial("Issue Detail Keyboard Shortcuts", () => {
     await page.goto(ISSUE_URL);
     await expect(page.getByText("Lifecycle timeline")).toBeVisible();
 
-    await page.keyboard.press("s");
+    await page.locator("body").press("s");
 
-    await page.waitForTimeout(500);
-    const badges = page.locator(".flex.flex-wrap.items-center.gap-3.mb-4");
-    await expect(badges).toBeVisible();
+    await expect(page.getByRole("combobox", { name: "Status: Pending" })).toBeVisible();
   });
 
   test("R key resolves the issue", async ({ page }) => {
     await page.goto(ISSUE_URL);
     await expect(page.getByText("Lifecycle timeline")).toBeVisible();
 
-    await page.keyboard.press("r");
+    await page.locator("body").press("r");
 
-    await expect(page.getByText("Resolved")).toBeVisible({ timeout: 3000 });
+    await expect(page.getByText("Resolved").first()).toBeVisible({ timeout: 3000 });
   });
 
   test("Escape key navigates back", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/dashboard");
     await page.goto(ISSUE_URL);
     await expect(page.getByText("Lifecycle timeline")).toBeVisible();
 
-    await page.keyboard.press("Escape");
-    await page.waitForURL("/", { timeout: 5000 });
+    await page.locator("body").press("Escape");
+    await expect(page).toHaveURL("/dashboard", { timeout: 5000 });
   });
 });
