@@ -1,16 +1,99 @@
 import { test, expect } from "@playwright/test";
+import { mkdir, writeFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
 import { waitForApp } from "./seed-data";
 
 const SUPABASE_URL = process.env.SUPABASE_URL ?? "http://127.0.0.1:54321";
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
+const ONBOARDING_USER_ID = randomUUID();
+const ONBOARDING_EMAIL = `onboarding-${ONBOARDING_USER_ID}@example.com`;
+const ONBOARDING_PASSWORD = "password123";
+const ONBOARDING_AUTH_PATH = "e2e/.auth/onboarding-user.json";
 
-function supabaseHeaders() {
+function supabaseHeaders(prefer = "return=minimal") {
   return {
     apikey: SERVICE_KEY,
     Authorization: `Bearer ${SERVICE_KEY}`,
     "Content-Type": "application/json",
-    Prefer: "return=minimal",
+    Prefer: prefer,
   };
+}
+
+async function createOnboardingAuthState() {
+  const authHeaders = {
+    apikey: SERVICE_KEY,
+    Authorization: `Bearer ${SERVICE_KEY}`,
+    "Content-Type": "application/json",
+  };
+
+  const createUser = await fetch(`${SUPABASE_URL}/auth/v1/admin/users`, {
+    method: "POST",
+    headers: authHeaders,
+    body: JSON.stringify({
+      id: ONBOARDING_USER_ID,
+      email: ONBOARDING_EMAIL,
+      password: ONBOARDING_PASSWORD,
+      email_confirm: true,
+      user_metadata: { name: "Test User" },
+    }),
+  });
+  expect(createUser.ok).toBeTruthy();
+
+  const profile = await fetch(`${SUPABASE_URL}/rest/v1/profiles`, {
+    method: "POST",
+    headers: supabaseHeaders("resolution=merge-duplicates,return=minimal"),
+    body: JSON.stringify({
+      id: ONBOARDING_USER_ID,
+      email: ONBOARDING_EMAIL,
+      name: "Test User",
+      has_completed_onboarding: false,
+    }),
+  });
+  expect(profile.ok).toBeTruthy();
+
+  const token = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
+    method: "POST",
+    headers: {
+      apikey: SERVICE_KEY,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      email: ONBOARDING_EMAIL,
+      password: ONBOARDING_PASSWORD,
+    }),
+  });
+  expect(token.ok).toBeTruthy();
+
+  const session = await token.json();
+  await mkdir("e2e/.auth", { recursive: true });
+  await writeFile(
+    ONBOARDING_AUTH_PATH,
+    JSON.stringify({
+      cookies: [
+        {
+          name: "sb-127-auth-token",
+          value: `base64-${Buffer.from(JSON.stringify(session)).toString("base64")}`,
+          domain: "localhost",
+          path: "/",
+          expires: Math.floor(Date.now() / 1000) + 60 * 60,
+          httpOnly: false,
+          secure: false,
+          sameSite: "Lax",
+        },
+      ],
+      origins: [],
+    })
+  );
+}
+
+async function deleteOnboardingUser() {
+  await fetch(`${SUPABASE_URL}/auth/v1/admin/users/${ONBOARDING_USER_ID}`, {
+    method: "DELETE",
+    headers: {
+      apikey: SERVICE_KEY,
+      Authorization: `Bearer ${SERVICE_KEY}`,
+    },
+  });
 }
 
 async function setOnboardingFlag(
@@ -18,7 +101,7 @@ async function setOnboardingFlag(
   value: boolean
 ) {
   await request.patch(
-    `${SUPABASE_URL}/rest/v1/profiles?email=eq.test@example.com`,
+    `${SUPABASE_URL}/rest/v1/profiles?id=eq.${ONBOARDING_USER_ID}`,
     { headers: supabaseHeaders(), data: { has_completed_onboarding: value } }
   );
 }
@@ -34,6 +117,11 @@ async function deleteOnboardingSeries(
 
 test.describe("Onboarding wizard", () => {
   test.describe.configure({ mode: "serial" });
+  test.use({ storageState: ONBOARDING_AUTH_PATH });
+
+  test.beforeAll(async () => {
+    await createOnboardingAuthState();
+  });
 
   test.beforeEach(async ({ request, page }) => {
     await setOnboardingFlag(request, false);
@@ -45,6 +133,11 @@ test.describe("Onboarding wizard", () => {
   test.afterEach(async ({ request }) => {
     await setOnboardingFlag(request, true);
     await deleteOnboardingSeries(request);
+  });
+
+  test.afterAll(async ({ request }) => {
+    await deleteOnboardingSeries(request);
+    await deleteOnboardingUser();
   });
 
   test("shows onboarding wizard for new users", async ({ page }) => {
@@ -116,7 +209,6 @@ test.describe("Onboarding wizard", () => {
 
   test("completing onboarding does not show wizard on next visit", async ({
     page,
-    request,
   }) => {
     await page.getByText("Skip setup").click();
     await page.waitForURL("**/dashboard");
