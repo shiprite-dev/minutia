@@ -44,7 +44,7 @@ async function getSmtpConfig(): Promise<{
 }
 
 export async function POST(request: NextRequest) {
-  const auth = await requireAdmin();
+  const auth = await requireAdmin(request);
   if (!auth.authorized) {
     return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
