@@ -24,8 +24,11 @@ export default function LoginPage() {
   );
   const supabase = createClient();
 
+  const publicSignupEnabled =
+    process.env.NEXT_PUBLIC_ENABLE_PUBLIC_SIGNUP === "true";
   const canSignIn = email.trim().length > 0 && password.length > 0;
-  const canSignUp = email.trim().length > 0 && password.length >= 8;
+  const canSignUp =
+    publicSignupEnabled && email.trim().length > 0 && password.length >= 8;
 
   async function handlePasswordLogin(e: React.FormEvent) {
     e.preventDefault();
@@ -241,15 +244,17 @@ export default function LoginPage() {
                 )}
               </Button>
 
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={handlePasswordSignUp}
-                disabled={formState === "loading" || !canSignUp}
-                className="h-10 w-full rounded-[12px] font-sans text-sm text-ink-3 hover:bg-paper-3 hover:text-ink-2"
-              >
-                Create account
-              </Button>
+              {publicSignupEnabled && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={handlePasswordSignUp}
+                  disabled={formState === "loading" || !canSignUp}
+                  className="h-10 w-full rounded-[12px] font-sans text-sm text-ink-3 hover:bg-paper-3 hover:text-ink-2"
+                >
+                  Create account
+                </Button>
+              )}
             </form>
 
             {/* Divider */}
