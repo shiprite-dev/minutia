@@ -19,6 +19,22 @@ import type {
 // Helpers
 // ---------------------------------------------------------------------------
 
+type ServerSupabaseClient = Awaited<ReturnType<typeof createClient>>;
+
+async function getGuestShareByToken(
+  supabase: ServerSupabaseClient,
+  token: string
+) {
+  const { data, error } = await supabase
+    .rpc("get_guest_share_by_token", { share_token: token })
+    .maybeSingle();
+
+  return {
+    data: data ? (data as GuestShare) : null,
+    error,
+  };
+}
+
 function formatDate(date: string | Date): string {
   return new Date(date).toLocaleDateString("en-US", {
     weekday: "long",
@@ -600,11 +616,7 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { token } = await params;
   const supabase = await createClient();
-  const { data: share } = await supabase
-    .from("guest_shares")
-    .select("resource_type")
-    .eq("token", token)
-    .single();
+  const { data: share } = await getGuestShareByToken(supabase, token);
 
   const type = share?.resource_type ?? "resource";
   return {
@@ -627,11 +639,7 @@ export default async function GuestSharePage({
   // 0. If the visitor is a registered user, create a notification and redirect to inbox
   const { data: { user } } = await supabase.auth.getUser();
   if (user) {
-    const { data: existingShare } = await supabase
-      .from("guest_shares")
-      .select("id, resource_type, resource_id")
-      .eq("token", token)
-      .single();
+    const { data: existingShare } = await getGuestShareByToken(supabase, token);
 
     if (existingShare) {
       // Check if notification already exists for this share to avoid duplicates
@@ -672,15 +680,11 @@ export default async function GuestSharePage({
     }
   }
 
-  // 1. Look up the guest share by token.
-  //    NOTE: This runs as anon role. The guest_shares table needs an RLS policy
-  //    allowing SELECT when token matches: (token = $1) for anonymous users.
-  //    If that policy is missing, this query will return no rows.
-  const { data: share, error: shareError } = await supabase
-    .from("guest_shares")
-    .select("*")
-    .eq("token", token)
-    .single();
+  // 1. Look up the guest share by token through a scoped RPC, not direct table access.
+  const { data: share, error: shareError } = await getGuestShareByToken(
+    supabase,
+    token
+  );
 
   if (shareError || !share) {
     return (
