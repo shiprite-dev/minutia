@@ -19,7 +19,7 @@ test.describe("Login Page", () => {
     ).toBeVisible();
     await expect(
       page.getByRole("button", { name: "Create account" })
-    ).toBeVisible();
+    ).toHaveCount(0);
     await expect(
       page.getByRole("button", { name: "Email magic link" })
     ).toBeVisible();
@@ -39,12 +39,11 @@ test.describe("Login Page", () => {
   test("password auth controls require credentials", async ({ page }) => {
     await page.goto("/login");
     const signInButton = page.getByRole("button", { name: "Sign in", exact: true });
-    const createAccountButton = page.getByRole("button", { name: "Create account" });
     const magicLinkButton = page.getByRole("button", { name: "Email magic link" });
 
     await expect(signInButton).toBeDisabled();
-    await expect(createAccountButton).toBeDisabled();
     await expect(magicLinkButton).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Create account" })).toHaveCount(0);
 
     await page.getByPlaceholder("you@company.com").fill("test@example.com");
     await expect(magicLinkButton).toBeEnabled();
@@ -52,10 +51,9 @@ test.describe("Login Page", () => {
 
     await page.getByLabel("Password").fill("short");
     await expect(signInButton).toBeEnabled();
-    await expect(createAccountButton).toBeDisabled();
 
     await page.getByLabel("Password").fill("password123");
-    await expect(createAccountButton).toBeEnabled();
+    await expect(signInButton).toBeEnabled();
   });
 
   test("unauthenticated user is redirected to login", async ({ page }) => {
