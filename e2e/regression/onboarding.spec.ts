@@ -100,10 +100,23 @@ async function setOnboardingFlag(
   request: Parameters<Parameters<typeof test>[2]>[0]["request"],
   value: boolean
 ) {
-  await request.patch(
+  const response = await request.patch(
     `${SUPABASE_URL}/rest/v1/profiles?id=eq.${ONBOARDING_USER_ID}`,
     { headers: supabaseHeaders(), data: { has_completed_onboarding: value } }
   );
+  expect(response.ok()).toBeTruthy();
+
+  await expect
+    .poll(async () => {
+      const current = await request.get(
+        `${SUPABASE_URL}/rest/v1/profiles?id=eq.${ONBOARDING_USER_ID}&select=has_completed_onboarding`,
+        { headers: supabaseHeaders() }
+      );
+      expect(current.ok()).toBeTruthy();
+      const rows = await current.json();
+      return rows[0]?.has_completed_onboarding;
+    })
+    .toBe(value);
 }
 
 async function deleteOnboardingSeries(
