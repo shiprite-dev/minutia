@@ -96,6 +96,7 @@ jobs:
         run: pnpm test:e2e
         env:
           CI: true
+          MINUTIA_SETUP_TOKEN: ci-setup-token
           SITE_URL: http://localhost:3000
           PLAYWRIGHT_WORKERS: 1
 
