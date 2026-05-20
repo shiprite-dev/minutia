@@ -1,7 +1,6 @@
 import { test as setup, expect } from "@playwright/test";
 
 setup("authenticate", async ({ page }) => {
-  // Use the app's own login flow (Guest button calls signInWithPassword)
   await page.goto("/login");
 
   const setupHeading = page.getByRole("heading", { name: "Instance Setup" });
@@ -9,9 +8,9 @@ setup("authenticate", async ({ page }) => {
     throw new Error("Cannot authenticate because the app redirected to /setup. Start the Minutia Supabase stack or point NEXT_PUBLIC_SUPABASE_URL at a seeded Minutia database.");
   }
 
-  const guestButton = page.getByRole("button", { name: "Sign in as Guest" });
-  await expect(guestButton).toBeVisible();
-  await guestButton.click();
+  await page.getByLabel("Email address").fill("test@example.com");
+  await page.getByLabel("Password").fill("password123");
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await page.waitForURL(/\/($|dashboard$)/, { timeout: 10000 });
 
   await page.goto("/dashboard");
