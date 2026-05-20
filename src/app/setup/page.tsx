@@ -58,6 +58,8 @@ export default function SetupPage() {
   const [envCheck, setEnvCheck] = React.useState<EnvCheck | null>(null);
   const [envLoading, setEnvLoading] = React.useState(true);
   const [envError, setEnvError] = React.useState<string | null>(null);
+  const [setupTokenRequired, setSetupTokenRequired] = React.useState(false);
+  const [setupToken, setSetupToken] = React.useState("");
 
   const [adminEmail, setAdminEmail] = React.useState("");
   const [adminPassword, setAdminPassword] = React.useState("");
@@ -83,6 +85,7 @@ export default function SetupPage() {
     fetch("/api/setup/status")
       .then((r) => r.json())
       .then((data) => {
+        setSetupTokenRequired(Boolean(data.setup_token_required));
         if (data.setup_completed) {
           router.replace("/");
           return;
@@ -118,13 +121,20 @@ export default function SetupPage() {
     envCheck.env.service_role_key === "ok" &&
     envCheck.db.connected;
 
+  function setupHeaders() {
+    return {
+      "Content-Type": "application/json",
+      ...(setupToken.trim() ? { "x-minutia-setup-token": setupToken.trim() } : {}),
+    };
+  }
+
   async function handleCreateAdmin() {
     setAdminCreating(true);
     setAdminError(null);
     try {
       const res = await fetch("/api/setup/create-admin", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: setupHeaders(),
         body: JSON.stringify({ email: adminEmail, password: adminPassword, name: adminName }),
       });
       const data = await res.json();
@@ -144,7 +154,7 @@ export default function SetupPage() {
     try {
       await fetch("/api/admin/config", {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: setupHeaders(),
         body: JSON.stringify({
           smtp_host: smtpHost,
           smtp_port: smtpPort,
@@ -155,7 +165,7 @@ export default function SetupPage() {
 
       const res = await fetch("/api/admin/smtp-test", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: setupHeaders(),
         body: JSON.stringify({ recipient_email: adminEmail }),
       });
       const data = await res.json();
@@ -172,7 +182,7 @@ export default function SetupPage() {
     try {
       await fetch("/api/admin/config", {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: setupHeaders(),
         body: JSON.stringify({
           instance_name: instanceName,
           ...(smtpHost ? { smtp_host: smtpHost, smtp_port: smtpPort, smtp_user: smtpUser, smtp_pass: smtpPass } : {}),
@@ -191,9 +201,9 @@ export default function SetupPage() {
     setCompleting(true);
     try {
       if (seedDemo) {
-        await fetch("/api/setup/seed-demo", { method: "POST" });
+        await fetch("/api/setup/seed-demo", { method: "POST", headers: setupHeaders() });
       }
-      await fetch("/api/setup/complete", { method: "POST" });
+      await fetch("/api/setup/complete", { method: "POST", headers: setupHeaders() });
       router.push("/login");
     } catch {
       router.push("/login");
@@ -253,7 +263,10 @@ export default function SetupPage() {
                   envCheck={envCheck}
                   loading={envLoading}
                   error={envError}
-                  ready={!!envReady}
+                  ready={!!envReady && (!setupTokenRequired || setupToken.trim().length > 0)}
+                  setupTokenRequired={setupTokenRequired}
+                  setupToken={setupToken}
+                  onSetupTokenChange={setSetupToken}
                   onRetry={runEnvCheck}
                   onNext={goNext}
                 />
@@ -360,6 +373,9 @@ function StepEnvironment({
   loading,
   error,
   ready,
+  setupTokenRequired,
+  setupToken,
+  onSetupTokenChange,
   onRetry,
   onNext,
 }: {
@@ -367,6 +383,9 @@ function StepEnvironment({
   loading: boolean;
   error: string | null;
   ready: boolean;
+  setupTokenRequired: boolean;
+  setupToken: string;
+  onSetupTokenChange: (v: string) => void;
   onRetry: () => void;
   onNext: () => void;
 }) {
@@ -422,6 +441,22 @@ function StepEnvironment({
               <OptionalBadge label="Google OAuth" configured={envCheck.env.google_configured} />
             </div>
           </div>
+        </div>
+      )}
+
+      {setupTokenRequired && (
+        <div className="space-y-2">
+          <Label htmlFor="setup-token" className="text-ink-2">
+            Setup token
+          </Label>
+          <Input
+            id="setup-token"
+            type="password"
+            value={setupToken}
+            onChange={(event) => onSetupTokenChange(event.target.value)}
+            placeholder="Enter MINUTIA_SETUP_TOKEN"
+            className="h-11"
+          />
         </div>
       )}
 
