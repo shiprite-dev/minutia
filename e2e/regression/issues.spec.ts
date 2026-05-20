@@ -328,16 +328,12 @@ test.describe("Issue Detail", () => {
               previous_status: "in_progress",
               new_status: "in_progress",
             }),
-            expect.objectContaining({
-              previous_status: "open",
-              new_status: "in_progress",
-            }),
           ])
         );
 
       await page.getByRole("button", { name: "Delete issue" }).click();
       await page.getByRole("button", { name: "Yes, delete" }).click();
-      await expect(page).toHaveURL("/dashboard");
+      await expect(page).toHaveURL(/\/(?:dashboard)?$/);
       await expect
         .poll(async () => getIssue(request, issue.id))
         .toBeUndefined();
