@@ -16,9 +16,61 @@ const GUEST_LOGIN_ERROR_MESSAGE =
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [formState, setFormState] = useState<FormState>("idle");
   const [errorMessage, setErrorMessage] = useState("");
+  const [sentMessage, setSentMessage] = useState(
+    "We sent a magic link to"
+  );
   const supabase = createClient();
+
+  const canSignIn = email.trim().length > 0 && password.length > 0;
+  const canSignUp = email.trim().length > 0 && password.length >= 8;
+
+  async function handlePasswordLogin(e: React.FormEvent) {
+    e.preventDefault();
+    if (!canSignIn) return;
+
+    setFormState("loading");
+    setErrorMessage("");
+
+    const { error } = await supabase.auth.signInWithPassword({
+      email: email.trim(),
+      password,
+    });
+
+    if (error) {
+      setFormState("error");
+      setErrorMessage(error.message);
+    } else {
+      window.location.href = "/";
+    }
+  }
+
+  async function handlePasswordSignUp() {
+    if (!canSignUp) return;
+
+    setFormState("loading");
+    setErrorMessage("");
+
+    const { data, error } = await supabase.auth.signUp({
+      email: email.trim(),
+      password,
+      options: {
+        emailRedirectTo: `${window.location.origin}/auth/callback`,
+      },
+    });
+
+    if (error) {
+      setFormState("error");
+      setErrorMessage(error.message);
+    } else if (data.session) {
+      window.location.href = "/";
+    } else {
+      setSentMessage("Confirm your account at");
+      setFormState("sent");
+    }
+  }
 
   async function handleMagicLink(e: React.FormEvent) {
     e.preventDefault();
@@ -38,6 +90,7 @@ export default function LoginPage() {
       setFormState("error");
       setErrorMessage(error.message);
     } else {
+      setSentMessage("We sent a magic link to");
       setFormState("sent");
     }
   }
@@ -110,7 +163,7 @@ export default function LoginPage() {
                 Check your email
               </p>
               <p className="mt-1 font-sans text-sm text-ink-3">
-                We sent a magic link to{" "}
+                {sentMessage}{" "}
                 <span className="font-medium text-ink-2">{email}</span>
               </p>
             </div>
@@ -118,6 +171,7 @@ export default function LoginPage() {
               onClick={() => {
                 setFormState("idle");
                 setEmail("");
+                setPassword("");
               }}
               className="font-sans text-sm text-ink-3 underline underline-offset-4 transition-colors hover:text-ink-2"
             >
@@ -126,8 +180,7 @@ export default function LoginPage() {
           </motion.div>
         ) : (
           <>
-            {/* Magic link form */}
-            <form onSubmit={handleMagicLink} className="space-y-4">
+            <form onSubmit={handlePasswordLogin} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="email" className="font-sans text-ink-2">
                   Email address
@@ -140,6 +193,22 @@ export default function LoginPage() {
                   onChange={(e) => setEmail(e.target.value)}
                   required
                   autoComplete="email"
+                  className="h-10 rounded-[12px] border-rule bg-paper px-3 font-sans text-ink placeholder:text-ink-4 focus-visible:border-accent focus-visible:ring-accent/30"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="password" className="font-sans text-ink-2">
+                  Password
+                </Label>
+                <Input
+                  id="password"
+                  type="password"
+                  placeholder="Minimum 8 characters"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  minLength={8}
+                  autoComplete="current-password"
                   className="h-10 rounded-[12px] border-rule bg-paper px-3 font-sans text-ink placeholder:text-ink-4 focus-visible:border-accent focus-visible:ring-accent/30"
                 />
               </div>
@@ -156,20 +225,30 @@ export default function LoginPage() {
 
               <Button
                 type="submit"
-                disabled={formState === "loading" || !email.trim()}
+                disabled={formState === "loading" || !canSignIn}
                 className="h-10 w-full rounded-[12px] bg-accent font-sans font-medium text-white hover:bg-accent-hover disabled:opacity-40"
               >
                 {formState === "loading" ? (
                   <span className="flex items-center gap-2">
                     <LoadingDots />
-                    Sending link
+                    Signing in
                   </span>
                 ) : (
                   <span className="flex items-center gap-2">
-                    Send magic link
+                    Sign in
                     <ArrowRight className="h-4 w-4" />
                   </span>
                 )}
+              </Button>
+
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={handlePasswordSignUp}
+                disabled={formState === "loading" || !canSignUp}
+                className="h-10 w-full rounded-[12px] font-sans text-sm text-ink-3 hover:bg-paper-3 hover:text-ink-2"
+              >
+                Create account
               </Button>
             </form>
 
@@ -181,6 +260,18 @@ export default function LoginPage() {
               </span>
               <Separator className="flex-1 bg-rule" />
             </div>
+
+            <form onSubmit={handleMagicLink}>
+              <Button
+                type="submit"
+                variant="outline"
+                disabled={formState === "loading" || !email.trim()}
+                className="mb-3 h-10 w-full rounded-[12px] border-rule bg-paper font-sans font-medium text-ink hover:bg-paper-3"
+              >
+                <Mail className="mr-2 h-4 w-4" />
+                Email magic link
+              </Button>
+            </form>
 
             {/* Google OAuth */}
             <Button
