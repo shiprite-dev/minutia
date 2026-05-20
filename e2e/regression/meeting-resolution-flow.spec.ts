@@ -1,16 +1,15 @@
 import { test, expect } from "@playwright/test";
-import { SERIES, MEETINGS, ISSUES, waitForApp } from "./seed-data";
+import { SERIES, MEETINGS, waitForApp } from "./seed-data";
+import { createDashboardIssue, deleteIssue } from "./dashboard-helpers";
 
 const SUPABASE_URL = process.env.SUPABASE_URL ?? "http://127.0.0.1:54321";
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
 
-const SERIES_URL = `/series/${SERIES.platformStandup}`;
-
-// Reset a specific issue to open status before each test
-async function resetIssueStatus(
+async function updateIssueStatus(
   request: Parameters<Parameters<typeof test>[2]>[0]["request"],
   issueId: string,
-  status: string = "open"
+  status: string,
+  resolvedMeetingId: string | null = null
 ) {
   const headers = {
     apikey: SERVICE_KEY,
@@ -22,212 +21,181 @@ async function resetIssueStatus(
     `${SUPABASE_URL}/rest/v1/issues?id=eq.${issueId}`,
     {
       headers,
-      data: { status, resolved_in_meeting_id: null },
+      data: { status, resolved_in_meeting_id: resolvedMeetingId },
     }
   );
 }
 
+async function createMeetingIssue(
+  request: Parameters<Parameters<typeof test>[2]>[0]["request"],
+  title = `Meeting resolution coverage ${Date.now()}`
+) {
+  return createDashboardIssue(request, title, {
+    raised_in_meeting_id: MEETINGS.standup1,
+  });
+}
+
+function raisedIssueRow(page: Parameters<Parameters<typeof test>[2]>[0]["page"], title: string) {
+  return page
+    .locator("section")
+    .filter({ hasText: "Items raised" })
+    .locator("[class*='group']")
+    .filter({ hasText: title })
+    .first();
+}
+
 test.describe("Meeting Issue Resolution Flow", () => {
-  // Use the "Migrate CI" issue (raised in standup1) for testing
-  const testIssueId = ISSUES.migrateCI;
+  test.describe.configure({ mode: "serial" });
   const meetingUrl = `/series/${SERIES.platformStandup}/meetings/${MEETINGS.standup1}`;
-
-  test.beforeEach(async ({ request }) => {
-    // Ensure the test issue starts as open
-    await resetIssueStatus(request, testIssueId);
-  });
-
-  test.afterEach(async ({ request }) => {
-    // Clean up: reset issue back to open
-    await resetIssueStatus(request, testIssueId);
-  });
 
   test("resolving an issue via checkbox updates its state", async ({
     page,
+    request,
   }) => {
-    await page.goto(meetingUrl);
-    await waitForApp(page);
+    const issue = await createMeetingIssue(request);
 
-    // Wait for the issue to load in open state
-    await expect(
-      page.getByText("Migrate CI from Jenkins to GitHub Actions").first()
-    ).toBeVisible({ timeout: 5000 });
+    try {
+      await page.goto(meetingUrl);
+      await waitForApp(page);
 
-    // Find the Mark complete button near this issue
-    const markComplete = page.getByRole("button", { name: "Mark complete" }).first();
-    await expect(markComplete).toBeVisible({ timeout: 5000 });
+      const issueRow = raisedIssueRow(page, issue.title);
+      await expect(issueRow).toBeVisible({ timeout: 5000 });
 
-    // Click to resolve
-    await markComplete.click();
+      const markComplete = issueRow.getByRole("button", { name: "Mark complete" });
+      await expect(markComplete).toBeVisible({ timeout: 5000 });
+      await markComplete.click();
 
-    // Should now show "Mark incomplete" (resolved state)
-    await expect(
-      page.getByRole("button", { name: "Mark incomplete" }).first()
-    ).toBeVisible({ timeout: 5000 });
+      await expect(
+        issueRow.getByRole("button", { name: "Mark incomplete" })
+      ).toBeVisible({ timeout: 5000 });
+    } finally {
+      await deleteIssue(request, issue.id).catch(() => undefined);
+    }
   });
 
   test("resolved issue appears in 'Resolved this meeting' section on completed page", async ({
     page,
     request,
   }) => {
-    // First resolve the issue via API
-    const headers = {
-      apikey: SERVICE_KEY,
-      Authorization: `Bearer ${SERVICE_KEY}`,
-      "Content-Type": "application/json",
-      Prefer: "return=minimal",
-    };
-    await request.patch(
-      `${SUPABASE_URL}/rest/v1/issues?id=eq.${testIssueId}`,
-      {
-        headers,
-        data: {
-          status: "resolved",
-          resolved_in_meeting_id: MEETINGS.standup1,
-        },
-      }
-    );
+    const issue = await createMeetingIssue(request);
 
-    await page.goto(meetingUrl);
-    await waitForApp(page);
+    try {
+      await updateIssueStatus(request, issue.id, "resolved", MEETINGS.standup1);
 
-    // "Resolved this meeting" section should be visible
-    await expect(
-      page.getByRole("heading", { name: /Resolved this meeting/ })
-    ).toBeVisible({ timeout: 5000 });
+      await page.goto(meetingUrl);
+      await waitForApp(page);
 
-    // The issue should appear in the resolved section
-    const resolvedSection = page.locator("section").filter({
-      hasText: "Resolved this meeting",
-    });
-    await expect(
-      resolvedSection.getByText("Migrate CI from Jenkins to GitHub Actions")
-    ).toBeVisible();
+      await expect(
+        page.getByRole("heading", { name: /Resolved this meeting/ })
+      ).toBeVisible({ timeout: 5000 });
+
+      const resolvedSection = page.locator("section").filter({
+        hasText: "Resolved this meeting",
+      });
+      await expect(resolvedSection.getByText(issue.title)).toBeVisible();
+    } finally {
+      await deleteIssue(request, issue.id).catch(() => undefined);
+    }
   });
 
   test("resolved issue shows checked checkbox with strikethrough in items raised", async ({
     page,
     request,
   }) => {
-    // Resolve the issue via API
-    const headers = {
-      apikey: SERVICE_KEY,
-      Authorization: `Bearer ${SERVICE_KEY}`,
-      "Content-Type": "application/json",
-      Prefer: "return=minimal",
-    };
-    await request.patch(
-      `${SUPABASE_URL}/rest/v1/issues?id=eq.${testIssueId}`,
-      {
-        headers,
-        data: {
-          status: "resolved",
-          resolved_in_meeting_id: MEETINGS.standup1,
-        },
-      }
-    );
+    const issue = await createMeetingIssue(request);
 
-    await page.goto(meetingUrl);
-    await waitForApp(page);
+    try {
+      await updateIssueStatus(request, issue.id, "resolved", MEETINGS.standup1);
 
-    // The issue in "Items raised" should show "Mark incomplete" (resolved)
-    const raisedSection = page.locator("section").filter({
-      hasText: "Items raised",
-    });
-    const issueRow = raisedSection.locator("[class*='group']").filter({
-      hasText: "Migrate CI from Jenkins to GitHub Actions",
-    }).first();
-    await expect(
-      issueRow.getByRole("button", { name: "Mark incomplete" })
-    ).toBeVisible({ timeout: 5000 });
+      await page.goto(meetingUrl);
+      await waitForApp(page);
+
+      const issueRow = raisedIssueRow(page, issue.title);
+      await expect(
+        issueRow.getByRole("button", { name: "Mark incomplete" })
+      ).toBeVisible({ timeout: 5000 });
+    } finally {
+      await deleteIssue(request, issue.id).catch(() => undefined);
+    }
   });
 
   test("unchecking a resolved issue removes it from resolved section", async ({
     page,
     request,
   }) => {
-    // Start with issue resolved
-    const headers = {
-      apikey: SERVICE_KEY,
-      Authorization: `Bearer ${SERVICE_KEY}`,
-      "Content-Type": "application/json",
-      Prefer: "return=minimal",
-    };
-    await request.patch(
-      `${SUPABASE_URL}/rest/v1/issues?id=eq.${testIssueId}`,
-      {
-        headers,
-        data: {
-          status: "resolved",
-          resolved_in_meeting_id: MEETINGS.standup1,
-        },
-      }
-    );
+    const issue = await createMeetingIssue(request);
 
-    await page.goto(meetingUrl);
-    await waitForApp(page);
+    try {
+      await updateIssueStatus(request, issue.id, "resolved", MEETINGS.standup1);
 
-    // Verify resolved section exists
-    await expect(
-      page.getByRole("heading", { name: /Resolved this meeting/ })
-    ).toBeVisible({ timeout: 5000 });
+      await page.goto(meetingUrl);
+      await waitForApp(page);
 
-    // Find the issue in "Items raised" and uncheck it
-    const raisedSection = page.locator("section").filter({
-      hasText: "Items raised",
-    });
-    const issueRow = raisedSection.locator("[class*='group']").filter({
-      hasText: "Migrate CI from Jenkins to GitHub Actions",
-    }).first();
-    await issueRow.getByRole("button", { name: "Mark incomplete" }).click();
+      await expect(
+        page.getByRole("heading", { name: /Resolved this meeting/ })
+      ).toBeVisible({ timeout: 5000 });
 
-    // Wait for it to become "Mark complete" again
-    await expect(
-      issueRow.getByRole("button", { name: "Mark complete" })
-    ).toBeVisible({ timeout: 5000 });
+      const issueRow = raisedIssueRow(page, issue.title);
+      await issueRow.getByRole("button", { name: "Mark incomplete" }).click();
+
+      await expect(
+        issueRow.getByRole("button", { name: "Mark complete" })
+      ).toBeVisible({ timeout: 5000 });
+    } finally {
+      await deleteIssue(request, issue.id).catch(() => undefined);
+    }
   });
 
   test("back button from issue detail returns to meeting page", async ({
     page,
+    request,
   }) => {
-    await page.goto(meetingUrl);
-    await waitForApp(page);
+    const issue = await createMeetingIssue(request);
 
-    // Navigate to an issue detail
-    await page.goto(`/issues/${testIssueId}`);
-    await waitForApp(page);
+    try {
+      await page.goto(meetingUrl);
+      await waitForApp(page);
 
-    // Click back button
-    await page.getByRole("button", { name: "Back" }).click();
+      await page.goto(`/issues/${issue.id}`);
+      await waitForApp(page);
 
-    // Should return to the meeting page
-    await page.waitForURL(/\/meetings\//);
-    await expect(page.url()).toContain(MEETINGS.standup1);
+      await page.getByRole("button", { name: "Back" }).click();
+
+      await page.waitForURL(/\/meetings\//);
+      await expect(page.url()).toContain(MEETINGS.standup1);
+    } finally {
+      await deleteIssue(request, issue.id).catch(() => undefined);
+    }
   });
 
   test("resolving via checkbox then reloading shows resolved section and summary count", async ({
     page,
+    request,
   }) => {
-    await page.goto(meetingUrl);
-    await waitForApp(page);
+    const issue = await createMeetingIssue(request);
 
-    // Resolve the issue via checkbox click
-    const markComplete = page.getByRole("button", { name: "Mark complete" }).first();
-    await expect(markComplete).toBeVisible({ timeout: 5000 });
-    await markComplete.click();
+    try {
+      await page.goto(meetingUrl);
+      await waitForApp(page);
 
-    // Wait for optimistic update
-    await expect(
-      page.getByRole("button", { name: "Mark incomplete" }).first()
-    ).toBeVisible({ timeout: 5000 });
+      const issueRow = raisedIssueRow(page, issue.title);
+      const markComplete = issueRow.getByRole("button", { name: "Mark complete" });
+      await expect(markComplete).toBeVisible({ timeout: 5000 });
+      await markComplete.click();
 
-    // Reload to get fresh server state
-    await page.reload();
-    await waitForApp(page);
+      await expect(
+        issueRow.getByRole("button", { name: "Mark incomplete" })
+      ).toBeVisible({ timeout: 5000 });
 
-    // "Resolved this meeting" section should appear
-    await expect(
-      page.getByRole("heading", { name: /Resolved this meeting/ })
-    ).toBeVisible({ timeout: 10000 });
+      await page.reload();
+      await waitForApp(page);
+
+      await expect(
+        page.getByRole("heading", { name: /Resolved this meeting/ })
+      ).toBeVisible({ timeout: 10000 });
+      await expect(page.getByText(issue.title).first()).toBeVisible();
+    } finally {
+      await deleteIssue(request, issue.id).catch(() => undefined);
+    }
   });
 });
