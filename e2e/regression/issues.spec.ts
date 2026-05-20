@@ -1,5 +1,10 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type APIRequestContext } from "@playwright/test";
 import { SERIES, MEETINGS, ISSUES, waitForApp } from "./seed-data";
+import {
+  createDashboardIssue,
+  deleteIssue,
+  HAS_SERVICE_ROLE,
+} from "./dashboard-helpers";
 
 const SUPABASE_URL = process.env.SUPABASE_URL ?? "http://127.0.0.1:54321";
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
@@ -16,6 +21,47 @@ async function resetIssueStatus(issueId: string) {
     },
     body: JSON.stringify({ status: "open" }),
   });
+}
+
+function serviceHeaders(prefer = "return=representation") {
+  if (!SERVICE_KEY) {
+    throw new Error("SUPABASE_SERVICE_ROLE_KEY is required for this test");
+  }
+  return {
+    apikey: SERVICE_KEY,
+    Authorization: `Bearer ${SERVICE_KEY}`,
+    "Content-Type": "application/json",
+    Prefer: prefer,
+  };
+}
+
+async function getIssue(request: APIRequestContext, issueId: string) {
+  const response = await request.get(
+    `${SUPABASE_URL}/rest/v1/issues?id=eq.${issueId}&select=title,description,status,priority,due_date`,
+    { headers: serviceHeaders() }
+  );
+  expect(response.ok()).toBeTruthy();
+  const rows = await response.json();
+  return rows[0] as
+    | {
+        title: string;
+        description: string | null;
+        status: string;
+        priority: string;
+        due_date: string | null;
+      }
+    | undefined;
+}
+
+async function getIssueUpdates(request: APIRequestContext, issueId: string) {
+  const response = await request.get(
+    `${SUPABASE_URL}/rest/v1/issue_updates?issue_id=eq.${issueId}&select=note,previous_status,new_status&order=created_at.desc`,
+    { headers: serviceHeaders() }
+  );
+  expect(response.ok()).toBeTruthy();
+  return response.json() as Promise<
+    { note: string | null; previous_status: string | null; new_status: string | null }[]
+  >;
 }
 
 test.describe("Issue Detail", () => {
@@ -195,6 +241,109 @@ test.describe("Issue Detail", () => {
     await expect(page).toHaveURL(
       `/series/${SERIES.platformStandup}/meetings/${MEETINGS.standup1}`
     );
+  });
+
+  test("edits, transitions, adds updates, reloads, and deletes an issue", async ({
+    page,
+    request,
+  }) => {
+    test.skip(!HAS_SERVICE_ROLE, "Requires service role cleanup for isolated issue data");
+
+    const stamp = Date.now();
+    const issue = await createDashboardIssue(
+      request,
+      `Issue lifecycle coverage ${stamp}`,
+      {
+        description: "Initial lifecycle coverage description.",
+        category: "risk",
+        priority: "low",
+        due_date: "2026-06-01",
+      }
+    );
+    const editedTitle = `Edited lifecycle coverage ${stamp}`;
+    const editedDescription = `Description saved from issue detail ${stamp}`;
+    const updateNote = `Timeline update saved from issue detail ${stamp}`;
+
+    try {
+      await page.goto(`/issues/${issue.id}`);
+      await waitForApp(page);
+
+      await expect(page.locator("h1", { hasText: issue.title })).toBeVisible();
+      await expect(page.getByText("Risk").first()).toBeVisible();
+      await expect(page.locator('[aria-label="Priority: low"]')).toBeVisible();
+
+      await page.getByRole("button", { name: /Edit Issue title/i }).click();
+      await page.locator('input[type="text"]').first().fill(editedTitle);
+      await page.keyboard.press("Enter");
+      await expect(page.locator("h1", { hasText: editedTitle })).toBeVisible();
+
+      await page.getByText("Initial lifecycle coverage description.").click();
+      await page.locator("textarea").first().fill(editedDescription);
+      await page.getByText("Source").click();
+      await expect(page.getByText(editedDescription)).toBeVisible();
+
+      await page.locator('input[type="date"]').fill("2026-06-15");
+      await page.locator("select").first().selectOption("critical");
+      await expect(page.locator('[aria-label="Priority: critical"]')).toBeVisible();
+
+      await page.getByRole("combobox", { name: "Status: Open" }).click();
+      await page.getByRole("option", { name: "In Progress" }).click();
+      await expect(
+        page.getByRole("combobox", { name: "Status: In Progress" })
+      ).toBeVisible();
+
+      await page.getByRole("button", { name: /Add update/ }).click();
+      await page
+        .getByPlaceholder("What's the latest on this issue?")
+        .fill(updateNote);
+      await page.getByRole("button", { name: "Add update" }).last().click();
+      await expect(page.getByText(updateNote)).toBeVisible();
+
+      await page.reload();
+      await waitForApp(page);
+      await expect(page.locator("h1", { hasText: editedTitle })).toBeVisible();
+      await expect(page.getByText(editedDescription)).toBeVisible();
+      await expect(
+        page.getByRole("combobox", { name: "Status: In Progress" })
+      ).toBeVisible();
+      await expect(page.locator('[aria-label="Priority: critical"]')).toBeVisible();
+      await expect(page.locator('input[type="date"]')).toHaveValue("2026-06-15");
+      await expect(page.getByText(updateNote)).toBeVisible();
+
+      await expect
+        .poll(async () => getIssue(request, issue.id))
+        .toMatchObject({
+          title: editedTitle,
+          description: editedDescription,
+          status: "in_progress",
+          priority: "critical",
+          due_date: "2026-06-15",
+        });
+      await expect
+        .poll(async () => getIssueUpdates(request, issue.id))
+        .toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              note: updateNote,
+              previous_status: "in_progress",
+              new_status: "in_progress",
+            }),
+            expect.objectContaining({
+              previous_status: "open",
+              new_status: "in_progress",
+            }),
+          ])
+        );
+
+      await page.getByRole("button", { name: "Delete issue" }).click();
+      await page.getByRole("button", { name: "Yes, delete" }).click();
+      await expect(page).toHaveURL("/dashboard");
+      await expect
+        .poll(async () => getIssue(request, issue.id))
+        .toBeUndefined();
+    } finally {
+      await deleteIssue(request, issue.id).catch(() => undefined);
+    }
   });
 });
 
