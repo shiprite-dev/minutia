@@ -26,6 +26,10 @@ export default function LoginPage() {
 
   const publicSignupEnabled =
     process.env.NEXT_PUBLIC_ENABLE_PUBLIC_SIGNUP === "true";
+  const googleAuthEnabled =
+    process.env.NEXT_PUBLIC_ENABLE_GOOGLE_AUTH === "true";
+  const guestLoginEnabled =
+    process.env.NEXT_PUBLIC_ENABLE_GUEST_LOGIN === "true";
   const canSignIn = email.trim().length > 0 && password.length > 0;
   const canSignUp =
     publicSignupEnabled && email.trim().length > 0 && password.length >= 8;
@@ -278,33 +282,36 @@ export default function LoginPage() {
               </Button>
             </form>
 
-            {/* Google OAuth */}
-            <Button
-              type="button"
-              variant="outline"
-              onClick={handleGoogleLogin}
-              className="h-10 w-full rounded-[12px] border-rule bg-paper font-sans font-medium text-ink hover:bg-paper-3"
-            >
-              <GoogleIcon />
-              Google
-            </Button>
+            {googleAuthEnabled && (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleGoogleLogin}
+                className="h-10 w-full rounded-[12px] border-rule bg-paper font-sans font-medium text-ink hover:bg-paper-3"
+              >
+                <GoogleIcon />
+                Google
+              </Button>
+            )}
 
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={handleGuestLogin}
-              disabled={formState === "loading"}
-              className="h-10 w-full rounded-[12px] font-sans text-sm text-ink-3 hover:bg-paper-3 hover:text-ink-2"
-            >
-              {formState === "loading" ? (
-                <span className="flex items-center gap-2">
-                  <LoadingDots />
-                  Signing in
-                </span>
-              ) : (
-                "Sign in as Guest"
-              )}
-            </Button>
+            {guestLoginEnabled && (
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={handleGuestLogin}
+                disabled={formState === "loading"}
+                className="h-10 w-full rounded-[12px] font-sans text-sm text-ink-3 hover:bg-paper-3 hover:text-ink-2"
+              >
+                {formState === "loading" ? (
+                  <span className="flex items-center gap-2">
+                    <LoadingDots />
+                    Signing in
+                  </span>
+                ) : (
+                  "Sign in as Guest"
+                )}
+              </Button>
+            )}
           </>
         )}
       </div>

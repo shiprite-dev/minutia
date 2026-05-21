@@ -15,7 +15,8 @@ test.describe("Authentication", () => {
     await expect(page.getByRole("button", { name: "Sign in", exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "Create account" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Email magic link" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Google" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Google" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Sign in as Guest" })).toHaveCount(0);
   });
 
   test("password form validates credentials", async ({ page }) => {
@@ -29,6 +30,8 @@ test.describe("Authentication", () => {
     await expect(signInButton).toBeDisabled();
     await expect(magicLinkButton).toBeDisabled();
     await expect(page.getByRole("button", { name: "Create account" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Google" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Sign in as Guest" })).toHaveCount(0);
 
     await emailInput.fill("test@example.com");
     await expect(magicLinkButton).toBeEnabled();

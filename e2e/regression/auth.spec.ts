@@ -25,10 +25,12 @@ test.describe("Login Page", () => {
     ).toBeVisible();
 
     await expect(page.getByText("or continue with")).toBeVisible();
-    await expect(page.getByRole("button", { name: "Google" })).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Google" })
+    ).toHaveCount(0);
     await expect(
       page.getByRole("button", { name: "Sign in as Guest" })
-    ).toBeVisible();
+    ).toHaveCount(0);
 
     await expect(
       page.getByText("Open source. Self-host free forever.")
@@ -44,6 +46,8 @@ test.describe("Login Page", () => {
     await expect(signInButton).toBeDisabled();
     await expect(magicLinkButton).toBeDisabled();
     await expect(page.getByRole("button", { name: "Create account" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Google" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Sign in as Guest" })).toHaveCount(0);
 
     await page.getByPlaceholder("you@company.com").fill("test@example.com");
     await expect(magicLinkButton).toBeEnabled();
