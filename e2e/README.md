@@ -51,8 +51,8 @@ pnpm test:e2e --debug
 
 Authenticated tests require a logged-in session. The `e2e/setup/auth.setup.ts` file handles this automatically:
 
-1. Calls the Supabase Auth API directly to sign in `test@example.com`
-2. Sets the auth cookie in the browser context
+1. Opens `/login`
+2. Signs in through the password form as `test@example.com`
 3. Saves `e2e/.auth/user.json` for reuse across test files
 
 The setup project runs before the main `chromium` project (see `playwright.config.ts`).
