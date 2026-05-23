@@ -37,5 +37,6 @@ export const SHARE_TOKENS = {
 };
 
 export async function waitForApp(page: Page) {
-  await page.waitForLoadState("networkidle");
+  await page.waitForLoadState("domcontentloaded");
+  await page.locator("body").waitFor({ state: "visible" });
 }

@@ -1,0 +1,127 @@
+#!/usr/bin/env node
+import { createHmac, randomBytes } from "node:crypto";
+import { existsSync, writeFileSync } from "node:fs";
+
+const args = new Map();
+for (let i = 2; i < process.argv.length; i += 1) {
+  const arg = process.argv[i];
+  if (arg.startsWith("--")) {
+    const [key, value] = arg.includes("=") ? arg.slice(2).split("=", 2) : [arg.slice(2), process.argv[i + 1]];
+    args.set(key, value === undefined || value.startsWith?.("--") ? true : value);
+    if (value !== undefined && !value.startsWith?.("--") && !arg.includes("=")) i += 1;
+  }
+}
+
+const out = String(args.get("out") || ".env");
+const force = args.has("force");
+const url = normalizeUrl(String(args.get("url") || args.get("host") || "http://localhost"));
+const publicHost = new URL(url).host;
+const siteAddress = url.startsWith("https://") ? publicHost : url;
+
+if (existsSync(out) && !force) {
+  console.error(`${out} already exists. Pass --force to replace it.`);
+  process.exit(1);
+}
+
+const jwtSecret = randomBase64(48);
+const anonKey = signJwt(jwtSecret, "anon");
+const serviceRoleKey = signJwt(jwtSecret, "service_role");
+const postgresPassword = randomBase64Url(30);
+const secretKeyBase = randomBase64(48);
+
+const env = `# Generated for Minutia self-hosting.
+# Keep this file private.
+
+PUBLIC_URL=${url}
+MINUTIA_APP_SITE_ADDRESS=${siteAddress}
+
+WEB_BIND=127.0.0.1
+WEB_PORT=3000
+KONG_BIND=127.0.0.1
+KONG_HTTP_PORT=8000
+SUPABASE_HOST=${publicHost}
+
+JWT_SECRET=${jwtSecret}
+ANON_KEY=${anonKey}
+SERVICE_ROLE_KEY=${serviceRoleKey}
+NEXT_PUBLIC_SUPABASE_URL=${url}
+NEXT_PUBLIC_SUPABASE_ANON_KEY=${anonKey}
+SUPABASE_SERVICE_ROLE_KEY=${serviceRoleKey}
+
+SITE_URL=${url}
+API_EXTERNAL_URL=${url}
+
+POSTGRES_PASSWORD=${postgresPassword}
+POSTGRES_DB=minutia
+JWT_EXPIRY=3600
+SECRET_KEY_BASE=${secretKeyBase}
+
+DISABLE_SIGNUP=false
+ENABLE_EMAIL_AUTOCONFIRM=true
+ENABLE_EMAIL_SIGNUP=true
+ENABLE_ANONYMOUS_SIGN_INS=false
+ADDITIONAL_REDIRECT_URLS=
+
+SMTP_HOST=
+SMTP_PORT=587
+SMTP_USER=
+SMTP_PASS=
+SMTP_ADMIN_EMAIL=admin@localhost
+SMTP_SENDER_NAME=Minutia
+EMAIL_FROM=noreply@localhost
+
+AI_API_KEY=
+AI_MODEL=claude-sonnet-4-6
+
+RESEND_API_KEY=
+ENABLE_GOOGLE_AUTH=false
+GOOGLE_AUTH_CLIENT_ID=
+GOOGLE_AUTH_CLIENT_SECRET=
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+GOOGLE_REDIRECT_URI=${url}/api/auth/google/callback
+GOOGLE_TOKEN_ENCRYPTION_KEY=
+
+PLAUSIBLE_DOMAIN=
+SENTRY_DSN=
+
+STRIPE_SECRET_KEY=
+STRIPE_WEBHOOK_SECRET=
+NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=
+`;
+
+writeFileSync(out, env, { mode: 0o600 });
+console.log(`Wrote ${out}`);
+console.log(`Public URL: ${url}`);
+
+function normalizeUrl(value) {
+  if (value.startsWith("http://") || value.startsWith("https://")) return value.replace(/\/$/, "");
+  return `http://${value.replace(/\/$/, "")}`;
+}
+
+function randomBase64(bytes) {
+  return randomBytes(bytes).toString("base64");
+}
+
+function randomBase64Url(bytes) {
+  return randomBytes(bytes).toString("base64url");
+}
+
+function signJwt(secret, role) {
+  const now = Math.floor(Date.now() / 1000);
+  const payload = {
+    aud: "authenticated",
+    exp: now + 60 * 60 * 24 * 365 * 10,
+    iat: now,
+    iss: "supabase",
+    role,
+  };
+  const header = { alg: "HS256", typ: "JWT" };
+  const body = `${base64UrlJson(header)}.${base64UrlJson(payload)}`;
+  const signature = createHmac("sha256", secret).update(body).digest("base64url");
+  return `${body}.${signature}`;
+}
+
+function base64UrlJson(value) {
+  return Buffer.from(JSON.stringify(value)).toString("base64url");
+}

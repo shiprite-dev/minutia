@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { createClient as createSupabaseAdmin } from "@supabase/supabase-js";
 import { NextResponse, type NextRequest } from "next/server";
+import { getSupabaseServerUrl } from "@/lib/supabase/url";
 
 const SECURITY_HEADERS: Record<string, string> = {
   "X-Frame-Options": "DENY",
@@ -19,7 +20,7 @@ async function isSetupCompleted(): Promise<boolean> {
   if (setupCompletedCache === true) return true;
 
   try {
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const url = getSupabaseServerUrl();
     const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
     if (!url || !key) return true;
 
@@ -86,6 +87,10 @@ function applySecurityHeaders(response: NextResponse): NextResponse {
   return response;
 }
 
+function safeNextPath(pathname: string, search: string) {
+  return `${pathname}${search}`;
+}
+
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
   const ip = getClientIp(request);
@@ -121,7 +126,7 @@ export async function middleware(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
 
   const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    getSupabaseServerUrl(),
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
@@ -145,19 +150,25 @@ export async function middleware(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const publicPaths = ["/login", "/auth/callback", "/share", "/setup", "/api/setup", "/api/admin"];
+  const publicPaths = ["/login", "/auth/callback", "/share", "/setup", "/api/setup", "/api/admin", "/api/invite-requests"];
   const isPublicPath = publicPaths.some((p) => pathname.startsWith(p));
 
   if (!user && !isPublicPath) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
+    url.searchParams.set("next", safeNextPath(pathname, request.nextUrl.search));
     const redirect = NextResponse.redirect(url);
     return applySecurityHeaders(redirect);
   }
 
   if (user && pathname === "/login") {
     const url = request.nextUrl.clone();
-    url.pathname = "/";
+    const next = request.nextUrl.searchParams.get("next");
+    const target = next && next.startsWith("/") && !next.startsWith("//")
+      ? new URL(next, request.url)
+      : new URL("/", request.url);
+    url.pathname = target.pathname;
+    url.search = target.search;
     const redirect = NextResponse.redirect(url);
     return applySecurityHeaders(redirect);
   }
