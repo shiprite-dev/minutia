@@ -20,6 +20,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { ShareButton } from "@/components/minutia/share-button";
+import { SendMeetingNotesButton } from "@/components/minutia/send-meeting-notes-button";
 import { ArrowLeft, Square, Play, Check, X, Copy, CheckCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatShortDate } from "@/lib/date-utils";
@@ -1075,7 +1076,13 @@ export function MeetingDetailContent({
               {formatMeetingDate(meeting.date)}
             </p>
           </div>
-          <ShareButton resource_type="meeting" resource_id={meetingId} />
+          <div className="flex items-center gap-2">
+            <SendMeetingNotesButton
+              meetingId={meetingId}
+              attendees={meeting.attendees ?? series?.default_attendees ?? []}
+            />
+            <ShareButton resource_type="meeting" resource_id={meetingId} />
+          </div>
         </div>
 
         {meeting.attendees && meeting.attendees.length > 0 && (

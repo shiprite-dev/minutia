@@ -10,8 +10,6 @@ import type {
   Issue,
   Decision,
   IssueUpdate,
-  IssueCategory,
-  IssueStatus,
   Priority,
 } from "@/lib/types";
 
@@ -21,16 +19,31 @@ import type {
 
 type ServerSupabaseClient = Awaited<ReturnType<typeof createClient>>;
 
-async function getGuestShareByToken(
+type GuestSharePayload = {
+  share: GuestShare;
+  resource_type: "meeting" | "series" | "issue";
+  meeting?: Meeting;
+  series?: MeetingSeries | null;
+  issue?: Issue;
+  meetings?: Meeting[];
+  issues?: Issue[];
+  open_issues?: Issue[];
+  open_issues_count?: number;
+  decisions?: Decision[];
+  updates?: IssueUpdate[];
+  updated_at?: string;
+};
+
+async function getGuestSharePayload(
   supabase: ServerSupabaseClient,
   token: string
 ) {
-  const { data, error } = await supabase
-    .rpc("get_guest_share_by_token", { share_token: token })
-    .maybeSingle();
+  const { data, error } = await supabase.rpc("get_guest_share_payload", {
+    share_token: token,
+  });
 
   return {
-    data: data ? (data as GuestShare) : null,
+    data: data ? (data as GuestSharePayload) : null,
     error,
   };
 }
@@ -224,7 +237,7 @@ function MeetingShareView({
   issues: Issue[];
   decisions: Decision[];
   share: GuestShare;
-  updatedAt: string;
+  updatedAt: string | Date;
 }) {
   return (
     <ShareLayout expiresAt={share.expires_at}>
@@ -616,9 +629,9 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { token } = await params;
   const supabase = await createClient();
-  const { data: share } = await getGuestShareByToken(supabase, token);
+  const { data: payload } = await getGuestSharePayload(supabase, token);
 
-  const type = share?.resource_type ?? "resource";
+  const type = payload?.resource_type ?? "resource";
   return {
     title: `Shared ${type} | Minutia`,
   };
@@ -639,7 +652,8 @@ export default async function GuestSharePage({
   // 0. If the visitor is a registered user, create a notification and redirect to inbox
   const { data: { user } } = await supabase.auth.getUser();
   if (user) {
-    const { data: existingShare } = await getGuestShareByToken(supabase, token);
+    const { data: existingPayload } = await getGuestSharePayload(supabase, token);
+    const existingShare = existingPayload?.share;
 
     if (existingShare) {
       // Check if notification already exists for this share to avoid duplicates
@@ -680,13 +694,14 @@ export default async function GuestSharePage({
     }
   }
 
-  // 1. Look up the guest share by token through a scoped RPC, not direct table access.
-  const { data: share, error: shareError } = await getGuestShareByToken(
+  // 1. Fetch a token-scoped, view-only payload. Anonymous visitors never query
+  // shared tables directly.
+  const { data: payload, error: shareError } = await getGuestSharePayload(
     supabase,
     token
   );
 
-  if (shareError || !share) {
+  if (shareError || !payload) {
     return (
       <ErrorView
         title="Invalid share link"
@@ -695,28 +710,11 @@ export default async function GuestSharePage({
     );
   }
 
-  const guestShare = share as GuestShare;
+  const guestShare = payload.share;
 
-  // 2. Check expiration
-  if (guestShare.expires_at && new Date(guestShare.expires_at) < new Date()) {
-    return (
-      <ErrorView
-        title="Share link expired"
-        description="This share link has expired."
-      />
-    );
-  }
-
-  // 3. Fetch resource based on type
-  if (guestShare.resource_type === "meeting") {
-    // Fetch meeting with issues and decisions
-    const { data: meeting, error: meetingError } = await supabase
-      .from("meetings")
-      .select("*, issues!issues_raised_in_meeting_id_fkey(*), decisions(*)")
-      .eq("id", guestShare.resource_id)
-      .single();
-
-    if (meetingError || !meeting) {
+  // 2. Render resource based on the token-scoped payload type.
+  if (payload.resource_type === "meeting") {
+    if (!payload.meeting) {
       return (
         <ErrorView
           title="Meeting not found"
@@ -725,37 +723,20 @@ export default async function GuestSharePage({
       );
     }
 
-    // Fetch series info
-    const { data: series } = await supabase
-      .from("meeting_series")
-      .select("*")
-      .eq("id", meeting.series_id)
-      .single();
-
-    const issues = (meeting as any).issues ?? [];
-    const decisions = (meeting as any).decisions ?? [];
-
     return (
       <MeetingShareView
-        meeting={meeting as any}
-        series={series as MeetingSeries | null}
-        issues={issues}
-        decisions={decisions}
+        meeting={payload.meeting}
+        series={payload.series ?? null}
+        issues={payload.issues ?? []}
+        decisions={payload.decisions ?? []}
         share={guestShare}
-        updatedAt={meeting.completed_at ?? meeting.created_at}
+        updatedAt={payload.updated_at ?? payload.meeting.created_at}
       />
     );
   }
 
-  if (guestShare.resource_type === "series") {
-    // Fetch series with meetings
-    const { data: series, error: seriesError } = await supabase
-      .from("meeting_series")
-      .select("*, meetings(*)")
-      .eq("id", guestShare.resource_id)
-      .single();
-
-    if (seriesError || !series) {
+  if (payload.resource_type === "series") {
+    if (!payload.series) {
       return (
         <ErrorView
           title="Series not found"
@@ -764,33 +745,19 @@ export default async function GuestSharePage({
       );
     }
 
-    // Fetch open issues for this series
-    const { data: openIssues, count } = await supabase
-      .from("issues")
-      .select("*", { count: "exact" })
-      .eq("series_id", guestShare.resource_id)
-      .not("status", "in", '("resolved","dropped")');
-
     return (
       <SeriesShareView
-        series={series as unknown as MeetingSeries}
-        meetings={(series as any).meetings ?? []}
-        openIssuesCount={count ?? 0}
-        openIssues={(openIssues as Issue[]) ?? []}
+        series={payload.series}
+        meetings={payload.meetings ?? []}
+        openIssuesCount={payload.open_issues_count ?? 0}
+        openIssues={payload.open_issues ?? []}
         share={guestShare}
       />
     );
   }
 
-  if (guestShare.resource_type === "issue") {
-    // Fetch issue with updates
-    const { data: issue, error: issueError } = await supabase
-      .from("issues")
-      .select("*, issue_updates(*)")
-      .eq("id", guestShare.resource_id)
-      .single();
-
-    if (issueError || !issue) {
+  if (payload.resource_type === "issue") {
+    if (!payload.issue) {
       return (
         <ErrorView
           title="Issue not found"
@@ -801,8 +768,8 @@ export default async function GuestSharePage({
 
     return (
       <IssueShareView
-        issue={issue as unknown as Issue}
-        updates={((issue as any).issue_updates ?? []) as IssueUpdate[]}
+        issue={payload.issue}
+        updates={payload.updates ?? []}
         share={guestShare}
       />
     );

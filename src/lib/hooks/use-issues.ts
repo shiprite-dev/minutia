@@ -107,7 +107,7 @@ export function useCreateIssue() {
           series_id: input.series_id,
           status: "open" as IssueStatus,
           source: "manual",
-          owner_user_id: user.id,
+          owner_user_id: input.owner_name ? null : user.id,
         })
         .select()
         .single();
@@ -166,22 +166,19 @@ export function useUpdateIssueStatus() {
 
       if (issueError) throw issueError;
 
-      // Create the IssueUpdate record (only if within a meeting context)
-      if (meetingId) {
-        const { error: updateError } = await supabase
-          .from("issue_updates")
-          .insert({
-            issue_id: issueId,
-            meeting_id: meetingId,
-            updated_by: user?.id ?? "",
-            author_type: "human",
-            previous_status: oldStatus,
-            new_status: newStatus,
-            note: note ?? null,
-          });
+      const { error: updateError } = await supabase
+        .from("issue_updates")
+        .insert({
+          issue_id: issueId,
+          meeting_id: meetingId ?? null,
+          updated_by: user?.id ?? "",
+          author_type: "human",
+          previous_status: oldStatus,
+          new_status: newStatus,
+          note: note ?? "",
+        });
 
-        if (updateError) throw updateError;
-      }
+      if (updateError) throw updateError;
 
       return issue as Issue;
     },

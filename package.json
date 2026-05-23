@@ -38,6 +38,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "deploy:env": "node scripts/generate-self-host-env.mjs",
+    "***": "bash scripts/***.sh",
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed",
     "test:e2e:ui": "playwright test --ui",

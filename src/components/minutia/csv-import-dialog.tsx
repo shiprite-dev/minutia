@@ -254,7 +254,7 @@ export function CsvImportDialog({
             series_id: seriesId,
             raised_in_meeting_id: meetingId,
             source: "manual" as const,
-            owner_user_id: user.id,
+            owner_user_id: null,
           };
 
           for (const [col, field] of Object.entries(mapping)) {

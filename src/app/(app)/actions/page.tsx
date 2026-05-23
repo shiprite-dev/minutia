@@ -122,12 +122,19 @@ export default function MyActionsPage() {
     return map;
   }, [seriesList]);
 
-  // Filter issues relevant to the current user
+  // Filter issues assigned to the current user
   const myIssues = React.useMemo(() => {
     if (!issues || !profile) return [];
-    return issues.filter(
-      (i) => i.owner_user_id === profile.id,
-    );
+    return issues.filter((i) => {
+      if (i.owner_name) {
+        const name = i.owner_name.toLowerCase();
+        return (
+          name === profile.email.toLowerCase() ||
+          name === profile.name?.toLowerCase()
+        );
+      }
+      return i.owner_user_id === profile.id;
+    });
   }, [issues, profile]);
 
   // Group into sections
