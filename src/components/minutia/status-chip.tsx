@@ -112,6 +112,7 @@ export function StatusChip({ status, onChange, readonly }: StatusChipProps) {
       >
         <button
           type="button"
+          data-status={status}
           role={isInteractive ? "combobox" : undefined}
           aria-expanded={isInteractive ? expanded : undefined}
           aria-label={`Status: ${config.label}`}
