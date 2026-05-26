@@ -34,7 +34,6 @@ export function useSeries() {
       const { data, error } = await supabase
         .from("meeting_series")
         .select("*, issues(count)")
-        .eq("owner_id", user.id)
         .order("updated_at", { ascending: false });
 
       if (error) throw error;
