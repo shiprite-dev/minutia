@@ -40,6 +40,7 @@
     "lint": "eslint",
     "deploy:env": "node scripts/generate-self-host-env.mjs",
     "deploy:vps": "bash scripts/deploy-minutia-vps.sh",
+    "test:ci-workflows": "node scripts/verify-ci-playwright-shards.mjs",
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed",
     "test:e2e:ui": "playwright test --ui",
