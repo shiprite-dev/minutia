@@ -13,6 +13,53 @@ function safeNextPath(value: string | undefined) {
   return value;
 }
 
+function shareTokenFromPath(nextPath: string) {
+  const pathname = new URL(nextPath, "http://localhost").pathname;
+  const [, share, token] = pathname.split("/");
+  return share === "share" && token ? decodeURIComponent(token) : null;
+}
+
+async function getGlobalAdminEmails(
+  supabase: ReturnType<typeof createServiceRoleClient>
+) {
+  const { data: admins } = await supabase
+    .from("profiles")
+    .select("email")
+    .eq("role", "admin")
+    .limit(5);
+
+  return (admins ?? [])
+    .map((admin) => admin.email)
+    .filter(Boolean);
+}
+
+async function getShareOrganizationAdminEmails(
+  supabase: ReturnType<typeof createServiceRoleClient>,
+  token: string | null
+) {
+  if (!token) return [];
+
+  const { data: share } = await supabase
+    .from("guest_shares")
+    .select("organization_id")
+    .eq("token", token)
+    .maybeSingle();
+
+  if (!share?.organization_id) return [];
+
+  const { data: admins } = await supabase
+    .from("organization_members")
+    .select("profiles!organization_members_user_id_fkey(email)")
+    .eq("organization_id", share.organization_id)
+    .eq("role", "admin")
+    .limit(10);
+
+  return (admins ?? [])
+    .flatMap((admin) => admin.profiles ?? [])
+    .map((profile) => profile.email)
+    .filter(Boolean);
+}
+
 export async function POST(request: NextRequest) {
   let body: unknown;
   try {
@@ -30,19 +77,17 @@ export async function POST(request: NextRequest) {
   }
 
   const supabase = createServiceRoleClient();
-  const { data: admins } = await supabase
-    .from("profiles")
-    .select("email")
-    .eq("role", "admin")
-    .limit(5);
-
-  const adminEmails = (admins ?? [])
-    .map((admin) => admin.email)
-    .filter(Boolean);
+  const nextPath = safeNextPath(parsed.data.next);
+  const shareAdminEmails = await getShareOrganizationAdminEmails(
+    supabase,
+    shareTokenFromPath(nextPath)
+  );
+  const adminEmails = shareAdminEmails.length
+    ? shareAdminEmails
+    : await getGlobalAdminEmails(supabase);
   const to = adminEmails.length
     ? adminEmails
     : [process.env.SMTP_ADMIN_EMAIL || process.env.EMAIL_FROM || "admin@localhost"];
-  const nextPath = safeNextPath(parsed.data.next);
   const requestedUrl = absoluteAppUrl(request.url, nextPath);
 
   try {
