@@ -776,7 +776,7 @@ export function MeetingDetailContent({
                 <h1 className="font-display text-base font-semibold text-ink leading-tight">
                   {series?.name}
                   {meetingSequence && (
-                    <span className="text-ink-3 font-normal"> — M-{meetingSequence}</span>
+                    <span className="text-ink-3 font-normal"> - M-{meetingSequence}</span>
                   )}
                 </h1>
                 <p className="text-xs font-mono text-ink-4">

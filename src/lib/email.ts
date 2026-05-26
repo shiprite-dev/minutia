@@ -63,6 +63,19 @@ export async function sendMail(message: MailMessage) {
     process.env.EMAIL_FROM ||
     process.env.SMTP_ADMIN_EMAIL ||
     "Minutia <noreply@localhost>";
+  const testOutbox = process.env.MINUTIA_TEST_EMAIL_OUTBOX;
+
+  if (testOutbox) {
+    const { appendFile, mkdir } = await import("node:fs/promises");
+    const { dirname } = await import("node:path");
+
+    await mkdir(dirname(testOutbox), { recursive: true });
+    await appendFile(
+      testOutbox,
+      `${JSON.stringify({ ...message, from, sentAt: new Date().toISOString() })}\n`
+    );
+    return;
+  }
 
   if (apiKey) {
     const res = await fetch("https://api.resend.com/emails", {
