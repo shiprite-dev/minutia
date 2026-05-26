@@ -208,4 +208,23 @@ test.describe("Instance config schema", () => {
       expect(data[0].role).toBe("user");
     }
   });
+
+  test("organization tenancy tables are exposed to service role", async ({ request }) => {
+    if (!SERVICE_KEY) {
+      test.skip();
+      return;
+    }
+
+    const orgRes = await request.get(
+      `${SUPABASE_URL}/rest/v1/organizations?select=id,name,slug&limit=1`,
+      { headers: supabaseHeaders() }
+    );
+    expect(orgRes.ok()).toBeTruthy();
+
+    const memberRes = await request.get(
+      `${SUPABASE_URL}/rest/v1/organization_members?select=organization_id,user_id,role&limit=1`,
+      { headers: supabaseHeaders() }
+    );
+    expect(memberRes.ok()).toBeTruthy();
+  });
 });

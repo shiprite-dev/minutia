@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTheme } from "next-themes";
 import { useProfile, useUpdateProfile } from "@/lib/hooks/use-profile";
 import {
@@ -13,7 +13,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Sun, Moon, Monitor, Download, Calendar, Unplug } from "lucide-react";
+import { Sun, Moon, Monitor, Download, Calendar, Unplug, UserPlus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useIssues } from "@/lib/hooks/use-issues";
 import { issuesToCsv, issuesToJson, downloadFile } from "@/lib/export";
@@ -28,6 +28,25 @@ const themeOptions = [
   { value: "system", label: "System", icon: Monitor },
 ] as const;
 
+type OrgAdminData = {
+  organization: { id: string; name: string; slug: string };
+  members: {
+    user_id: string;
+    role: "admin" | "member";
+    profiles?: { email?: string; name?: string | null } | null;
+  }[];
+  invitations: {
+    id: string;
+    email: string;
+    role: "admin" | "member";
+    status: "pending" | "accepted" | "revoked";
+  }[];
+};
+
+type HostedOrgData = {
+  organizations: { id: string; name: string; slug: string; created_at: string }[];
+};
+
 export default function SettingsPage() {
   const { data: profile, isLoading } = useProfile();
   const updateProfile = useUpdateProfile();
@@ -38,6 +57,16 @@ export default function SettingsPage() {
 
   const [name, setName] = useState("");
   const [nameInitialized, setNameInitialized] = useState(false);
+  const [orgAdmin, setOrgAdmin] = useState<OrgAdminData | null>(null);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteRole, setInviteRole] = useState<"member" | "admin">("member");
+  const [inviteState, setInviteState] = useState<"idle" | "loading" | "sent" | "error">("idle");
+  const [inviteMessage, setInviteMessage] = useState("");
+  const [hostedOrgs, setHostedOrgs] = useState<HostedOrgData | null>(null);
+  const [newOrgName, setNewOrgName] = useState("");
+  const [newOrgAdminEmail, setNewOrgAdminEmail] = useState("");
+  const [newOrgState, setNewOrgState] = useState<"idle" | "loading" | "created" | "error">("idle");
+  const [newOrgMessage, setNewOrgMessage] = useState("");
 
   // Sync profile name once loaded
   if (profile?.name && !nameInitialized) {
@@ -48,10 +77,82 @@ export default function SettingsPage() {
   const isDirty = name !== (profile?.name ?? "");
   const isValid = name.trim().length >= 1 && name.length <= 100;
 
+  useEffect(() => {
+    fetch("/api/admin/invitations")
+      .then(async (res) => {
+        if (!res.ok) return null;
+        return res.json();
+      })
+      .then(setOrgAdmin)
+      .catch(() => setOrgAdmin(null));
+
+    fetch("/api/admin/organizations")
+      .then(async (res) => {
+        if (!res.ok) return null;
+        return res.json();
+      })
+      .then(setHostedOrgs)
+      .catch(() => setHostedOrgs(null));
+  }, []);
+
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!isValid) return;
     updateProfile.mutate({ name: name.trim() });
+  }
+
+  async function handleInvite(e: React.FormEvent) {
+    e.preventDefault();
+    setInviteState("loading");
+    setInviteMessage("");
+
+    const res = await fetch("/api/admin/invitations", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: inviteEmail, role: inviteRole }),
+    });
+    const data = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      setInviteState("error");
+      setInviteMessage(data.error || "Failed to send invitation.");
+      return;
+    }
+
+    setInviteState("sent");
+    setInviteMessage("Invitation sent.");
+    setInviteEmail("");
+    const refreshed = await fetch("/api/admin/invitations").then((r) => r.json());
+    setOrgAdmin(refreshed);
+  }
+
+  async function handleCreateOrganization(e: React.FormEvent) {
+    e.preventDefault();
+    setNewOrgState("loading");
+    setNewOrgMessage("");
+
+    const res = await fetch("/api/admin/organizations", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: newOrgName,
+        admin_email: newOrgAdminEmail,
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      setNewOrgState("error");
+      setNewOrgMessage(data.error || "Failed to create organization.");
+      return;
+    }
+
+    setNewOrgState("created");
+    setNewOrgMessage("Organization created and admin invited.");
+    setNewOrgName("");
+    setNewOrgAdminEmail("");
+    const refreshed = await fetch("/api/admin/organizations").then((r) => r.json());
+    setHostedOrgs(refreshed);
   }
 
   if (isLoading) {
@@ -108,6 +209,121 @@ export default function SettingsPage() {
             </form>
           </CardContent>
         </Card>
+
+        {orgAdmin && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Workspace access</CardTitle>
+              <CardDescription>
+                Invite teammates into {orgAdmin.organization.name}.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <form onSubmit={handleInvite} className="grid gap-3 sm:grid-cols-[1fr_auto_auto]">
+                <Input
+                  type="email"
+                  placeholder="teammate@company.com"
+                  value={inviteEmail}
+                  onChange={(e) => setInviteEmail(e.target.value)}
+                />
+                <select
+                  value={inviteRole}
+                  onChange={(e) => setInviteRole(e.target.value as "member" | "admin")}
+                  className="h-10 rounded-md border border-rule bg-paper px-3 text-sm text-ink"
+                >
+                  <option value="member">Member</option>
+                  <option value="admin">Admin</option>
+                </select>
+                <Button type="submit" size="sm" disabled={inviteState === "loading" || !inviteEmail}>
+                  <UserPlus className="size-3.5" />
+                  {inviteState === "loading" ? "Sending" : "Invite"}
+                </Button>
+              </form>
+              {inviteMessage && (
+                <p className={cn("text-xs", inviteState === "error" ? "text-danger" : "text-success")}>
+                  {inviteMessage}
+                </p>
+              )}
+              <div className="space-y-2">
+                {orgAdmin.members.map((member) => (
+                  <div key={member.user_id} className="flex items-center justify-between border-b border-rule pb-2 text-sm last:border-b-0">
+                    <div>
+                      <p className="font-medium text-ink">{member.profiles?.name || member.profiles?.email}</p>
+                      <p className="text-xs text-ink-3">{member.profiles?.email}</p>
+                    </div>
+                    <span className="rounded-md bg-paper-2 px-2 py-1 text-xs capitalize text-ink-2">
+                      {member.role}
+                    </span>
+                  </div>
+                ))}
+                {orgAdmin.invitations
+                  .filter((invite) => invite.status === "pending")
+                  .map((invite) => (
+                    <div key={invite.id} className="flex items-center justify-between border-b border-rule pb-2 text-sm last:border-b-0">
+                      <div>
+                        <p className="font-medium text-ink">{invite.email}</p>
+                        <p className="text-xs text-ink-3">Pending invitation</p>
+                      </div>
+                      <span className="rounded-md bg-paper-2 px-2 py-1 text-xs capitalize text-ink-2">
+                        {invite.role}
+                      </span>
+                    </div>
+                  ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {hostedOrgs && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Hosted organizations</CardTitle>
+              <CardDescription>
+                Create isolated customer spaces. Available only in hosted mode.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <form onSubmit={handleCreateOrganization} className="grid gap-3">
+                <Input
+                  placeholder="Organization name"
+                  value={newOrgName}
+                  onChange={(e) => setNewOrgName(e.target.value)}
+                />
+                <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
+                  <Input
+                    type="email"
+                    placeholder="admin@customer.com"
+                    value={newOrgAdminEmail}
+                    onChange={(e) => setNewOrgAdminEmail(e.target.value)}
+                  />
+                  <Button
+                    type="submit"
+                    size="sm"
+                    disabled={newOrgState === "loading" || !newOrgName || !newOrgAdminEmail}
+                  >
+                    <UserPlus className="size-3.5" />
+                    {newOrgState === "loading" ? "Creating" : "Create"}
+                  </Button>
+                </div>
+              </form>
+              {newOrgMessage && (
+                <p className={cn("text-xs", newOrgState === "error" ? "text-danger" : "text-success")}>
+                  {newOrgMessage}
+                </p>
+              )}
+              <div className="space-y-2">
+                {hostedOrgs.organizations.map((organization) => (
+                  <div key={organization.id} className="flex items-center justify-between border-b border-rule pb-2 text-sm last:border-b-0">
+                    <div>
+                      <p className="font-medium text-ink">{organization.name}</p>
+                      <p className="text-xs text-ink-3">{organization.slug}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Appearance */}
         <Card>
