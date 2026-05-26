@@ -9,6 +9,7 @@ export type SharePermission = "view" | "comment";
 export type ShareResourceType = "meeting" | "series" | "issue";
 export type Theme = "light" | "dark" | "system";
 export type UserRole = "user" | "admin";
+export type OrganizationRole = "admin" | "member";
 
 export interface Profile {
   id: string;
@@ -17,8 +18,39 @@ export interface Profile {
   avatar_url: string | null;
   role: UserRole;
   has_completed_onboarding: boolean;
+  current_organization_id: string | null;
   created_at: Date;
   updated_at: Date;
+}
+
+export interface Organization {
+  id: string;
+  name: string;
+  slug: string;
+  created_by: string | null;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export interface OrganizationMember {
+  organization_id: string;
+  user_id: string;
+  role: OrganizationRole;
+  invited_by: string | null;
+  joined_at: Date;
+  created_at: Date;
+}
+
+export interface OrganizationInvitation {
+  id: string;
+  organization_id: string;
+  email: string;
+  role: OrganizationRole;
+  status: "pending" | "accepted" | "revoked";
+  invited_by: string;
+  accepted_by: string | null;
+  created_at: Date;
+  accepted_at: Date | null;
 }
 
 export interface InstanceConfig {
@@ -42,6 +74,7 @@ export interface UserSettings {
 
 export interface MeetingSeries {
   id: string;
+  organization_id: string;
   owner_id: string;
   name: string;
   description: string | null;
