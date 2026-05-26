@@ -16,8 +16,7 @@ export async function POST(request: NextRequest) {
   const { error } = await supabase
     .from("meeting_series")
     .update({ gcal_calendar_id: calendarId, gcal_sync_enabled: true })
-    .eq("id", seriesId)
-    .eq("owner_id", user.id);
+    .eq("id", seriesId);
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 400 });

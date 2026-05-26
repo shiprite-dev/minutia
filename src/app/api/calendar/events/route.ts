@@ -18,7 +18,6 @@ export async function GET(request: NextRequest) {
     .from("meeting_series")
     .select("gcal_calendar_id, gcal_sync_enabled, name")
     .eq("id", seriesId)
-    .eq("owner_id", user.id)
     .single();
 
   if (!series?.gcal_calendar_id || !series.gcal_sync_enabled) {

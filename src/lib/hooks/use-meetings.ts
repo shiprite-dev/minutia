@@ -146,15 +146,9 @@ export function useAllMeetings() {
   return useQuery<(Meeting & { issues_raised: number; issues_resolved: number })[]>({
     queryKey: [...meetingKeys.all, "dashboard"],
     queryFn: async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) throw new Error("Not authenticated");
-
       const { data, error } = await supabase
         .from("meetings")
-        .select("*, series:meeting_series!inner(owner_id), raised_issues:issues!raised_in_meeting_id(count), resolved_issues:issues!resolved_in_meeting_id(count)")
-        .eq("series.owner_id", user.id)
+        .select("*, raised_issues:issues!raised_in_meeting_id(count), resolved_issues:issues!resolved_in_meeting_id(count)")
         .order("date", { ascending: true })
         .limit(20);
 
@@ -181,18 +175,12 @@ export function useMeetingsByMonth(year: number, month: number) {
   return useQuery<MeetingWithSeries[]>({
     queryKey: [...meetingKeys.all, "month", year, month],
     queryFn: async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) throw new Error("Not authenticated");
-
       const start = new Date(year, month, 1);
       const end = new Date(year, month + 1, 0, 23, 59, 59);
 
       const { data, error } = await supabase
         .from("meetings")
-        .select("*, series:meeting_series!inner(owner_id, name)")
-        .eq("series.owner_id", user.id)
+        .select("*, series:meeting_series!inner(name)")
         .gte("date", start.toISOString())
         .lte("date", end.toISOString())
         .order("date", { ascending: true });
