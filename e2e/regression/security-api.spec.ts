@@ -151,6 +151,7 @@ test.describe("Guest share API security", () => {
     const admin = serviceClient();
     const email = `foreign-owner-${Date.now()}@example.com`;
     const seriesId = crypto.randomUUID();
+    const orgId = crypto.randomUUID();
 
     const { data: userData, error: userError } = await admin.auth.admin.createUser({
       email,
@@ -169,10 +170,32 @@ test.describe("Guest share API security", () => {
     });
     expect(profileError).toBeNull();
 
+    const { error: orgError } = await admin.from("organizations").insert({
+      id: orgId,
+      name: "Foreign Private Org",
+      slug: `foreign-private-${Date.now()}`,
+      created_by: foreignUserId,
+    });
+    expect(orgError).toBeNull();
+
+    const { error: membershipError } = await admin.from("organization_members").insert({
+      organization_id: orgId,
+      user_id: foreignUserId,
+      role: "admin",
+    });
+    expect(membershipError).toBeNull();
+
+    const { error: currentOrgError } = await admin
+      .from("profiles")
+      .update({ current_organization_id: orgId })
+      .eq("id", foreignUserId);
+    expect(currentOrgError).toBeNull();
+
     const { error: seriesError } = await admin.from("meeting_series").insert({
       id: seriesId,
       name: "Foreign Private Series",
       owner_id: foreignUserId,
+      organization_id: orgId,
     });
     expect(seriesError).toBeNull();
 
@@ -202,6 +225,7 @@ test.describe("Guest share API security", () => {
       await expect(verify.json()).resolves.toEqual([]);
     } finally {
       await admin.from("guest_shares").delete().eq("resource_id", seriesId);
+      await admin.from("organizations").delete().eq("id", orgId);
       await admin.auth.admin.deleteUser(foreignUserId);
     }
   });
