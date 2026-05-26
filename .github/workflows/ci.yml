@@ -67,6 +67,9 @@ jobs:
         if: steps.playwright-cache.outputs.cache-hit == 'true'
         run: npx playwright install-deps chromium
 
+      - name: Stop stale Supabase containers
+        run: npx supabase stop --no-backup || true
+
       - name: Start Supabase
         run: npx supabase start
 
