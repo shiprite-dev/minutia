@@ -29,6 +29,9 @@ jobs:
       - name: Lint
         run: pnpm lint
 
+      - name: Verify CI workflow contracts
+        run: pnpm test:ci-workflows
+
       - name: Build (includes typecheck)
         run: pnpm build
         env:
@@ -36,9 +39,13 @@ jobs:
           NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder
 
   e2e:
-    name: E2E Tests
+    name: E2E Tests ${{ matrix.shard }}/4
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
     steps:
       - uses: actions/checkout@v4
 
@@ -96,18 +103,17 @@ jobs:
 
       - name: Run E2E tests
         id: e2e
-        run: pnpm test:e2e
+        run: pnpm test:e2e --shard=${{ matrix.shard }}/4
         env:
           CI: true
           MINUTIA_SETUP_TOKEN: ci-setup-token
           SITE_URL: http://localhost:3000
-          PLAYWRIGHT_WORKERS: 1
 
       - name: Upload Playwright report
         if: steps.e2e.outcome == 'failure'
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-report
+          name: playwright-report-${{ matrix.shard }}
           path: playwright-report/
           retention-days: 14
           if-no-files-found: ignore

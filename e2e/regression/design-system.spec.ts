@@ -59,7 +59,10 @@ test.describe("Typography: JetBrains Mono on metadata", () => {
     await page.goto("/dashboard");
     await waitForApp(page);
 
-    const dueLabel = page.getByText(/Due (tomorrow|today|May|Jun)/).first();
+    const dueLabel = page
+      .locator(".font-mono")
+      .filter({ hasText: /^(Due|Overdue)/ })
+      .first();
     await expect(dueLabel).toBeVisible();
     const fontFamily = await dueLabel.evaluate(
       (el) => getComputedStyle(el).fontFamily
