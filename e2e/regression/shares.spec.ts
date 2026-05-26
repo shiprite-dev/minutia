@@ -1,8 +1,18 @@
 import { test, expect } from "@playwright/test";
+import { randomUUID } from "node:crypto";
+import { readFile, rm } from "node:fs/promises";
+import path from "node:path";
 import { MEETINGS, SHARE_TOKENS, waitForApp } from "./seed-data";
 
+const APP_URL = "http://localhost:3000";
 const SUPABASE_URL = process.env.SUPABASE_URL ?? "http://127.0.0.1:54321";
 const ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
+const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
+const TEST_USER_ID = "00000000-0000-0000-0000-000000000001";
+const TEST_USER_EMAIL = "test@example.com";
+const OUTBOX_PATH =
+  process.env.MINUTIA_TEST_EMAIL_OUTBOX ??
+  path.join(process.cwd(), "test-results", "meeting-notes-email-outbox.jsonl");
 
 function anonHeaders() {
   return {
@@ -10,6 +20,99 @@ function anonHeaders() {
     Authorization: `Bearer ${ANON_KEY}`,
     "Content-Type": "application/json",
   };
+}
+
+function serviceHeaders(prefer = "return=minimal") {
+  return {
+    apikey: SERVICE_KEY,
+    Authorization: `Bearer ${SERVICE_KEY}`,
+    "Content-Type": "application/json",
+    Prefer: prefer,
+  };
+}
+
+async function resetOutbox() {
+  await rm(OUTBOX_PATH, { force: true });
+}
+
+async function readOutbox() {
+  const content = await readFile(OUTBOX_PATH, "utf8");
+  return content
+    .trim()
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => JSON.parse(line) as {
+      to: string | string[];
+      replyTo?: string;
+      subject: string;
+      text: string;
+      html: string;
+    });
+}
+
+async function getShareOrgId(
+  request: Parameters<Parameters<typeof test>[2]>[0]["request"],
+) {
+  const res = await request.get(
+    `${SUPABASE_URL}/rest/v1/guest_shares?token=eq.${SHARE_TOKENS.meeting}&select=organization_id`,
+    { headers: serviceHeaders() }
+  );
+  expect(res.ok()).toBeTruthy();
+  const rows = await res.json();
+  const orgId = rows[0]?.organization_id;
+  expect(orgId).toBeTruthy();
+  return orgId as string;
+}
+
+async function setOrganizationRole(
+  request: Parameters<Parameters<typeof test>[2]>[0]["request"],
+  organizationId: string,
+  userId: string,
+  role: "admin" | "member"
+) {
+  const res = await request.post(
+    `${SUPABASE_URL}/rest/v1/organization_members?on_conflict=organization_id,user_id`,
+    {
+      headers: serviceHeaders("resolution=merge-duplicates,return=minimal"),
+      data: { organization_id: organizationId, user_id: userId, role },
+    }
+  );
+  expect(res.ok()).toBeTruthy();
+}
+
+async function createGlobalAdmin(
+  request: Parameters<Parameters<typeof test>[2]>[0]["request"],
+  email: string
+) {
+  const userId = randomUUID();
+  const createUser = await request.post(`${SUPABASE_URL}/auth/v1/admin/users`, {
+    headers: serviceHeaders(),
+    data: {
+      id: userId,
+      email,
+      password: "password123",
+      email_confirm: true,
+      user_metadata: { name: "Global Admin" },
+    },
+  });
+  expect(createUser.ok()).toBeTruthy();
+
+  const profile = await request.patch(
+    `${SUPABASE_URL}/rest/v1/profiles?id=eq.${userId}`,
+    { headers: serviceHeaders(), data: { role: "admin" } }
+  );
+  expect(profile.ok()).toBeTruthy();
+  return userId;
+}
+
+async function deleteAuthUser(
+  request: Parameters<Parameters<typeof test>[2]>[0]["request"],
+  userId: string | null
+) {
+  if (!userId) return;
+  await request.delete(`${SUPABASE_URL}/auth/v1/admin/users/${userId}`, {
+    headers: serviceHeaders(),
+  });
 }
 
 test.describe("Guest Share Pages", () => {
@@ -152,5 +255,38 @@ test.describe("Guest Share Pages", () => {
     );
     expect(privateMeeting.ok()).toBeTruthy();
     await expect(privateMeeting.json()).resolves.toEqual([]);
+  });
+
+  test("share access requests notify organization admins instead of global admins", async ({
+    request,
+  }) => {
+    test.skip(!SERVICE_KEY, "Requires service role for org setup");
+
+    const orgId = await getShareOrgId(request);
+    const globalAdminEmail = `global-admin-${Date.now()}@example.com`;
+    let globalAdminId: string | null = null;
+
+    try {
+      await setOrganizationRole(request, orgId, TEST_USER_ID, "admin");
+      globalAdminId = await createGlobalAdmin(request, globalAdminEmail);
+      await resetOutbox();
+
+      const res = await request.post(`${APP_URL}/api/invite-requests`, {
+        data: {
+          email: "viewer@example.com",
+          next: `/share/${SHARE_TOKENS.meeting}`,
+        },
+      });
+      expect(res.ok()).toBeTruthy();
+
+      const [email] = await readOutbox();
+      expect(email.to).toEqual([TEST_USER_EMAIL]);
+      expect(email.to).not.toContain(globalAdminEmail);
+      expect(email.replyTo).toBe("viewer@example.com");
+      expect(email.text).toContain(`/share/${SHARE_TOKENS.meeting}`);
+    } finally {
+      await setOrganizationRole(request, orgId, TEST_USER_ID, "member");
+      await deleteAuthUser(request, globalAdminId);
+    }
   });
 });
