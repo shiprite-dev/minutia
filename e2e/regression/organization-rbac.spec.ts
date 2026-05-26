@@ -59,14 +59,18 @@ async function upsertMembership(
   expect(res.ok()).toBeTruthy();
 }
 
-async function createAuthUser(request: APIRequestContext, email: string) {
+async function createAuthUser(
+  request: APIRequestContext,
+  email: string,
+  userMetadata: Record<string, string> = {}
+) {
   const res = await request.post(`${SUPABASE_URL}/auth/v1/admin/users`, {
     headers: serviceHeaders(),
     data: {
       email,
       password: "password123",
       email_confirm: true,
-      user_metadata: { name: email.split("@")[0] },
+      user_metadata: { name: email.split("@")[0], ...userMetadata },
     },
   });
   expect(res.ok()).toBeTruthy();
@@ -237,6 +241,38 @@ test.describe("Organization RBAC and hosted organization routes", () => {
     }
   });
 
+  test("signup metadata cannot grant organization membership without an invitation", async ({
+    request,
+  }) => {
+    const orgId = await getCurrentOrgId(request);
+    const forgedEmail = `forged-org-${Date.now()}@example.com`;
+    let forgedUserId: string | null = null;
+
+    try {
+      forgedUserId = await createAuthUser(request, forgedEmail, {
+        organization_id: orgId,
+        organization_role: "admin",
+      });
+
+      const membershipRes = await request.get(
+        `${SUPABASE_URL}/rest/v1/organization_members?organization_id=eq.${orgId}&user_id=eq.${forgedUserId}&select=role`,
+        { headers: serviceHeaders() }
+      );
+      expect(membershipRes.ok()).toBeTruthy();
+      expect(await membershipRes.json()).toEqual([]);
+
+      const profileRes = await request.get(
+        `${SUPABASE_URL}/rest/v1/profiles?id=eq.${forgedUserId}&select=current_organization_id`,
+        { headers: serviceHeaders() }
+      );
+      expect(profileRes.ok()).toBeTruthy();
+      const profiles = await profileRes.json();
+      expect(profiles[0]?.current_organization_id).toBeNull();
+    } finally {
+      await deleteAuthUser(request, forgedUserId);
+    }
+  });
+
   test("hosted organization management is hidden in OSS mode", async ({
     request,
   }) => {
@@ -273,6 +309,65 @@ test.describe("Organization RBAC and hosted organization routes", () => {
       expect(membershipRes.ok()).toBeTruthy();
       const memberships = await membershipRes.json();
       expect(memberships[0]?.role).toBe("admin");
+    } finally {
+      if (createdOrgId) {
+        await request.delete(`${SUPABASE_URL}/rest/v1/organizations?id=eq.${createdOrgId}`, {
+          headers: serviceHeaders(),
+        });
+      }
+      await deleteAuthUser(request, adminUserId);
+    }
+  });
+
+  test("super admin can create a hosted organization with a new invited admin", async ({
+    request,
+  }) => {
+    await setGlobalRole(request, "admin");
+    await setHostedMode(request, true);
+
+    const adminEmail = `new-hosted-admin-${Date.now()}@example.com`;
+    let adminUserId: string | null = null;
+    let createdOrgId: string | null = null;
+
+    try {
+      const res = await request.post(`${APP_URL}/api/admin/organizations`, {
+        data: { name: "Beta Hosted", admin_email: adminEmail },
+      });
+      expect(res.ok()).toBeTruthy();
+      const body = await res.json();
+      createdOrgId = body.organization.id;
+      expect(body.organization.name).toBe("Beta Hosted");
+
+      const userRes = await request.get(
+        `${SUPABASE_URL}/auth/v1/admin/users`,
+        { headers: serviceHeaders() }
+      );
+      expect(userRes.ok()).toBeTruthy();
+      const usersBody = await userRes.json();
+      const users = Array.isArray(usersBody) ? usersBody : usersBody.users;
+      adminUserId =
+        users.find((user: { email: string }) => user.email === adminEmail)
+          ?.id ?? null;
+      expect(adminUserId).toBeTruthy();
+
+      const membershipRes = await request.get(
+        `${SUPABASE_URL}/rest/v1/organization_members?organization_id=eq.${createdOrgId}&user_id=eq.${adminUserId}&select=role`,
+        { headers: serviceHeaders() }
+      );
+      expect(membershipRes.ok()).toBeTruthy();
+      const memberships = await membershipRes.json();
+      expect(memberships[0]?.role).toBe("admin");
+
+      const invitationRes = await request.get(
+        `${SUPABASE_URL}/rest/v1/organization_invitations?organization_id=eq.${createdOrgId}&email=eq.${adminEmail}&select=status,accepted_by`,
+        { headers: serviceHeaders() }
+      );
+      expect(invitationRes.ok()).toBeTruthy();
+      const invitations = await invitationRes.json();
+      expect(invitations[0]).toMatchObject({
+        status: "accepted",
+        accepted_by: adminUserId,
+      });
     } finally {
       if (createdOrgId) {
         await request.delete(`${SUPABASE_URL}/rest/v1/organizations?id=eq.${createdOrgId}`, {
