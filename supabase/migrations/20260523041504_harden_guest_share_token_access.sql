@@ -43,11 +43,18 @@ BEGIN
   INTO share_row
   FROM public.guest_shares
   WHERE token = share_token
-    AND (expires_at IS NULL OR expires_at > now())
   LIMIT 1;
 
   IF NOT FOUND THEN
     RETURN NULL;
+  END IF;
+
+  IF share_row.expires_at IS NOT NULL AND share_row.expires_at <= now() THEN
+    RETURN jsonb_build_object(
+      'share', to_jsonb(share_row),
+      'resource_type', share_row.resource_type,
+      'expired', true
+    );
   END IF;
 
   IF share_row.resource_type = 'meeting' THEN
