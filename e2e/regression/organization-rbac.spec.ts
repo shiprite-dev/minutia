@@ -40,12 +40,27 @@ async function setGlobalRole(request: APIRequestContext, role: "admin" | "user")
   expect(res.ok()).toBeTruthy();
 }
 
-async function setHostedMode(request: APIRequestContext, enabled: boolean) {
-  const res = await request.patch(
-    `${SUPABASE_URL}/rest/v1/instance_config?key=eq.hosted_mode`,
-    { headers: serviceHeaders(), data: { value: String(enabled) } }
+async function setInstanceConfig(
+  request: APIRequestContext,
+  key: string,
+  value: string
+) {
+  const res = await request.post(
+    `${SUPABASE_URL}/rest/v1/instance_config?on_conflict=key`,
+    {
+      headers: serviceHeaders("resolution=merge-duplicates,return=minimal"),
+      data: { key, value },
+    }
   );
   expect(res.ok()).toBeTruthy();
+}
+
+async function setHostedMode(request: APIRequestContext, enabled: boolean) {
+  await setInstanceConfig(request, "hosted_mode", String(enabled));
+}
+
+async function setHostedControlPlane(request: APIRequestContext, enabled: boolean) {
+  await setInstanceConfig(request, "hosted_control_plane", String(enabled));
 }
 
 async function upsertMembership(
@@ -131,12 +146,14 @@ test.describe("Organization RBAC and hosted organization routes", () => {
     test.skip(!SERVICE_KEY, "Requires service role for RBAC setup");
     await setGlobalRole(request, "user");
     await setHostedMode(request, false);
+    await setHostedControlPlane(request, false);
   });
 
   test.afterEach(async ({ request }) => {
     if (!SERVICE_KEY) return;
     await setGlobalRole(request, "user");
     await setHostedMode(request, false);
+    await setHostedControlPlane(request, false);
   });
 
   test("organization admin can list workspace members and invitations", async ({
@@ -308,6 +325,18 @@ test.describe("Organization RBAC and hosted organization routes", () => {
   }) => {
     await setGlobalRole(request, "admin");
     await setHostedMode(request, false);
+    await setHostedControlPlane(request, false);
+
+    const res = await request.get(`${APP_URL}/api/admin/organizations`);
+    expect(res.status()).toBe(404);
+  });
+
+  test("hosted organization management is hidden without the hosted control plane", async ({
+    request,
+  }) => {
+    await setGlobalRole(request, "admin");
+    await setHostedMode(request, true);
+    await setHostedControlPlane(request, false);
 
     const res = await request.get(`${APP_URL}/api/admin/organizations`);
     expect(res.status()).toBe(404);
@@ -318,6 +347,7 @@ test.describe("Organization RBAC and hosted organization routes", () => {
   }) => {
     await setGlobalRole(request, "admin");
     await setHostedMode(request, true);
+    await setHostedControlPlane(request, true);
 
     const adminEmail = `hosted-admin-${Date.now()}@example.com`;
     const adminUserId = await createAuthUser(request, adminEmail);
@@ -361,6 +391,7 @@ test.describe("Organization RBAC and hosted organization routes", () => {
   }) => {
     await setGlobalRole(request, "admin");
     await setHostedMode(request, true);
+    await setHostedControlPlane(request, true);
 
     const adminEmail = `new-hosted-admin-${Date.now()}@example.com`;
     let adminUserId: string | null = null;
@@ -453,6 +484,7 @@ test.describe("Organization RBAC and hosted organization routes", () => {
     await upsertMembership(request, orgId, TEST_USER_ID, "admin");
     await setGlobalRole(request, "admin");
     await setHostedMode(request, true);
+    await setHostedControlPlane(request, true);
 
     await page.goto("/settings");
     await expect(page.getByText("Hosted organizations")).toBeVisible();
