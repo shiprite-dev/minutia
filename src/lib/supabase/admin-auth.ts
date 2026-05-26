@@ -61,3 +61,17 @@ export async function isHostedMode() {
 
   return data?.value === "true";
 }
+
+export async function isHostedControlPlaneEnabled() {
+  if (process.env.MINUTIA_HOSTED_CONTROL_PLANE !== "true") return false;
+  if (!(await isHostedMode())) return false;
+
+  const serviceClient = createServiceRoleClient();
+  const { data } = await serviceClient
+    .from("instance_config")
+    .select("value")
+    .eq("key", "hosted_control_plane")
+    .maybeSingle();
+
+  return data?.value === "true";
+}

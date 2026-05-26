@@ -3,7 +3,7 @@ import { z } from "zod";
 import { absoluteAppUrl } from "@/lib/app-url";
 import { sendMail } from "@/lib/email";
 import { buildExistingUserOrganizationInviteEmail } from "@/lib/organization-invite-email";
-import { isHostedMode, requireAdmin } from "@/lib/supabase/admin-auth";
+import { isHostedControlPlaneEnabled, requireAdmin } from "@/lib/supabase/admin-auth";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 
 const createOrganizationSchema = z.object({
@@ -25,8 +25,8 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
 
-  if (!(await isHostedMode())) {
-    return NextResponse.json({ error: "Hosted mode required" }, { status: 404 });
+  if (!(await isHostedControlPlaneEnabled())) {
+    return NextResponse.json({ error: "Hosted control plane required" }, { status: 404 });
   }
 
   const supabase = createServiceRoleClient();
@@ -48,8 +48,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
 
-  if (!(await isHostedMode())) {
-    return NextResponse.json({ error: "Hosted mode required" }, { status: 404 });
+  if (!(await isHostedControlPlaneEnabled())) {
+    return NextResponse.json({ error: "Hosted control plane required" }, { status: 404 });
   }
 
   let body: unknown;
