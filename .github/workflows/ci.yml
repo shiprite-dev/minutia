@@ -39,13 +39,13 @@ jobs:
           NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder
 
   e2e:
-    name: E2E Tests ${{ matrix.shard }}/10
+    name: E2E Tests ${{ matrix.shard }}/16
     runs-on: ubuntu-latest
     timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+        shard: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
     steps:
       - uses: actions/checkout@v4
 
@@ -103,7 +103,7 @@ jobs:
 
       - name: Run E2E tests
         id: e2e
-        run: pnpm test:e2e --shard=${{ matrix.shard }}/10
+        run: pnpm test:e2e --shard=${{ matrix.shard }}/16
         env:
           CI: true
           MINUTIA_SETUP_TOKEN: ci-setup-token

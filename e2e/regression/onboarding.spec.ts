@@ -1,15 +1,16 @@
 import { test, expect } from "@playwright/test";
-import { mkdir, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { waitForApp } from "./seed-data";
 
 const SUPABASE_URL = process.env.SUPABASE_URL ?? "http://127.0.0.1:54321";
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
-const ONBOARDING_USER_ID = randomUUID();
-const ONBOARDING_EMAIL = `onboarding-${ONBOARDING_USER_ID}@example.com`;
 const ONBOARDING_PASSWORD = "password123";
-const ONBOARDING_AUTH_PATH = "e2e/.auth/onboarding-user.json";
-const ONBOARDING_ORG_ID = randomUUID();
+
+type OnboardingState = {
+  userId: string;
+  orgId: string;
+  cookieValue: string;
+};
 
 function supabaseHeaders(prefer = "return=minimal") {
   return {
@@ -20,7 +21,10 @@ function supabaseHeaders(prefer = "return=minimal") {
   };
 }
 
-async function createOnboardingAuthState() {
+async function createOnboardingAuthState(): Promise<OnboardingState> {
+  const userId = randomUUID();
+  const email = `onboarding-${userId}@example.com`;
+  const orgId = randomUUID();
   const authHeaders = {
     apikey: SERVICE_KEY,
     Authorization: `Bearer ${SERVICE_KEY}`,
@@ -31,8 +35,8 @@ async function createOnboardingAuthState() {
     method: "POST",
     headers: authHeaders,
     body: JSON.stringify({
-      id: ONBOARDING_USER_ID,
-      email: ONBOARDING_EMAIL,
+      id: userId,
+      email,
       password: ONBOARDING_PASSWORD,
       email_confirm: true,
       user_metadata: { name: "Test User" },
@@ -44,8 +48,8 @@ async function createOnboardingAuthState() {
     method: "POST",
     headers: supabaseHeaders("resolution=merge-duplicates,return=minimal"),
     body: JSON.stringify({
-      id: ONBOARDING_USER_ID,
-      email: ONBOARDING_EMAIL,
+      id: userId,
+      email,
       name: "Test User",
       has_completed_onboarding: false,
     }),
@@ -56,10 +60,10 @@ async function createOnboardingAuthState() {
     method: "POST",
     headers: supabaseHeaders(),
     body: JSON.stringify({
-      id: ONBOARDING_ORG_ID,
+      id: orgId,
       name: "Onboarding E2E",
-      slug: `onboarding-${ONBOARDING_USER_ID}`,
-      created_by: ONBOARDING_USER_ID,
+      slug: `onboarding-${userId}`,
+      created_by: userId,
     }),
   });
   expect(org.ok).toBeTruthy();
@@ -68,19 +72,19 @@ async function createOnboardingAuthState() {
     method: "POST",
     headers: supabaseHeaders("resolution=merge-duplicates,return=minimal"),
     body: JSON.stringify({
-      organization_id: ONBOARDING_ORG_ID,
-      user_id: ONBOARDING_USER_ID,
+      organization_id: orgId,
+      user_id: userId,
       role: "admin",
     }),
   });
   expect(membership.ok).toBeTruthy();
 
   const currentOrg = await fetch(
-    `${SUPABASE_URL}/rest/v1/profiles?id=eq.${ONBOARDING_USER_ID}`,
+    `${SUPABASE_URL}/rest/v1/profiles?id=eq.${userId}`,
     {
       method: "PATCH",
       headers: supabaseHeaders(),
-      body: JSON.stringify({ current_organization_id: ONBOARDING_ORG_ID }),
+      body: JSON.stringify({ current_organization_id: orgId }),
     }
   );
   expect(currentOrg.ok).toBeTruthy();
@@ -92,41 +96,28 @@ async function createOnboardingAuthState() {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      email: ONBOARDING_EMAIL,
+      email,
       password: ONBOARDING_PASSWORD,
     }),
   });
   expect(token.ok).toBeTruthy();
 
   const session = await token.json();
-  await mkdir("e2e/.auth", { recursive: true });
-  await writeFile(
-    ONBOARDING_AUTH_PATH,
-    JSON.stringify({
-      cookies: [
-        {
-          name: "sb-127-auth-token",
-          value: `base64-${Buffer.from(JSON.stringify(session)).toString("base64")}`,
-          domain: "localhost",
-          path: "/",
-          expires: Math.floor(Date.now() / 1000) + 60 * 60,
-          httpOnly: false,
-          secure: false,
-          sameSite: "Lax",
-        },
-      ],
-      origins: [],
-    })
-  );
+
+  return {
+    userId,
+    orgId,
+    cookieValue: `base64-${Buffer.from(JSON.stringify(session)).toString("base64")}`,
+  };
 }
 
-async function deleteOnboardingUser() {
-  await fetch(`${SUPABASE_URL}/rest/v1/organizations?id=eq.${ONBOARDING_ORG_ID}`, {
+async function deleteOnboardingUser(state: OnboardingState) {
+  await fetch(`${SUPABASE_URL}/rest/v1/organizations?id=eq.${state.orgId}`, {
     method: "DELETE",
     headers: supabaseHeaders(),
   });
 
-  await fetch(`${SUPABASE_URL}/auth/v1/admin/users/${ONBOARDING_USER_ID}`, {
+  await fetch(`${SUPABASE_URL}/auth/v1/admin/users/${state.userId}`, {
     method: "DELETE",
     headers: {
       apikey: SERVICE_KEY,
@@ -137,10 +128,11 @@ async function deleteOnboardingUser() {
 
 async function setOnboardingFlag(
   request: Parameters<Parameters<typeof test>[2]>[0]["request"],
+  state: OnboardingState,
   value: boolean
 ) {
   const response = await request.patch(
-    `${SUPABASE_URL}/rest/v1/profiles?id=eq.${ONBOARDING_USER_ID}`,
+    `${SUPABASE_URL}/rest/v1/profiles?id=eq.${state.userId}`,
     { headers: supabaseHeaders(), data: { has_completed_onboarding: value } }
   );
   expect(response.ok()).toBeTruthy();
@@ -148,7 +140,7 @@ async function setOnboardingFlag(
   await expect
     .poll(async () => {
       const current = await request.get(
-        `${SUPABASE_URL}/rest/v1/profiles?id=eq.${ONBOARDING_USER_ID}&select=has_completed_onboarding`,
+        `${SUPABASE_URL}/rest/v1/profiles?id=eq.${state.userId}&select=has_completed_onboarding`,
         { headers: supabaseHeaders() }
       );
       expect(current.ok()).toBeTruthy();
@@ -160,36 +152,43 @@ async function setOnboardingFlag(
 
 async function deleteOnboardingSeries(
   request: Parameters<Parameters<typeof test>[2]>[0]["request"],
+  state: OnboardingState,
 ) {
   await request.delete(
-    `${SUPABASE_URL}/rest/v1/meeting_series?name=eq.E2E Onboarding Series`,
+    `${SUPABASE_URL}/rest/v1/meeting_series?organization_id=eq.${state.orgId}`,
     { headers: supabaseHeaders() }
   );
 }
 
 test.describe("Onboarding wizard", () => {
   test.describe.configure({ mode: "serial" });
-  test.use({ storageState: ONBOARDING_AUTH_PATH });
+  let state: OnboardingState | null = null;
 
-  test.beforeAll(async () => {
-    await createOnboardingAuthState();
-  });
-
-  test.beforeEach(async ({ request, page }) => {
-    await setOnboardingFlag(request, false);
+  test.beforeEach(async ({ page }) => {
+    state = await createOnboardingAuthState();
+    await page.context().addCookies([
+      {
+        name: "sb-127-auth-token",
+        value: state.cookieValue,
+        domain: "localhost",
+        path: "/",
+        expires: Math.floor(Date.now() / 1000) + 60 * 60,
+        httpOnly: false,
+        secure: false,
+        sameSite: "Lax",
+      },
+    ]);
     await page.goto("/dashboard", { waitUntil: "commit" });
     await page.reload({ waitUntil: "networkidle" });
     await expect(page.getByText("Welcome to Minutia")).toBeVisible({ timeout: 15000 });
   });
 
   test.afterEach(async ({ request }) => {
-    await setOnboardingFlag(request, true);
-    await deleteOnboardingSeries(request);
-  });
-
-  test.afterAll(async ({ request }) => {
-    await deleteOnboardingSeries(request);
-    await deleteOnboardingUser();
+    if (!state) return;
+    await setOnboardingFlag(request, state, true);
+    await deleteOnboardingSeries(request, state);
+    await deleteOnboardingUser(state);
+    state = null;
   });
 
   test("shows onboarding wizard for new users", async ({ page }) => {

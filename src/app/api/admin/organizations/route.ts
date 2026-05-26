@@ -1,6 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { absoluteAppUrl } from "@/lib/app-url";
+import { sendMail } from "@/lib/email";
+import { buildExistingUserOrganizationInviteEmail } from "@/lib/organization-invite-email";
 import { isHostedMode, requireAdmin } from "@/lib/supabase/admin-auth";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 
@@ -126,6 +128,18 @@ export async function POST(request: NextRequest) {
       await supabase.from("organizations").delete().eq("id", organization.id);
       return NextResponse.json({ error: memberError.message }, { status: 500 });
     }
+
+    const appUrl = absoluteAppUrl(request.url, "/");
+    const emailMessage = buildExistingUserOrganizationInviteEmail({
+      organizationName: organization.name,
+      role: "admin",
+      appUrl,
+    });
+
+    await sendMail({
+      to: adminEmail,
+      ...emailMessage,
+    });
   } else {
     const redirectTo = absoluteAppUrl(request.url, "/auth/callback?next=/settings");
     const { data, error } = await supabase.auth.admin.inviteUserByEmail(adminEmail, {
