@@ -1,7 +1,16 @@
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
+import { requireSetupToken } from "@/lib/setup-token";
 
-export async function POST() {
+export async function POST(request: NextRequest) {
+  const setupAuth = requireSetupToken(request);
+  if (!setupAuth.authorized) {
+    return NextResponse.json(
+      { error: setupAuth.error },
+      { status: setupAuth.status }
+    );
+  }
+
   const supabase = createServiceRoleClient();
 
   const { data: existingAdmins } = await supabase
