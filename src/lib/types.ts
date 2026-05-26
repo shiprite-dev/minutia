@@ -41,6 +41,13 @@ export interface OrganizationMember {
   created_at: Date;
 }
 
+export interface OrganizationOption {
+  id: string;
+  name: string;
+  slug: string;
+  role: OrganizationRole;
+}
+
 export interface OrganizationInvitation {
   id: string;
   organization_id: string;

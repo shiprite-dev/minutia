@@ -1,5 +1,6 @@
 import { readFile, rm } from "node:fs/promises";
 import path from "node:path";
+import { randomUUID } from "node:crypto";
 import { test, expect, type APIRequestContext } from "@playwright/test";
 import { createClient } from "@supabase/supabase-js";
 
@@ -21,15 +22,27 @@ function serviceHeaders(prefer = "return=minimal") {
 }
 
 async function getCurrentOrgId(request: APIRequestContext) {
+  const orgId = await getProfileCurrentOrgId(request);
+  expect(orgId).toBeTruthy();
+  return orgId as string;
+}
+
+async function getProfileCurrentOrgId(request: APIRequestContext) {
   const res = await request.get(
     `${SUPABASE_URL}/rest/v1/profiles?id=eq.${TEST_USER_ID}&select=current_organization_id`,
     { headers: serviceHeaders() }
   );
   expect(res.ok()).toBeTruthy();
   const rows = await res.json();
-  const orgId = rows[0]?.current_organization_id;
-  expect(orgId).toBeTruthy();
-  return orgId as string;
+  return rows[0]?.current_organization_id as string | null;
+}
+
+async function setCurrentOrgId(request: APIRequestContext, orgId: string) {
+  const res = await request.patch(
+    `${SUPABASE_URL}/rest/v1/profiles?id=eq.${TEST_USER_ID}`,
+    { headers: serviceHeaders(), data: { current_organization_id: orgId } }
+  );
+  expect(res.ok()).toBeTruthy();
 }
 
 async function setGlobalRole(request: APIRequestContext, role: "admin" | "user") {
@@ -77,6 +90,27 @@ async function upsertMembership(
     }
   );
   expect(res.ok()).toBeTruthy();
+}
+
+async function createOrganization(
+  request: APIRequestContext,
+  name: string,
+  slug: string
+) {
+  const id = randomUUID();
+  const res = await request.post(`${SUPABASE_URL}/rest/v1/organizations`, {
+    headers: serviceHeaders(),
+    data: { id, name, slug, created_by: TEST_USER_ID },
+  });
+  expect(res.ok()).toBeTruthy();
+  return id;
+}
+
+async function deleteOrganization(request: APIRequestContext, orgId: string | null) {
+  if (!orgId) return;
+  await request.delete(`${SUPABASE_URL}/rest/v1/organizations?id=eq.${orgId}`, {
+    headers: serviceHeaders(),
+  });
 }
 
 async function createAuthUser(
@@ -463,6 +497,54 @@ test.describe("Organization RBAC and hosted organization routes", () => {
     expect(res.ok()).toBeFalsy();
   });
 
+  test("organization slug URL switches the current organization for members", async ({
+    request,
+  }) => {
+    const originalOrgId = await getCurrentOrgId(request);
+    const slug = `switchable-${Date.now()}`;
+    let orgId: string | null = null;
+
+    try {
+      orgId = await createOrganization(request, "Switchable Workspace", slug);
+      await upsertMembership(request, orgId, TEST_USER_ID, "member");
+
+      const res = await request.get(`${APP_URL}/org/${slug}`, {
+        maxRedirects: 0,
+      });
+      expect([307, 308]).toContain(res.status());
+      expect(res.headers().location).toBe("/");
+      await expect
+        .poll(() => getProfileCurrentOrgId(request))
+        .toBe(orgId);
+    } finally {
+      await setCurrentOrgId(request, originalOrgId);
+      await deleteOrganization(request, orgId);
+    }
+  });
+
+  test("organization slug URL does not switch non-members", async ({
+    request,
+  }) => {
+    const originalOrgId = await getCurrentOrgId(request);
+    const slug = `private-${Date.now()}`;
+    let orgId: string | null = null;
+
+    try {
+      orgId = await createOrganization(request, "Private Workspace", slug);
+
+      const res = await request.get(`${APP_URL}/org/${slug}`, {
+        maxRedirects: 0,
+      });
+      expect(res.status()).toBe(404);
+      await expect
+        .poll(() => getProfileCurrentOrgId(request))
+        .toBe(originalOrgId);
+    } finally {
+      await setCurrentOrgId(request, originalOrgId);
+      await deleteOrganization(request, orgId);
+    }
+  });
+
   test("settings exposes workspace invite UI to organization admins", async ({
     page,
     request,
@@ -490,5 +572,30 @@ test.describe("Organization RBAC and hosted organization routes", () => {
     await expect(page.getByText("Hosted organizations")).toBeVisible();
     await expect(page.getByPlaceholder("Organization name")).toBeVisible();
     await expect(page.getByPlaceholder("admin@customer.com")).toBeVisible();
+  });
+
+  test("sidebar organization switcher navigates through organization URLs", async ({
+    page,
+    request,
+  }) => {
+    const originalOrgId = await getCurrentOrgId(request);
+    const slug = `sidebar-switch-${Date.now()}`;
+    let orgId: string | null = null;
+
+    try {
+      orgId = await createOrganization(request, "Sidebar Switch", slug);
+      await upsertMembership(request, orgId, TEST_USER_ID, "member");
+      await setCurrentOrgId(request, originalOrgId);
+
+      await page.goto("/settings");
+      await page.getByLabel("Organization").selectOption(orgId);
+      await page.waitForURL("**/");
+      await expect
+        .poll(() => getProfileCurrentOrgId(request))
+        .toBe(orgId);
+    } finally {
+      await setCurrentOrgId(request, originalOrgId);
+      await deleteOrganization(request, orgId);
+    }
   });
 });

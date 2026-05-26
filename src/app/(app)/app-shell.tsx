@@ -9,14 +9,15 @@ import { KeyboardShortcutsDialog } from "@/components/minutia/keyboard-shortcuts
 import { GotoShortcuts } from "@/components/minutia/goto-shortcuts";
 import { CalendarSidebar } from "@/components/minutia/calendar-sidebar";
 import { OnboardingWizard } from "@/components/minutia/onboarding-wizard";
-import type { Profile } from "@/lib/types";
+import type { OrganizationOption, Profile } from "@/lib/types";
 
 interface AppShellProps {
   profile: Profile | null;
+  organizations: OrganizationOption[];
   children: ReactNode;
 }
 
-export function AppShell({ profile, children }: AppShellProps) {
+export function AppShell({ profile, organizations, children }: AppShellProps) {
   if (profile && !profile.has_completed_onboarding) {
     return (
       <OnboardingWizard userName={profile.name} userEmail={profile.email} />
@@ -31,7 +32,7 @@ export function AppShell({ profile, children }: AppShellProps) {
       >
         Skip to content
       </a>
-      <AppSidebar profile={profile} />
+      <AppSidebar profile={profile} organizations={organizations} />
       <SidebarInset>
         <AppHeader profile={profile} />
         <div className="flex flex-1 overflow-hidden">
