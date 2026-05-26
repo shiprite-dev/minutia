@@ -9,6 +9,7 @@ import {
   Bell,
   Settings,
   LogOut,
+  Building2,
 } from "lucide-react";
 import { signOut } from "@/lib/supabase/auth-actions";
 import { useSeries } from "@/lib/hooks/use-series";
@@ -28,7 +29,7 @@ import {
 } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import type { Profile } from "@/lib/types";
+import type { OrganizationOption, Profile } from "@/lib/types";
 
 function isActive(pathname: string, href: string): boolean {
   if (href === "/") return pathname === "/";
@@ -67,13 +68,17 @@ function UserInitials({ name, email }: { name: string | null; email: string }) {
 
 interface AppSidebarProps {
   profile: Profile | null;
+  organizations: OrganizationOption[];
 }
 
-export function AppSidebar({ profile }: AppSidebarProps) {
+export function AppSidebar({ profile, organizations }: AppSidebarProps) {
   const pathname = usePathname();
   const { data: seriesList } = useSeries();
   const { data: issues } = useIssues();
   const { data: unreadCount } = useUnreadCount();
+  const currentOrganization = organizations.find(
+    (organization) => organization.id === profile?.current_organization_id
+  );
 
   const openIssues = (issues ?? []).filter(
     (i) => i.status !== "resolved" && i.status !== "dropped"
@@ -177,6 +182,37 @@ export function AppSidebar({ profile }: AppSidebarProps) {
       </SidebarContent>
 
       <SidebarFooter className="border-t border-rule px-3 py-4">
+        {currentOrganization && (
+          <div className="mb-3 px-2">
+            <label className="mb-1.5 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.1em] text-ink-4">
+              <Building2 className="size-3" />
+              Organization
+            </label>
+            {organizations.length > 1 ? (
+              <select
+                aria-label="Organization"
+                value={currentOrganization.id}
+                onChange={(event) => {
+                  const selected = organizations.find(
+                    (organization) => organization.id === event.target.value
+                  );
+                  if (selected) window.location.href = `/org/${selected.slug}`;
+                }}
+                className="h-9 w-full rounded-md border border-rule bg-paper px-2 text-sm text-ink"
+              >
+                {organizations.map((organization) => (
+                  <option key={organization.id} value={organization.id}>
+                    {organization.name}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <div className="truncate rounded-md border border-rule bg-paper px-2 py-2 text-sm text-ink">
+                {currentOrganization.name}
+              </div>
+            )}
+          </div>
+        )}
         <SidebarMenu className="mb-2">
           <SidebarMenuItem>
             <SidebarMenuButton
