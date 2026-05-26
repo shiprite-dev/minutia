@@ -86,7 +86,7 @@ export async function POST(request: NextRequest) {
       category: "decision" as const,
       status: "resolved" as const,
       priority: "medium" as const,
-      owner_name: null,
+      owner_name: "Unassigned",
       description: "Both parties agreed on Q3 launch window.",
     },
     {
@@ -102,7 +102,7 @@ export async function POST(request: NextRequest) {
       category: "action" as const,
       status: "open" as const,
       priority: "low" as const,
-      owner_name: null,
+      owner_name: "Unassigned",
       description: "Send a brief update to the steering committee after each sync.",
     },
   ];

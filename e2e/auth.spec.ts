@@ -46,7 +46,7 @@ test.describe("Authentication", () => {
 
   test("unauthenticated user is redirected from app pages", async ({ page }) => {
     await page.goto("/dashboard");
-    await page.waitForURL("**/login");
+    await page.waitForURL(/\/login/, { timeout: 10000 });
     expect(page.url()).toContain("/login");
   });
 });
