@@ -1,11 +1,13 @@
 import { createClient } from "@/lib/supabase/server";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
+import { requireSetupToken } from "@/lib/setup-token";
+import type { NextRequest } from "next/server";
 
 type AuthResult =
   | { authorized: true; userId: string }
   | { authorized: false; status: number; error: string };
 
-export async function requireAdmin(): Promise<AuthResult> {
+export async function requireAdmin(request?: NextRequest): Promise<AuthResult> {
   const serviceClient = createServiceRoleClient();
 
   const { data: configData } = await serviceClient
@@ -15,6 +17,13 @@ export async function requireAdmin(): Promise<AuthResult> {
     .single();
 
   if (configData?.value !== "true") {
+    if (request) {
+      const setupAuth = requireSetupToken(request);
+      if (!setupAuth.authorized) {
+        return setupAuth;
+      }
+    }
+
     return { authorized: true, userId: "setup" };
   }
 

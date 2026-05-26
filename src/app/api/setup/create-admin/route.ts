@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
+import { requireSetupToken } from "@/lib/setup-token";
 
 const createAdminSchema = z.object({
   email: z.string().email("Invalid email address"),
@@ -9,6 +10,14 @@ const createAdminSchema = z.object({
 });
 
 export async function POST(request: NextRequest) {
+  const setupAuth = requireSetupToken(request);
+  if (!setupAuth.authorized) {
+    return NextResponse.json(
+      { error: setupAuth.error },
+      { status: setupAuth.status }
+    );
+  }
+
   let body: unknown;
   try {
     body = await request.json();

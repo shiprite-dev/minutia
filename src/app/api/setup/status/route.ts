@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
+import { isSetupTokenRequired } from "@/lib/setup-token";
 
 export async function GET() {
   try {
@@ -21,10 +22,18 @@ export async function GET() {
     const setupCompleted = configResult.data?.value === "true";
     const hasAdmin = (adminResult.data?.length ?? 0) > 0;
 
-    return NextResponse.json({ setup_completed: setupCompleted, has_admin: hasAdmin });
+    return NextResponse.json({
+      setup_completed: setupCompleted,
+      has_admin: hasAdmin,
+      setup_token_required: isSetupTokenRequired(),
+    });
   } catch {
     return NextResponse.json(
-      { setup_completed: false, has_admin: false },
+      {
+        setup_completed: false,
+        has_admin: false,
+        setup_token_required: isSetupTokenRequired(),
+      },
       { status: 500 }
     );
   }

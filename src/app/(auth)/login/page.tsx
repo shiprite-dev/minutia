@@ -37,8 +37,15 @@ function LoginForm() {
   );
   const supabase = createClient();
 
+  const publicSignupEnabled =
+    process.env.NEXT_PUBLIC_ENABLE_PUBLIC_SIGNUP === "true";
+  const googleAuthEnabled =
+    process.env.NEXT_PUBLIC_ENABLE_GOOGLE_AUTH === "true";
+  const guestLoginEnabled =
+    process.env.NEXT_PUBLIC_ENABLE_GUEST_LOGIN === "true";
   const canSignIn = email.trim().length > 0 && password.length > 0;
-  const canSignUp = email.trim().length > 0 && password.length >= 8;
+  const canSignUp =
+    publicSignupEnabled && email.trim().length > 0 && password.length >= 8;
   const nextPath = getSafeNext(searchParams.get("next"));
   const callbackUrl = `${typeof window !== "undefined" ? window.location.origin : ""}/auth/callback?next=${encodeURIComponent(nextPath)}`;
 
@@ -278,15 +285,17 @@ function LoginForm() {
                 )}
               </Button>
 
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={handlePasswordSignUp}
-                disabled={formState === "loading" || !canSignUp}
-                className="h-10 w-full rounded-[12px] font-sans text-sm text-ink-3 hover:bg-paper-3 hover:text-ink-2"
-              >
-                Create account
-              </Button>
+              {publicSignupEnabled && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={handlePasswordSignUp}
+                  disabled={formState === "loading" || !canSignUp}
+                  className="h-10 w-full rounded-[12px] font-sans text-sm text-ink-3 hover:bg-paper-3 hover:text-ink-2"
+                >
+                  Create account
+                </Button>
+              )}
             </form>
 
             {/* Divider */}
@@ -310,33 +319,36 @@ function LoginForm() {
               </Button>
             </form>
 
-            {/* Google OAuth */}
-            <Button
-              type="button"
-              variant="outline"
-              onClick={handleGoogleLogin}
-              className="h-10 w-full rounded-[12px] border-rule bg-paper font-sans font-medium text-ink hover:bg-paper-3"
-            >
-              <GoogleIcon />
-              Google
-            </Button>
+            {googleAuthEnabled && (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleGoogleLogin}
+                className="h-10 w-full rounded-[12px] border-rule bg-paper font-sans font-medium text-ink hover:bg-paper-3"
+              >
+                <GoogleIcon />
+                Google
+              </Button>
+            )}
 
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={handleGuestLogin}
-              disabled={formState === "loading"}
-              className="h-10 w-full rounded-[12px] font-sans text-sm text-ink-3 hover:bg-paper-3 hover:text-ink-2"
-            >
-              {formState === "loading" ? (
-                <span className="flex items-center gap-2">
-                  <LoadingDots />
-                  Signing in
-                </span>
-              ) : (
-                "Sign in as Guest"
-              )}
-            </Button>
+            {guestLoginEnabled && (
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={handleGuestLogin}
+                disabled={formState === "loading"}
+                className="h-10 w-full rounded-[12px] font-sans text-sm text-ink-3 hover:bg-paper-3 hover:text-ink-2"
+              >
+                {formState === "loading" ? (
+                  <span className="flex items-center gap-2">
+                    <LoadingDots />
+                    Signing in
+                  </span>
+                ) : (
+                  "Sign in as Guest"
+                )}
+              </Button>
+            )}
 
             <div className="mt-5 rounded-[14px] border border-rule bg-paper px-4 py-3">
               <p className="font-sans text-xs font-medium text-ink">
