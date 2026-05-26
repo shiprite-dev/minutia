@@ -3,6 +3,7 @@ import { test, expect } from "@playwright/test";
 const APP_URL = "http://localhost:3000";
 const SUPABASE_URL = process.env.SUPABASE_URL ?? "http://127.0.0.1:54321";
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
+const SETUP_TOKEN = process.env.MINUTIA_SETUP_TOKEN ?? "";
 
 function supabaseHeaders() {
   return {
@@ -10,6 +11,13 @@ function supabaseHeaders() {
     Authorization: `Bearer ${SERVICE_KEY}`,
     "Content-Type": "application/json",
     Prefer: "return=minimal",
+  };
+}
+
+function setupHeaders() {
+  return {
+    "Content-Type": "application/json",
+    ...(SETUP_TOKEN ? { "x-minutia-setup-token": SETUP_TOKEN } : {}),
   };
 }
 
@@ -110,10 +118,14 @@ test.describe("Setup completion flow", () => {
 
     if (!status.has_admin) {
       // Cannot seed without admin
-      const res = await request.post(`${APP_URL}/api/setup/seed-demo`);
+      const res = await request.post(`${APP_URL}/api/setup/seed-demo`, {
+        headers: setupHeaders(),
+      });
       expect(res.status()).toBe(400);
     } else {
-      const res = await request.post(`${APP_URL}/api/setup/seed-demo`);
+      const res = await request.post(`${APP_URL}/api/setup/seed-demo`, {
+        headers: setupHeaders(),
+      });
       if (res.ok()) {
         const body = await res.json();
         expect(body).toHaveProperty("series_id");
