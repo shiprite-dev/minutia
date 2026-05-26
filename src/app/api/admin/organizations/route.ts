@@ -89,6 +89,26 @@ export async function POST(request: NextRequest) {
     .ilike("email", adminEmail)
     .maybeSingle();
 
+  const { error: invitationError } = await supabase
+    .from("organization_invitations")
+    .upsert(
+      {
+        organization_id: organization.id,
+        email: adminEmail,
+        role: "admin",
+        status: existingProfile ? "accepted" : "pending",
+        invited_by: auth.userId,
+        accepted_by: existingProfile?.id ?? null,
+        accepted_at: existingProfile ? new Date().toISOString() : null,
+      },
+      { onConflict: "organization_id,email" }
+    );
+
+  if (invitationError) {
+    await supabase.from("organizations").delete().eq("id", organization.id);
+    return NextResponse.json({ error: invitationError.message }, { status: 500 });
+  }
+
   if (existingProfile?.id) {
     const { error: memberError } = await supabase
       .from("organization_members")
@@ -135,21 +155,6 @@ export async function POST(request: NextRequest) {
         );
     }
   }
-
-  await supabase
-    .from("organization_invitations")
-    .upsert(
-      {
-        organization_id: organization.id,
-        email: adminEmail,
-        role: "admin",
-        status: existingProfile ? "accepted" : "pending",
-        invited_by: auth.userId,
-        accepted_by: existingProfile?.id ?? null,
-        accepted_at: existingProfile ? new Date().toISOString() : null,
-      },
-      { onConflict: "organization_id,email" }
-    );
 
   return NextResponse.json({ organization });
 }
