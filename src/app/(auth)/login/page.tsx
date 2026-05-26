@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,14 +11,26 @@ import { Mail, ArrowRight, ExternalLink } from "lucide-react";
 import { motion } from "motion/react";
 
 type FormState = "idle" | "loading" | "sent" | "error";
+type InviteState = "idle" | "loading" | "sent" | "error";
 
 const GUEST_LOGIN_ERROR_MESSAGE =
   "Guest login is unavailable because the local test user is missing or out of sync. Run `supabase db reset` to reseed test@example.com.";
 
 export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginForm />
+    </Suspense>
+  );
+}
+
+function LoginForm() {
+  const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [formState, setFormState] = useState<FormState>("idle");
+  const [inviteState, setInviteState] = useState<InviteState>("idle");
+  const [inviteMessage, setInviteMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [sentMessage, setSentMessage] = useState(
     "We sent a magic link to"
@@ -33,6 +46,8 @@ export default function LoginPage() {
   const canSignIn = email.trim().length > 0 && password.length > 0;
   const canSignUp =
     publicSignupEnabled && email.trim().length > 0 && password.length >= 8;
+  const nextPath = getSafeNext(searchParams.get("next"));
+  const callbackUrl = `${typeof window !== "undefined" ? window.location.origin : ""}/auth/callback?next=${encodeURIComponent(nextPath)}`;
 
   async function handlePasswordLogin(e: React.FormEvent) {
     e.preventDefault();
@@ -50,7 +65,7 @@ export default function LoginPage() {
       setFormState("error");
       setErrorMessage(error.message);
     } else {
-      window.location.href = "/";
+      window.location.href = nextPath;
     }
   }
 
@@ -64,7 +79,7 @@ export default function LoginPage() {
       email: email.trim(),
       password,
       options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
+        emailRedirectTo: callbackUrl,
       },
     });
 
@@ -72,7 +87,7 @@ export default function LoginPage() {
       setFormState("error");
       setErrorMessage(error.message);
     } else if (data.session) {
-      window.location.href = "/";
+      window.location.href = nextPath;
     } else {
       setSentMessage("Confirm your account at");
       setFormState("sent");
@@ -89,7 +104,7 @@ export default function LoginPage() {
     const { error } = await supabase.auth.signInWithOtp({
       email: email.trim(),
       options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
+        emailRedirectTo: callbackUrl,
       },
     });
 
@@ -106,7 +121,7 @@ export default function LoginPage() {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
+        redirectTo: callbackUrl,
       },
     });
 
@@ -133,7 +148,29 @@ export default function LoginPage() {
           : error.message
       );
     } else {
-      window.location.href = "/";
+      window.location.href = nextPath;
+    }
+  }
+
+  async function handleInviteRequest() {
+    if (!email.trim()) return;
+
+    setInviteState("loading");
+    setInviteMessage("");
+
+    try {
+      const res = await fetch("/api/invite-requests", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim(), next: nextPath }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to request invite");
+      setInviteState("sent");
+      setInviteMessage("Invite request sent to the Minutia admin.");
+    } catch (err) {
+      setInviteState("error");
+      setInviteMessage(err instanceof Error ? err.message : "Failed to request invite");
     }
   }
 
@@ -312,6 +349,37 @@ export default function LoginPage() {
                 )}
               </Button>
             )}
+
+            <div className="mt-5 rounded-[14px] border border-rule bg-paper px-4 py-3">
+              <p className="font-sans text-xs font-medium text-ink">
+                Need access to this Minutia workspace?
+              </p>
+              <div className="mt-2 flex items-center justify-between gap-3">
+                <p className="font-sans text-xs text-ink-4">
+                  Enter your email and ask the admin for an invite.
+                </p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleInviteRequest}
+                  disabled={inviteState === "loading" || !email.trim()}
+                  className="h-8 shrink-0 rounded-[10px] border-rule bg-paper text-xs text-ink hover:bg-paper-3"
+                >
+                  {inviteState === "loading" ? "Sending" : "Request invite"}
+                </Button>
+              </div>
+              {inviteMessage && (
+                <p
+                  className={
+                    inviteState === "error"
+                      ? "mt-2 font-sans text-xs text-danger"
+                      : "mt-2 font-sans text-xs text-success"
+                  }
+                >
+                  {inviteMessage}
+                </p>
+              )}
+            </div>
           </>
         )}
       </div>
@@ -331,6 +399,11 @@ export default function LoginPage() {
       </p>
     </motion.div>
   );
+}
+
+function getSafeNext(value: string | null) {
+  if (!value || !value.startsWith("/") || value.startsWith("//")) return "/";
+  return value;
 }
 
 function LoadingDots() {

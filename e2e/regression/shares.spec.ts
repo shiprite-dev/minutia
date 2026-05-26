@@ -94,7 +94,7 @@ test.describe("Guest Share Pages", () => {
     await expect(response.json()).resolves.toEqual([]);
   });
 
-  test("anonymous token lookup and shared resource RLS stay scoped", async ({
+  test("anonymous token lookup and shared resource access stay scoped", async ({
     request,
   }) => {
     test.skip(!ANON_KEY, "NEXT_PUBLIC_SUPABASE_ANON_KEY is required");
@@ -124,14 +124,27 @@ test.describe("Guest Share Pages", () => {
     expect(invalidLookup.ok()).toBeTruthy();
     await expect(invalidLookup.json()).resolves.toEqual([]);
 
+    const payload = await request.post(
+      `${SUPABASE_URL}/rest/v1/rpc/get_guest_share_payload`,
+      {
+        headers: anonHeaders(),
+        data: { share_token: SHARE_TOKENS.meeting },
+      }
+    );
+    expect(payload.ok()).toBeTruthy();
+    await expect(payload.json()).resolves.toEqual(
+      expect.objectContaining({
+        resource_type: "meeting",
+        meeting: expect.objectContaining({ id: MEETINGS.standup2 }),
+      })
+    );
+
     const sharedMeeting = await request.get(
       `${SUPABASE_URL}/rest/v1/meetings?id=eq.${MEETINGS.standup2}&select=id`,
       { headers: anonHeaders() }
     );
     expect(sharedMeeting.ok()).toBeTruthy();
-    await expect(sharedMeeting.json()).resolves.toEqual([
-      { id: MEETINGS.standup2 },
-    ]);
+    await expect(sharedMeeting.json()).resolves.toEqual([]);
 
     const privateMeeting = await request.get(
       `${SUPABASE_URL}/rest/v1/meetings?id=eq.${MEETINGS.productKickoff}&select=id`,

@@ -80,7 +80,16 @@ export function AppSidebar({ profile }: AppSidebarProps) {
   );
   const outstandingCount = openIssues.length;
   const myActionsCount = profile
-    ? openIssues.filter((i) => i.owner_user_id === profile.id).length
+    ? openIssues.filter((i) => {
+        if (i.owner_name) {
+          const name = i.owner_name.toLowerCase();
+          return (
+            name === profile.email.toLowerCase() ||
+            name === profile.name?.toLowerCase()
+          );
+        }
+        return i.owner_user_id === profile.id;
+      }).length
     : 0;
 
   const navItems = [
