@@ -9,6 +9,7 @@ const ONBOARDING_USER_ID = randomUUID();
 const ONBOARDING_EMAIL = `onboarding-${ONBOARDING_USER_ID}@example.com`;
 const ONBOARDING_PASSWORD = "password123";
 const ONBOARDING_AUTH_PATH = "e2e/.auth/onboarding-user.json";
+const ONBOARDING_ORG_ID = randomUUID();
 
 function supabaseHeaders(prefer = "return=minimal") {
   return {
@@ -51,6 +52,39 @@ async function createOnboardingAuthState() {
   });
   expect(profile.ok).toBeTruthy();
 
+  const org = await fetch(`${SUPABASE_URL}/rest/v1/organizations`, {
+    method: "POST",
+    headers: supabaseHeaders(),
+    body: JSON.stringify({
+      id: ONBOARDING_ORG_ID,
+      name: "Onboarding E2E",
+      slug: `onboarding-${ONBOARDING_USER_ID}`,
+      created_by: ONBOARDING_USER_ID,
+    }),
+  });
+  expect(org.ok).toBeTruthy();
+
+  const membership = await fetch(`${SUPABASE_URL}/rest/v1/organization_members`, {
+    method: "POST",
+    headers: supabaseHeaders("resolution=merge-duplicates,return=minimal"),
+    body: JSON.stringify({
+      organization_id: ONBOARDING_ORG_ID,
+      user_id: ONBOARDING_USER_ID,
+      role: "admin",
+    }),
+  });
+  expect(membership.ok).toBeTruthy();
+
+  const currentOrg = await fetch(
+    `${SUPABASE_URL}/rest/v1/profiles?id=eq.${ONBOARDING_USER_ID}`,
+    {
+      method: "PATCH",
+      headers: supabaseHeaders(),
+      body: JSON.stringify({ current_organization_id: ONBOARDING_ORG_ID }),
+    }
+  );
+  expect(currentOrg.ok).toBeTruthy();
+
   const token = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
     method: "POST",
     headers: {
@@ -87,6 +121,11 @@ async function createOnboardingAuthState() {
 }
 
 async function deleteOnboardingUser() {
+  await fetch(`${SUPABASE_URL}/rest/v1/organizations?id=eq.${ONBOARDING_ORG_ID}`, {
+    method: "DELETE",
+    headers: supabaseHeaders(),
+  });
+
   await fetch(`${SUPABASE_URL}/auth/v1/admin/users/${ONBOARDING_USER_ID}`, {
     method: "DELETE",
     headers: {

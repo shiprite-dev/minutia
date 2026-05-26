@@ -100,6 +100,26 @@ AS $$
     )
 $$;
 
+CREATE OR REPLACE FUNCTION public.user_is_global_admin()
+RETURNS boolean
+LANGUAGE sql
+SECURITY DEFINER
+STABLE
+SET search_path = public
+AS $$
+  SELECT EXISTS (
+    SELECT 1
+    FROM public.profiles p
+    WHERE p.id = auth.uid()
+      AND p.role = 'admin'
+  )
+$$;
+
+DROP POLICY IF EXISTS "profiles_update_role_admin" ON public.profiles;
+CREATE POLICY "profiles_update_role_admin"
+  ON public.profiles FOR UPDATE
+  USING (public.user_is_global_admin());
+
 CREATE OR REPLACE FUNCTION public.set_series_organization()
 RETURNS trigger
 LANGUAGE plpgsql
