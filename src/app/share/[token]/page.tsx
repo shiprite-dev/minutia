@@ -22,6 +22,7 @@ type ServerSupabaseClient = Awaited<ReturnType<typeof createClient>>;
 type GuestSharePayload = {
   share: GuestShare;
   resource_type: "meeting" | "series" | "issue";
+  expired?: boolean;
   meeting?: Meeting;
   series?: MeetingSeries | null;
   issue?: Issue;
@@ -711,6 +712,15 @@ export default async function GuestSharePage({
   }
 
   const guestShare = payload.share;
+
+  if (payload.expired) {
+    return (
+      <ErrorView
+        title="Share link expired"
+        description="This share link has expired."
+      />
+    );
+  }
 
   // 2. Render resource based on the token-scoped payload type.
   if (payload.resource_type === "meeting") {
