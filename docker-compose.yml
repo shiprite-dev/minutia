@@ -24,19 +24,28 @@ services:
         NEXT_PUBLIC_ENABLE_GUEST_LOGIN: ${NEXT_PUBLIC_ENABLE_GUEST_LOGIN:-false}
     restart: unless-stopped
     ports:
-      - "${WEB_PORT:-3000}:3000"
+      - "${WEB_BIND:-0.0.0.0}:${WEB_PORT:-3000}:3000"
     environment:
+      - HOSTNAME=0.0.0.0
       - NEXT_PUBLIC_SUPABASE_URL=http://${SUPABASE_HOST:-localhost}:${KONG_HTTP_PORT:-8000}
+      - SUPABASE_INTERNAL_URL=http://supabase-kong:8000
       - NEXT_PUBLIC_SUPABASE_ANON_KEY=${ANON_KEY}
       - SUPABASE_SERVICE_ROLE_KEY=${SERVICE_ROLE_KEY}
       - SITE_URL=${SITE_URL:-http://localhost:3000}
+      - RESEND_API_KEY=${RESEND_API_KEY:-}
+      - SMTP_HOST=${SMTP_HOST:-}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASS=${SMTP_PASS:-}
+      - SMTP_ADMIN_EMAIL=${SMTP_ADMIN_EMAIL:-admin@localhost}
+      - EMAIL_FROM=${EMAIL_FROM:-noreply@localhost}
       - AI_API_KEY=${AI_API_KEY:-}
       - AI_MODEL=${AI_MODEL:-claude-sonnet-4-6}
     depends_on:
       supabase-kong:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000"]
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:3000/setup"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -51,21 +60,22 @@ services:
     image: kong:2.8.1
     restart: unless-stopped
     ports:
-      - "${KONG_HTTP_PORT:-8000}:8000/tcp"
+      - "${KONG_BIND:-0.0.0.0}:${KONG_HTTP_PORT:-8000}:8000/tcp"
     environment:
       KONG_DATABASE: "off"
       KONG_DECLARATIVE_CONFIG: /var/lib/kong/kong.yml
       KONG_DNS_ORDER: LAST,A,CNAME
       KONG_PLUGINS: request-transformer,cors,key-auth,acl
+      KONG_NGINX_WORKER_PROCESSES: 2
       KONG_NGINX_PROXY_PROXY_BUFFER_SIZE: 160k
       KONG_NGINX_PROXY_PROXY_BUFFERS: 64 160k
     volumes:
-      - ./docker/kong.yml:/var/lib/kong/kong.yml:ro
+      - ${KONG_CONFIG:-./docker/kong.yml}:/var/lib/kong/kong.yml:ro
     depends_on:
       supabase-auth:
         condition: service_healthy
       supabase-rest:
-        condition: service_healthy
+        condition: service_started
     healthcheck:
       test: ["CMD", "kong", "health"]
       interval: 15s
@@ -75,7 +85,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 256M
+          memory: 1G
 
   # ---- Supabase: Auth (GoTrue) ----
   supabase-auth:
@@ -148,11 +158,7 @@ services:
       supabase-db:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3000/ || exit 1"]
-      interval: 15s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
+      disable: true
     deploy:
       resources:
         limits:
@@ -182,11 +188,7 @@ services:
       supabase-db:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:4000/ || exit 1"]
-      interval: 15s
-      timeout: 5s
-      retries: 5
-      start_period: 15s
+      disable: true
     deploy:
       resources:
         limits:

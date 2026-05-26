@@ -1,0 +1,51 @@
+services:
+  caddy:
+    image: caddy:2.10-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      MINUTIA_APP_SITE_ADDRESS: ${MINUTIA_APP_SITE_ADDRESS:-http://localhost}
+      MINUTIA_API_SITE_ADDRESS: ${MINUTIA_API_SITE_ADDRESS:-api.example.com}
+    volumes:
+      - ./deploy/minutia/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      minutia-web:
+        condition: service_healthy
+      supabase-kong:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "host=\"$${MINUTIA_APP_SITE_ADDRESS#http://}\"; host=\"$${host#https://}\"; wget --header \"Host: $${host}\" --spider -q http://127.0.0.1/setup"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  minutia-web:
+    build:
+      args:
+        NEXT_PUBLIC_SUPABASE_URL: ${PUBLIC_API_URL:-${PUBLIC_URL:-http://localhost}}
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${ANON_KEY}
+    environment:
+      - NEXT_PUBLIC_SUPABASE_URL=${PUBLIC_API_URL:-${PUBLIC_URL:-http://localhost}}
+      - SITE_URL=${PUBLIC_APP_URL:-${PUBLIC_URL:-http://localhost}}
+
+  supabase-auth:
+    environment:
+      API_EXTERNAL_URL: ${PUBLIC_API_URL:-${PUBLIC_URL:-http://localhost}}
+      GOTRUE_SITE_URL: ${PUBLIC_APP_URL:-${PUBLIC_URL:-http://localhost}}
+      GOTRUE_EXTERNAL_GOOGLE_REDIRECT_URI: ${PUBLIC_API_URL:-${PUBLIC_URL:-http://localhost}}/auth/v1/callback
+
+volumes:
+  caddy-data:
+    name: minutia-caddy-data
+  caddy-config:
+    name: minutia-caddy-config

@@ -16,6 +16,7 @@
 /playwright-report/
 /playwright/.cache/
 /e2e/.auth/
+/tmp/
 
 # next.js
 /.next/
@@ -23,6 +24,7 @@
 
 # production
 /build
+/.deploy-generated
 
 # misc
 .DS_Store
@@ -46,9 +48,14 @@ yarn-error.log*
 next-env.d.ts
 
 # internal project management (not for public repo)
+.claude/
+.codex/
+.serena/
 tasks.json
 MINUTIA-PRD-*.md
 GTM-STRATEGY.md
 DESIGN.md
 minutia-prototype.html
 CLAUDE.md
+teaching-tasks.json
+SESSION-LEDGER.md
