@@ -1,3 +1,5 @@
+import { readFile, rm } from "node:fs/promises";
+import path from "node:path";
 import { test, expect, type APIRequestContext } from "@playwright/test";
 import { createClient } from "@supabase/supabase-js";
 
@@ -5,6 +7,9 @@ const APP_URL = "http://localhost:3000";
 const SUPABASE_URL = process.env.SUPABASE_URL ?? "http://127.0.0.1:54321";
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
 const TEST_USER_ID = "00000000-0000-0000-0000-000000000001";
+const OUTBOX_PATH =
+  process.env.MINUTIA_TEST_EMAIL_OUTBOX ??
+  path.join(process.cwd(), "test-results", "meeting-notes-email-outbox.jsonl");
 
 function serviceHeaders(prefer = "return=minimal") {
   return {
@@ -85,6 +90,24 @@ async function deleteAuthUser(request: APIRequestContext, userId: string | null)
   });
 }
 
+async function resetOutbox() {
+  await rm(OUTBOX_PATH, { force: true });
+}
+
+async function readOutbox() {
+  const content = await readFile(OUTBOX_PATH, "utf8");
+  return content
+    .trim()
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => JSON.parse(line) as {
+      to: string | string[];
+      subject: string;
+      text: string;
+      html: string;
+    });
+}
+
 async function getPasswordAccessToken() {
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   expect(anonKey).toBeTruthy();
@@ -150,6 +173,7 @@ test.describe("Organization RBAC and hosted organization routes", () => {
     const invitedUserId = await createAuthUser(request, invitedEmail);
 
     try {
+      await resetOutbox();
       const res = await request.post(`${APP_URL}/api/admin/invitations`, {
         data: { email: invitedEmail, role: "member" },
       });
@@ -170,6 +194,12 @@ test.describe("Organization RBAC and hosted organization routes", () => {
       expect(invitationRes.ok()).toBeTruthy();
       const invitations = await invitationRes.json();
       expect(invitations[0]).toMatchObject({ status: "accepted", role: "member" });
+
+      const [email] = await readOutbox();
+      expect(email.to).toBe(invitedEmail);
+      expect(email.subject).toContain("Minutia");
+      expect(email.text).toContain("member");
+      expect(email.html).toContain("/settings");
     } finally {
       await deleteAuthUser(request, invitedUserId);
     }
@@ -294,6 +324,7 @@ test.describe("Organization RBAC and hosted organization routes", () => {
     let createdOrgId: string | null = null;
 
     try {
+      await resetOutbox();
       const res = await request.post(`${APP_URL}/api/admin/organizations`, {
         data: { name: "Acme Hosted", admin_email: adminEmail },
       });
@@ -309,6 +340,12 @@ test.describe("Organization RBAC and hosted organization routes", () => {
       expect(membershipRes.ok()).toBeTruthy();
       const memberships = await membershipRes.json();
       expect(memberships[0]?.role).toBe("admin");
+
+      const [email] = await readOutbox();
+      expect(email.to).toBe(adminEmail);
+      expect(email.subject).toContain("Acme Hosted");
+      expect(email.text).toContain("admin");
+      expect(email.html).toContain("/settings");
     } finally {
       if (createdOrgId) {
         await request.delete(`${SUPABASE_URL}/rest/v1/organizations?id=eq.${createdOrgId}`, {
