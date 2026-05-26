@@ -1,6 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { absoluteAppUrl } from "@/lib/app-url";
+import { sendMail } from "@/lib/email";
+import { buildExistingUserOrganizationInviteEmail } from "@/lib/organization-invite-email";
 import { requireCurrentOrgAdmin } from "@/lib/supabase/org-auth";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 
@@ -113,7 +115,29 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: invitationError.message }, { status: 500 });
   }
 
-  if (!existingProfile) {
+  if (existingProfile?.id) {
+    const { data: organization, error: organizationError } = await supabase
+      .from("organizations")
+      .select("name")
+      .eq("id", auth.organizationId)
+      .single();
+
+    if (organizationError || !organization) {
+      return NextResponse.json({ error: "Failed to load organization" }, { status: 500 });
+    }
+
+    const appUrl = absoluteAppUrl(request.url, "/");
+    const emailMessage = buildExistingUserOrganizationInviteEmail({
+      organizationName: organization.name,
+      role,
+      appUrl,
+    });
+
+    await sendMail({
+      to: email,
+      ...emailMessage,
+    });
+  } else {
     const redirectTo = absoluteAppUrl(request.url, "/auth/callback?next=/settings");
     const { data, error } = await supabase.auth.admin.inviteUserByEmail(email, {
       data: {
