@@ -19,7 +19,7 @@ services:
       supabase-kong:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "host=\"$${MINUTIA_APP_SITE_ADDRESS#http://}\"; host=\"$${host#https://}\"; wget --header \"Host: $${host}\" --spider -q http://127.0.0.1/setup"]
+      test: ["CMD-SHELL", "host=\"$${MINUTIA_APP_SITE_ADDRESS%%,*}\"; host=\"$${host# }\"; host=\"$${host#http://}\"; host=\"$${host#https://}\"; wget --header \"Host: $${host}\" --spider -q http://127.0.0.1/setup"]
       interval: 30s
       timeout: 5s
       retries: 3
