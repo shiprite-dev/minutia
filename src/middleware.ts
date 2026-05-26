@@ -154,6 +154,12 @@ export async function middleware(request: NextRequest) {
   const isPublicPath = publicPaths.some((p) => pathname.startsWith(p));
 
   if (!user && !isPublicPath) {
+    if (pathname.startsWith("/api/")) {
+      return applySecurityHeaders(
+        NextResponse.json({ error: "Not authenticated" }, { status: 401 })
+      );
+    }
+
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     url.searchParams.set("next", safeNextPath(pathname, request.nextUrl.search));

@@ -43,7 +43,7 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: "pnpm dev",
+    command: "MINUTIA_TEST_EMAIL_OUTBOX=test-results/meeting-notes-email-outbox.jsonl pnpm dev",
     url: "http://localhost:3000",
     reuseExistingServer: !process.env.CI,
   },

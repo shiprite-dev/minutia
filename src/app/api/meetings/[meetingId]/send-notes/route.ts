@@ -55,6 +55,13 @@ export async function POST(
   }
 
   const payload = meeting as MeetingPayload;
+  if (payload.status !== "completed") {
+    return NextResponse.json(
+      { error: "Meeting notes can only be sent after a meeting is completed." },
+      { status: 400 }
+    );
+  }
+
   const { data: seriesIssues, error: issuesError } = await supabase
     .from("issues")
     .select("*")
