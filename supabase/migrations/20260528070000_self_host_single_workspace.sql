@@ -58,22 +58,59 @@ BEGIN
     RETURN NEW;
   END IF;
 
-  IF workspace_org_id IS NULL THEN
-    base_slug := COALESCE(NULLIF(public.slugify_organization_name(profile_name), ''), 'workspace');
-    final_slug := base_slug || '-' || substr(replace(NEW.id::text, '-', ''), 1, 8);
+  base_slug := COALESCE(NULLIF(public.slugify_organization_name(profile_name), ''), 'workspace');
+  final_slug := base_slug || '-' || substr(replace(NEW.id::text, '-', ''), 1, 8);
 
-    INSERT INTO public.organizations (name, slug, created_by)
-    VALUES (profile_name || '''s workspace', final_slug, NEW.id)
-    RETURNING id INTO created_org_id;
+  INSERT INTO public.organizations (name, slug, created_by)
+  VALUES (profile_name || '''s workspace', final_slug, NEW.id)
+  RETURNING id INTO created_org_id;
 
-    INSERT INTO public.organization_members (organization_id, user_id, role)
-    VALUES (created_org_id, NEW.id, 'admin');
+  INSERT INTO public.organization_members (organization_id, user_id, role)
+  VALUES (created_org_id, NEW.id, 'admin');
 
-    UPDATE public.profiles
-    SET current_organization_id = created_org_id
-    WHERE id = NEW.id;
-  END IF;
+  UPDATE public.profiles
+  SET current_organization_id = created_org_id
+  WHERE id = NEW.id;
 
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
+DO $$
+DECLARE
+  workspace_org_id uuid;
+BEGIN
+  SELECT id
+  INTO workspace_org_id
+  FROM public.organizations
+  ORDER BY created_at ASC
+  LIMIT 1;
+
+  IF workspace_org_id IS NULL THEN
+    RETURN;
+  END IF;
+
+  INSERT INTO public.organization_members (organization_id, user_id, role)
+  SELECT
+    workspace_org_id,
+    p.id,
+    CASE WHEN p.role = 'admin' THEN 'admin' ELSE 'member' END
+  FROM public.profiles p
+  WHERE NOT EXISTS (
+    SELECT 1
+    FROM public.organization_members om
+    WHERE om.user_id = p.id
+  )
+  ON CONFLICT (organization_id, user_id) DO NOTHING;
+
+  UPDATE public.profiles p
+  SET current_organization_id = workspace_org_id
+  WHERE p.current_organization_id IS NULL
+    AND EXISTS (
+      SELECT 1
+      FROM public.organization_members om
+      WHERE om.organization_id = workspace_org_id
+        AND om.user_id = p.id
+    );
+END;
+$$;

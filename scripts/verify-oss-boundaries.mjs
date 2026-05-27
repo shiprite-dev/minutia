@@ -8,7 +8,8 @@ const mustExist = [
   "src/lib/supabase/org-auth.ts",
   "scripts/generate-self-host-env.mjs",
   "scripts/run-self-host-migrations.sh",
-  "supabase/migrations/20260526061638_multi_tenant_orgs.sql"
+  "supabase/migrations/20260526061638_multi_tenant_orgs.sql",
+  "supabase/migrations/20260528071000_enforce_single_self_host_workspace.sql"
 ];
 
 const mustNotExist = [
@@ -17,6 +18,7 @@ const mustNotExist = [
   "deploy/minutia/env.vps.example",
   "docs/DEPLOY_SELF_HOST_VPS.md",
   "src/app/api/admin/organizations/route.ts",
+  "src/app/org/[slug]/page.tsx",
   "scripts/deploy-minutia-vps.sh",
   "supabase/migrations/20260527000000_hosted_control_plane_gate.sql"
 ];
@@ -31,6 +33,10 @@ const bannedTextByFile = {
     "Hosted organizations",
     "HostedOrgData"
   ],
+  "src/components/minutia/app-sidebar.tsx": [
+    "organizations.length > 1",
+    "window.location.href = `/org/"
+  ],
   "src/lib/supabase/admin-auth.ts": [
     "MINUTIA_HOSTED_CONTROL_PLANE",
     "hosted_control_plane",
@@ -42,7 +48,9 @@ const bannedTextByFile = {
   "e2e/regression/organization-rbac.spec.ts": [
     "/api/admin/organizations",
     "Hosted organizations",
-    "hosted_control_plane"
+    "hosted_control_plane",
+    "/org/${slug}",
+    "selectOption(orgId)"
   ],
   "supabase/migrations/20260526061638_multi_tenant_orgs.sql": [
     "hosted_mode"
