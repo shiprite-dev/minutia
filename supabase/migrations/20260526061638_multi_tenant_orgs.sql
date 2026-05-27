@@ -51,10 +51,6 @@ ALTER TABLE public.meeting_series
 ALTER TABLE public.guest_shares
   ADD COLUMN IF NOT EXISTS organization_id uuid REFERENCES public.organizations(id) ON DELETE CASCADE;
 
-INSERT INTO public.instance_config (key, value)
-VALUES ('hosted_mode', 'false')
-ON CONFLICT (key) DO NOTHING;
-
 CREATE INDEX idx_meeting_series_organization_id ON public.meeting_series(organization_id);
 CREATE INDEX idx_guest_shares_organization_id ON public.guest_shares(organization_id);
 
