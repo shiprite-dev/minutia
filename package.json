@@ -39,7 +39,7 @@
     "start": "next start",
     "lint": "eslint",
     "deploy:env": "node scripts/generate-self-host-env.mjs",
-    "deploy:vps": "bash scripts/deploy-minutia-vps.sh",
+    "test:oss-boundaries": "node scripts/verify-oss-boundaries.mjs",
     "test:ci-workflows": "node scripts/verify-ci-playwright-shards.mjs",
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed",
