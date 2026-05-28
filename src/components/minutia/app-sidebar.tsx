@@ -188,29 +188,9 @@ export function AppSidebar({ profile, organizations }: AppSidebarProps) {
               <Building2 className="size-3" />
               Organization
             </label>
-            {organizations.length > 1 ? (
-              <select
-                aria-label="Organization"
-                value={currentOrganization.id}
-                onChange={(event) => {
-                  const selected = organizations.find(
-                    (organization) => organization.id === event.target.value
-                  );
-                  if (selected) window.location.href = `/org/${selected.slug}`;
-                }}
-                className="h-9 w-full rounded-md border border-rule bg-paper px-2 text-sm text-ink"
-              >
-                {organizations.map((organization) => (
-                  <option key={organization.id} value={organization.id}>
-                    {organization.name}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <div className="truncate rounded-md border border-rule bg-paper px-2 py-2 text-sm text-ink">
-                {currentOrganization.name}
-              </div>
-            )}
+            <div className="truncate rounded-md border border-rule bg-paper px-2 py-2 text-sm text-ink">
+              {currentOrganization.name}
+            </div>
           </div>
         )}
         <SidebarMenu className="mb-2">
