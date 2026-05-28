@@ -39,10 +39,14 @@ function LoginForm() {
 
   const publicSignupEnabled =
     process.env.NEXT_PUBLIC_ENABLE_PUBLIC_SIGNUP === "true";
+  const magicLinkEnabled =
+    process.env.NEXT_PUBLIC_ENABLE_MAGIC_LINK === "true";
   const googleAuthEnabled =
     process.env.NEXT_PUBLIC_ENABLE_GOOGLE_AUTH === "true";
   const guestLoginEnabled =
     process.env.NEXT_PUBLIC_ENABLE_GUEST_LOGIN === "true";
+  const secondaryAuthEnabled =
+    magicLinkEnabled || googleAuthEnabled || guestLoginEnabled;
   const canSignIn = email.trim().length > 0 && password.length > 0;
   const canSignUp =
     publicSignupEnabled && email.trim().length > 0 && password.length >= 8;
@@ -298,26 +302,29 @@ function LoginForm() {
               )}
             </form>
 
-            {/* Divider */}
-            <div className="relative my-6 flex items-center">
-              <Separator className="flex-1 bg-rule" />
-              <span className="px-3 font-sans text-xs text-ink-4">
-                or continue with
-              </span>
-              <Separator className="flex-1 bg-rule" />
-            </div>
+            {secondaryAuthEnabled && (
+              <div className="relative my-6 flex items-center">
+                <Separator className="flex-1 bg-rule" />
+                <span className="px-3 font-sans text-xs text-ink-4">
+                  or continue with
+                </span>
+                <Separator className="flex-1 bg-rule" />
+              </div>
+            )}
 
-            <form onSubmit={handleMagicLink}>
-              <Button
-                type="submit"
-                variant="outline"
-                disabled={formState === "loading" || !email.trim()}
-                className="mb-3 h-10 w-full rounded-[12px] border-rule bg-paper font-sans font-medium text-ink hover:bg-paper-3"
-              >
-                <Mail className="mr-2 h-4 w-4" />
-                Email magic link
-              </Button>
-            </form>
+            {magicLinkEnabled && (
+              <form onSubmit={handleMagicLink}>
+                <Button
+                  type="submit"
+                  variant="outline"
+                  disabled={formState === "loading" || !email.trim()}
+                  className="mb-3 h-10 w-full rounded-[12px] border-rule bg-paper font-sans font-medium text-ink hover:bg-paper-3"
+                >
+                  <Mail className="mr-2 h-4 w-4" />
+                  Email magic link
+                </Button>
+              </form>
+            )}
 
             {googleAuthEnabled && (
               <Button

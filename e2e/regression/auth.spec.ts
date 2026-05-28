@@ -22,9 +22,9 @@ test.describe("Login Page", () => {
     ).toHaveCount(0);
     await expect(
       page.getByRole("button", { name: "Email magic link" })
-    ).toBeVisible();
+    ).toHaveCount(0);
 
-    await expect(page.getByText("or continue with")).toBeVisible();
+    await expect(page.getByText("or continue with")).toHaveCount(0);
     await expect(
       page.getByRole("button", { name: "Google" })
     ).toHaveCount(0);
@@ -41,16 +41,14 @@ test.describe("Login Page", () => {
   test("password auth controls require credentials", async ({ page }) => {
     await page.goto("/login");
     const signInButton = page.getByRole("button", { name: "Sign in", exact: true });
-    const magicLinkButton = page.getByRole("button", { name: "Email magic link" });
 
     await expect(signInButton).toBeDisabled();
-    await expect(magicLinkButton).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Email magic link" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Create account" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Google" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Sign in as Guest" })).toHaveCount(0);
 
     await page.getByPlaceholder("you@company.com").fill("test@example.com");
-    await expect(magicLinkButton).toBeEnabled();
     await expect(signInButton).toBeDisabled();
 
     await page.getByLabel("Password").fill("short");
