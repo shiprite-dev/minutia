@@ -79,8 +79,17 @@ jobs:
 
       - name: Enable seeded email auth for E2E
         run: |
-          sed -i '/^\[auth\]$/,/^\[/ s/^enable_signup = false/enable_signup = true/' supabase/config.toml
-          sed -i '/^\[auth.email\]$/,/^\[/ s/^enable_signup = false/enable_signup = true/' supabase/config.toml
+          awk '
+            /^\[auth\]$/ { section = "auth" }
+            /^\[auth\.email\]$/ { section = "auth.email" }
+            /^\[/ && $0 !~ /^\[auth(\.email)?\]$/ { section = "" }
+            section == "auth" && $0 == "enable_signup = false" { print "enable_signup = true"; next }
+            section == "auth.email" && $0 == "enable_signup = false" { print "enable_signup = true"; next }
+            { print }
+          ' supabase/config.toml > supabase/config.toml.ci
+          mv supabase/config.toml.ci supabase/config.toml
+          grep -A 25 '^\[auth\]' supabase/config.toml
+          grep -A 12 '^\[auth\.email\]' supabase/config.toml
 
       - name: Start Supabase
         run: npx supabase start
