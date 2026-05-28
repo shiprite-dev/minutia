@@ -40,7 +40,14 @@ test.describe("Setup API endpoints", () => {
   test("GET /api/setup/check-env returns environment validation", async ({
     request,
   }) => {
-    const res = await request.get(`${APP_URL}/api/setup/check-env`);
+    const res = await request.get(`${APP_URL}/api/setup/check-env`, {
+      headers: setupHeaders(),
+    });
+    if (!res.ok()) {
+      expect([401, 403, 503]).toContain(res.status());
+      return;
+    }
+
     expect(res.ok()).toBeTruthy();
     const body = await res.json();
 

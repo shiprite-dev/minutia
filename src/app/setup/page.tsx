@@ -81,6 +81,29 @@ export default function SetupPage() {
   const [seedDemo, setSeedDemo] = React.useState(true);
   const [completing, setCompleting] = React.useState(false);
 
+  const setupHeaders = React.useCallback(() => ({
+    "Content-Type": "application/json",
+    ...(setupToken.trim() ? { "x-minutia-setup-token": setupToken.trim() } : {}),
+  }), [setupToken]);
+
+  const runEnvCheck = React.useCallback(async () => {
+    setEnvLoading(true);
+    setEnvError(null);
+    try {
+      const res = await fetch("/api/setup/check-env", { headers: setupHeaders() });
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.error || "Health check failed");
+      }
+      const data = await res.json();
+      setEnvCheck(data);
+    } catch (err) {
+      setEnvError(err instanceof Error ? err.message : "Failed to check environment");
+    } finally {
+      setEnvLoading(false);
+    }
+  }, [setupHeaders]);
+
   React.useEffect(() => {
     fetch("/api/setup/status")
       .then((r) => r.json())
@@ -93,22 +116,7 @@ export default function SetupPage() {
         runEnvCheck();
       })
       .catch(() => runEnvCheck());
-  }, [router]);
-
-  async function runEnvCheck() {
-    setEnvLoading(true);
-    setEnvError(null);
-    try {
-      const res = await fetch("/api/setup/check-env");
-      if (!res.ok) throw new Error("Health check failed");
-      const data = await res.json();
-      setEnvCheck(data);
-    } catch (err) {
-      setEnvError(err instanceof Error ? err.message : "Failed to check environment");
-    } finally {
-      setEnvLoading(false);
-    }
-  }
+  }, [router, runEnvCheck]);
 
   function goNext() {
     setDirection(1);
@@ -120,13 +128,6 @@ export default function SetupPage() {
     envCheck.env.anon_key === "ok" &&
     envCheck.env.service_role_key === "ok" &&
     envCheck.db.connected;
-
-  function setupHeaders() {
-    return {
-      "Content-Type": "application/json",
-      ...(setupToken.trim() ? { "x-minutia-setup-token": setupToken.trim() } : {}),
-    };
-  }
 
   async function handleCreateAdmin() {
     setAdminCreating(true);

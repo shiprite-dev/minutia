@@ -9,6 +9,8 @@ import {
 const SUPABASE_URL = process.env.SUPABASE_URL ?? "http://127.0.0.1:54321";
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
 
+test.describe.configure({ mode: "serial" });
+
 async function resetIssueStatus(issueId: string) {
   if (!SERVICE_KEY) return;
   await fetch(`${SUPABASE_URL}/rest/v1/issues?id=eq.${issueId}`, {

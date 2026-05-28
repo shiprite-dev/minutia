@@ -11,6 +11,27 @@ const SECURITY_HEADERS: Record<string, string> = {
   "X-DNS-Prefetch-Control": "on",
 };
 
+const SENSITIVE_PROBE_PATHS = new Set([
+  "/.env",
+  "/.env.local",
+  "/.env.production",
+  "/account.json",
+  "/actuator/env",
+  "/api/env",
+  "/appsettings.json",
+  "/credentials.json",
+  "/keyfile.json",
+]);
+
+function isSensitiveProbePath(pathname: string): boolean {
+  const normalized = pathname.toLowerCase();
+  return (
+    SENSITIVE_PROBE_PATHS.has(normalized) ||
+    normalized.startsWith("/.env.") ||
+    normalized.startsWith("/cdn-cgi/scripts/")
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Setup completion cache (avoids DB hit on every request after setup)
 // ---------------------------------------------------------------------------
@@ -94,6 +115,10 @@ function safeNextPath(pathname: string, search: string) {
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
   const ip = getClientIp(request);
+
+  if (isSensitiveProbePath(pathname)) {
+    return applySecurityHeaders(new NextResponse("Not Found", { status: 404 }));
+  }
 
   if (pathname.startsWith("/api/")) {
     if (isRateLimited(ip, 100, 60_000)) {

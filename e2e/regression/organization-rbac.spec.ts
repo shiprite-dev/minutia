@@ -1,15 +1,11 @@
-import { readFile, rm } from "node:fs/promises";
-import path from "node:path";
 import { test, expect, type APIRequestContext } from "@playwright/test";
 import { createClient } from "@supabase/supabase-js";
+import { readOutbox, withOutbox } from "../helpers/outbox";
 
 const APP_URL = "http://localhost:3000";
 const SUPABASE_URL = process.env.SUPABASE_URL ?? "http://127.0.0.1:54321";
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
 const TEST_USER_ID = "00000000-0000-0000-0000-000000000001";
-const OUTBOX_PATH =
-  process.env.MINUTIA_TEST_EMAIL_OUTBOX ??
-  path.join(process.cwd(), "test-results", "meeting-notes-email-outbox.jsonl");
 
 function serviceHeaders(prefer = "return=minimal") {
   return {
@@ -82,24 +78,6 @@ async function deleteAuthUser(request: APIRequestContext, userId: string | null)
   });
 }
 
-async function resetOutbox() {
-  await rm(OUTBOX_PATH, { force: true });
-}
-
-async function readOutbox() {
-  const content = await readFile(OUTBOX_PATH, "utf8");
-  return content
-    .trim()
-    .split("\n")
-    .filter(Boolean)
-    .map((line) => JSON.parse(line) as {
-      to: string | string[];
-      subject: string;
-      text: string;
-      html: string;
-    });
-}
-
 async function getPasswordAccessToken() {
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   expect(anonKey).toBeTruthy();
@@ -163,33 +141,34 @@ test.describe("Organization RBAC and workspace routes", () => {
     const invitedUserId = await createAuthUser(request, invitedEmail);
 
     try {
-      await resetOutbox();
-      const res = await request.post(`${APP_URL}/api/admin/invitations`, {
-        data: { email: invitedEmail, role: "member" },
+      await withOutbox(async () => {
+        const res = await request.post(`${APP_URL}/api/admin/invitations`, {
+          data: { email: invitedEmail, role: "member" },
+        });
+        expect(res.ok()).toBeTruthy();
+
+        const membershipRes = await request.get(
+          `${SUPABASE_URL}/rest/v1/organization_members?organization_id=eq.${orgId}&user_id=eq.${invitedUserId}&select=role`,
+          { headers: serviceHeaders() }
+        );
+        expect(membershipRes.ok()).toBeTruthy();
+        const memberships = await membershipRes.json();
+        expect(memberships[0]?.role).toBe("member");
+
+        const invitationRes = await request.get(
+          `${SUPABASE_URL}/rest/v1/organization_invitations?organization_id=eq.${orgId}&email=eq.${invitedEmail}&select=status,role`,
+          { headers: serviceHeaders() }
+        );
+        expect(invitationRes.ok()).toBeTruthy();
+        const invitations = await invitationRes.json();
+        expect(invitations[0]).toMatchObject({ status: "accepted", role: "member" });
+
+        const [email] = await readOutbox();
+        expect(email.to).toBe(invitedEmail);
+        expect(email.subject).toContain("Minutia");
+        expect(email.text).toContain("member");
+        expect(email.html).toContain("/settings");
       });
-      expect(res.ok()).toBeTruthy();
-
-      const membershipRes = await request.get(
-        `${SUPABASE_URL}/rest/v1/organization_members?organization_id=eq.${orgId}&user_id=eq.${invitedUserId}&select=role`,
-        { headers: serviceHeaders() }
-      );
-      expect(membershipRes.ok()).toBeTruthy();
-      const memberships = await membershipRes.json();
-      expect(memberships[0]?.role).toBe("member");
-
-      const invitationRes = await request.get(
-        `${SUPABASE_URL}/rest/v1/organization_invitations?organization_id=eq.${orgId}&email=eq.${invitedEmail}&select=status,role`,
-        { headers: serviceHeaders() }
-      );
-      expect(invitationRes.ok()).toBeTruthy();
-      const invitations = await invitationRes.json();
-      expect(invitations[0]).toMatchObject({ status: "accepted", role: "member" });
-
-      const [email] = await readOutbox();
-      expect(email.to).toBe(invitedEmail);
-      expect(email.subject).toContain("Minutia");
-      expect(email.text).toContain("member");
-      expect(email.html).toContain("/settings");
     } finally {
       await deleteAuthUser(request, invitedUserId);
     }
@@ -301,7 +280,7 @@ test.describe("Organization RBAC and workspace routes", () => {
       );
       expect(membershipRes.ok()).toBeTruthy();
       const memberships = await membershipRes.json();
-      expect(memberships[0]?.role).toBe("member");
+      expect(memberships).toEqual([]);
 
       const profileRes = await request.get(
         `${SUPABASE_URL}/rest/v1/profiles?id=eq.${forgedUserId}&select=current_organization_id`,
@@ -309,7 +288,7 @@ test.describe("Organization RBAC and workspace routes", () => {
       );
       expect(profileRes.ok()).toBeTruthy();
       const profiles = await profileRes.json();
-      expect(profiles[0]?.current_organization_id).toBe(orgId);
+      expect(profiles[0]?.current_organization_id).toBeNull();
     } finally {
       await deleteAuthUser(request, forgedUserId);
     }

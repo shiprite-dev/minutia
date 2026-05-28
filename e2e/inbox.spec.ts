@@ -1,8 +1,14 @@
 import { test, expect } from "@playwright/test";
+import { resetSeedNotifications, waitForApp } from "./regression/seed-data";
 
 test.describe.serial("Inbox", () => {
+  test.beforeEach(async ({ request }) => {
+    await resetSeedNotifications(request);
+  });
+
   test("displays unread and read notifications", async ({ page }) => {
     await page.goto("/inbox");
+    await waitForApp(page);
 
     await expect(page.getByRole("heading", { name: "Inbox" }).first()).toBeVisible();
     await expect(page.getByText("unread notification")).toBeVisible();
@@ -20,12 +26,16 @@ test.describe.serial("Inbox", () => {
 
   test("sidebar shows unread badge count", async ({ page }) => {
     await page.goto("/inbox");
+    await waitForApp(page);
+
     const inboxLink = page.locator('a[href="/inbox"]');
     await expect(inboxLink).toContainText(/\d+/, { timeout: 10000 });
   });
 
   test("clicking notification navigates to target", async ({ page }) => {
     await page.goto("/inbox");
+    await waitForApp(page);
+
     await page.getByText("You were assigned: Migrate CI").click();
     await page.waitForURL(/\/issues\//);
     expect(page.url()).toContain("/issues/");
@@ -33,6 +43,8 @@ test.describe.serial("Inbox", () => {
 
   test("mark all read clears unread count", async ({ page }) => {
     await page.goto("/inbox");
+    await waitForApp(page);
+
     await page.getByRole("button", { name: "Mark all read" }).click();
 
     const inboxLink = page.locator('a[href="/inbox"]');
