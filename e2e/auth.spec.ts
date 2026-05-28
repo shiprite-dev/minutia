@@ -14,7 +14,7 @@ test.describe("Authentication", () => {
     await expect(page.getByLabel("Password")).toBeVisible();
     await expect(page.getByRole("button", { name: "Sign in", exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "Create account" })).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "Email magic link" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Email magic link" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Google" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Sign in as Guest" })).toHaveCount(0);
   });
@@ -25,16 +25,14 @@ test.describe("Authentication", () => {
     const emailInput = page.getByLabel("Email address");
     const passwordInput = page.getByLabel("Password");
     const signInButton = page.getByRole("button", { name: "Sign in", exact: true });
-    const magicLinkButton = page.getByRole("button", { name: "Email magic link" });
 
     await expect(signInButton).toBeDisabled();
-    await expect(magicLinkButton).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Email magic link" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Create account" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Google" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Sign in as Guest" })).toHaveCount(0);
 
     await emailInput.fill("test@example.com");
-    await expect(magicLinkButton).toBeEnabled();
     await expect(signInButton).toBeDisabled();
 
     await passwordInput.fill("short");
@@ -42,6 +40,33 @@ test.describe("Authentication", () => {
 
     await passwordInput.fill("password123");
     await expect(signInButton).toBeEnabled();
+  });
+
+  test("forgot password sends a recovery email", async ({ page }) => {
+    await page.route("**/api/password-reset-requests", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: "{}",
+      });
+    });
+
+    await page.goto("/login");
+    await page.getByLabel("Email address").fill("test@example.com");
+    await page.getByRole("button", { name: "Forgot password?" }).click();
+
+    await expect(page.getByText("Check your email")).toBeVisible();
+    await expect(
+      page.getByText("We sent a password reset link to test@example.com")
+    ).toBeVisible();
+  });
+
+  test("password reset request is handled by the backend email path", async ({ request }) => {
+    const res = await request.post("/api/password-reset-requests", {
+      data: { email: "test@example.com" },
+    });
+
+    await expect(res).toBeOK();
   });
 
   test("unauthenticated user is redirected from app pages", async ({ page }) => {
