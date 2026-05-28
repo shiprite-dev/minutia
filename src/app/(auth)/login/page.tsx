@@ -39,10 +39,14 @@ function LoginForm() {
 
   const publicSignupEnabled =
     process.env.NEXT_PUBLIC_ENABLE_PUBLIC_SIGNUP === "true";
+  const magicLinkEnabled =
+    process.env.NEXT_PUBLIC_ENABLE_MAGIC_LINK === "true";
   const googleAuthEnabled =
     process.env.NEXT_PUBLIC_ENABLE_GOOGLE_AUTH === "true";
   const guestLoginEnabled =
     process.env.NEXT_PUBLIC_ENABLE_GUEST_LOGIN === "true";
+  const secondaryAuthEnabled =
+    magicLinkEnabled || googleAuthEnabled || guestLoginEnabled;
   const canSignIn = email.trim().length > 0 && password.length > 0;
   const canSignUp =
     publicSignupEnabled && email.trim().length > 0 && password.length >= 8;
@@ -113,6 +117,28 @@ function LoginForm() {
       setErrorMessage(error.message);
     } else {
       setSentMessage("We sent a magic link to");
+      setFormState("sent");
+    }
+  }
+
+  async function handleForgotPassword() {
+    if (!email.trim()) return;
+
+    setFormState("loading");
+    setErrorMessage("");
+
+    const res = await fetch("/api/password-reset-requests", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: email.trim() }),
+    });
+    const data = await res.json();
+
+    if (!res.ok) {
+      setFormState("error");
+      setErrorMessage(data.error || "Failed to send password reset email");
+    } else {
+      setSentMessage("We sent a password reset link to");
       setFormState("sent");
     }
   }
@@ -241,9 +267,19 @@ function LoginForm() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="password" className="font-sans text-ink-2">
-                  Password
-                </Label>
+                <div className="flex items-center justify-between gap-3">
+                  <Label htmlFor="password" className="font-sans text-ink-2">
+                    Password
+                  </Label>
+                  <button
+                    type="button"
+                    onClick={handleForgotPassword}
+                    disabled={formState === "loading" || !email.trim()}
+                    className="font-sans text-xs text-ink-3 underline underline-offset-4 transition-colors hover:text-ink-2 disabled:pointer-events-none disabled:opacity-40"
+                  >
+                    Forgot password?
+                  </button>
+                </div>
                 <Input
                   id="password"
                   type="password"
@@ -298,26 +334,29 @@ function LoginForm() {
               )}
             </form>
 
-            {/* Divider */}
-            <div className="relative my-6 flex items-center">
-              <Separator className="flex-1 bg-rule" />
-              <span className="px-3 font-sans text-xs text-ink-4">
-                or continue with
-              </span>
-              <Separator className="flex-1 bg-rule" />
-            </div>
+            {secondaryAuthEnabled && (
+              <div className="relative my-6 flex items-center">
+                <Separator className="flex-1 bg-rule" />
+                <span className="px-3 font-sans text-xs text-ink-4">
+                  or continue with
+                </span>
+                <Separator className="flex-1 bg-rule" />
+              </div>
+            )}
 
-            <form onSubmit={handleMagicLink}>
-              <Button
-                type="submit"
-                variant="outline"
-                disabled={formState === "loading" || !email.trim()}
-                className="mb-3 h-10 w-full rounded-[12px] border-rule bg-paper font-sans font-medium text-ink hover:bg-paper-3"
-              >
-                <Mail className="mr-2 h-4 w-4" />
-                Email magic link
-              </Button>
-            </form>
+            {magicLinkEnabled && (
+              <form onSubmit={handleMagicLink}>
+                <Button
+                  type="submit"
+                  variant="outline"
+                  disabled={formState === "loading" || !email.trim()}
+                  className="mb-3 h-10 w-full rounded-[12px] border-rule bg-paper font-sans font-medium text-ink hover:bg-paper-3"
+                >
+                  <Mail className="mr-2 h-4 w-4" />
+                  Email magic link
+                </Button>
+              </form>
+            )}
 
             {googleAuthEnabled && (
               <Button

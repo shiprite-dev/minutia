@@ -10,6 +10,8 @@ const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
 const TEST_USER_ID = "00000000-0000-0000-0000-000000000001";
 const TEST_USER_EMAIL = "test@example.com";
 
+test.describe.configure({ mode: "serial" });
+
 function anonHeaders() {
   return {
     apikey: ANON_KEY,
@@ -25,6 +27,12 @@ function serviceHeaders(prefer = "return=minimal") {
     "Content-Type": "application/json",
     Prefer: prefer,
   };
+}
+
+function extractActionUrl(text: string, label: string) {
+  const match = text.match(new RegExp(`${label}: (https?://\\S+)`));
+  expect(match?.[1]).toBeTruthy();
+  return new URL(match![1]);
 }
 
 async function getShareOrgId(
@@ -261,10 +269,88 @@ test.describe("Guest Share Pages", () => {
         expect(email.to).not.toContain(globalAdminEmail);
         expect(email.replyTo).toBe("viewer@example.com");
         expect(email.text).toContain(`/share/${SHARE_TOKENS.meeting}`);
+        expect(email.text).toContain("Approve request:");
+        expect(email.text).toContain("Reject request:");
+        expect(email.html).toContain("Approve request");
+        expect(email.html).toContain("Reject request");
       });
     } finally {
       await setOrganizationRole(request, orgId, TEST_USER_ID, "member");
       await deleteAuthUser(request, globalAdminId);
+    }
+  });
+});
+
+test.describe("Invite request email actions", () => {
+  test.use({ storageState: "e2e/.auth/user.json" });
+
+  test("organization admin can approve a share access request from the email action", async ({
+    request,
+  }) => {
+    test.skip(!SERVICE_KEY, "Requires service role for org setup");
+
+    const orgId = await getShareOrgId(request);
+    const requestedEmail = `viewer-${Date.now()}@example.com`;
+
+    try {
+      await setOrganizationRole(request, orgId, TEST_USER_ID, "admin");
+      let token: string | null = null;
+
+      await withOutbox(async () => {
+        const res = await request.post(`${APP_URL}/api/invite-requests`, {
+          data: {
+            email: requestedEmail,
+            next: `/share/${SHARE_TOKENS.meeting}`,
+          },
+        });
+        expect(res.ok()).toBeTruthy();
+
+        const [email] = await readOutbox();
+        const approveUrl = extractActionUrl(email.text, "Approve request");
+        expect(approveUrl.pathname).toBe("/invite-requests/review");
+
+        token = approveUrl.searchParams.get("token");
+      });
+
+      expect(token).toBeTruthy();
+
+      const approve = await request.post(`${APP_URL}/api/invite-requests/actions`, {
+        data: { token, decision: "approve" },
+      });
+      expect(approve.ok()).toBeTruthy();
+      await expect(approve.json()).resolves.toEqual(
+        expect.objectContaining({
+          status: "approved",
+          email: requestedEmail,
+          organizationId: orgId,
+        })
+      );
+
+      const invitationRes = await request.get(
+        `${SUPABASE_URL}/rest/v1/organization_invitations?organization_id=eq.${orgId}&email=eq.${requestedEmail}&select=status,role`,
+        { headers: serviceHeaders() }
+      );
+      expect(invitationRes.ok()).toBeTruthy();
+      const invitations = await invitationRes.json();
+      expect(invitations[0]).toMatchObject({ status: "accepted", role: "member" });
+    } finally {
+      const profileRes = await request.get(
+        `${SUPABASE_URL}/rest/v1/profiles?email=eq.${requestedEmail}&select=id`,
+        { headers: serviceHeaders() }
+      );
+      if (profileRes.ok()) {
+        const profiles = await profileRes.json();
+        await deleteAuthUser(request, profiles[0]?.id ?? null);
+      }
+      await request.delete(
+        `${SUPABASE_URL}/rest/v1/organization_invitations?organization_id=eq.${orgId}&email=eq.${requestedEmail}`,
+        { headers: serviceHeaders() }
+      );
+      await request.delete(
+        `${SUPABASE_URL}/rest/v1/invite_requests?organization_id=eq.${orgId}&email=eq.${requestedEmail}`,
+        { headers: serviceHeaders() }
+      );
+      await setOrganizationRole(request, orgId, TEST_USER_ID, "member");
     }
   });
 });
