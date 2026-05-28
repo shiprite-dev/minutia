@@ -114,6 +114,24 @@ test.describe("Issue Detail", () => {
     ).toBeVisible();
   });
 
+  test("shows the human-readable issue key", async ({ page }) => {
+    await page.goto(url);
+    await waitForApp(page);
+
+    await expect(page.getByText("OIL-1").first()).toBeVisible();
+  });
+
+  test("issue key URL opens the canonical issue detail", async ({ page }) => {
+    await page.goto("/issues/OIL-1");
+    await waitForApp(page);
+
+    await expect(page).toHaveURL(new RegExp(`/issues/${ISSUES.migrateCI}`));
+    await expect(page.getByText("OIL-1").first()).toBeVisible();
+    await expect(
+      page.locator("h1", { hasText: "Migrate CI from Jenkins to GitHub Actions" })
+    ).toBeVisible();
+  });
+
   test("lifecycle timeline shows status updates", async ({ page }) => {
     await page.goto(url);
     await waitForApp(page);

@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { CATEGORY_CONFIG, STATUS_CONFIG } from "@/lib/constants";
+import { IssueKey } from "@/components/minutia/issue-key";
 import type {
   GuestShare,
   Meeting,
@@ -464,6 +465,7 @@ function IssueShareView({
           <span>Shared</span>
           <ViewOnlyBadge />
         </div>
+        <IssueKey issue={issue} className="mt-3" />
         <h1 className="font-display text-2xl font-semibold text-ink mt-3">
           {issue.title}
         </h1>
@@ -598,6 +600,7 @@ function ShareIssueCard({ issue }: { issue: Issue }) {
           />
         </div>
         <div className="flex-1 min-w-0">
+          <IssueKey issue={issue} className="mb-2 h-5 px-1.5 text-[10px]" />
           <p className="text-sm font-medium text-ink">{issue.title}</p>
           <div className="flex flex-wrap items-center gap-3 mt-2">
             <span className="inline-flex items-center gap-1 text-xs text-ink-2">

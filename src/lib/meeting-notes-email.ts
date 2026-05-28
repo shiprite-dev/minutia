@@ -1,5 +1,6 @@
 import type { Decision, Issue, Meeting } from "@/lib/types";
 import { escapeHtml } from "@/lib/email";
+import { formatIssueKey } from "@/lib/issue-utils";
 
 type MeetingEmailInput = {
   meeting: Meeting;
@@ -41,7 +42,9 @@ function issueRows(issues: Issue[], appUrl: string) {
   return issues
     .map((issue) => {
       const url = issueUrl(appUrl, issue.id);
+      const issueKey = formatIssueKey(issue);
       const meta = [
+        issueKey,
         issue.category,
         issue.status.replaceAll("_", " "),
         issue.owner_name ? `Owner: ${issue.owner_name}` : null,
@@ -168,13 +171,13 @@ export function buildMeetingNotesEmail(input: MeetingEmailInput) {
     formatDate(meeting.date),
     "",
     `Items raised (${raisedIssues.length})`,
-    ...raisedIssues.map((issue) => `- ${issue.title}: ${issueUrl(appUrl, issue.id)}`),
+    ...raisedIssues.map((issue) => `- ${formatIssueKey(issue)} ${issue.title}: ${issueUrl(appUrl, issue.id)}`),
     "",
     `Resolved this meeting (${resolvedIssues.length})`,
-    ...resolvedIssues.map((issue) => `- ${issue.title}: ${issueUrl(appUrl, issue.id)}`),
+    ...resolvedIssues.map((issue) => `- ${formatIssueKey(issue)} ${issue.title}: ${issueUrl(appUrl, issue.id)}`),
     "",
     `Carried forward (${carriedIssues.length})`,
-    ...carriedIssues.map((issue) => `- ${issue.title}: ${issueUrl(appUrl, issue.id)}`),
+    ...carriedIssues.map((issue) => `- ${formatIssueKey(issue)} ${issue.title}: ${issueUrl(appUrl, issue.id)}`),
     "",
     `Decisions (${decisions.length})`,
     ...decisions.map((decision) => `- ${decision.title}`),

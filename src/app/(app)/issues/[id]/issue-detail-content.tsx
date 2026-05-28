@@ -18,6 +18,7 @@ import {
 } from "@/lib/hooks/use-issues";
 import { StatusChip } from "@/components/minutia/status-chip";
 import { CategoryBadge } from "@/components/minutia/category-badge";
+import { IssueKey } from "@/components/minutia/issue-key";
 import { PriorityIndicator } from "@/components/minutia/priority-indicator";
 import { TimelineNode } from "@/components/minutia/timeline-node";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -341,6 +342,8 @@ export function IssueDetailContent({ issueId }: IssueDetailContentProps) {
           <ArrowLeft className="size-4" />
           Back
         </button>
+
+        <IssueKey issue={issue} className="mb-3" />
 
         {/* Title (inline editable) */}
         <InlineEditText

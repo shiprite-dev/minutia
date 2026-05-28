@@ -37,6 +37,7 @@ import { useDecisions } from "@/lib/hooks/use-decisions";
 import { PRIORITY_CONFIG, STATUS_CONFIG } from "@/lib/constants";
 import { StatusChip } from "@/components/minutia/status-chip";
 import { CategoryBadge } from "@/components/minutia/category-badge";
+import { IssueKey } from "@/components/minutia/issue-key";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -540,6 +541,7 @@ function IssueRow({
       )}
     >
       <CategoryBadge category={issue.category} size="sm" />
+      <IssueKey issue={issue} className="h-5 px-1.5 text-[10px]" />
       <Link
         href={`/issues/${issue.id}`}
         className="flex-1 min-w-0 text-sm font-medium text-ink group-hover:text-accent transition-colors truncate basis-[120px]"

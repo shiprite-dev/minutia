@@ -8,6 +8,7 @@ import type { Issue, IssueStatus, IssueUpdate } from "@/lib/types";
 import { STATUS_CONFIG } from "@/lib/constants";
 import { StatusChip } from "./status-chip";
 import { CategoryBadge } from "./category-badge";
+import { IssueKey } from "./issue-key";
 import { PriorityIndicator } from "./priority-indicator";
 import { isDateOverdue, formatShortDate } from "@/lib/date-utils";
 
@@ -64,6 +65,7 @@ export function IssueCard({
           <PriorityIndicator priority={issue.priority} />
         </div>
         <div className="flex-1 min-w-0">
+          <IssueKey issue={issue} className="mb-2 h-5 px-1.5 text-[10px]" />
           <Link
             href={`/issues/${issue.id}`}
             className={cn(

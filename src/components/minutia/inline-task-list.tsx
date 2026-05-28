@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CATEGORY_CONFIG } from "@/lib/constants";
+import { IssueKey } from "@/components/minutia/issue-key";
 import type { Issue, IssueCategory, IssueStatus } from "@/lib/types";
 
 interface InlineTaskListProps {
@@ -174,6 +175,8 @@ function InlineTaskItem({
       >
         {isChecked && <Check className="size-3" strokeWidth={3} />}
       </button>
+
+      <IssueKey issue={issue} className="h-5 px-1.5 text-[10px]" />
 
       {/* Title (editable or link) */}
       <div className="flex-1 min-w-0 relative">
