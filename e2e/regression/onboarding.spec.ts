@@ -24,7 +24,6 @@ function supabaseHeaders(prefer = "return=minimal") {
 async function createOnboardingAuthState(): Promise<OnboardingState> {
   const userId = randomUUID();
   const email = `onboarding-${userId}@example.com`;
-  const orgId = randomUUID();
   const authHeaders = {
     apikey: SERVICE_KEY,
     Authorization: `Bearer ${SERVICE_KEY}`,
@@ -56,38 +55,14 @@ async function createOnboardingAuthState(): Promise<OnboardingState> {
   });
   expect(profile.ok).toBeTruthy();
 
-  const org = await fetch(`${SUPABASE_URL}/rest/v1/organizations`, {
-    method: "POST",
-    headers: supabaseHeaders(),
-    body: JSON.stringify({
-      id: orgId,
-      name: "Onboarding E2E",
-      slug: `onboarding-${userId}`,
-      created_by: userId,
-    }),
-  });
-  expect(org.ok).toBeTruthy();
-
-  const membership = await fetch(`${SUPABASE_URL}/rest/v1/organization_members`, {
-    method: "POST",
-    headers: supabaseHeaders("resolution=merge-duplicates,return=minimal"),
-    body: JSON.stringify({
-      organization_id: orgId,
-      user_id: userId,
-      role: "admin",
-    }),
-  });
-  expect(membership.ok).toBeTruthy();
-
   const currentOrg = await fetch(
-    `${SUPABASE_URL}/rest/v1/profiles?id=eq.${userId}`,
-    {
-      method: "PATCH",
-      headers: supabaseHeaders(),
-      body: JSON.stringify({ current_organization_id: orgId }),
-    }
+    `${SUPABASE_URL}/rest/v1/profiles?id=eq.${userId}&select=current_organization_id`,
+    { headers: supabaseHeaders("return=representation") }
   );
   expect(currentOrg.ok).toBeTruthy();
+  const currentOrgRows = await currentOrg.json();
+  const orgId = currentOrgRows[0]?.current_organization_id;
+  expect(orgId).toBeTruthy();
 
   const token = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
     method: "POST",
@@ -112,11 +87,6 @@ async function createOnboardingAuthState(): Promise<OnboardingState> {
 }
 
 async function deleteOnboardingUser(state: OnboardingState) {
-  await fetch(`${SUPABASE_URL}/rest/v1/organizations?id=eq.${state.orgId}`, {
-    method: "DELETE",
-    headers: supabaseHeaders(),
-  });
-
   await fetch(`${SUPABASE_URL}/auth/v1/admin/users/${state.userId}`, {
     method: "DELETE",
     headers: {
@@ -155,7 +125,7 @@ async function deleteOnboardingSeries(
   state: OnboardingState,
 ) {
   await request.delete(
-    `${SUPABASE_URL}/rest/v1/meeting_series?organization_id=eq.${state.orgId}`,
+    `${SUPABASE_URL}/rest/v1/meeting_series?owner_id=eq.${state.userId}`,
     { headers: supabaseHeaders() }
   );
 }

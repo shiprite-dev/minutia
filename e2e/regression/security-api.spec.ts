@@ -77,6 +77,18 @@ async function getSeedUserRole(request: APIRequestContext): Promise<string> {
   return body[0]?.role;
 }
 
+async function getSeedWorkspaceId(request: APIRequestContext): Promise<string> {
+  const res = await request.get(
+    `${SUPABASE_URL}/rest/v1/profiles?id=eq.${TEST_USER_ID}&select=current_organization_id`,
+    { headers: serviceHeaders("return=representation") }
+  );
+
+  expect(res.ok()).toBeTruthy();
+  const body = await res.json();
+  expect(body[0]?.current_organization_id).toBeTruthy();
+  return body[0].current_organization_id as string;
+}
+
 test.describe("Profile role API security", () => {
   test.describe.configure({ mode: "serial" });
 
@@ -145,13 +157,13 @@ test.describe("Guest share API security", () => {
     test.skip(!ANON_KEY || !SERVICE_KEY, "Supabase anon and service keys are required");
   });
 
-  test("authenticated users cannot create shares for resources they do not own", async ({
+  test("workspace members can create shares for resources owned by another member", async ({
     request,
   }) => {
     const admin = serviceClient();
     const email = `foreign-owner-${Date.now()}@example.com`;
     const seriesId = crypto.randomUUID();
-    const orgId = crypto.randomUUID();
+    const orgId = await getSeedWorkspaceId(request);
 
     const { data: userData, error: userError } = await admin.auth.admin.createUser({
       email,
@@ -169,27 +181,6 @@ test.describe("Guest share API security", () => {
       name: "Foreign Owner",
     });
     expect(profileError).toBeNull();
-
-    const { error: orgError } = await admin.from("organizations").insert({
-      id: orgId,
-      name: "Foreign Private Org",
-      slug: `foreign-private-${Date.now()}`,
-      created_by: foreignUserId,
-    });
-    expect(orgError).toBeNull();
-
-    const { error: membershipError } = await admin.from("organization_members").insert({
-      organization_id: orgId,
-      user_id: foreignUserId,
-      role: "admin",
-    });
-    expect(membershipError).toBeNull();
-
-    const { error: currentOrgError } = await admin
-      .from("profiles")
-      .update({ current_organization_id: orgId })
-      .eq("id", foreignUserId);
-    expect(currentOrgError).toBeNull();
 
     const { error: seriesError } = await admin.from("meeting_series").insert({
       id: seriesId,
@@ -215,17 +206,16 @@ test.describe("Guest share API security", () => {
         }
       );
 
-      expect(response.ok()).toBeFalsy();
+      expect(response.ok()).toBeTruthy();
 
       const verify = await request.get(
-        `${SUPABASE_URL}/rest/v1/guest_shares?resource_id=eq.${seriesId}&select=id`,
+        `${SUPABASE_URL}/rest/v1/guest_shares?resource_id=eq.${seriesId}&select=resource_id`,
         { headers: serviceHeaders("return=representation") }
       );
       expect(verify.ok()).toBeTruthy();
-      await expect(verify.json()).resolves.toEqual([]);
+      await expect(verify.json()).resolves.toEqual([{ resource_id: seriesId }]);
     } finally {
       await admin.from("guest_shares").delete().eq("resource_id", seriesId);
-      await admin.from("organizations").delete().eq("id", orgId);
       await admin.auth.admin.deleteUser(foreignUserId);
     }
   });

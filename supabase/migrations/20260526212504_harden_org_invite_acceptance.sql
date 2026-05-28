@@ -3,6 +3,7 @@ RETURNS trigger AS $$
 DECLARE
   profile_name text;
   invitation_row record;
+  workspace_org_id uuid;
   created_org_id uuid;
   accepted_org_id uuid;
   base_slug text;
@@ -40,7 +41,24 @@ BEGIN
     RETURN NEW;
   END IF;
 
-  IF NOT EXISTS (SELECT 1 FROM public.organizations) THEN
+  SELECT id
+  INTO workspace_org_id
+  FROM public.organizations
+  ORDER BY created_at ASC
+  LIMIT 1;
+
+  IF workspace_org_id IS NOT NULL THEN
+    INSERT INTO public.organization_members (organization_id, user_id, role)
+    VALUES (workspace_org_id, NEW.id, 'member')
+    ON CONFLICT (organization_id, user_id) DO NOTHING;
+
+    UPDATE public.profiles
+    SET current_organization_id = workspace_org_id
+    WHERE id = NEW.id;
+    RETURN NEW;
+  END IF;
+
+  IF workspace_org_id IS NULL THEN
     base_slug := COALESCE(NULLIF(public.slugify_organization_name(profile_name), ''), 'workspace');
     final_slug := base_slug || '-' || substr(replace(NEW.id::text, '-', ''), 1, 8);
 

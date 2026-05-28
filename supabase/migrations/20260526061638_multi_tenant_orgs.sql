@@ -51,10 +51,6 @@ ALTER TABLE public.meeting_series
 ALTER TABLE public.guest_shares
   ADD COLUMN IF NOT EXISTS organization_id uuid REFERENCES public.organizations(id) ON DELETE CASCADE;
 
-INSERT INTO public.instance_config (key, value)
-VALUES ('hosted_mode', 'false')
-ON CONFLICT (key) DO NOTHING;
-
 CREATE INDEX idx_meeting_series_organization_id ON public.meeting_series(organization_id);
 CREATE INDEX idx_guest_shares_organization_id ON public.guest_shares(organization_id);
 
@@ -301,29 +297,53 @@ $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 DO $$
 DECLARE
   profile_row record;
-  created_org_id uuid;
+  workspace_org_id uuid;
   org_name text;
   org_slug text;
 BEGIN
+  SELECT id
+  INTO workspace_org_id
+  FROM public.organizations
+  ORDER BY created_at ASC
+  LIMIT 1;
+
+  IF workspace_org_id IS NULL THEN
+    SELECT p.id, p.email, p.name
+    INTO profile_row
+    FROM public.profiles p
+    WHERE NOT EXISTS (
+      SELECT 1 FROM public.organization_members om WHERE om.user_id = p.id
+    )
+    ORDER BY p.created_at ASC
+    LIMIT 1;
+
+    IF profile_row.id IS NOT NULL THEN
+      org_name := COALESCE(NULLIF(profile_row.name, ''), split_part(profile_row.email, '@', 1), 'Workspace') || '''s workspace';
+      org_slug := COALESCE(NULLIF(public.slugify_organization_name(org_name), ''), 'workspace') || '-' || substr(replace(profile_row.id::text, '-', ''), 1, 8);
+
+      INSERT INTO public.organizations (name, slug, created_by)
+      VALUES (org_name, org_slug, profile_row.id)
+      RETURNING id INTO workspace_org_id;
+    END IF;
+  END IF;
+
+  IF workspace_org_id IS NULL THEN
+    RETURN;
+  END IF;
+
   FOR profile_row IN
-    SELECT p.id, p.email, p.name, p.role
+    SELECT p.id, p.role
     FROM public.profiles p
     WHERE NOT EXISTS (
       SELECT 1 FROM public.organization_members om WHERE om.user_id = p.id
     )
   LOOP
-    org_name := COALESCE(NULLIF(profile_row.name, ''), split_part(profile_row.email, '@', 1), 'Workspace') || '''s workspace';
-    org_slug := COALESCE(NULLIF(public.slugify_organization_name(org_name), ''), 'workspace') || '-' || substr(replace(profile_row.id::text, '-', ''), 1, 8);
-
-    INSERT INTO public.organizations (name, slug, created_by)
-    VALUES (org_name, org_slug, profile_row.id)
-    RETURNING id INTO created_org_id;
-
     INSERT INTO public.organization_members (organization_id, user_id, role)
-    VALUES (created_org_id, profile_row.id, CASE WHEN profile_row.role = 'admin' THEN 'admin' ELSE 'member' END);
+    VALUES (workspace_org_id, profile_row.id, CASE WHEN profile_row.role = 'admin' THEN 'admin' ELSE 'member' END)
+    ON CONFLICT (organization_id, user_id) DO NOTHING;
 
     UPDATE public.profiles
-    SET current_organization_id = created_org_id
+    SET current_organization_id = workspace_org_id
     WHERE id = profile_row.id;
   END LOOP;
 END;

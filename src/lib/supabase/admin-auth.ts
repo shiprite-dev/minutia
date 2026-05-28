@@ -48,30 +48,3 @@ export async function requireAdmin(request?: NextRequest): Promise<AuthResult> {
 
   return { authorized: true, userId: user.id };
 }
-
-export async function isHostedMode() {
-  if (process.env.MINUTIA_HOSTED_MODE === "true") return true;
-
-  const serviceClient = createServiceRoleClient();
-  const { data } = await serviceClient
-    .from("instance_config")
-    .select("value")
-    .eq("key", "hosted_mode")
-    .maybeSingle();
-
-  return data?.value === "true";
-}
-
-export async function ***() {
-  if (process.env.*** !== "true") return false;
-  if (!(await isHostedMode())) return false;
-
-  const serviceClient = createServiceRoleClient();
-  const { data } = await serviceClient
-    .from("instance_config")
-    .select("value")
-    .eq("key", "***")
-    .maybeSingle();
-
-  return data?.value === "true";
-}

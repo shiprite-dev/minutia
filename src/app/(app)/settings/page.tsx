@@ -43,10 +43,6 @@ type OrgAdminData = {
   }[];
 };
 
-type HostedOrgData = {
-  organizations: { id: string; name: string; slug: string; created_at: string }[];
-};
-
 export default function SettingsPage() {
   const { data: profile, isLoading } = useProfile();
   const updateProfile = useUpdateProfile();
@@ -62,11 +58,6 @@ export default function SettingsPage() {
   const [inviteRole, setInviteRole] = useState<"member" | "admin">("member");
   const [inviteState, setInviteState] = useState<"idle" | "loading" | "sent" | "error">("idle");
   const [inviteMessage, setInviteMessage] = useState("");
-  const [hostedOrgs, setHostedOrgs] = useState<HostedOrgData | null>(null);
-  const [newOrgName, setNewOrgName] = useState("");
-  const [newOrgAdminEmail, setNewOrgAdminEmail] = useState("");
-  const [newOrgState, setNewOrgState] = useState<"idle" | "loading" | "created" | "error">("idle");
-  const [newOrgMessage, setNewOrgMessage] = useState("");
 
   // Sync profile name once loaded
   if (profile?.name && !nameInitialized) {
@@ -85,14 +76,6 @@ export default function SettingsPage() {
       })
       .then(setOrgAdmin)
       .catch(() => setOrgAdmin(null));
-
-    fetch("/api/admin/organizations")
-      .then(async (res) => {
-        if (!res.ok) return null;
-        return res.json();
-      })
-      .then(setHostedOrgs)
-      .catch(() => setHostedOrgs(null));
   }, []);
 
   function handleSubmit(e: React.FormEvent) {
@@ -124,35 +107,6 @@ export default function SettingsPage() {
     setInviteEmail("");
     const refreshed = await fetch("/api/admin/invitations").then((r) => r.json());
     setOrgAdmin(refreshed);
-  }
-
-  async function handleCreateOrganization(e: React.FormEvent) {
-    e.preventDefault();
-    setNewOrgState("loading");
-    setNewOrgMessage("");
-
-    const res = await fetch("/api/admin/organizations", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: newOrgName,
-        admin_email: newOrgAdminEmail,
-      }),
-    });
-    const data = await res.json().catch(() => ({}));
-
-    if (!res.ok) {
-      setNewOrgState("error");
-      setNewOrgMessage(data.error || "Failed to create organization.");
-      return;
-    }
-
-    setNewOrgState("created");
-    setNewOrgMessage("Organization created and admin invited.");
-    setNewOrgName("");
-    setNewOrgAdminEmail("");
-    const refreshed = await fetch("/api/admin/organizations").then((r) => r.json());
-    setHostedOrgs(refreshed);
   }
 
   if (isLoading) {
@@ -269,57 +223,6 @@ export default function SettingsPage() {
                       </span>
                     </div>
                   ))}
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {hostedOrgs && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Hosted organizations</CardTitle>
-              <CardDescription>
-                Create isolated customer spaces. Available only in hosted mode.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <form onSubmit={handleCreateOrganization} className="grid gap-3">
-                <Input
-                  placeholder="Organization name"
-                  value={newOrgName}
-                  onChange={(e) => setNewOrgName(e.target.value)}
-                />
-                <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
-                  <Input
-                    type="email"
-                    placeholder="admin@customer.com"
-                    value={newOrgAdminEmail}
-                    onChange={(e) => setNewOrgAdminEmail(e.target.value)}
-                  />
-                  <Button
-                    type="submit"
-                    size="sm"
-                    disabled={newOrgState === "loading" || !newOrgName || !newOrgAdminEmail}
-                  >
-                    <UserPlus className="size-3.5" />
-                    {newOrgState === "loading" ? "Creating" : "Create"}
-                  </Button>
-                </div>
-              </form>
-              {newOrgMessage && (
-                <p className={cn("text-xs", newOrgState === "error" ? "text-danger" : "text-success")}>
-                  {newOrgMessage}
-                </p>
-              )}
-              <div className="space-y-2">
-                {hostedOrgs.organizations.map((organization) => (
-                  <div key={organization.id} className="flex items-center justify-between border-b border-rule pb-2 text-sm last:border-b-0">
-                    <div>
-                      <p className="font-medium text-ink">{organization.name}</p>
-                      <p className="text-xs text-ink-3">{organization.slug}</p>
-                    </div>
-                  </div>
-                ))}
               </div>
             </CardContent>
           </Card>
