@@ -21,6 +21,10 @@ test.describe("Inline Tasks", () => {
     await expect(checkboxes.first()).toBeVisible();
   });
 
+  test("inline task items show issue keys", async ({ page }) => {
+    await expect(page.getByText("OIL-1").first()).toBeVisible();
+  });
+
   test("resolved items show checked checkbox and strikethrough", async ({
     page,
   }) => {

@@ -31,6 +31,13 @@ test.describe("My Actions Page", () => {
     ).toBeVisible();
   });
 
+  test("issue cards show issue keys", async ({ page }) => {
+    await page.goto("/actions");
+    await waitForApp(page);
+
+    await expect(page.getByText("OIL-2").first()).toBeVisible();
+  });
+
   test("pending section shows pending issues", async ({ page }) => {
     await page.goto("/actions");
     await waitForApp(page);
