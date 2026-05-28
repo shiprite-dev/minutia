@@ -97,6 +97,21 @@ test.describe("Command Palette", () => {
     ).toBeVisible({ timeout: 5000 });
   });
 
+  test("finds issues by issue key", async ({ page }) => {
+    await page.goto("/");
+    await page.waitForLoadState("networkidle");
+
+    await page.keyboard.press("Meta+k");
+    const dialog = page.getByRole("dialog");
+
+    const input = dialog.locator("input");
+    await input.fill("OIL-1");
+
+    await expect(
+      dialog.getByText("Migrate CI from Jenkins to GitHub Actions")
+    ).toBeVisible({ timeout: 5000 });
+  });
+
   test("shows empty state for no results", async ({ page }) => {
     await page.goto("/");
     await page.waitForLoadState("networkidle");

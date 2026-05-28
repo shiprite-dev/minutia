@@ -42,6 +42,15 @@ test.describe("OIL Board Dashboard", () => {
     ).toBeVisible({ timeout: 10000 });
   });
 
+  test("outstanding issue rows show issue keys", async ({ page }) => {
+    await gotoDashboard(page);
+    await expandOutstandingPreview(page);
+
+    await expect(
+      issueRow(page, "Update API rate limiting config").getByText("OIL-6")
+    ).toBeVisible();
+  });
+
   test("filter pills work correctly", async ({ page }) => {
     await gotoDashboard(page);
 

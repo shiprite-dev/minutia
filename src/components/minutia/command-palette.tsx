@@ -21,6 +21,8 @@ import { useIssues } from "@/lib/hooks/use-issues";
 import { useSeries } from "@/lib/hooks/use-series";
 import { useDecisions } from "@/lib/hooks/use-decisions";
 import { CATEGORY_CONFIG, STATUS_CONFIG } from "@/lib/constants";
+import { formatIssueKey } from "@/lib/issue-utils";
+import { IssueKey } from "@/components/minutia/issue-key";
 import type { IssueCategory } from "@/lib/types";
 
 const NAV_ITEMS = [
@@ -111,10 +113,12 @@ export function CommandPalette() {
               const catConfig =
                 CATEGORY_CONFIG[issue.category as IssueCategory];
               const statusConfig = STATUS_CONFIG[issue.status];
+              const issueKey = formatIssueKey(issue);
               return (
                 <CommandItem
                   key={issue.id}
-                  value={`issue ${issue.title} ${issue.category}`}
+                  value={`issue ${issue.title}`}
+                  keywords={[issueKey, issue.category, statusConfig?.label ?? ""]}
                   onSelect={() =>
                     runCommand(() => router.push(`/issues/${issue.id}`))
                   }
@@ -125,6 +129,7 @@ export function CommandPalette() {
                   >
                     {catConfig?.glyph}
                   </span>
+                  <IssueKey issue={issue} className="h-5 px-1.5 text-[10px]" />
                   <span className="truncate">{issue.title}</span>
                   <span className="ml-auto shrink-0 text-xs text-muted-foreground">
                     {statusConfig?.label}
