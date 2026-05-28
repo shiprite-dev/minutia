@@ -43,7 +43,7 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: "MINUTIA_HOSTED_CONTROL_PLANE=true MINUTIA_TEST_EMAIL_OUTBOX=test-results/meeting-notes-email-outbox.jsonl pnpm dev",
+    command: "MINUTIA_TEST_EMAIL_OUTBOX=test-results/meeting-notes-email-outbox.jsonl pnpm dev",
     url: "http://localhost:3000",
     reuseExistingServer: !process.env.CI,
   },

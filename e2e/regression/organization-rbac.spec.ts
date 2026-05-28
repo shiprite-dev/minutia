@@ -1,6 +1,5 @@
 import { readFile, rm } from "node:fs/promises";
 import path from "node:path";
-import { randomUUID } from "node:crypto";
 import { test, expect, type APIRequestContext } from "@playwright/test";
 import { createClient } from "@supabase/supabase-js";
 
@@ -22,27 +21,15 @@ function serviceHeaders(prefer = "return=minimal") {
 }
 
 async function getCurrentOrgId(request: APIRequestContext) {
-  const orgId = await getProfileCurrentOrgId(request);
-  expect(orgId).toBeTruthy();
-  return orgId as string;
-}
-
-async function getProfileCurrentOrgId(request: APIRequestContext) {
   const res = await request.get(
     `${SUPABASE_URL}/rest/v1/profiles?id=eq.${TEST_USER_ID}&select=current_organization_id`,
     { headers: serviceHeaders() }
   );
   expect(res.ok()).toBeTruthy();
   const rows = await res.json();
-  return rows[0]?.current_organization_id as string | null;
-}
-
-async function setCurrentOrgId(request: APIRequestContext, orgId: string) {
-  const res = await request.patch(
-    `${SUPABASE_URL}/rest/v1/profiles?id=eq.${TEST_USER_ID}`,
-    { headers: serviceHeaders(), data: { current_organization_id: orgId } }
-  );
-  expect(res.ok()).toBeTruthy();
+  const orgId = rows[0]?.current_organization_id;
+  expect(orgId).toBeTruthy();
+  return orgId as string;
 }
 
 async function setGlobalRole(request: APIRequestContext, role: "admin" | "user") {
@@ -51,29 +38,6 @@ async function setGlobalRole(request: APIRequestContext, role: "admin" | "user")
     { headers: serviceHeaders(), data: { role } }
   );
   expect(res.ok()).toBeTruthy();
-}
-
-async function setInstanceConfig(
-  request: APIRequestContext,
-  key: string,
-  value: string
-) {
-  const res = await request.post(
-    `${SUPABASE_URL}/rest/v1/instance_config?on_conflict=key`,
-    {
-      headers: serviceHeaders("resolution=merge-duplicates,return=minimal"),
-      data: { key, value },
-    }
-  );
-  expect(res.ok()).toBeTruthy();
-}
-
-async function setHostedMode(request: APIRequestContext, enabled: boolean) {
-  await setInstanceConfig(request, "hosted_mode", String(enabled));
-}
-
-async function setHostedControlPlane(request: APIRequestContext, enabled: boolean) {
-  await setInstanceConfig(request, "hosted_control_plane", String(enabled));
 }
 
 async function upsertMembership(
@@ -90,27 +54,6 @@ async function upsertMembership(
     }
   );
   expect(res.ok()).toBeTruthy();
-}
-
-async function createOrganization(
-  request: APIRequestContext,
-  name: string,
-  slug: string
-) {
-  const id = randomUUID();
-  const res = await request.post(`${SUPABASE_URL}/rest/v1/organizations`, {
-    headers: serviceHeaders(),
-    data: { id, name, slug, created_by: TEST_USER_ID },
-  });
-  expect(res.ok()).toBeTruthy();
-  return id;
-}
-
-async function deleteOrganization(request: APIRequestContext, orgId: string | null) {
-  if (!orgId) return;
-  await request.delete(`${SUPABASE_URL}/rest/v1/organizations?id=eq.${orgId}`, {
-    headers: serviceHeaders(),
-  });
 }
 
 async function createAuthUser(
@@ -172,22 +115,18 @@ async function getPasswordAccessToken() {
   return data.session!.access_token;
 }
 
-test.describe("Organization RBAC and hosted organization routes", () => {
+test.describe("Organization RBAC and workspace routes", () => {
   test.describe.configure({ mode: "serial" });
   test.use({ storageState: "e2e/.auth/user.json" });
 
   test.beforeEach(async ({ request }) => {
     test.skip(!SERVICE_KEY, "Requires service role for RBAC setup");
     await setGlobalRole(request, "user");
-    await setHostedMode(request, false);
-    await setHostedControlPlane(request, false);
   });
 
   test.afterEach(async ({ request }) => {
     if (!SERVICE_KEY) return;
     await setGlobalRole(request, "user");
-    await setHostedMode(request, false);
-    await setHostedControlPlane(request, false);
   });
 
   test("organization admin can list workspace members and invitations", async ({
@@ -268,6 +207,27 @@ test.describe("Organization RBAC and hosted organization routes", () => {
     expect(res.status()).toBe(400);
   });
 
+  test("self-host database rejects a second workspace", async ({ request }) => {
+    const orgId = crypto.randomUUID();
+    const res = await request.post(`${SUPABASE_URL}/rest/v1/organizations`, {
+      headers: serviceHeaders(),
+      data: {
+        id: orgId,
+        name: "Second Workspace",
+        slug: `second-${Date.now()}`,
+        created_by: TEST_USER_ID,
+      },
+    });
+
+    if (res.ok()) {
+      await request.delete(`${SUPABASE_URL}/rest/v1/organizations?id=eq.${orgId}`, {
+        headers: serviceHeaders(),
+      });
+    }
+
+    expect(res.ok()).toBeFalsy();
+  });
+
   test("pending invitation is accepted when user signs up outside invite link", async ({
     request,
   }) => {
@@ -322,7 +282,7 @@ test.describe("Organization RBAC and hosted organization routes", () => {
     }
   });
 
-  test("signup metadata cannot grant organization membership without an invitation", async ({
+  test("signup metadata cannot grant organization admin access without an invitation", async ({
     request,
   }) => {
     const orgId = await getCurrentOrgId(request);
@@ -340,7 +300,8 @@ test.describe("Organization RBAC and hosted organization routes", () => {
         { headers: serviceHeaders() }
       );
       expect(membershipRes.ok()).toBeTruthy();
-      expect(await membershipRes.json()).toEqual([]);
+      const memberships = await membershipRes.json();
+      expect(memberships[0]?.role).toBe("member");
 
       const profileRes = await request.get(
         `${SUPABASE_URL}/rest/v1/profiles?id=eq.${forgedUserId}&select=current_organization_id`,
@@ -348,135 +309,9 @@ test.describe("Organization RBAC and hosted organization routes", () => {
       );
       expect(profileRes.ok()).toBeTruthy();
       const profiles = await profileRes.json();
-      expect(profiles[0]?.current_organization_id).toBeNull();
+      expect(profiles[0]?.current_organization_id).toBe(orgId);
     } finally {
       await deleteAuthUser(request, forgedUserId);
-    }
-  });
-
-  test("hosted organization management is hidden in OSS mode", async ({
-    request,
-  }) => {
-    await setGlobalRole(request, "admin");
-    await setHostedMode(request, false);
-    await setHostedControlPlane(request, false);
-
-    const res = await request.get(`${APP_URL}/api/admin/organizations`);
-    expect(res.status()).toBe(404);
-  });
-
-  test("hosted organization management is hidden without the hosted control plane", async ({
-    request,
-  }) => {
-    await setGlobalRole(request, "admin");
-    await setHostedMode(request, true);
-    await setHostedControlPlane(request, false);
-
-    const res = await request.get(`${APP_URL}/api/admin/organizations`);
-    expect(res.status()).toBe(404);
-  });
-
-  test("super admin can create a hosted organization with an existing admin", async ({
-    request,
-  }) => {
-    await setGlobalRole(request, "admin");
-    await setHostedMode(request, true);
-    await setHostedControlPlane(request, true);
-
-    const adminEmail = `hosted-admin-${Date.now()}@example.com`;
-    const adminUserId = await createAuthUser(request, adminEmail);
-    let createdOrgId: string | null = null;
-
-    try {
-      await resetOutbox();
-      const res = await request.post(`${APP_URL}/api/admin/organizations`, {
-        data: { name: "Acme Hosted", admin_email: adminEmail },
-      });
-      expect(res.ok()).toBeTruthy();
-      const body = await res.json();
-      createdOrgId = body.organization.id;
-      expect(body.organization.name).toBe("Acme Hosted");
-
-      const membershipRes = await request.get(
-        `${SUPABASE_URL}/rest/v1/organization_members?organization_id=eq.${createdOrgId}&user_id=eq.${adminUserId}&select=role`,
-        { headers: serviceHeaders() }
-      );
-      expect(membershipRes.ok()).toBeTruthy();
-      const memberships = await membershipRes.json();
-      expect(memberships[0]?.role).toBe("admin");
-
-      const [email] = await readOutbox();
-      expect(email.to).toBe(adminEmail);
-      expect(email.subject).toContain("Acme Hosted");
-      expect(email.text).toContain("admin");
-      expect(email.html).toContain("/settings");
-    } finally {
-      if (createdOrgId) {
-        await request.delete(`${SUPABASE_URL}/rest/v1/organizations?id=eq.${createdOrgId}`, {
-          headers: serviceHeaders(),
-        });
-      }
-      await deleteAuthUser(request, adminUserId);
-    }
-  });
-
-  test("super admin can create a hosted organization with a new invited admin", async ({
-    request,
-  }) => {
-    await setGlobalRole(request, "admin");
-    await setHostedMode(request, true);
-    await setHostedControlPlane(request, true);
-
-    const adminEmail = `new-hosted-admin-${Date.now()}@example.com`;
-    let adminUserId: string | null = null;
-    let createdOrgId: string | null = null;
-
-    try {
-      const res = await request.post(`${APP_URL}/api/admin/organizations`, {
-        data: { name: "Beta Hosted", admin_email: adminEmail },
-      });
-      expect(res.ok()).toBeTruthy();
-      const body = await res.json();
-      createdOrgId = body.organization.id;
-      expect(body.organization.name).toBe("Beta Hosted");
-
-      const userRes = await request.get(
-        `${SUPABASE_URL}/auth/v1/admin/users`,
-        { headers: serviceHeaders() }
-      );
-      expect(userRes.ok()).toBeTruthy();
-      const usersBody = await userRes.json();
-      const users = Array.isArray(usersBody) ? usersBody : usersBody.users;
-      adminUserId =
-        users.find((user: { email: string }) => user.email === adminEmail)
-          ?.id ?? null;
-      expect(adminUserId).toBeTruthy();
-
-      const membershipRes = await request.get(
-        `${SUPABASE_URL}/rest/v1/organization_members?organization_id=eq.${createdOrgId}&user_id=eq.${adminUserId}&select=role`,
-        { headers: serviceHeaders() }
-      );
-      expect(membershipRes.ok()).toBeTruthy();
-      const memberships = await membershipRes.json();
-      expect(memberships[0]?.role).toBe("admin");
-
-      const invitationRes = await request.get(
-        `${SUPABASE_URL}/rest/v1/organization_invitations?organization_id=eq.${createdOrgId}&email=eq.${adminEmail}&select=status,accepted_by`,
-        { headers: serviceHeaders() }
-      );
-      expect(invitationRes.ok()).toBeTruthy();
-      const invitations = await invitationRes.json();
-      expect(invitations[0]).toMatchObject({
-        status: "accepted",
-        accepted_by: adminUserId,
-      });
-    } finally {
-      if (createdOrgId) {
-        await request.delete(`${SUPABASE_URL}/rest/v1/organizations?id=eq.${createdOrgId}`, {
-          headers: serviceHeaders(),
-        });
-      }
-      await deleteAuthUser(request, adminUserId);
     }
   });
 
@@ -497,54 +332,6 @@ test.describe("Organization RBAC and hosted organization routes", () => {
     expect(res.ok()).toBeFalsy();
   });
 
-  test("organization slug URL switches the current organization for members", async ({
-    request,
-  }) => {
-    const originalOrgId = await getCurrentOrgId(request);
-    const slug = `switchable-${Date.now()}`;
-    let orgId: string | null = null;
-
-    try {
-      orgId = await createOrganization(request, "Switchable Workspace", slug);
-      await upsertMembership(request, orgId, TEST_USER_ID, "member");
-
-      const res = await request.get(`${APP_URL}/org/${slug}`, {
-        maxRedirects: 0,
-      });
-      expect([307, 308]).toContain(res.status());
-      expect(res.headers().location).toBe("/");
-      await expect
-        .poll(() => getProfileCurrentOrgId(request))
-        .toBe(orgId);
-    } finally {
-      await setCurrentOrgId(request, originalOrgId);
-      await deleteOrganization(request, orgId);
-    }
-  });
-
-  test("organization slug URL does not switch non-members", async ({
-    request,
-  }) => {
-    const originalOrgId = await getCurrentOrgId(request);
-    const slug = `private-${Date.now()}`;
-    let orgId: string | null = null;
-
-    try {
-      orgId = await createOrganization(request, "Private Workspace", slug);
-
-      const res = await request.get(`${APP_URL}/org/${slug}`, {
-        maxRedirects: 0,
-      });
-      expect(res.status()).toBe(404);
-      await expect
-        .poll(() => getProfileCurrentOrgId(request))
-        .toBe(originalOrgId);
-    } finally {
-      await setCurrentOrgId(request, originalOrgId);
-      await deleteOrganization(request, orgId);
-    }
-  });
-
   test("settings exposes workspace invite UI to organization admins", async ({
     page,
     request,
@@ -555,47 +342,23 @@ test.describe("Organization RBAC and hosted organization routes", () => {
     await page.goto("/settings");
     await expect(page.getByText("Workspace access")).toBeVisible();
     await expect(page.getByPlaceholder("teammate@company.com")).toBeVisible();
-    await expect(page.getByText("Hosted organizations")).toHaveCount(0);
   });
 
-  test("settings exposes hosted organization UI only in hosted mode", async ({
+  test("sidebar shows the current workspace without a workspace switcher", async ({
     page,
     request,
   }) => {
     const orgId = await getCurrentOrgId(request);
-    await upsertMembership(request, orgId, TEST_USER_ID, "admin");
-    await setGlobalRole(request, "admin");
-    await setHostedMode(request, true);
-    await setHostedControlPlane(request, true);
+
+    const orgRes = await request.get(
+      `${SUPABASE_URL}/rest/v1/organizations?id=eq.${orgId}&select=name`,
+      { headers: serviceHeaders() }
+    );
+    expect(orgRes.ok()).toBeTruthy();
+    const organizations = await orgRes.json();
 
     await page.goto("/settings");
-    await expect(page.getByText("Hosted organizations")).toBeVisible();
-    await expect(page.getByPlaceholder("Organization name")).toBeVisible();
-    await expect(page.getByPlaceholder("admin@customer.com")).toBeVisible();
-  });
-
-  test("sidebar organization switcher navigates through organization URLs", async ({
-    page,
-    request,
-  }) => {
-    const originalOrgId = await getCurrentOrgId(request);
-    const slug = `sidebar-switch-${Date.now()}`;
-    let orgId: string | null = null;
-
-    try {
-      orgId = await createOrganization(request, "Sidebar Switch", slug);
-      await upsertMembership(request, orgId, TEST_USER_ID, "member");
-      await setCurrentOrgId(request, originalOrgId);
-
-      await page.goto("/settings");
-      await page.getByLabel("Organization").selectOption(orgId);
-      await page.waitForURL("**/");
-      await expect
-        .poll(() => getProfileCurrentOrgId(request))
-        .toBe(orgId);
-    } finally {
-      await setCurrentOrgId(request, originalOrgId);
-      await deleteOrganization(request, orgId);
-    }
+    await expect(page.getByText(organizations[0].name)).toBeVisible();
+    await expect(page.getByLabel("Organization")).toHaveCount(0);
   });
 });
