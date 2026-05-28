@@ -4,10 +4,12 @@ import { waitForApp } from "./seed-data";
 
 const SUPABASE_URL = process.env.SUPABASE_URL ?? "http://127.0.0.1:54321";
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
+const TEST_USER_ID = "00000000-0000-0000-0000-000000000001";
 const ONBOARDING_PASSWORD = "password123";
 
 type OnboardingState = {
   userId: string;
+  email: string;
   orgId: string;
   cookieValue: string;
 };
@@ -21,14 +23,41 @@ function supabaseHeaders(prefer = "return=minimal") {
   };
 }
 
+async function getSeedWorkspaceId() {
+  const response = await fetch(
+    `${SUPABASE_URL}/rest/v1/profiles?id=eq.${TEST_USER_ID}&select=current_organization_id`,
+    { headers: supabaseHeaders("return=representation") }
+  );
+  expect(response.ok).toBeTruthy();
+
+  const rows = await response.json();
+  const orgId = rows[0]?.current_organization_id;
+  expect(orgId).toBeTruthy();
+  return orgId as string;
+}
+
 async function createOnboardingAuthState(): Promise<OnboardingState> {
   const userId = randomUUID();
   const email = `onboarding-${userId}@example.com`;
+  const orgId = await getSeedWorkspaceId();
   const authHeaders = {
     apikey: SERVICE_KEY,
     Authorization: `Bearer ${SERVICE_KEY}`,
     "Content-Type": "application/json",
   };
+
+  const invitation = await fetch(`${SUPABASE_URL}/rest/v1/organization_invitations`, {
+    method: "POST",
+    headers: supabaseHeaders(),
+    body: JSON.stringify({
+      organization_id: orgId,
+      email,
+      role: "member",
+      status: "pending",
+      invited_by: TEST_USER_ID,
+    }),
+  });
+  expect(invitation.ok).toBeTruthy();
 
   const createUser = await fetch(`${SUPABASE_URL}/auth/v1/admin/users`, {
     method: "POST",
@@ -61,8 +90,7 @@ async function createOnboardingAuthState(): Promise<OnboardingState> {
   );
   expect(currentOrg.ok).toBeTruthy();
   const currentOrgRows = await currentOrg.json();
-  const orgId = currentOrgRows[0]?.current_organization_id;
-  expect(orgId).toBeTruthy();
+  expect(currentOrgRows[0]?.current_organization_id).toBe(orgId);
 
   const token = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
     method: "POST",
@@ -81,12 +109,18 @@ async function createOnboardingAuthState(): Promise<OnboardingState> {
 
   return {
     userId,
+    email,
     orgId,
     cookieValue: `base64-${Buffer.from(JSON.stringify(session)).toString("base64")}`,
   };
 }
 
 async function deleteOnboardingUser(state: OnboardingState) {
+  await fetch(
+    `${SUPABASE_URL}/rest/v1/organization_invitations?organization_id=eq.${state.orgId}&email=eq.${state.email}`,
+    { method: "DELETE", headers: supabaseHeaders() }
+  );
+
   await fetch(`${SUPABASE_URL}/auth/v1/admin/users/${state.userId}`, {
     method: "DELETE",
     headers: {

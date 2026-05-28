@@ -1,47 +1,11 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
-import nodemailer from "nodemailer";
 import { requireAdmin } from "@/lib/supabase/admin-auth";
-import { createServiceRoleClient } from "@/lib/supabase/service-role";
+import { createMailTransport, getSmtpConfig } from "@/lib/email";
 
 const schema = z.object({
   recipient_email: z.string().email().optional(),
 });
-
-async function getSmtpConfig(): Promise<{
-  host: string;
-  port: number;
-  user: string;
-  pass: string;
-  from: string;
-} | null> {
-  const supabase = createServiceRoleClient();
-  const { data } = await supabase
-    .from("instance_config")
-    .select("key, value")
-    .in("key", ["smtp_host", "smtp_port", "smtp_user", "smtp_pass", "smtp_from"]);
-
-  const configMap: Record<string, string | null> = {};
-  for (const row of data ?? []) {
-    configMap[row.key] = row.value;
-  }
-
-  const host = configMap.smtp_host || process.env.SMTP_HOST;
-  const port = configMap.smtp_port || process.env.SMTP_PORT;
-  const user = configMap.smtp_user || process.env.SMTP_USER;
-  const pass = configMap.smtp_pass || process.env.SMTP_PASS;
-  const from = configMap.smtp_from || process.env.EMAIL_FROM || process.env.SMTP_ADMIN_EMAIL;
-
-  if (!host) return null;
-
-  return {
-    host,
-    port: parseInt(port || "587", 10),
-    user: user || "",
-    pass: pass || "",
-    from: from || "noreply@localhost",
-  };
-}
 
 export async function POST(request: NextRequest) {
   const auth = await requireAdmin(request);
@@ -68,14 +32,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const transport = nodemailer.createTransport({
-      host: smtp.host,
-      port: smtp.port,
-      secure: smtp.port === 465,
-      auth: smtp.user ? { user: smtp.user, pass: smtp.pass } : undefined,
-      connectionTimeout: 10000,
-      greetingTimeout: 10000,
-    });
+    const transport = createMailTransport(smtp);
 
     await transport.verify();
 
