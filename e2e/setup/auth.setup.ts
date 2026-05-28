@@ -1,5 +1,7 @@
 import { test as setup, expect } from "@playwright/test";
 
+setup.setTimeout(process.env.CI ? 90_000 : 30_000);
+
 setup("authenticate", async ({ page }) => {
   await page.goto("/login");
 
@@ -12,7 +14,7 @@ setup("authenticate", async ({ page }) => {
   await page.getByLabel("Password").fill("password123");
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await page.waitForURL(/\/($|dashboard$)/, {
-    timeout: 30000,
+    timeout: process.env.CI ? 60_000 : 30_000,
     waitUntil: "domcontentloaded",
   });
 
