@@ -158,6 +158,8 @@ test.describe("Meeting notes email", () => {
       expect(email.to).toEqual(["attendee@example.com"]);
       expect(email.subject).toContain("Platform Standup #2");
       expect(email.text).toContain("Use GitHub Actions for CI/CD");
+      expect(email.text).toContain("OIL-2");
+      expect(email.html).toContain("OIL-2");
       expect(email.html).toContain(`/issues/${ISSUES.stagingMonitoring}`);
     });
   });

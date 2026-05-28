@@ -140,6 +140,7 @@ test.describe("Guest Share Pages", () => {
     ).toBeVisible();
     await expect(page.getByText("Action").first()).toBeVisible();
     await expect(page.getByText("High").first()).toBeVisible();
+    await expect(page.getByText("OIL-1").first()).toBeVisible();
     await expect(page.getByText("Timeline").first()).toBeVisible();
   });
 

@@ -128,6 +128,7 @@ export interface Meeting {
 
 export interface Issue {
   id: string;
+  issue_number: number;
   raised_in_meeting_id: string;
   series_id: string;
   title: string;

@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { readFile } from "node:fs/promises";
 import { waitForApp } from "./seed-data";
 
 test.describe("Settings Page", () => {
@@ -86,6 +87,37 @@ test.describe("Settings Page", () => {
     await expect(
       page.getByText(/issues available for export/)
     ).toBeVisible();
+  });
+
+  test("CSV export includes issue keys", async ({ page }) => {
+    await page.goto("/settings");
+    await waitForApp(page);
+
+    const downloadPromise = page.waitForEvent("download");
+    await page.getByRole("button", { name: "Export CSV" }).click();
+    const download = await downloadPromise;
+    const path = await download.path();
+    expect(path).toBeTruthy();
+
+    const csv = await readFile(path!, "utf8");
+    expect(csv).toContain("Issue Key");
+    expect(csv).toContain("OIL-1");
+  });
+
+  test("JSON export includes issue keys", async ({ page }) => {
+    await page.goto("/settings");
+    await waitForApp(page);
+
+    const downloadPromise = page.waitForEvent("download");
+    await page.getByRole("button", { name: "Export JSON" }).click();
+    const download = await downloadPromise;
+    const path = await download.path();
+    expect(path).toBeTruthy();
+
+    const json = JSON.parse(await readFile(path!, "utf8")) as Array<{
+      issue_key?: string;
+    }>;
+    expect(json.some((issue) => issue.issue_key === "OIL-1")).toBe(true);
   });
 
   test("theme buttons switch appearance", async ({ page }) => {

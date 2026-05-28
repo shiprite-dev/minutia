@@ -1,7 +1,9 @@
 import type { Issue } from "@/lib/types";
+import { formatIssueKey } from "@/lib/issue-utils";
 
 function issueToCsvRow(issue: Issue): Record<string, string> {
   return {
+    "Issue Key": formatIssueKey(issue),
     Title: issue.title,
     Description: issue.description ?? "",
     Category: issue.category,
@@ -35,6 +37,7 @@ export function issuesToCsv(issues: Issue[]): string {
 
 export function issuesToJson(issues: Issue[]): string {
   const data = issues.map((issue) => ({
+    issue_key: formatIssueKey(issue),
     title: issue.title,
     description: issue.description,
     category: issue.category,
