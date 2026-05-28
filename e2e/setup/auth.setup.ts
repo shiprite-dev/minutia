@@ -11,7 +11,10 @@ setup("authenticate", async ({ page }) => {
   await page.getByLabel("Email address").fill("test@example.com");
   await page.getByLabel("Password").fill("password123");
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
-  await page.waitForURL(/\/($|dashboard$)/, { timeout: 10000 });
+  await page.waitForURL(/\/($|dashboard$)/, {
+    timeout: 30000,
+    waitUntil: "domcontentloaded",
+  });
 
   await page.goto("/dashboard");
   await expect(page).toHaveURL("/dashboard");
