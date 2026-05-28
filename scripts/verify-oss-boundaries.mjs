@@ -68,6 +68,17 @@ for (const path of mustNotExist) {
 const packageJson = JSON.parse(readFileSync("package.json", "utf8"));
 assert.equal(packageJson.scripts["deploy:vps"], undefined, "deploy:vps belongs in minutia-ops");
 
+const envExample = readFileSync(".env.example", "utf8");
+const generatedEnvScript = readFileSync("scripts/generate-self-host-env.mjs", "utf8");
+const dockerCompose = readFileSync("docker-compose.yml", "utf8");
+
+assert.match(envExample, /MINUTIA_SETUP_TOKEN=/, ".env.example must document the production setup token");
+assert.match(generatedEnvScript, /MINUTIA_SETUP_TOKEN=/, "generated self-host env must include a setup token");
+assert.match(dockerCompose, /MINUTIA_SETUP_TOKEN=\$\{MINUTIA_SETUP_TOKEN/, "docker compose must pass setup token to the web app");
+assert.match(dockerCompose, /NEXT_PUBLIC_SUPABASE_URL=\$\{NEXT_PUBLIC_SUPABASE_URL/, "docker compose must use the configured public Supabase URL");
+assert.doesNotMatch(envExample, /STRIPE_/, "Stripe configuration belongs in minutia-cloud, not OSS setup docs");
+assert.doesNotMatch(generatedEnvScript, /STRIPE_/, "Stripe configuration belongs in minutia-cloud, not OSS env generation");
+
 for (const [path, bannedTerms] of Object.entries(bannedTextByFile)) {
   const content = readFileSync(path, "utf8");
   for (const term of bannedTerms) {
