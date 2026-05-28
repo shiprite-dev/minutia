@@ -1,12 +1,11 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { requireAdmin } from "@/lib/supabase/admin-auth";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
-
-const ENCRYPTED_KEYS = new Set([
-  "smtp_pass",
-  "ai_api_key",
-  "google_client_secret",
-]);
+import {
+  displayInstanceConfigValue,
+  prepareInstanceConfigValue,
+  SECRET_CONFIG_KEYS,
+} from "@/lib/instance-config";
 
 export async function GET(request: NextRequest) {
   const auth = await requireAdmin(request);
@@ -24,15 +23,9 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  const reveal = request.nextUrl.searchParams.get("reveal") === "true";
-
   const config: Record<string, string | null> = {};
   for (const row of data ?? []) {
-    if (row.encrypted && !reveal) {
-      config[row.key] = row.value ? "configured" : null;
-    } else {
-      config[row.key] = row.value;
-    }
+    config[row.key] = displayInstanceConfigValue(row);
   }
 
   return NextResponse.json(config);
@@ -55,14 +48,14 @@ export async function PUT(request: NextRequest) {
   const entries = Object.entries(body);
 
   for (const [key, value] of entries) {
-    const encrypted = ENCRYPTED_KEYS.has(key);
+    const encrypted = SECRET_CONFIG_KEYS.has(key);
 
     const { error } = await supabase
       .from("instance_config")
       .upsert(
         {
           key,
-          value,
+          value: prepareInstanceConfigValue(key, value),
           encrypted,
           updated_by: auth.userId === "setup" ? null : auth.userId,
           updated_at: new Date().toISOString(),

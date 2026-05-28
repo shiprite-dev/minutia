@@ -1,7 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { randomUUID } from "node:crypto";
-import { readFile, rm } from "node:fs/promises";
-import path from "node:path";
+import { readOutbox, withOutbox } from "../helpers/outbox";
 import { MEETINGS, SHARE_TOKENS, waitForApp } from "./seed-data";
 
 const APP_URL = "http://localhost:3000";
@@ -10,9 +9,6 @@ const ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
 const TEST_USER_ID = "00000000-0000-0000-0000-000000000001";
 const TEST_USER_EMAIL = "test@example.com";
-const OUTBOX_PATH =
-  process.env.MINUTIA_TEST_EMAIL_OUTBOX ??
-  path.join(process.cwd(), "test-results", "meeting-notes-email-outbox.jsonl");
 
 function anonHeaders() {
   return {
@@ -29,25 +25,6 @@ function serviceHeaders(prefer = "return=minimal") {
     "Content-Type": "application/json",
     Prefer: prefer,
   };
-}
-
-async function resetOutbox() {
-  await rm(OUTBOX_PATH, { force: true });
-}
-
-async function readOutbox() {
-  const content = await readFile(OUTBOX_PATH, "utf8");
-  return content
-    .trim()
-    .split("\n")
-    .filter(Boolean)
-    .map((line) => JSON.parse(line) as {
-      to: string | string[];
-      replyTo?: string;
-      subject: string;
-      text: string;
-      html: string;
-    });
 }
 
 async function getShareOrgId(
@@ -269,21 +246,21 @@ test.describe("Guest Share Pages", () => {
     try {
       await setOrganizationRole(request, orgId, TEST_USER_ID, "admin");
       globalAdminId = await createGlobalAdmin(request, globalAdminEmail);
-      await resetOutbox();
+      await withOutbox(async () => {
+        const res = await request.post(`${APP_URL}/api/invite-requests`, {
+          data: {
+            email: "viewer@example.com",
+            next: `/share/${SHARE_TOKENS.meeting}`,
+          },
+        });
+        expect(res.ok()).toBeTruthy();
 
-      const res = await request.post(`${APP_URL}/api/invite-requests`, {
-        data: {
-          email: "viewer@example.com",
-          next: `/share/${SHARE_TOKENS.meeting}`,
-        },
+        const [email] = await readOutbox();
+        expect(email.to).toEqual([TEST_USER_EMAIL]);
+        expect(email.to).not.toContain(globalAdminEmail);
+        expect(email.replyTo).toBe("viewer@example.com");
+        expect(email.text).toContain(`/share/${SHARE_TOKENS.meeting}`);
       });
-      expect(res.ok()).toBeTruthy();
-
-      const [email] = await readOutbox();
-      expect(email.to).toEqual([TEST_USER_EMAIL]);
-      expect(email.to).not.toContain(globalAdminEmail);
-      expect(email.replyTo).toBe("viewer@example.com");
-      expect(email.text).toContain(`/share/${SHARE_TOKENS.meeting}`);
     } finally {
       await setOrganizationRole(request, orgId, TEST_USER_ID, "member");
       await deleteAuthUser(request, globalAdminId);

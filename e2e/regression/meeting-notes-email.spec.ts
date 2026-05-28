@@ -1,14 +1,10 @@
 import { randomUUID } from "node:crypto";
-import { readFile, rm } from "node:fs/promises";
-import path from "node:path";
 import { test, expect, type APIRequestContext } from "@playwright/test";
+import { readOutbox, withOutbox } from "../helpers/outbox";
 import { ISSUES, MEETINGS, SERIES, waitForApp } from "./seed-data";
 
 const SUPABASE_URL = process.env.SUPABASE_URL ?? "http://127.0.0.1:54321";
 const HAS_SERVICE_ROLE = !!process.env.SUPABASE_SERVICE_ROLE_KEY;
-const OUTBOX_PATH =
-  process.env.MINUTIA_TEST_EMAIL_OUTBOX ??
-  path.join(process.cwd(), "test-results", "meeting-notes-email-outbox.jsonl");
 
 function serviceHeaders(prefer = "return=representation") {
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -127,25 +123,7 @@ async function createEmailFixture(request: APIRequestContext, status = "complete
   return { seriesId, meetingId, meetingTitle, issueId, issueTitle, decisionTitle };
 }
 
-async function readOutbox() {
-  const content = await readFile(OUTBOX_PATH, "utf8");
-  return content
-    .trim()
-    .split("\n")
-    .filter(Boolean)
-    .map((line) => JSON.parse(line) as {
-      to: string[];
-      subject: string;
-      text: string;
-      html: string;
-    });
-}
-
 test.describe("Meeting notes email", () => {
-  test.beforeEach(async () => {
-    await rm(OUTBOX_PATH, { force: true });
-  });
-
   test("completed meeting can send branded notes", async ({ page }) => {
     await page.route(`**/api/meetings/${MEETINGS.standup2}/send-notes`, async (route) => {
       const body = route.request().postDataJSON() as { recipients?: string[] };
@@ -168,42 +146,46 @@ test.describe("Meeting notes email", () => {
   });
 
   test("API sends branded notes with explicit recipients", async ({ request }) => {
-    const response = await request.post(`/api/meetings/${MEETINGS.standup2}/send-notes`, {
-      data: { recipients: ["attendee@example.com"] },
+    await withOutbox(async () => {
+      const response = await request.post(`/api/meetings/${MEETINGS.standup2}/send-notes`, {
+        data: { recipients: ["attendee@example.com"] },
+      });
+
+      expect(response.ok()).toBeTruthy();
+      await expect(response.json()).resolves.toEqual({ sent: 1 });
+
+      const [email] = await readOutbox();
+      expect(email.to).toEqual(["attendee@example.com"]);
+      expect(email.subject).toContain("Platform Standup #2");
+      expect(email.text).toContain("Use GitHub Actions for CI/CD");
+      expect(email.html).toContain(`/issues/${ISSUES.stagingMonitoring}`);
     });
-
-    expect(response.ok()).toBeTruthy();
-    await expect(response.json()).resolves.toEqual({ sent: 1 });
-
-    const [email] = await readOutbox();
-    expect(email.to).toEqual(["attendee@example.com"]);
-    expect(email.subject).toContain("Platform Standup #2");
-    expect(email.text).toContain("Use GitHub Actions for CI/CD");
-    expect(email.html).toContain(`/issues/${ISSUES.stagingMonitoring}`);
   });
 
   test("API extracts recipients from meeting and series attendees", async ({ request }) => {
     test.skip(!HAS_SERVICE_ROLE, "Requires service role setup for isolated email data");
 
-    const fixture = await createEmailFixture(request);
+    await withOutbox(async () => {
+      const fixture = await createEmailFixture(request);
 
-    try {
-      const response = await request.post(`/api/meetings/${fixture.meetingId}/send-notes`, {
-        data: {},
-      });
+      try {
+        const response = await request.post(`/api/meetings/${fixture.meetingId}/send-notes`, {
+          data: {},
+        });
 
-      expect(response.ok()).toBeTruthy();
-      await expect(response.json()).resolves.toEqual({ sent: 3 });
+        expect(response.ok()).toBeTruthy();
+        await expect(response.json()).resolves.toEqual({ sent: 3 });
 
-      const [email] = await readOutbox();
-      expect(email.to).toEqual(["mina@example.com", "ava@example.com", "ops@example.com"]);
-      expect(email.subject).toContain(fixture.meetingTitle);
-      expect(email.text).toContain(fixture.issueTitle);
-      expect(email.text).toContain(fixture.decisionTitle);
-      expect(email.html).toContain(`/issues/${fixture.issueId}`);
-    } finally {
-      await deleteSeries(request, fixture.seriesId);
-    }
+        const [email] = await readOutbox();
+        expect(email.to).toEqual(["mina@example.com", "ava@example.com", "ops@example.com"]);
+        expect(email.subject).toContain(fixture.meetingTitle);
+        expect(email.text).toContain(fixture.issueTitle);
+        expect(email.text).toContain(fixture.decisionTitle);
+        expect(email.html).toContain(`/issues/${fixture.issueId}`);
+      } finally {
+        await deleteSeries(request, fixture.seriesId);
+      }
+    });
   });
 
   test("API rejects invalid recipients", async ({ request }) => {

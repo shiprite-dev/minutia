@@ -1,6 +1,8 @@
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { getSupabaseServerUrl } from "@/lib/supabase/url";
+import { requireAdmin } from "@/lib/supabase/admin-auth";
+import { requireSetupToken } from "@/lib/setup-token";
 
 type EnvStatus = "ok" | "missing" | "weak";
 type ServiceStatus = "healthy" | "unreachable";
@@ -50,7 +52,28 @@ function checkEnvVar(name: string, minLength?: number): EnvStatus {
   return "ok";
 }
 
-export async function GET() {
+async function isSetupCompleted() {
+  try {
+    const supabase = createServiceRoleClient();
+    const { data } = await supabase
+      .from("instance_config")
+      .select("value")
+      .eq("key", "setup_completed")
+      .single();
+    return data?.value === "true";
+  } catch {
+    return false;
+  }
+}
+
+export async function GET(request: NextRequest) {
+  const setupCompleted = await isSetupCompleted();
+  const auth = setupCompleted ? await requireAdmin(request) : requireSetupToken(request);
+
+  if (!auth.authorized) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status });
+  }
+
   const env = {
     jwt_secret: checkEnvVar("JWT_SECRET", 32),
     anon_key: checkEnvVar("NEXT_PUBLIC_SUPABASE_ANON_KEY"),
