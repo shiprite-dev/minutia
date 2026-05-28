@@ -1,5 +1,5 @@
 import nodemailer from "nodemailer";
-import { createServiceRoleClient } from "@/lib/supabase/service-role";
+import { getInstanceConfigMap } from "@/lib/instance-config";
 
 export type SmtpConfig = {
   host: string;
@@ -19,14 +19,13 @@ export type MailMessage = {
 };
 
 export async function getSmtpConfig(): Promise<SmtpConfig | null> {
-  const supabase = createServiceRoleClient();
-  const { data } = await supabase
-    .from("instance_config")
-    .select("key, value")
-    .in("key", ["smtp_host", "smtp_port", "smtp_user", "smtp_pass", "smtp_from"]);
-
-  const configMap: Record<string, string | null> = {};
-  for (const row of data ?? []) configMap[row.key] = row.value;
+  const configMap = await getInstanceConfigMap([
+    "smtp_host",
+    "smtp_port",
+    "smtp_user",
+    "smtp_pass",
+    "smtp_from",
+  ]);
 
   const host = configMap.smtp_host || process.env.SMTP_HOST;
   const port = configMap.smtp_port || process.env.SMTP_PORT;

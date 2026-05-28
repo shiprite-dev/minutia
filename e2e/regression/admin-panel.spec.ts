@@ -1,9 +1,12 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type APIRequestContext } from "@playwright/test";
 
 const APP_URL = "http://localhost:3000";
 const SUPABASE_URL = process.env.SUPABASE_URL ?? "http://127.0.0.1:54321";
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
 const SETUP_TOKEN = process.env.MINUTIA_SETUP_TOKEN ?? "";
+const TEST_USER_ID = "00000000-0000-0000-0000-000000000001";
+
+test.describe.configure({ mode: "serial" });
 
 function supabaseHeaders() {
   return {
@@ -21,11 +24,32 @@ function setupHeaders() {
   };
 }
 
+async function setSeedUserRole(
+  request: APIRequestContext,
+  role: "admin" | "user"
+) {
+  const res = await request.patch(
+    `${SUPABASE_URL}/rest/v1/profiles?id=eq.${TEST_USER_ID}`,
+    { headers: supabaseHeaders(), data: { role } }
+  );
+  expect(res.ok()).toBeTruthy();
+}
+
 // ---------------------------------------------------------------------------
 // Admin config API tests
 // ---------------------------------------------------------------------------
 test.describe("Admin config API", () => {
-  test.describe.configure({ mode: "parallel" });
+  test.describe.configure({ mode: "serial" });
+
+  test.beforeEach(async ({ request }) => {
+    test.skip(!SERVICE_KEY, "Requires service role for admin setup");
+    await setSeedUserRole(request, "admin");
+  });
+
+  test.afterEach(async ({ request }) => {
+    if (!SERVICE_KEY) return;
+    await setSeedUserRole(request, "user");
+  });
 
   test("PUT /api/admin/config writes and reads back values", async ({
     request,
@@ -57,10 +81,9 @@ test.describe("Admin config API", () => {
     }
   });
 
-  test("GET /api/admin/config masks encrypted values by default", async ({
+  test("GET /api/admin/config never reveals encrypted values", async ({
     request,
   }) => {
-    // Write an encrypted key
     const putRes = await request.put(`${APP_URL}/api/admin/config`, {
       data: { smtp_pass: "secret123" },
     });
@@ -70,7 +93,6 @@ test.describe("Admin config API", () => {
       return;
     }
 
-    // Read without reveal
     const getRes = await request.get(`${APP_URL}/api/admin/config`);
     expect(getRes.ok()).toBeTruthy();
     const config = await getRes.json();
@@ -79,19 +101,26 @@ test.describe("Admin config API", () => {
       expect(config.smtp_pass).toBe("configured");
     }
 
-    // Read with reveal
     const revealRes = await request.get(
       `${APP_URL}/api/admin/config?reveal=true`
     );
-    if (revealRes.ok()) {
-      const revealed = await revealRes.json();
-      if (revealed.smtp_pass !== undefined) {
-        expect(revealed.smtp_pass).toBe("secret123");
-      }
+    expect(revealRes.ok()).toBeTruthy();
+    const revealed = await revealRes.json();
+    if (revealed.smtp_pass !== undefined) {
+      expect(revealed.smtp_pass).toBe("configured");
     }
 
-    // Cleanup
     if (SERVICE_KEY) {
+      const rawRes = await request.get(
+        `${SUPABASE_URL}/rest/v1/instance_config?key=eq.smtp_pass&select=value,encrypted`,
+        { headers: supabaseHeaders() }
+      );
+      expect(rawRes.ok()).toBeTruthy();
+      const rows = await rawRes.json();
+      expect(rows[0]?.encrypted).toBe(true);
+      expect(rows[0]?.value).not.toBe("secret123");
+      expect(rows[0]?.value).toContain("minutia:v1:");
+
       await request.delete(
         `${SUPABASE_URL}/rest/v1/instance_config?key=eq.smtp_pass`,
         { headers: supabaseHeaders() }
@@ -146,7 +175,7 @@ test.describe("Setup completion flow", () => {
 // Instance config schema tests
 // ---------------------------------------------------------------------------
 test.describe("Instance config schema", () => {
-  test.describe.configure({ mode: "parallel" });
+  test.describe.configure({ mode: "serial" });
 
   test("instance_config upsert works on conflict", async ({ request }) => {
     if (!SERVICE_KEY) {

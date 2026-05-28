@@ -225,16 +225,18 @@ test.describe("Guest share API security", () => {
   }) => {
     const accessToken = await signInAsSeedUser(request);
     const token = crypto.randomUUID();
+    const orgId = await getSeedWorkspaceId(request);
 
     try {
       const response = await request.post(
-        `${SUPABASE_URL}/rest/v1/guest_shares?select=token,resource_type,resource_id`,
+        `${SUPABASE_URL}/rest/v1/guest_shares?select=token,resource_type,resource_id,organization_id`,
         {
           headers: userHeaders(accessToken),
           data: {
             token,
             resource_type: "series",
             resource_id: TEST_SERIES_ID,
+            organization_id: crypto.randomUUID(),
             permissions: "view",
             created_by: TEST_USER_ID,
           },
@@ -247,6 +249,7 @@ test.describe("Guest share API security", () => {
           token,
           resource_type: "series",
           resource_id: TEST_SERIES_ID,
+          organization_id: orgId,
         },
       ]);
     } finally {
@@ -258,6 +261,47 @@ test.describe("Guest share API security", () => {
 });
 
 test.describe("Setup API security", () => {
+  test("credential probe paths return 404 instead of auth redirects", async ({
+    playwright,
+  }) => {
+    const publicRequest = await playwright.request.newContext();
+    for (const path of [
+      "/.env",
+      "/.env.production",
+      "/credentials.json",
+      "/keyfile.json",
+      "/appsettings.json",
+      "/account.json",
+      "/api/env",
+      "/actuator/env",
+      "/cdn-cgi/scripts/test.js",
+    ]) {
+      const res = await publicRequest.get(`${APP_URL}${path}`, { maxRedirects: 0 });
+      expect(res.status(), path).toBe(404);
+    }
+    await publicRequest.dispose();
+  });
+
+  test("setup environment check is not public after setup", async ({
+    request,
+    playwright,
+  }) => {
+    const statusRes = await request.get(`${APP_URL}/api/setup/status`);
+    expect(statusRes.ok()).toBeTruthy();
+    const status = await statusRes.json();
+
+    const publicRequest = await playwright.request.newContext();
+    const res = await publicRequest.get(`${APP_URL}/api/setup/check-env`);
+    if (status.setup_completed) {
+      expect([401, 403]).toContain(res.status());
+    } else if (SETUP_TOKEN) {
+      expect(res.status()).toBe(403);
+    } else {
+      expect(res.ok()).toBeTruthy();
+    }
+    await publicRequest.dispose();
+  });
+
   test("setup mutations require the bootstrap token when configured", async ({
     request,
   }) => {
