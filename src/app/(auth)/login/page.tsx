@@ -121,6 +121,28 @@ function LoginForm() {
     }
   }
 
+  async function handleForgotPassword() {
+    if (!email.trim()) return;
+
+    setFormState("loading");
+    setErrorMessage("");
+
+    const res = await fetch("/api/password-reset-requests", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: email.trim() }),
+    });
+    const data = await res.json();
+
+    if (!res.ok) {
+      setFormState("error");
+      setErrorMessage(data.error || "Failed to send password reset email");
+    } else {
+      setSentMessage("We sent a password reset link to");
+      setFormState("sent");
+    }
+  }
+
   async function handleGoogleLogin() {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
@@ -245,9 +267,19 @@ function LoginForm() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="password" className="font-sans text-ink-2">
-                  Password
-                </Label>
+                <div className="flex items-center justify-between gap-3">
+                  <Label htmlFor="password" className="font-sans text-ink-2">
+                    Password
+                  </Label>
+                  <button
+                    type="button"
+                    onClick={handleForgotPassword}
+                    disabled={formState === "loading" || !email.trim()}
+                    className="font-sans text-xs text-ink-3 underline underline-offset-4 transition-colors hover:text-ink-2 disabled:pointer-events-none disabled:opacity-40"
+                  >
+                    Forgot password?
+                  </button>
+                </div>
                 <Input
                   id="password"
                   type="password"

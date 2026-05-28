@@ -58,6 +58,25 @@ test.describe("Login Page", () => {
     await expect(signInButton).toBeEnabled();
   });
 
+  test("forgot password starts the recovery flow", async ({ page }) => {
+    await page.route("**/api/password-reset-requests", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: "{}",
+      });
+    });
+
+    await page.goto("/login");
+    await page.getByPlaceholder("you@company.com").fill("test@example.com");
+    await page.getByRole("button", { name: "Forgot password?" }).click();
+
+    await expect(page.getByText("Check your email")).toBeVisible();
+    await expect(
+      page.getByText("We sent a password reset link to test@example.com")
+    ).toBeVisible();
+  });
+
   test("unauthenticated user is redirected to login", async ({ page }) => {
     await page.goto("/dashboard");
     await page.waitForURL(/\/login/, { timeout: 10000 });

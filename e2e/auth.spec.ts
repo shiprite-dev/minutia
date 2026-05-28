@@ -42,6 +42,33 @@ test.describe("Authentication", () => {
     await expect(signInButton).toBeEnabled();
   });
 
+  test("forgot password sends a recovery email", async ({ page }) => {
+    await page.route("**/api/password-reset-requests", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: "{}",
+      });
+    });
+
+    await page.goto("/login");
+    await page.getByLabel("Email address").fill("test@example.com");
+    await page.getByRole("button", { name: "Forgot password?" }).click();
+
+    await expect(page.getByText("Check your email")).toBeVisible();
+    await expect(
+      page.getByText("We sent a password reset link to test@example.com")
+    ).toBeVisible();
+  });
+
+  test("password reset request is handled by the backend email path", async ({ request }) => {
+    const res = await request.post("/api/password-reset-requests", {
+      data: { email: "test@example.com" },
+    });
+
+    await expect(res).toBeOK();
+  });
+
   test("unauthenticated user is redirected from app pages", async ({ page }) => {
     await page.goto("/dashboard");
     await page.waitForURL(/\/login/, { timeout: 10000 });
