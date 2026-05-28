@@ -2,25 +2,53 @@ import { test as setup, expect } from "@playwright/test";
 
 setup.setTimeout(process.env.CI ? 90_000 : 30_000);
 
-setup("authenticate", async ({ page }) => {
-  await page.goto("/login");
+setup("authenticate", async ({ browser, request }) => {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-  const setupHeading = page.getByRole("heading", { name: "Instance Setup" });
-  if (await setupHeading.isVisible().catch(() => false)) {
-    throw new Error("Cannot authenticate because the app redirected to /setup. Start the Minutia Supabase stack or point NEXT_PUBLIC_SUPABASE_URL at a seeded Minutia database.");
+  if (!supabaseUrl || !anonKey) {
+    throw new Error("NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY are required for E2E auth setup.");
   }
 
-  await page.getByLabel("Email address").fill("test@example.com");
-  await page.getByLabel("Password").fill("password123");
-  await page.getByRole("button", { name: "Sign in", exact: true }).click();
-  await page.waitForURL(/\/($|dashboard$)/, {
-    timeout: process.env.CI ? 60_000 : 30_000,
-    waitUntil: "domcontentloaded",
+  const authResponse = await request.post(`${supabaseUrl}/auth/v1/token?grant_type=password`, {
+    headers: {
+      apikey: anonKey,
+      Authorization: `Bearer ${anonKey}`,
+      "Content-Type": "application/json",
+    },
+    data: {
+      email: "test@example.com",
+      password: "password123",
+    },
   });
 
+  if (!authResponse.ok()) {
+    throw new Error(`E2E auth setup failed: ${authResponse.status()} ${await authResponse.text()}`);
+  }
+
+  const session = await authResponse.json();
+  const context = await browser.newContext();
+  await context.addCookies([
+    {
+      name: getSupabaseAuthCookieName(supabaseUrl),
+      value: `base64-${Buffer.from(JSON.stringify(session)).toString("base64")}`,
+      domain: "localhost",
+      path: "/",
+      expires: session.expires_at ?? Math.floor(Date.now() / 1000) + session.expires_in,
+      httpOnly: false,
+      secure: false,
+      sameSite: "Lax",
+    },
+  ]);
+
+  const page = await context.newPage();
   await page.goto("/dashboard");
   await expect(page).toHaveURL("/dashboard");
 
-  // Save storage state for reuse across test files
   await page.context().storageState({ path: "e2e/.auth/user.json" });
+  await context.close();
 });
+
+function getSupabaseAuthCookieName(supabaseUrl: string) {
+  return `sb-${new URL(supabaseUrl).hostname.split(".")[0]}-auth-token`;
+}
