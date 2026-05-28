@@ -67,6 +67,7 @@ Connect Google Calendar for read-only calendar sync, manage your profile, choose
 - **Calendar Sidebar** - Persistent mini-calendar panel (Ctrl+.), month navigation, day agenda with meeting links, scroll-to-date integration on series timeline.
 - **Google Sign-In** - One-click OAuth login alongside email/password and guest auth.
 - **Guest Sharing** - Share read-only links with external collaborators. No account required.
+- **Single-Workspace Team Access** - Self-hosted instances use one workspace with admin-managed invitations for teammates.
 - **Command Palette** - Cmd+K to search across all issues and series instantly.
 - **CSV Import/Export** - Migrate from your spreadsheet in seconds. Export anytime.
 - **Draggable Widgets** - Drag-to-reorder and resize dashboard widgets. Layout persists via localStorage.
@@ -80,12 +81,15 @@ Connect Google Calendar for read-only calendar sync, manage your profile, choose
 ```bash
 git clone https://github.com/shiprite-dev/minutia.git
 cd minutia
-cp .env.example .env
-# Edit .env: generate JWT_SECRET and API keys (instructions in the file)
-docker compose up
+pnpm deploy:env
+docker compose up -d
 ```
 
-Open [http://localhost:3000](http://localhost:3000). Create an account. Start tracking.
+Open [http://localhost:3000/setup](http://localhost:3000/setup). Enter the `MINUTIA_SETUP_TOKEN` written to `.env`, create the first admin account, optionally seed demo data, then sign in.
+
+For a real domain, generate env with explicit public URLs: `pnpm deploy:env -- --site-url https://minutia.example.com --api-url https://api.example.com`.
+
+Self-hosted Minutia uses one workspace per instance. The first admin manages that workspace and invites additional users from Settings. Public signup is disabled by default; if you explicitly enable it, new users join the existing workspace as members.
 
 ### Development
 
@@ -101,6 +105,17 @@ npx supabase start
 # Start dev server
 pnpm dev
 ```
+
+For local development, visit `/setup` first when `instance_config.setup_completed` is false. In production, setup is protected by `MINUTIA_SETUP_TOKEN`.
+
+### Onboarding
+
+Minutia has two onboarding layers:
+
+- **Instance setup** is one-time. `/setup` checks environment health, creates the first admin, saves optional instance settings, optionally seeds demo data, and stores completion in `instance_config.setup_completed`.
+- **User onboarding** is per user. Any signed-in user with `profiles.has_completed_onboarding = false` sees the three-step onboarding wizard: confirm display name, optionally create a first meeting series, then review a quick product tour. Completing or skipping it updates only that user's profile.
+
+The current tour is a lightweight checklist inside onboarding, not a persistent guided overlay. Keyboard shortcuts remain available from `?` after onboarding.
 
 ## Who Is This For?
 
@@ -130,7 +145,7 @@ Minutia is AI-optional. The data model is AI-ready from day one, but AI features
 - **Next**: Auto-classify items, smart pre-meeting briefs, transcript ingestion
 - **Later**: Native audio capture, local transcription, cross-meeting intelligence
 
-Self-hosters bring their own API key (Claude, OpenAI, Ollama). Cloud users get AI included.
+Self-hosters bring their own API key (Claude, OpenAI, Ollama). Managed deployments can provide AI through their own backend.
 
 ## Roadmap
 
@@ -141,7 +156,7 @@ Self-hosters bring their own API key (Claude, OpenAI, Ollama). Cloud users get A
 - `/api/v1/ingest` REST endpoint for transcript ingestion
 - AI auto-classification and smart pre-meeting briefs
 - Real-time collaboration (Supabase Realtime subscriptions)
-- Team/org management (multi-user beyond single profile)
+- Advanced team management for self-hosted workspaces
 - Drag-to-reorder issue priority
 - PDF export
 - Enterprise SSO (SAML / OIDC)

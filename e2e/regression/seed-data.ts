@@ -1,4 +1,5 @@
 import type { Page } from "@playwright/test";
+import type { APIRequestContext } from "@playwright/test";
 
 export const SERIES = {
   platformStandup: "10000000-0000-0000-0000-000000000001",
@@ -35,6 +36,39 @@ export const SHARE_TOKENS = {
   issue: "test-share-issue-ghi789",
   expired: "test-share-expired-xyz000",
 };
+
+export const SEED_NOTIFICATION_UNREAD = [
+  "70000000-0000-0000-0000-000000000001",
+  "70000000-0000-0000-0000-000000000002",
+  "70000000-0000-0000-0000-000000000005",
+];
+
+export const SEED_NOTIFICATION_READ = [
+  "70000000-0000-0000-0000-000000000003",
+  "70000000-0000-0000-0000-000000000004",
+];
+
+export async function resetSeedNotifications(request: APIRequestContext) {
+  const supabaseUrl = process.env.SUPABASE_URL ?? "http://127.0.0.1:54321";
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
+  const headers = {
+    apikey: serviceKey,
+    Authorization: `Bearer ${serviceKey}`,
+    "Content-Type": "application/json",
+    Prefer: "return=minimal",
+  };
+
+  const allIds = [...SEED_NOTIFICATION_UNREAD, ...SEED_NOTIFICATION_READ];
+  await request.patch(
+    `${supabaseUrl}/rest/v1/notifications?id=in.(${allIds.join(",")})`,
+    { headers, data: { created_at: new Date().toISOString() } }
+  );
+
+  await request.patch(
+    `${supabaseUrl}/rest/v1/notifications?id=in.(${SEED_NOTIFICATION_UNREAD.join(",")})`,
+    { headers, data: { read: false } }
+  );
+}
 
 export async function waitForApp(page: Page) {
   await page.waitForLoadState("domcontentloaded");
