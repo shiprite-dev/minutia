@@ -3,9 +3,9 @@
 # Self-hosted meeting issue tracker with Supabase backend.
 #
 # Usage:
-#   1. Copy .env.example to .env and configure required values
+#   1. Generate .env with `pnpm deploy:env`
 #   2. docker compose up -d
-#   3. Open http://localhost:3000
+#   3. Open http://localhost:3000/setup
 #
 # For development, the docker-compose.override.yml adds hot reload
 # and exposes Postgres directly.
@@ -17,7 +17,7 @@ services:
     build:
       context: .
       args:
-        NEXT_PUBLIC_SUPABASE_URL: http://${SUPABASE_HOST:-localhost}:${KONG_HTTP_PORT:-8000}
+        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL:-http://localhost:8000}
         NEXT_PUBLIC_SUPABASE_ANON_KEY: ${ANON_KEY}
         NEXT_PUBLIC_ENABLE_PUBLIC_SIGNUP: ${NEXT_PUBLIC_ENABLE_PUBLIC_SIGNUP:-false}
         NEXT_PUBLIC_ENABLE_GOOGLE_AUTH: ${NEXT_PUBLIC_ENABLE_GOOGLE_AUTH:-false}
@@ -27,10 +27,11 @@ services:
       - "${WEB_BIND:-0.0.0.0}:${WEB_PORT:-3000}:3000"
     environment:
       - HOSTNAME=0.0.0.0
-      - NEXT_PUBLIC_SUPABASE_URL=http://${SUPABASE_HOST:-localhost}:${KONG_HTTP_PORT:-8000}
+      - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL:-http://localhost:8000}
       - SUPABASE_INTERNAL_URL=http://supabase-kong:8000
       - NEXT_PUBLIC_SUPABASE_ANON_KEY=${ANON_KEY}
       - SUPABASE_SERVICE_ROLE_KEY=${SERVICE_ROLE_KEY}
+      - MINUTIA_SETUP_TOKEN=${MINUTIA_SETUP_TOKEN:-}
       - SITE_URL=${SITE_URL:-http://localhost:3000}
       - RESEND_API_KEY=${RESEND_API_KEY:-}
       - SMTP_HOST=${SMTP_HOST:-}

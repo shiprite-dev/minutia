@@ -15,12 +15,18 @@ Thank you for your interest in contributing to Minutia. This guide covers everyt
 git clone https://github.com/shiprite-dev/minutia.git
 cd minutia
 cp .env.example .env.local
-# Fill in your Supabase keys in .env.local
 pnpm install
+
+# Start local Supabase and copy the local keys into .env.local
+npx supabase start
+
+# Start the app
 pnpm dev
 ```
 
-For the database, either run Supabase locally (`npx supabase start`) or use `docker compose up supabase-db` to start just the Postgres instance. Migrations in `supabase/migrations/` are applied automatically.
+For a full Docker self-host smoke test, run `pnpm deploy:env`, then `docker compose up -d`, then open `/setup`. The first-run setup wizard creates the admin account and marks `instance_config.setup_completed`.
+
+For development, local Supabase applies migrations from `supabase/migrations/`. If `/setup` appears, finish setup once or reset `instance_config.setup_completed` during setup wizard testing.
 
 ## Project Structure
 

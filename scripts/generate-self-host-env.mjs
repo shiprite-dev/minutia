@@ -14,9 +14,10 @@ for (let i = 2; i < process.argv.length; i += 1) {
 
 const out = String(args.get("out") || ".env");
 const force = args.has("force");
-const url = normalizeUrl(String(args.get("url") || args.get("host") || "http://localhost"));
-const publicHost = new URL(url).host;
-const siteAddress = url.startsWith("https://") ? publicHost : url;
+const siteUrl = normalizeUrl(String(args.get("site-url") || args.get("url") || args.get("host") || "http://localhost:3000"));
+const defaultApiUrl = isLocalUrl(siteUrl) ? replacePort(siteUrl, "8000") : siteUrl;
+const apiUrl = normalizeUrl(String(args.get("api-url") || defaultApiUrl));
+const siteAddress = siteUrl.startsWith("https://") ? new URL(siteUrl).host : siteUrl;
 
 if (existsSync(out) && !force) {
   console.error(`${out} already exists. Pass --force to replace it.`);
@@ -28,35 +29,37 @@ const anonKey = signJwt(jwtSecret, "anon");
 const serviceRoleKey = signJwt(jwtSecret, "service_role");
 const postgresPassword = randomBase64Url(30);
 const secretKeyBase = randomBase64(48);
+const setupToken = randomBase64Url(32);
 
 const env = `# Generated for Minutia self-hosting.
 # Keep this file private.
 
-PUBLIC_URL=${url}
+PUBLIC_URL=${siteUrl}
 MINUTIA_APP_SITE_ADDRESS=${siteAddress}
 
 WEB_BIND=127.0.0.1
 WEB_PORT=3000
 KONG_BIND=127.0.0.1
 KONG_HTTP_PORT=8000
-SUPABASE_HOST=${publicHost}
 
 JWT_SECRET=${jwtSecret}
 ANON_KEY=${anonKey}
 SERVICE_ROLE_KEY=${serviceRoleKey}
-NEXT_PUBLIC_SUPABASE_URL=${url}
+NEXT_PUBLIC_SUPABASE_URL=${apiUrl}
 NEXT_PUBLIC_SUPABASE_ANON_KEY=${anonKey}
 SUPABASE_SERVICE_ROLE_KEY=${serviceRoleKey}
+MINUTIA_SETUP_TOKEN=${setupToken}
 
-SITE_URL=${url}
-API_EXTERNAL_URL=${url}
+SITE_URL=${siteUrl}
+API_EXTERNAL_URL=${apiUrl}
 
 POSTGRES_PASSWORD=${postgresPassword}
 POSTGRES_DB=minutia
 JWT_EXPIRY=3600
 SECRET_KEY_BASE=${secretKeyBase}
 
-DISABLE_SIGNUP=false
+DISABLE_SIGNUP=true
+NEXT_PUBLIC_ENABLE_PUBLIC_SIGNUP=false
 ENABLE_EMAIL_AUTOCONFIRM=true
 ENABLE_EMAIL_SIGNUP=true
 ENABLE_ANONYMOUS_SIGN_INS=false
@@ -79,24 +82,31 @@ GOOGLE_AUTH_CLIENT_ID=
 GOOGLE_AUTH_CLIENT_SECRET=
 GOOGLE_CLIENT_ID=
 GOOGLE_CLIENT_SECRET=
-GOOGLE_REDIRECT_URI=${url}/api/auth/google/callback
+GOOGLE_REDIRECT_URI=${siteUrl}/api/auth/google/callback
 GOOGLE_TOKEN_ENCRYPTION_KEY=
 
-PLAUSIBLE_DOMAIN=
-SENTRY_DSN=
-
-***=
-***=
-NEXT_PUBLIC_***=
 `;
 
 writeFileSync(out, env, { mode: 0o600 });
 console.log(`Wrote ${out}`);
-console.log(`Public URL: ${url}`);
+console.log(`Site URL: ${siteUrl}`);
+console.log(`Supabase API URL: ${apiUrl}`);
+console.log(`Setup token: ${setupToken}`);
 
 function normalizeUrl(value) {
   if (value.startsWith("http://") || value.startsWith("https://")) return value.replace(/\/$/, "");
   return `http://${value.replace(/\/$/, "")}`;
+}
+
+function isLocalUrl(value) {
+  const hostname = new URL(value).hostname;
+  return hostname === "localhost" || hostname === "127.0.0.1";
+}
+
+function replacePort(value, port) {
+  const parsed = new URL(value);
+  parsed.port = port;
+  return parsed.toString().replace(/\/$/, "");
 }
 
 function randomBase64(bytes) {
