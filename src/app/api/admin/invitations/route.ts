@@ -11,6 +11,26 @@ const inviteSchema = z.object({
   role: z.enum(["admin", "member"]).default("member"),
 });
 
+const revokeInvitationSchema = z.object({
+  id: z.string().uuid(),
+});
+
+function rejectCrossOrigin(request: NextRequest) {
+  const origin = request.headers.get("origin");
+  if (!origin) return null;
+
+  return origin === new URL(request.url).origin
+    ? null
+    : NextResponse.json({ error: "Cross-origin requests are not allowed" }, { status: 403 });
+}
+
+function requireJsonBody(request: NextRequest) {
+  const contentType = request.headers.get("content-type") ?? "";
+  return contentType.toLowerCase().includes("application/json")
+    ? null
+    : NextResponse.json({ error: "JSON body required" }, { status: 415 });
+}
+
 export async function GET() {
   const auth = await requireCurrentOrgAdmin();
   if (!auth.authorized) {
@@ -48,6 +68,12 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
+  const crossOrigin = rejectCrossOrigin(request);
+  if (crossOrigin) return crossOrigin;
+
+  const jsonBody = requireJsonBody(request);
+  if (jsonBody) return jsonBody;
+
   const auth = await requireCurrentOrgAdmin();
   if (!auth.authorized) {
     return NextResponse.json({ error: auth.error }, { status: auth.status });
@@ -167,4 +193,52 @@ export async function POST(request: NextRequest) {
   }
 
   return NextResponse.json({ invited: true });
+}
+
+export async function DELETE(request: NextRequest) {
+  const crossOrigin = rejectCrossOrigin(request);
+  if (crossOrigin) return crossOrigin;
+
+  const jsonBody = requireJsonBody(request);
+  if (jsonBody) return jsonBody;
+
+  const auth = await requireCurrentOrgAdmin();
+  if (!auth.authorized) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status });
+  }
+
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
+
+  const parsed = revokeInvitationSchema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: parsed.error.issues[0].message },
+      { status: 400 }
+    );
+  }
+
+  const supabase = createServiceRoleClient();
+  const { data, error } = await supabase
+    .from("organization_invitations")
+    .update({ status: "revoked" })
+    .eq("id", parsed.data.id)
+    .eq("organization_id", auth.organizationId)
+    .eq("status", "pending")
+    .select("id")
+    .maybeSingle();
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  if (!data) {
+    return NextResponse.json({ error: "Invitation not found" }, { status: 404 });
+  }
+
+  return NextResponse.json({ revoked: true });
 }
