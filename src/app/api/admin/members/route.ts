@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
+import { rejectCrossOrigin } from "@/lib/request-origin";
 import { requireCurrentOrgAdmin } from "@/lib/supabase/org-auth";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 
@@ -11,15 +12,6 @@ const updateMemberSchema = z.object({
 const removeMemberSchema = z.object({
   userId: z.string().uuid(),
 });
-
-function rejectCrossOrigin(request: NextRequest) {
-  const origin = request.headers.get("origin");
-  if (!origin) return null;
-
-  return origin === new URL(request.url).origin
-    ? null
-    : NextResponse.json({ error: "Cross-origin requests are not allowed" }, { status: 403 });
-}
 
 function requireJsonBody(request: NextRequest) {
   const contentType = request.headers.get("content-type") ?? "";

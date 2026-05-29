@@ -3,6 +3,7 @@ import { z } from "zod";
 import { absoluteAppUrl } from "@/lib/app-url";
 import { sendMail } from "@/lib/email";
 import { buildExistingUserOrganizationInviteEmail } from "@/lib/organization-invite-email";
+import { rejectCrossOrigin } from "@/lib/request-origin";
 import { requireCurrentOrgAdmin } from "@/lib/supabase/org-auth";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 
@@ -14,15 +15,6 @@ const inviteSchema = z.object({
 const revokeInvitationSchema = z.object({
   id: z.string().uuid(),
 });
-
-function rejectCrossOrigin(request: NextRequest) {
-  const origin = request.headers.get("origin");
-  if (!origin) return null;
-
-  return origin === new URL(request.url).origin
-    ? null
-    : NextResponse.json({ error: "Cross-origin requests are not allowed" }, { status: 403 });
-}
 
 function requireJsonBody(request: NextRequest) {
   const contentType = request.headers.get("content-type") ?? "";

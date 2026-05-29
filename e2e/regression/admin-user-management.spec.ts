@@ -1,4 +1,9 @@
-import { test, expect, type APIRequestContext } from "@playwright/test";
+import {
+  test,
+  expect,
+  request as playwrightRequest,
+  type APIRequestContext,
+} from "@playwright/test";
 import { randomUUID } from "node:crypto";
 import { waitForApp } from "./seed-data";
 
@@ -123,6 +128,13 @@ async function deleteInvitation(
   );
 }
 
+async function newAnonymousApi() {
+  return playwrightRequest.newContext({
+    baseURL: "http://localhost:3000",
+    storageState: { cookies: [], origins: [] },
+  });
+}
+
 test.describe("Admin user management", () => {
   let organizationId: string | null = null;
   let memberId: string | null = null;
@@ -233,29 +245,57 @@ test.describe("Admin user management", () => {
 });
 
 test.describe("Admin user management security", () => {
-  test("member mutation rejects cross-origin requests before auth", async ({ request }) => {
-    const res = await request.patch("/api/admin/members", {
+  test("member deletion accepts proxied same-origin requests before auth", async () => {
+    const api = await newAnonymousApi();
+
+    const res = await api.delete("/api/admin/members", {
+      headers: {
+        Origin: "https://workspace.example.com",
+        "X-Forwarded-Host": "workspace.example.com",
+        "X-Forwarded-Proto": "https",
+        "Content-Type": "application/json",
+      },
+      data: { userId: randomUUID() },
+    });
+    const body = await res.json();
+
+    await api.dispose();
+
+    expect(res.status()).toBe(401);
+    expect(body).toEqual({ error: "Not authenticated" });
+  });
+
+  test("member mutation rejects cross-origin requests before auth", async () => {
+    const api = await newAnonymousApi();
+    const res = await api.patch("/api/admin/members", {
       headers: {
         Origin: "https://attacker.example",
         "Content-Type": "application/json",
       },
       data: { userId: randomUUID(), role: "admin" },
     });
+    const body = await res.json();
+
+    await api.dispose();
 
     expect(res.status()).toBe(403);
-    expect(await res.json()).toEqual({ error: "Cross-origin requests are not allowed" });
+    expect(body).toEqual({ error: "Cross-origin requests are not allowed" });
   });
 
-  test("invitation revoke rejects cross-origin requests before auth", async ({ request }) => {
-    const res = await request.delete("/api/admin/invitations", {
+  test("invitation revoke rejects cross-origin requests before auth", async () => {
+    const api = await newAnonymousApi();
+    const res = await api.delete("/api/admin/invitations", {
       headers: {
         Origin: "https://attacker.example",
         "Content-Type": "application/json",
       },
       data: { id: randomUUID() },
     });
+    const body = await res.json();
+
+    await api.dispose();
 
     expect(res.status()).toBe(403);
-    expect(await res.json()).toEqual({ error: "Cross-origin requests are not allowed" });
+    expect(body).toEqual({ error: "Cross-origin requests are not allowed" });
   });
 });
