@@ -74,6 +74,9 @@ const dockerCompose = readFileSync("docker-compose.yml", "utf8");
 
 assert.match(envExample, /MINUTIA_SETUP_TOKEN=/, ".env.example must document the production setup token");
 assert.match(generatedEnvScript, /MINUTIA_SETUP_TOKEN=/, "generated self-host env must include a setup token");
+assert.match(envExample, /^ADDITIONAL_REDIRECT_URLS=.*\/accept-invite/m, ".env.example must allow invite redirects");
+assert.match(generatedEnvScript, /ADDITIONAL_REDIRECT_URLS=\$\{inviteRedirectUrl\}/, "generated self-host env must allow invite redirects");
+assert.match(dockerCompose, /GOTRUE_URI_ALLOW_LIST: .*\/accept-invite/, "docker compose must allow invite redirects by default");
 assert.match(dockerCompose, /MINUTIA_SETUP_TOKEN=\$\{MINUTIA_SETUP_TOKEN/, "docker compose must pass setup token to the web app");
 assert.match(dockerCompose, /NEXT_PUBLIC_SUPABASE_URL=\$\{NEXT_PUBLIC_SUPABASE_URL/, "docker compose must use the configured public Supabase URL");
 assert.doesNotMatch(envExample, /***/, "Stripe configuration belongs in ***, not OSS setup docs");

@@ -103,7 +103,7 @@ services:
       GOTRUE_DB_DATABASE_URL: postgres://supabase_auth_admin:${POSTGRES_PASSWORD:-postgres}@supabase-db:5432/${POSTGRES_DB:-minutia}
 
       GOTRUE_SITE_URL: ${SITE_URL:-http://localhost:3000}
-      GOTRUE_URI_ALLOW_LIST: ${ADDITIONAL_REDIRECT_URLS:-}
+      GOTRUE_URI_ALLOW_LIST: ${ADDITIONAL_REDIRECT_URLS:-${SITE_URL:-http://localhost:3000}/accept-invite}
       GOTRUE_DISABLE_SIGNUP: ${DISABLE_SIGNUP:-true}
 
       GOTRUE_JWT_ADMIN_ROLES: service_role

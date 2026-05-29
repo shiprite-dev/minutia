@@ -18,6 +18,7 @@ const siteUrl = normalizeUrl(String(args.get("site-url") || args.get("url") || a
 const defaultApiUrl = isLocalUrl(siteUrl) ? replacePort(siteUrl, "8000") : siteUrl;
 const apiUrl = normalizeUrl(String(args.get("api-url") || defaultApiUrl));
 const siteAddress = siteUrl.startsWith("https://") ? new URL(siteUrl).host : siteUrl;
+const inviteRedirectUrl = `${siteUrl}/accept-invite`;
 
 if (existsSync(out) && !force) {
   console.error(`${out} already exists. Pass --force to replace it.`);
@@ -64,7 +65,7 @@ NEXT_PUBLIC_ENABLE_MAGIC_LINK=false
 ENABLE_EMAIL_AUTOCONFIRM=true
 ENABLE_EMAIL_SIGNUP=true
 ENABLE_ANONYMOUS_SIGN_INS=false
-ADDITIONAL_REDIRECT_URLS=
+ADDITIONAL_REDIRECT_URLS=${inviteRedirectUrl}
 
 SMTP_HOST=
 SMTP_PORT=587
