@@ -2,7 +2,10 @@ import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { absoluteAppUrl } from "@/lib/app-url";
 import { sendMail } from "@/lib/email";
-import { buildExistingUserOrganizationInviteEmail } from "@/lib/organization-invite-email";
+import {
+  buildExistingUserOrganizationInviteEmail,
+  buildNewUserOrganizationInviteEmail,
+} from "@/lib/organization-invite-email";
 import { rejectCrossOrigin } from "@/lib/request-origin";
 import { requireCurrentOrgAdmin } from "@/lib/supabase/org-auth";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
@@ -133,17 +136,17 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: invitationError.message }, { status: 500 });
   }
 
+  const { data: organization, error: organizationError } = await supabase
+    .from("organizations")
+    .select("name")
+    .eq("id", auth.organizationId)
+    .single();
+
+  if (organizationError || !organization) {
+    return NextResponse.json({ error: "Failed to load organization" }, { status: 500 });
+  }
+
   if (existingProfile?.id) {
-    const { data: organization, error: organizationError } = await supabase
-      .from("organizations")
-      .select("name")
-      .eq("id", auth.organizationId)
-      .single();
-
-    if (organizationError || !organization) {
-      return NextResponse.json({ error: "Failed to load organization" }, { status: 500 });
-    }
-
     const appUrl = absoluteAppUrl(request.url, "/");
     const emailMessage = buildExistingUserOrganizationInviteEmail({
       organizationName: organization.name,
@@ -156,32 +159,60 @@ export async function POST(request: NextRequest) {
       ...emailMessage,
     });
   } else {
-    const redirectTo = absoluteAppUrl(request.url, "/auth/callback?next=/settings");
-    const { data, error } = await supabase.auth.admin.inviteUserByEmail(email, {
-      data: {
-        organization_id: auth.organizationId,
-        organization_role: role,
+    const redirectTo = absoluteAppUrl(request.url, "/accept-invite");
+    const { data, error } = await supabase.auth.admin.generateLink({
+      type: "invite",
+      email,
+      options: {
+        data: {
+          organization_id: auth.organizationId,
+          organization_name: organization.name,
+          organization_role: role,
+        },
+        redirectTo,
       },
-      redirectTo,
     });
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    if (data.user?.id) {
-      await supabase
-        .from("organization_members")
-        .upsert(
-          {
-            organization_id: auth.organizationId,
-            user_id: data.user.id,
-            role,
-            invited_by: auth.userId,
-          },
-          { onConflict: "organization_id,user_id" }
-        );
+    if (!data.user?.id) {
+      return NextResponse.json({ error: "Failed to create invite user" }, { status: 500 });
     }
+
+    const { error: memberError } = await supabase
+      .from("organization_members")
+      .upsert(
+        {
+          organization_id: auth.organizationId,
+          user_id: data.user.id,
+          role,
+          invited_by: auth.userId,
+        },
+        { onConflict: "organization_id,user_id" }
+      );
+
+    if (memberError) {
+      return NextResponse.json({ error: memberError.message }, { status: 500 });
+    }
+
+    const acceptUrl = data.properties?.action_link;
+    if (!acceptUrl) {
+      return NextResponse.json({ error: "Failed to generate invite link" }, { status: 500 });
+    }
+
+    const emailMessage = buildNewUserOrganizationInviteEmail({
+      organizationName: organization.name,
+      role,
+      invitedEmail: email,
+      acceptUrl,
+    });
+
+    await sendMail({
+      to: email,
+      ...emailMessage,
+    });
   }
 
   return NextResponse.json({ invited: true });

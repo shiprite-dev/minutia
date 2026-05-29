@@ -78,6 +78,16 @@ async function deleteAuthUser(request: APIRequestContext, userId: string | null)
   });
 }
 
+async function getProfileIdByEmail(request: APIRequestContext, email: string) {
+  const res = await request.get(
+    `${SUPABASE_URL}/rest/v1/profiles?email=eq.${encodeURIComponent(email)}&select=id`,
+    { headers: serviceHeaders("return=representation") }
+  );
+  expect(res.ok()).toBeTruthy();
+  const rows = await res.json();
+  return (rows[0]?.id ?? null) as string | null;
+}
+
 async function getPasswordAccessToken() {
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   expect(anonKey).toBeTruthy();
@@ -170,6 +180,56 @@ test.describe("Organization RBAC and workspace routes", () => {
         expect(email.html).toContain("/settings");
       });
     } finally {
+      await deleteAuthUser(request, invitedUserId);
+    }
+  });
+
+  test("organization invite link lets new users set their password", async ({
+    browser,
+    request,
+  }) => {
+    const orgId = await getCurrentOrgId(request);
+    await upsertMembership(request, orgId, TEST_USER_ID, "admin");
+
+    const invitedEmail = `accept-invite-${Date.now()}@example.com`;
+    let invitedUserId: string | null = null;
+    const inviteContext = await browser.newContext({
+      storageState: { cookies: [], origins: [] },
+    });
+
+    try {
+      await withOutbox(async () => {
+        const res = await request.post(`${APP_URL}/api/admin/invitations`, {
+          data: { email: invitedEmail, role: "member" },
+        });
+        expect(res.ok()).toBeTruthy();
+
+        const [email] = await readOutbox();
+        expect(email.to).toBe(invitedEmail);
+        expect(email.subject).toContain("Minutia");
+        expect(email.text).toContain("Set your password");
+        expect(email.text).toContain("No temporary password");
+        expect(email.html).toContain("accept-invite");
+        expect(email.html).not.toContain("/auth/callback");
+
+        const acceptUrl = email.text.match(/https?:\/\/\S+/)?.[0];
+        expect(acceptUrl).toBeTruthy();
+        expect(acceptUrl).toContain("/auth/v1/verify");
+
+        invitedUserId = await getProfileIdByEmail(request, invitedEmail);
+        const invitePage = await inviteContext.newPage();
+        await invitePage.goto(acceptUrl!);
+
+        await expect(invitePage).toHaveURL(/\/accept-invite/);
+        await expect(invitePage.getByLabel("Email address")).toHaveValue(invitedEmail);
+        await invitePage.getByLabel("Password", { exact: true }).fill("invite-password123");
+        await invitePage.getByLabel("Confirm password").fill("invite-password123");
+        await invitePage.getByRole("button", { name: "Set password" }).click();
+        await expect(invitePage).toHaveURL(`${APP_URL}/`);
+      });
+    } finally {
+      await inviteContext.close();
+      invitedUserId ??= await getProfileIdByEmail(request, invitedEmail);
       await deleteAuthUser(request, invitedUserId);
     }
   });
