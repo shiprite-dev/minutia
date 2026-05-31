@@ -13,6 +13,26 @@ export async function POST(request: NextRequest) {
 
   const supabase = createServiceRoleClient();
 
+  const { data: setupConfig, error: setupError } = await supabase
+    .from("instance_config")
+    .select("value")
+    .eq("key", "setup_completed")
+    .single();
+
+  if (setupError) {
+    return NextResponse.json(
+      { error: "Failed to check setup status" },
+      { status: 500 }
+    );
+  }
+
+  if (setupConfig?.value === "true") {
+    return NextResponse.json(
+      { error: "Setup is already complete" },
+      { status: 409 }
+    );
+  }
+
   const { data: admin } = await supabase
     .from("profiles")
     .select("id")
