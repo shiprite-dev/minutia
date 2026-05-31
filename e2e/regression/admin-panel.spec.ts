@@ -1,6 +1,6 @@
 import { test, expect, type APIRequestContext } from "@playwright/test";
 
-const APP_URL = "http://localhost:3000";
+const APP_URL = process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3000";
 const SUPABASE_URL = process.env.SUPABASE_URL ?? "http://127.0.0.1:54321";
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
 const SETUP_TOKEN = process.env.MINUTIA_SETUP_TOKEN ?? "";
@@ -31,6 +31,25 @@ async function setSeedUserRole(
   const res = await request.patch(
     `${SUPABASE_URL}/rest/v1/profiles?id=eq.${TEST_USER_ID}`,
     { headers: supabaseHeaders(), data: { role } }
+  );
+  expect(res.ok()).toBeTruthy();
+}
+
+async function getSetupCompleted(request: APIRequestContext): Promise<string> {
+  const res = await request.get(
+    `${SUPABASE_URL}/rest/v1/instance_config?key=eq.setup_completed&select=value`,
+    { headers: supabaseHeaders() }
+  );
+  expect(res.ok()).toBeTruthy();
+
+  const rows = await res.json();
+  return rows[0]?.value ?? "false";
+}
+
+async function setSetupCompleted(request: APIRequestContext, value: string) {
+  const res = await request.patch(
+    `${SUPABASE_URL}/rest/v1/instance_config?key=eq.setup_completed`,
+    { headers: supabaseHeaders(), data: { value } }
   );
   expect(res.ok()).toBeTruthy();
 }
@@ -141,32 +160,40 @@ test.describe("Setup completion flow", () => {
       return;
     }
 
-    // Check if admin exists
-    const statusRes = await request.get(`${APP_URL}/api/setup/status`);
-    const status = await statusRes.json();
+    const originalSetupCompleted = await getSetupCompleted(request);
 
-    if (!status.has_admin) {
-      // Cannot seed without admin
-      const res = await request.post(`${APP_URL}/api/setup/seed-demo`, {
-        headers: setupHeaders(),
-      });
-      expect(res.status()).toBe(400);
-    } else {
-      const res = await request.post(`${APP_URL}/api/setup/seed-demo`, {
-        headers: setupHeaders(),
-      });
-      if (res.ok()) {
-        const body = await res.json();
-        expect(body).toHaveProperty("series_id");
-        expect(body).toHaveProperty("issues_created");
-        expect(body.issues_created).toBe(5);
+    try {
+      await setSetupCompleted(request, "false");
 
-        // Cleanup: delete the seeded series
-        await request.delete(
-          `${SUPABASE_URL}/rest/v1/meeting_series?name=eq.Weekly Vendor Sync`,
-          { headers: supabaseHeaders() }
-        );
+      // Check if admin exists
+      const statusRes = await request.get(`${APP_URL}/api/setup/status`);
+      const status = await statusRes.json();
+
+      if (!status.has_admin) {
+        // Cannot seed without admin
+        const res = await request.post(`${APP_URL}/api/setup/seed-demo`, {
+          headers: setupHeaders(),
+        });
+        expect(res.status()).toBe(400);
+      } else {
+        const res = await request.post(`${APP_URL}/api/setup/seed-demo`, {
+          headers: setupHeaders(),
+        });
+        if (res.ok()) {
+          const body = await res.json();
+          expect(body).toHaveProperty("series_id");
+          expect(body).toHaveProperty("issues_created");
+          expect(body.issues_created).toBe(5);
+
+          // Cleanup: delete the seeded series
+          await request.delete(
+            `${SUPABASE_URL}/rest/v1/meeting_series?name=eq.Weekly Vendor Sync`,
+            { headers: supabaseHeaders() }
+          );
+        }
       }
+    } finally {
+      await setSetupCompleted(request, originalSetupCompleted);
     }
   });
 });

@@ -8,7 +8,7 @@ const TEST_USER_ID = "00000000-0000-0000-0000-000000000001";
 const TEST_USER_EMAIL = "test@example.com";
 const TEST_USER_PASSWORD = "password123";
 const TEST_SERIES_ID = "10000000-0000-0000-0000-000000000001";
-const APP_URL = "http://localhost:3000";
+const APP_URL = process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3000";
 const SETUP_TOKEN = process.env.MINUTIA_SETUP_TOKEN ?? "";
 
 function serviceClient(): SupabaseClient {
@@ -87,6 +87,26 @@ async function getSeedWorkspaceId(request: APIRequestContext): Promise<string> {
   const body = await res.json();
   expect(body[0]?.current_organization_id).toBeTruthy();
   return body[0].current_organization_id as string;
+}
+
+async function getSetupCompleted(request: APIRequestContext): Promise<string> {
+  const res = await request.get(
+    `${SUPABASE_URL}/rest/v1/instance_config?key=eq.setup_completed&select=value`,
+    { headers: serviceHeaders("return=representation") }
+  );
+
+  expect(res.ok()).toBeTruthy();
+  const body = await res.json();
+  return body[0]?.value ?? "false";
+}
+
+async function setSetupCompleted(request: APIRequestContext, value: string) {
+  const res = await request.patch(
+    `${SUPABASE_URL}/rest/v1/instance_config?key=eq.setup_completed`,
+    { headers: serviceHeaders(), data: { value } }
+  );
+
+  expect(res.ok()).toBeTruthy();
 }
 
 test.describe("Profile role API security", () => {
@@ -261,6 +281,8 @@ test.describe("Guest share API security", () => {
 });
 
 test.describe("Setup API security", () => {
+  test.describe.configure({ mode: "serial" });
+
   test("credential probe paths return 404 instead of auth redirects", async ({
     playwright,
   }) => {
@@ -325,5 +347,58 @@ test.describe("Setup API security", () => {
       data: body,
     });
     expect(validToken.status()).toBe(400);
+  });
+
+  test("setup bootstrap mutations reject after setup is complete", async ({
+    request,
+  }) => {
+    test.skip(!SERVICE_KEY, "Service role key is required");
+
+    const originalSetupCompleted = await getSetupCompleted(request);
+    const email = `blocked-setup-${Date.now()}@example.com`;
+
+    try {
+      await setSetupCompleted(request, "true");
+
+      const createAdmin = await request.post(`${APP_URL}/api/setup/create-admin`, {
+        headers: setupHeaders(),
+        data: {
+          email,
+          password: "password123",
+          name: "Blocked Setup User",
+        },
+      });
+      expect(createAdmin.status()).toBe(409);
+      await expect(createAdmin.json()).resolves.toMatchObject({
+        error: "Setup is already complete",
+      });
+
+      const seedDemo = await request.post(`${APP_URL}/api/setup/seed-demo`, {
+        headers: setupHeaders(),
+      });
+      expect(seedDemo.status()).toBe(409);
+      await expect(seedDemo.json()).resolves.toMatchObject({
+        error: "Setup is already complete",
+      });
+
+      const profileLookup = await request.get(
+        `${SUPABASE_URL}/rest/v1/profiles?email=eq.${email}&select=id`,
+        { headers: serviceHeaders("return=representation") }
+      );
+      expect(profileLookup.ok()).toBeTruthy();
+      const profiles = await profileLookup.json();
+      expect(profiles[0]?.id ?? null).toBeNull();
+    } finally {
+      await setSetupCompleted(request, originalSetupCompleted);
+      const cleanupLookup = await request.get(
+        `${SUPABASE_URL}/rest/v1/profiles?email=eq.${email}&select=id`,
+        { headers: serviceHeaders("return=representation") }
+      );
+      const cleanupProfiles = cleanupLookup.ok() ? await cleanupLookup.json() : [];
+      const createdUserId = cleanupProfiles[0]?.id ?? null;
+      if (createdUserId) {
+        await serviceClient().auth.admin.deleteUser(createdUserId);
+      }
+    }
   });
 });
