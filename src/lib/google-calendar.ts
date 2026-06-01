@@ -1,15 +1,13 @@
-import { createClient } from "@supabase/supabase-js";
 import { encrypt, decrypt } from "./crypto";
+import type { GoogleCalendarRawEvent } from "./google-calendar-sync";
+import { createServiceRoleClient } from "./supabase/service-role";
 
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 const GOOGLE_CALENDAR_API = "https://www.googleapis.com/calendar/v3";
 const GOOGLE_REVOKE_URL = "https://oauth2.googleapis.com/revoke";
 
 function getServiceClient() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
+  return createServiceRoleClient();
 }
 
 export interface StoredTokens {
@@ -103,15 +101,23 @@ export interface CalendarEntry {
   primary: boolean;
 }
 
+type GoogleCalendarListResponse = {
+  items?: CalendarEntry[];
+};
+
+type GoogleCalendarEventsResponse = {
+  items?: GoogleCalendarRawEvent[];
+};
+
 export async function listCalendars(accessToken: string): Promise<CalendarEntry[]> {
   const res = await fetch(`${GOOGLE_CALENDAR_API}/users/me/calendarList`, {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
 
   if (!res.ok) throw new Error(`Calendar list failed: ${res.status}`);
-  const data = await res.json();
+  const data = (await res.json()) as GoogleCalendarListResponse;
 
-  return (data.items ?? []).map((item: any) => ({
+  return (data.items ?? []).map((item) => ({
     id: item.id,
     summary: item.summary ?? item.id,
     primary: item.primary ?? false,
@@ -148,15 +154,47 @@ export async function listUpcomingEvents(
   );
 
   if (!res.ok) throw new Error(`Events fetch failed: ${res.status}`);
-  const data = await res.json();
+  const data = (await res.json()) as GoogleCalendarEventsResponse;
 
-  return (data.items ?? []).map((item: any) => ({
+  return (data.items ?? []).map((item) => ({
     id: item.id,
     summary: item.summary ?? "(No title)",
     start: { dateTime: item.start?.dateTime, date: item.start?.date },
     end: { dateTime: item.end?.dateTime, date: item.end?.date },
     htmlLink: item.htmlLink,
   }));
+}
+
+export async function listAgendaEvents({
+  accessToken,
+  calendarId = "primary",
+  timeMin,
+  timeMax,
+  maxResults = 50,
+}: {
+  accessToken: string;
+  calendarId?: string;
+  timeMin: Date;
+  timeMax: Date;
+  maxResults?: number;
+}): Promise<GoogleCalendarRawEvent[]> {
+  const params = new URLSearchParams({
+    timeMin: timeMin.toISOString(),
+    timeMax: timeMax.toISOString(),
+    maxResults: String(maxResults),
+    singleEvents: "true",
+    orderBy: "startTime",
+    showDeleted: "false",
+  });
+
+  const res = await fetch(
+    `${GOOGLE_CALENDAR_API}/calendars/${encodeURIComponent(calendarId)}/events?${params}`,
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
+
+  if (!res.ok) throw new Error(`Agenda fetch failed: ${res.status}`);
+  const data = (await res.json()) as GoogleCalendarEventsResponse;
+  return data.items ?? [];
 }
 
 export async function revokeToken(token: string) {
