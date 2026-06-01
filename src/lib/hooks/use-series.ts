@@ -1,12 +1,13 @@
 "use client";
 
+import * as React from "react";
 import {
   useQuery,
   useMutation,
   useQueryClient,
 } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
-import type { MeetingSeries, SeriesWithMeetings } from "@/lib/types";
+import type { MeetingSeries, SeriesParticipantRole, SeriesWithMeetings } from "@/lib/types";
 import type { CreateSeriesInput } from "@/lib/schemas";
 
 // ---------------------------------------------------------------------------
@@ -15,6 +16,7 @@ import type { CreateSeriesInput } from "@/lib/schemas";
 export const seriesKeys = {
   all: ["series"] as const,
   detail: (id: string) => ["series", id] as const,
+  role: (id: string) => ["series", id, "participant-role"] as const,
 };
 
 // ---------------------------------------------------------------------------
@@ -74,6 +76,82 @@ export function useSeriesDetail(id: string) {
 }
 
 // ---------------------------------------------------------------------------
+// useSeriesParticipantRole - current user's role in a series
+// ---------------------------------------------------------------------------
+export function useSeriesParticipantRole(seriesId: string) {
+  const supabase = createClient();
+
+  return useQuery<SeriesParticipantRole | null>({
+    queryKey: seriesKeys.role(seriesId),
+    enabled: !!seriesId,
+    queryFn: async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
+
+      const { data, error } = await supabase
+        .from("series_participants")
+        .select("role")
+        .eq("series_id", seriesId)
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      if (error) throw error;
+      return (data?.role ?? null) as SeriesParticipantRole | null;
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// useSeriesRealtime - refresh series detail when meeting state changes
+// ---------------------------------------------------------------------------
+export function useSeriesRealtime(seriesId: string) {
+  const queryClient = useQueryClient();
+
+  React.useEffect(() => {
+    if (!seriesId) return;
+
+    const supabase = createClient();
+    const refresh = () => {
+      void queryClient.invalidateQueries({ queryKey: seriesKeys.all });
+      void queryClient.invalidateQueries({ queryKey: seriesKeys.detail(seriesId) });
+      void queryClient.invalidateQueries({ queryKey: ["meetings", seriesId] });
+    };
+
+    const channel = supabase
+      .channel(`series:${seriesId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "meeting_series",
+          filter: `id=eq.${seriesId}`,
+        },
+        refresh
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "meetings",
+          filter: `series_id=eq.${seriesId}`,
+        },
+        refresh
+      )
+      .subscribe();
+    const interval = window.setInterval(refresh, 3000);
+
+    return () => {
+      window.clearInterval(interval);
+      void supabase.removeChannel(channel);
+    };
+  }, [queryClient, seriesId]);
+}
+
+// ---------------------------------------------------------------------------
 // useCreateSeries
 // ---------------------------------------------------------------------------
 export function useCreateSeries() {
@@ -87,9 +165,21 @@ export function useCreateSeries() {
       } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
 
+      const { data: profile, error: profileError } = await supabase
+        .from("profiles")
+        .select("current_organization_id")
+        .eq("id", user.id)
+        .single();
+
+      if (profileError) throw profileError;
+
       const { data, error } = await supabase
         .from("meeting_series")
-        .insert({ ...input, owner_id: user.id })
+        .insert({
+          ...input,
+          owner_id: user.id,
+          organization_id: profile.current_organization_id,
+        })
         .select()
         .single();
 

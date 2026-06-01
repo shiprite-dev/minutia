@@ -10,6 +10,7 @@ export type ShareResourceType = "meeting" | "series" | "issue";
 export type Theme = "light" | "dark" | "system";
 export type UserRole = "user" | "admin";
 export type OrganizationRole = "admin" | "member";
+export type SeriesParticipantRole = "owner" | "facilitator" | "participant";
 
 export interface Profile {
   id: string;
@@ -91,6 +92,15 @@ export interface MeetingSeries {
   gcal_sync_enabled: boolean;
   created_at: Date;
   updated_at: Date;
+}
+
+export interface SeriesParticipant {
+  series_id: string;
+  user_id: string;
+  role: SeriesParticipantRole;
+  invited_by: string | null;
+  joined_at: Date;
+  created_at: Date;
 }
 
 export interface GoogleCalendarEntry {

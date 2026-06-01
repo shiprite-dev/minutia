@@ -4,6 +4,7 @@ import { waitForApp } from "./seed-data";
 
 const SUPABASE_URL = process.env.SUPABASE_URL ?? "http://127.0.0.1:54321";
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
+const APP_URL = process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3000";
 const TEST_USER_ID = "00000000-0000-0000-0000-000000000001";
 const ONBOARDING_PASSWORD = "password123";
 
@@ -174,7 +175,7 @@ test.describe("Onboarding wizard", () => {
       {
         name: "sb-127-auth-token",
         value: state.cookieValue,
-        domain: "localhost",
+        domain: new URL(APP_URL).hostname,
         path: "/",
         expires: Math.floor(Date.now() / 1000) + 60 * 60,
         httpOnly: false,
