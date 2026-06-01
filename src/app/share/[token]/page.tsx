@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { CATEGORY_CONFIG, STATUS_CONFIG } from "@/lib/constants";
 import { IssueKey } from "@/components/minutia/issue-key";
+import { MinutiaCategoryIcon } from "@/components/minutia/minutia-icons";
 import type {
   GuestShare,
   Meeting,
@@ -304,9 +305,7 @@ function MeetingShareView({
                 className="bg-card border border-rule rounded-md p-4"
               >
                 <div className="flex items-start gap-2">
-                  <span className="text-ink-3 shrink-0" aria-hidden="true">
-                    {CATEGORY_CONFIG.decision.glyph}
-                  </span>
+                  <MinutiaCategoryIcon category="decision" className="size-4 shrink-0 text-ink" />
                   <div>
                     <p className="text-sm font-medium text-ink">
                       {decision.title}
@@ -396,8 +395,8 @@ function SeriesShareView({
                 <span className="text-sm text-ink flex-1 min-w-0 truncate">
                   {issue.title}
                 </span>
-                <span className="text-xs text-ink-3 shrink-0">
-                  {CATEGORY_CONFIG[issue.category].glyph}{" "}
+                <span className="inline-flex items-center gap-1 text-xs text-ink-3 shrink-0">
+                  <MinutiaCategoryIcon category={issue.category} className="size-3.5 text-ink" />
                   {CATEGORY_CONFIG[issue.category].label}
                 </span>
                 <span className="text-xs text-ink-3 shrink-0">
@@ -471,9 +470,7 @@ function IssueShareView({
         </h1>
         <div className="mt-3 flex flex-wrap items-center gap-3">
           <span className="inline-flex items-center gap-1 text-xs text-ink-2">
-            <span aria-hidden="true">
-              {CATEGORY_CONFIG[issue.category].glyph}
-            </span>
+            <MinutiaCategoryIcon category={issue.category} className="size-3.5 text-ink" />
             {CATEGORY_CONFIG[issue.category].label}
           </span>
           <span className="inline-flex items-center gap-1.5 text-xs text-ink-2">
@@ -604,9 +601,7 @@ function ShareIssueCard({ issue }: { issue: Issue }) {
           <p className="text-sm font-medium text-ink">{issue.title}</p>
           <div className="flex flex-wrap items-center gap-3 mt-2">
             <span className="inline-flex items-center gap-1 text-xs text-ink-2">
-              <span aria-hidden="true">
-                {CATEGORY_CONFIG[issue.category].glyph}
-              </span>
+              <MinutiaCategoryIcon category={issue.category} className="size-3.5 text-ink" />
               {CATEGORY_CONFIG[issue.category].label}
             </span>
             <span className="text-xs text-ink-3">

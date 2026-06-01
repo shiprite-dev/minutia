@@ -23,6 +23,7 @@ import { useDecisions } from "@/lib/hooks/use-decisions";
 import { CATEGORY_CONFIG, STATUS_CONFIG } from "@/lib/constants";
 import { formatIssueKey } from "@/lib/issue-utils";
 import { IssueKey } from "@/components/minutia/issue-key";
+import { MinutiaCategoryIcon } from "@/components/minutia/minutia-icons";
 import type { IssueCategory } from "@/lib/types";
 
 const NAV_ITEMS = [
@@ -123,12 +124,11 @@ export function CommandPalette() {
                     runCommand(() => router.push(`/issues/${issue.id}`))
                   }
                 >
-                  <span
-                    className="shrink-0 text-xs leading-none text-muted-foreground"
-                    title={catConfig?.label}
-                  >
-                    {catConfig?.glyph}
-                  </span>
+                  <MinutiaCategoryIcon
+                    category={issue.category}
+                    className="size-3.5 shrink-0 text-ink"
+                    aria-label={catConfig?.label}
+                  />
                   <IssueKey issue={issue} className="h-5 px-1.5 text-[10px]" />
                   <span className="truncate">{issue.title}</span>
                   <span className="ml-auto shrink-0 text-xs text-muted-foreground">
