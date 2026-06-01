@@ -2,6 +2,8 @@ import { test as setup, expect } from "@playwright/test";
 
 setup.setTimeout(process.env.CI ? 90_000 : 30_000);
 
+const APP_URL = process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3000";
+
 setup("authenticate", async ({ browser, request }) => {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -28,13 +30,11 @@ setup("authenticate", async ({ browser, request }) => {
 
   const session = await authResponse.json();
   const context = await browser.newContext();
-  const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3000";
   await context.addCookies([
     {
       name: getSupabaseAuthCookieName(supabaseUrl),
       value: `base64-${Buffer.from(JSON.stringify(session)).toString("base64")}`,
-      domain: new URL(baseURL).hostname,
-      path: "/",
+      url: APP_URL,
       expires: session.expires_at ?? Math.floor(Date.now() / 1000) + session.expires_in,
       httpOnly: false,
       secure: false,
@@ -43,8 +43,8 @@ setup("authenticate", async ({ browser, request }) => {
   ]);
 
   const page = await context.newPage();
-  await page.goto("/dashboard");
-  await expect(page).toHaveURL("/dashboard");
+  await page.goto(`${APP_URL}/dashboard`);
+  await expect(page).toHaveURL(`${APP_URL}/dashboard`);
 
   await page.context().storageState({ path: "e2e/.auth/user.json" });
   await context.close();
