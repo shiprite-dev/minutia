@@ -17,6 +17,8 @@ test.describe("Authentication", () => {
     await expect(page.getByRole("button", { name: "Email magic link" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Google" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Sign in as Guest" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Forgot password?" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Request invite" })).toHaveCount(0);
   });
 
   test("password form validates credentials", async ({ page }) => {
@@ -31,6 +33,8 @@ test.describe("Authentication", () => {
     await expect(page.getByRole("button", { name: "Create account" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Google" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Sign in as Guest" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Forgot password?" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Request invite" })).toHaveCount(0);
 
     await emailInput.fill("test@example.com");
     await expect(signInButton).toBeDisabled();
@@ -40,25 +44,6 @@ test.describe("Authentication", () => {
 
     await passwordInput.fill("password123");
     await expect(signInButton).toBeEnabled();
-  });
-
-  test("forgot password sends a recovery email", async ({ page }) => {
-    await page.route("**/api/password-reset-requests", async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: "{}",
-      });
-    });
-
-    await page.goto("/login");
-    await page.getByLabel("Email address").fill("test@example.com");
-    await page.getByRole("button", { name: "Forgot password?" }).click();
-
-    await expect(page.getByText("Check your email")).toBeVisible();
-    await expect(
-      page.getByText("We sent a password reset link to test@example.com")
-    ).toBeVisible();
   });
 
   test("password reset request is handled by the backend email path", async ({ request }) => {
