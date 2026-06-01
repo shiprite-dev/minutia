@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { createClient as createSupabaseAdmin } from "@supabase/supabase-js";
 import { NextResponse, type NextRequest } from "next/server";
+import { getSupabaseAuthCookieName } from "@/lib/supabase/auth-cookie";
 import { getSupabaseServerUrl } from "@/lib/supabase/url";
 
 const SECURITY_HEADERS: Record<string, string> = {
@@ -149,11 +150,13 @@ export async function middleware(request: NextRequest) {
   }
 
   let supabaseResponse = NextResponse.next({ request });
+  const cookieName = getSupabaseAuthCookieName();
 
   const supabase = createServerClient(
     getSupabaseServerUrl(),
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
+      cookieOptions: cookieName ? { name: cookieName } : undefined,
       cookies: {
         getAll() {
           return request.cookies.getAll();
