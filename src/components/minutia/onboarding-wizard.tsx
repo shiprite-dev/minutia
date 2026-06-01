@@ -7,6 +7,7 @@ import { ArrowRight, Check, ChevronRight, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { MinutiaCadenceIcon } from "@/components/minutia/minutia-icons";
 import { cn } from "@/lib/utils";
 import { useUpdateProfile } from "@/lib/hooks/use-profile";
 import { useCompleteOnboarding } from "@/lib/hooks/use-profile";
@@ -309,13 +310,14 @@ function StepCreateSeries({
               key={c}
               type="button"
               className={cn(
-                "rounded-full px-3 py-1.5 text-xs font-medium transition-colors",
+                "inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors",
                 cadence === c
                   ? "bg-ink text-paper"
                   : "bg-paper-2 text-ink-3 hover:text-ink-2 hover:bg-paper-3"
               )}
               onClick={() => onCadenceChange(c)}
             >
+              <MinutiaCadenceIcon cadence={c} className="size-3 text-current" />
               {cadenceLabels[c]}
             </button>
           ))}

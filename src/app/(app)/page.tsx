@@ -37,6 +37,7 @@ import { useDecisions } from "@/lib/hooks/use-decisions";
 import { PRIORITY_CONFIG, STATUS_CONFIG } from "@/lib/constants";
 import { StatusChip } from "@/components/minutia/status-chip";
 import { CategoryBadge } from "@/components/minutia/category-badge";
+import { MinutiaCadenceIcon } from "@/components/minutia/minutia-icons";
 import { IssueKey } from "@/components/minutia/issue-key";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
@@ -272,7 +273,8 @@ function NextMeetingWidget({
           )}
         </div>
       ) : (
-        <p className="text-sm text-ink-2 capitalize mb-4">
+        <p className="mb-4 inline-flex items-center gap-1.5 text-sm text-ink-2 capitalize">
+          <MinutiaCadenceIcon cadence={nextSeries.cadence} className="size-3.5 text-ink" />
           {nextSeries.cadence === "adhoc" ? "Ad hoc" : nextSeries.cadence}
         </p>
       )}
@@ -423,14 +425,14 @@ function OutstandingWidget({
             return (
               <div key={series.id} className="py-5 first:pt-0 last:pb-0">
                 <div className="flex items-center gap-3 mb-3">
-                  <span className="size-2 rounded-full bg-accent" />
+                  <MinutiaCadenceIcon cadence={series.cadence} className="size-4 shrink-0 text-ink" />
                   <Link
                     href={`/series/${series.id}`}
                     className="text-sm font-semibold text-ink hover:text-accent transition-colors"
                   >
                     {series.name}
                   </Link>
-                  <span className="text-xs text-ink-4 capitalize">
+                  <span className="inline-flex items-center gap-1 text-xs text-ink-4 capitalize">
                     {series.cadence === "adhoc" ? "Ad hoc" : series.cadence}
                   </span>
                   <span className="ml-auto text-xs text-ink-4 tabular-nums">

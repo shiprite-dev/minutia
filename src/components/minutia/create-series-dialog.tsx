@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { MinutiaCadenceIcon } from "@/components/minutia/minutia-icons";
 import { cn } from "@/lib/utils";
 import { Loader2 } from "lucide-react";
 
@@ -123,13 +124,14 @@ export function CreateSeriesDialog({
                   role="radio"
                   aria-checked={selectedCadence === cadence}
                   className={cn(
-                    "rounded-full px-4 py-1.5 text-sm font-medium transition-colors",
+                    "inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-sm font-medium transition-colors",
                     selectedCadence === cadence
                       ? "bg-ink text-paper"
                       : "bg-paper-2 text-ink-3 hover:text-ink-2 hover:bg-paper-3"
                   )}
                   onClick={() => setValue("cadence", cadence)}
                 >
+                  <MinutiaCadenceIcon cadence={cadence} className="size-3.5 text-current" />
                   {cadenceLabels[cadence]}
                 </button>
               ))}

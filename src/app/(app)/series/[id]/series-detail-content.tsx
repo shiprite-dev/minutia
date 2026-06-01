@@ -17,6 +17,7 @@ import { BriefCard } from "@/components/minutia/brief-card";
 import { EmptyState } from "@/components/minutia/empty-state";
 import { IssueCard } from "@/components/minutia/issue-card";
 import { DateAnchoredTimeline } from "@/components/minutia/date-anchored-timeline";
+import { MinutiaCadenceIcon } from "@/components/minutia/minutia-icons";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
@@ -363,13 +364,14 @@ function SeriesSettingsDialog({
                   role="radio"
                   aria-checked={selectedCadence === cadence}
                   className={cn(
-                    "rounded-full px-3 py-1 text-xs font-medium transition-colors",
+                    "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-colors",
                     selectedCadence === cadence
                       ? "bg-ink text-paper"
                       : "bg-paper-2 text-ink-3 hover:text-ink-2 hover:bg-paper-3"
                   )}
                   onClick={() => setValue("cadence", cadence)}
                 >
+                  <MinutiaCadenceIcon cadence={cadence} className="size-3 text-current" />
                   {cadenceLabels[cadence]}
                 </button>
               ))}
