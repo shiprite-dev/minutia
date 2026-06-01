@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useSeries } from "@/lib/hooks/use-series";
 import { EmptyState } from "@/components/minutia/empty-state";
 import { CreateSeriesDialog } from "@/components/minutia/create-series-dialog";
+import { MinutiaCadenceIcon } from "@/components/minutia/minutia-icons";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
@@ -98,8 +99,9 @@ export default function SeriesListPage() {
                     </h2>
                     <Badge
                       variant="secondary"
-                      className="shrink-0 text-[10px]"
+                      className="shrink-0 gap-1 text-[10px]"
                     >
+                      <MinutiaCadenceIcon cadence={series.cadence} className="size-3 text-ink" />
                       {cadenceLabels[series.cadence]}
                     </Badge>
                   </div>

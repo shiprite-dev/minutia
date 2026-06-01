@@ -3,6 +3,7 @@
 import * as React from "react";
 import { motion } from "motion/react";
 import { cn } from "@/lib/utils";
+import { MinutiaMeetingStatusIcon } from "@/components/minutia/minutia-icons";
 import type { Meeting } from "@/lib/types";
 import Link from "next/link";
 
@@ -65,13 +66,7 @@ export function MeetingTimelineItem({
       {/* Timeline track */}
       <div className="relative flex flex-col items-center pt-1">
         {/* Node */}
-        <div
-          className={cn(
-            "size-2.5 rounded-full shrink-0",
-            meeting.status === "live" ? "bg-accent" : "bg-ink-3"
-          )}
-          aria-hidden="true"
-        />
+        <MinutiaMeetingStatusIcon status={meeting.status} className="size-4 shrink-0 text-ink" />
 
         {/* Line below */}
         {!isLast && (

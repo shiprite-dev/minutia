@@ -4,6 +4,7 @@ import * as React from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { cn } from "@/lib/utils";
 import { CATEGORY_CONFIG, ISSUE_CATEGORIES } from "@/lib/constants";
+import { MinutiaCategoryIcon } from "@/components/minutia/minutia-icons";
 import type { IssueCategory } from "@/lib/types";
 
 interface CaptureInputProps {
@@ -114,15 +115,15 @@ export function CaptureInput({ onSubmit, onCancel }: CaptureInputProps) {
                 aria-label={config.label}
                 title={`${config.label} (${config.shortcut})`}
                 className={cn(
-                  "size-7 flex items-center justify-center rounded text-xs font-medium transition-colors outline-none",
+                  "size-7 flex items-center justify-center rounded transition-colors outline-none",
                   "focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-paper",
                   isSelected
-                    ? "bg-ink text-paper"
+                    ? "bg-ink text-paper [--accent:theme(colors.paper)]"
                     : "bg-paper-2 text-ink-3 hover:text-ink-2 hover:bg-paper-3"
                 )}
                 onClick={() => setCategory(cat)}
               >
-                {config.shortcut.toUpperCase()}
+                <MinutiaCategoryIcon category={cat} className="size-4" />
               </button>
             );
           })}
@@ -134,8 +135,9 @@ export function CaptureInput({ onSubmit, onCancel }: CaptureInputProps) {
         <span className="text-[10px] text-ink-4">
           Enter to submit, Shift+Enter for newline, Esc to cancel
         </span>
-        <span className="text-[10px] text-ink-3 font-medium">
-          {CATEGORY_CONFIG[category].glyph} {CATEGORY_CONFIG[category].label}
+        <span className="inline-flex items-center gap-1 text-[10px] text-ink-3 font-medium">
+          <MinutiaCategoryIcon category={category} className="size-3 text-ink" />
+          {CATEGORY_CONFIG[category].label}
         </span>
       </div>
     </div>

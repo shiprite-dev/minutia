@@ -3,15 +3,10 @@
 import * as React from "react";
 import { motion, AnimatePresence } from "motion/react";
 import Link from "next/link";
-import {
-  ChevronRight,
-  Circle,
-  CheckCircle2,
-  Radio,
-  Clock,
-} from "lucide-react";
+import { CheckCircle2, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CategoryBadge } from "@/components/minutia/category-badge";
+import { MinutiaMeetingStatusIcon } from "@/components/minutia/minutia-icons";
 import { useUIStore } from "@/lib/stores/ui-store";
 import type { Meeting, Issue, Decision } from "@/lib/types";
 
@@ -47,12 +42,6 @@ function formatTime(date: Date): string {
     minute: "2-digit",
   });
 }
-
-const statusIcon: Record<string, React.ReactNode> = {
-  completed: <CheckCircle2 className="size-4 text-success" />,
-  live: <Radio className="size-4 text-accent animate-pulse" />,
-  upcoming: <Clock className="size-4 text-ink-3" />,
-};
 
 const ISSUE_PREVIEW_LIMIT = 5;
 
@@ -99,7 +88,7 @@ function MeetingSection({
       >
         {/* Timeline node */}
         <div className="flex flex-col items-center pt-0.5 shrink-0">
-          {statusIcon[meeting.status] ?? <Circle className="size-4 text-ink-4" />}
+          <MinutiaMeetingStatusIcon status={meeting.status} className="size-4 text-ink" />
         </div>
 
         {/* Content */}

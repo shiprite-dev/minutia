@@ -9,6 +9,7 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { MinutiaMeetingStatusIcon } from "@/components/minutia/minutia-icons";
 import {
   Sheet,
   SheetContent,
@@ -215,9 +216,7 @@ function DayAgenda({
                           meeting.status === "upcoming" && "bg-paper-3 text-ink-3"
                         )}
                       >
-                        {meeting.status === "live" && (
-                          <span className="size-1.5 rounded-full bg-accent animate-pulse" />
-                        )}
+                        <MinutiaMeetingStatusIcon status={meeting.status} className="size-3 text-ink" />
                         {meeting.status}
                       </span>
                     </div>

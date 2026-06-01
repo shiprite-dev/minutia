@@ -2,6 +2,7 @@
 
 import { cn } from "@/lib/utils";
 import { CATEGORY_CONFIG } from "@/lib/constants";
+import { MinutiaCategoryIcon } from "@/components/minutia/minutia-icons";
 import type { IssueCategory } from "@/lib/types";
 
 interface CategoryBadgeProps {
@@ -20,7 +21,7 @@ export function CategoryBadge({ category, size = "sm" }: CategoryBadgeProps) {
         size === "md" && "text-sm"
       )}
     >
-      <span aria-hidden="true">{config.glyph}</span>
+      <MinutiaCategoryIcon category={category} className="size-3.5 shrink-0 text-ink" />
       <span>{config.label}</span>
     </span>
   );
