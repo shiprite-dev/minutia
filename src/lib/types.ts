@@ -89,6 +89,9 @@ export interface MeetingSeries {
   default_attendees: string[];
   gcal_calendar_id: string | null;
   gcal_sync_enabled: boolean;
+  gcal_series_key: string | null;
+  gcal_series_kind: "recurring" | "adhoc" | null;
+  gcal_last_synced_at: Date | null;
   created_at: Date;
   updated_at: Date;
 }
@@ -107,6 +110,26 @@ export interface GoogleCalendarEvent {
   htmlLink?: string;
 }
 
+export interface GoogleCalendarAgendaItem {
+  id: string;
+  calendarId: string;
+  eventId: string;
+  seriesId: string;
+  meetingId: string;
+  seriesKind: "recurring" | "adhoc";
+  title: string;
+  description: string | null;
+  startAt: string;
+  endAt: string;
+  htmlLink: string | null;
+  meetingUrl: string | null;
+  attendeeEmails: string[];
+  organizerEmail: string | null;
+  eventType: string;
+  eventStatus: string;
+  meetingStatus: MeetingStatus;
+}
+
 export interface GoogleCalendarStatus {
   connected: boolean;
   googleEmail: string | null;
@@ -122,6 +145,13 @@ export interface Meeting {
   attendees: string[];
   notes_markdown: string;
   transcript_raw: string | null;
+  gcal_meeting_key: string | null;
+  gcal_calendar_id: string | null;
+  gcal_event_id: string | null;
+  gcal_original_start_time: string | null;
+  gcal_meeting_url: string | null;
+  gcal_html_link: string | null;
+  gcal_last_synced_at: Date | null;
   created_at: Date;
   completed_at: Date | null;
 }
