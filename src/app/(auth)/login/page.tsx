@@ -11,6 +11,7 @@ import { Mail, ArrowRight, ExternalLink } from "lucide-react";
 import { motion } from "motion/react";
 
 type FormState = "idle" | "loading" | "sent" | "error";
+type InviteState = "idle" | "loading" | "sent" | "error";
 
 const GUEST_LOGIN_ERROR_MESSAGE =
   "Guest login is unavailable because the local test user is missing or out of sync. Run `supabase db reset` to reseed test@example.com.";
@@ -28,6 +29,8 @@ function LoginForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [formState, setFormState] = useState<FormState>("idle");
+  const [inviteState, setInviteState] = useState<InviteState>("idle");
+  const [inviteMessage, setInviteMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [sentMessage, setSentMessage] = useState(
     "We sent a magic link to"
@@ -118,6 +121,28 @@ function LoginForm() {
     }
   }
 
+  async function handleForgotPassword() {
+    if (!email.trim()) return;
+
+    setFormState("loading");
+    setErrorMessage("");
+
+    const res = await fetch("/api/password-reset-requests", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: email.trim() }),
+    });
+    const data = await res.json();
+
+    if (!res.ok) {
+      setFormState("error");
+      setErrorMessage(data.error || "Failed to send password reset email");
+    } else {
+      setSentMessage("We sent a password reset link to");
+      setFormState("sent");
+    }
+  }
+
   async function handleGoogleLogin() {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
@@ -150,6 +175,28 @@ function LoginForm() {
       );
     } else {
       window.location.href = nextPath;
+    }
+  }
+
+  async function handleInviteRequest() {
+    if (!email.trim()) return;
+
+    setInviteState("loading");
+    setInviteMessage("");
+
+    try {
+      const res = await fetch("/api/invite-requests", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim(), next: nextPath }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to request invite");
+      setInviteState("sent");
+      setInviteMessage("Invite request sent to the Minutia admin.");
+    } catch (err) {
+      setInviteState("error");
+      setInviteMessage(err instanceof Error ? err.message : "Failed to request invite");
     }
   }
 
@@ -220,9 +267,19 @@ function LoginForm() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="password" className="font-sans text-ink-2">
-                  Password
-                </Label>
+                <div className="flex items-center justify-between gap-3">
+                  <Label htmlFor="password" className="font-sans text-ink-2">
+                    Password
+                  </Label>
+                  <button
+                    type="button"
+                    onClick={handleForgotPassword}
+                    disabled={formState === "loading" || !email.trim()}
+                    className="font-sans text-xs text-ink-3 underline underline-offset-4 transition-colors hover:text-ink-2 disabled:pointer-events-none disabled:opacity-40"
+                  >
+                    Forgot password?
+                  </button>
+                </div>
                 <Input
                   id="password"
                   type="password"
@@ -331,6 +388,35 @@ function LoginForm() {
                 )}
               </Button>
             )}
+
+            <div className="mt-5 rounded-[14px] border border-rule bg-paper px-4 py-3">
+              <p className="font-sans text-xs font-medium text-ink">
+                Need access to this Minutia workspace?
+              </p>
+              <div className="mt-2 flex items-center justify-between gap-3">
+                <p className="font-sans text-xs text-ink-4">
+                  Enter your email and ask the admin for an invite.
+                </p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleInviteRequest}
+                  disabled={inviteState === "loading" || !email.trim()}
+                  className="h-8 shrink-0 rounded-[10px] border-rule bg-paper text-xs text-ink hover:bg-paper-3"
+                >
+                  {inviteState === "loading" ? "Sending" : "Request invite"}
+                </Button>
+              </div>
+              {inviteMessage && (
+                <p
+                  className={`mt-2 font-sans text-xs ${
+                    inviteState === "error" ? "text-danger" : "text-ink-3"
+                  }`}
+                >
+                  {inviteMessage}
+                </p>
+              )}
+            </div>
           </>
         )}
       </div>
