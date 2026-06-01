@@ -23,6 +23,7 @@ import { PriorityIndicator } from "@/components/minutia/priority-indicator";
 import { TimelineNode } from "@/components/minutia/timeline-node";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { daysBetween } from "@/lib/date-utils";
 import { PRIORITIES, STATUS_CONFIG } from "@/lib/constants";
@@ -333,17 +334,19 @@ export function IssueDetailContent({ issueId }: IssueDetailContentProps) {
   return (
     <div className="min-h-full bg-paper">
       <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6 lg:px-8">
-        {/* Back button */}
-        <button
-          type="button"
-          onClick={() => router.back()}
-          className="inline-flex items-center gap-1.5 text-sm text-ink-3 hover:text-ink transition-colors mb-6"
-        >
-          <ArrowLeft className="size-4" />
-          Back
-        </button>
-
-        <IssueKey issue={issue} className="mb-3" />
+        <div className="mb-6 flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => router.back()}
+            className="-ml-2 text-ink-3 hover:text-ink"
+          >
+            <ArrowLeft className="size-4" />
+            Back
+          </Button>
+          <IssueKey issue={issue} />
+        </div>
 
         {/* Title (inline editable) */}
         <InlineEditText
@@ -380,11 +383,12 @@ export function IssueDetailContent({ issueId }: IssueDetailContentProps) {
           {/* Due date */}
           <div className="flex items-center gap-2 text-sm">
             <span className="text-ink-3 w-20 shrink-0">Due</span>
-            <input
+            <Input
               type="date"
+              aria-label="Due date"
               value={issue.due_date ? formatISODate(issue.due_date) : ""}
               onChange={handleDueDateChange}
-              className="bg-transparent border border-transparent hover:border-rule focus:border-ink-3 rounded px-1 py-0.5 text-sm text-ink font-mono focus:outline-none transition-colors"
+              className="h-7 w-[9.5rem] max-w-full rounded-md border-transparent bg-transparent px-2 py-0 text-sm font-mono text-ink shadow-none hover:border-rule focus-visible:border-ink-3 focus-visible:ring-0"
             />
           </div>
 
