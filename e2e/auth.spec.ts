@@ -51,6 +51,20 @@ test.describe("Authentication", () => {
     await expect(signInButton).toBeEnabled();
   });
 
+  test("password login replaces login history entry", async ({ page }) => {
+    await page.goto("/login");
+
+    await page.getByLabel("Email address").fill("test@example.com");
+    await page.getByLabel("Password").fill("password123");
+    await page.getByRole("button", { name: "Sign in", exact: true }).click();
+    await page.waitForURL("/", { timeout: 10000 });
+
+    await page.goBack();
+
+    expect(page.url()).not.toContain("/login");
+    await expect(page.getByRole("heading", { name: "minutia" })).toHaveCount(0);
+  });
+
   test("password reset request is handled by the backend email path", async ({ request }) => {
     const res = await request.post("/api/password-reset-requests", {
       data: { email: "test@example.com" },
