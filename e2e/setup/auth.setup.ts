@@ -28,11 +28,12 @@ setup("authenticate", async ({ browser, request }) => {
 
   const session = await authResponse.json();
   const context = await browser.newContext();
+  const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3000";
   await context.addCookies([
     {
       name: getSupabaseAuthCookieName(supabaseUrl),
       value: `base64-${Buffer.from(JSON.stringify(session)).toString("base64")}`,
-      domain: "localhost",
+      domain: new URL(baseURL).hostname,
       path: "/",
       expires: session.expires_at ?? Math.floor(Date.now() / 1000) + session.expires_in,
       httpOnly: false,
