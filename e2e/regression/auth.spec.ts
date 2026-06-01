@@ -31,8 +31,13 @@ test.describe("Login Page", () => {
     await expect(
       page.getByRole("button", { name: "Sign in as Guest" })
     ).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "Forgot password?" })).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "Request invite" })).toHaveCount(0);
+    await expect(
+      page.getByRole("button", { name: "Forgot password?" })
+    ).toBeVisible();
+    await expect(page.getByText("Need access to this Minutia workspace?")).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Request invite" })
+    ).toBeVisible();
 
     await expect(
       page.getByText("Open source. Self-host free forever.")
@@ -49,10 +54,14 @@ test.describe("Login Page", () => {
     await expect(page.getByRole("button", { name: "Create account" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Google" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Sign in as Guest" })).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "Forgot password?" })).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "Request invite" })).toHaveCount(0);
+    const forgotPasswordButton = page.getByRole("button", { name: "Forgot password?" });
+    const requestInviteButton = page.getByRole("button", { name: "Request invite" });
+    await expect(forgotPasswordButton).toBeDisabled();
+    await expect(requestInviteButton).toBeDisabled();
 
     await page.getByPlaceholder("you@company.com").fill("test@example.com");
+    await expect(forgotPasswordButton).toBeEnabled();
+    await expect(requestInviteButton).toBeEnabled();
     await expect(signInButton).toBeDisabled();
 
     await page.getByLabel("Password").fill("short");

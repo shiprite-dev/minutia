@@ -234,6 +234,6 @@ test.describe("Issue email links", () => {
     await page.goto(`/issues/${ISSUES.migrateCI}`);
 
     await expect(page).toHaveURL(new RegExp(`/login\\?next=%2Fissues%2F${ISSUES.migrateCI}`));
-    await expect(page.getByRole("button", { name: "Request invite" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Request invite" })).toBeDisabled();
   });
 });
