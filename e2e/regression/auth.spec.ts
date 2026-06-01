@@ -31,6 +31,8 @@ test.describe("Login Page", () => {
     await expect(
       page.getByRole("button", { name: "Sign in as Guest" })
     ).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Forgot password?" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Request invite" })).toHaveCount(0);
 
     await expect(
       page.getByText("Open source. Self-host free forever.")
@@ -47,6 +49,8 @@ test.describe("Login Page", () => {
     await expect(page.getByRole("button", { name: "Create account" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Google" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Sign in as Guest" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Forgot password?" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Request invite" })).toHaveCount(0);
 
     await page.getByPlaceholder("you@company.com").fill("test@example.com");
     await expect(signInButton).toBeDisabled();
@@ -56,25 +60,6 @@ test.describe("Login Page", () => {
 
     await page.getByLabel("Password").fill("password123");
     await expect(signInButton).toBeEnabled();
-  });
-
-  test("forgot password starts the recovery flow", async ({ page }) => {
-    await page.route("**/api/password-reset-requests", async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: "{}",
-      });
-    });
-
-    await page.goto("/login");
-    await page.getByPlaceholder("you@company.com").fill("test@example.com");
-    await page.getByRole("button", { name: "Forgot password?" }).click();
-
-    await expect(page.getByText("Check your email")).toBeVisible();
-    await expect(
-      page.getByText("We sent a password reset link to test@example.com")
-    ).toBeVisible();
   });
 
   test("unauthenticated user is redirected to login", async ({ page }) => {
