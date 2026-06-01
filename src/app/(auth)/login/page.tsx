@@ -15,6 +15,8 @@ type InviteState = "idle" | "loading" | "sent" | "error";
 
 const GUEST_LOGIN_ERROR_MESSAGE =
   "Guest login is unavailable because the local test user is missing or out of sync. Run `supabase db reset` to reseed test@example.com.";
+const GOOGLE_WORKSPACE_SCOPES =
+  "openid email profile https://www.googleapis.com/auth/calendar.readonly";
 
 export default function LoginPage() {
   return (
@@ -148,6 +150,11 @@ function LoginForm() {
       provider: "google",
       options: {
         redirectTo: callbackUrl,
+        scopes: GOOGLE_WORKSPACE_SCOPES,
+        queryParams: {
+          access_type: "offline",
+          prompt: "consent",
+        },
       },
     });
 
