@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { test, expect, type APIRequestContext } from "@playwright/test";
+import { test, expect, type APIRequestContext, type Page } from "@playwright/test";
 import { SERIES, MEETINGS, waitForApp } from "./seed-data";
 
 const SUPABASE_URL = process.env.SUPABASE_URL ?? "http://127.0.0.1:54321";
@@ -66,6 +66,11 @@ async function deleteSeriesByName(request: APIRequestContext, name: string) {
 
 function seriesIdFromUrl(url: string) {
   return url.match(/\/series\/([^/?#]+)/)?.[1];
+}
+
+async function gotoSeriesDetail(page: Page, seriesId = SERIES.platformStandup) {
+  await page.goto(`/series/${seriesId}`, { waitUntil: "commit" });
+  await waitForApp(page);
 }
 
 test.describe("Series List Page", () => {
@@ -174,13 +179,10 @@ test.describe("Series List Page", () => {
 });
 
 test.describe("Series Detail Page", () => {
-  const url = `/series/${SERIES.platformStandup}`;
-
   test("renders header with name, back link, and action buttons", async ({
     page,
   }) => {
-    await page.goto(url);
-    await waitForApp(page);
+    await gotoSeriesDetail(page);
 
     await expect(
       page.getByRole("heading", { name: "Platform Team Standup" }).first()
@@ -195,8 +197,7 @@ test.describe("Series Detail Page", () => {
   });
 
   test("timeline section lists meetings in order", async ({ page }) => {
-    await page.goto(url);
-    await waitForApp(page);
+    await gotoSeriesDetail(page);
 
     await expect(page.getByText("Timeline")).toBeVisible();
 
@@ -207,16 +208,14 @@ test.describe("Series Detail Page", () => {
   });
 
   test("open issues section lists active issues", async ({ page }) => {
-    await page.goto(url);
-    await waitForApp(page);
+    await gotoSeriesDetail(page);
 
     const section = page.getByText(/Open issues/i).first();
     await expect(section).toBeVisible();
   });
 
   test("settings dialog opens with all fields", async ({ page }) => {
-    await page.goto(url);
-    await waitForApp(page);
+    await gotoSeriesDetail(page);
 
     await page.getByRole("button", { name: "Series settings" }).click();
 
@@ -258,8 +257,7 @@ test.describe("Series Detail Page", () => {
     const updatedName = `${series.name} updated`;
 
     try {
-      await page.goto(`/series/${series.id}`);
-      await waitForApp(page);
+      await gotoSeriesDetail(page, series.id);
 
       await page.getByRole("button", { name: "Series settings" }).click();
       let dialog = page.locator("[role='dialog']");
@@ -308,8 +306,7 @@ test.describe("Series Detail Page", () => {
     });
 
     try {
-      await page.goto(`/series/${series.id}`);
-      await waitForApp(page);
+      await gotoSeriesDetail(page, series.id);
 
       await page.getByRole("button", { name: "Start meeting" }).click();
 
@@ -328,8 +325,7 @@ test.describe("Series Detail Page", () => {
   });
 
   test("meeting timeline items link to meeting detail", async ({ page }) => {
-    await page.goto(url);
-    await waitForApp(page);
+    await gotoSeriesDetail(page);
 
     const standup1 = page.getByText("Platform Standup #1").first();
     await standup1.click();

@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import type { ReactNode } from "react";
+import { usePathname } from "next/navigation";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/minutia/app-sidebar";
 import { AppHeader } from "@/components/minutia/app-header";
@@ -21,14 +22,22 @@ interface AppShellProps {
 
 export function AppShell({ profile, organizations, children }: AppShellProps) {
   const shellRef = React.useRef<HTMLDivElement>(null);
+  const pathname = usePathname();
 
   React.useEffect(() => {
     shellRef.current?.setAttribute("data-hydrated", "true");
-  }, []);
+  }, [pathname]);
 
   if (profile && !profile.has_completed_onboarding) {
     return (
-      <OnboardingWizard userName={profile.name} userEmail={profile.email} />
+      <div
+        ref={shellRef}
+        className="contents"
+        data-minutia-app-shell
+        data-hydrated="false"
+      >
+        <OnboardingWizard userName={profile.name} userEmail={profile.email} />
+      </div>
     );
   }
 
