@@ -5,13 +5,16 @@ import type {
   GoogleCalendarStatus,
   GoogleCalendarEntry,
   GoogleCalendarEvent,
+  GoogleCalendarAgendaItem,
 } from "@/lib/types";
 import { seriesKeys } from "./use-series";
+import { meetingKeys } from "./use-meetings";
 
 export const calendarKeys = {
   status: ["calendar", "status"] as const,
   calendars: ["calendar", "calendars"] as const,
   events: (seriesId: string) => ["calendar", "events", seriesId] as const,
+  agenda: ["calendar", "agenda"] as const,
 };
 
 export function useGoogleCalendarStatus() {
@@ -54,6 +57,42 @@ export function useCalendarEvents(seriesId: string | undefined) {
     enabled: !!seriesId && !!status?.connected,
     staleTime: 5 * 60 * 1000,
     retry: 1,
+  });
+}
+
+export function useCalendarAgenda() {
+  const { data: status } = useGoogleCalendarStatus();
+
+  return useQuery<{ connected: boolean; syncedAt?: string; events: GoogleCalendarAgendaItem[] }>({
+    queryKey: calendarKeys.agenda,
+    queryFn: async () => {
+      const res = await fetch("/api/calendar/agenda");
+      if (!res.ok) throw new Error("Failed to fetch calendar agenda");
+      return res.json();
+    },
+    enabled: !!status?.connected,
+    staleTime: 2 * 60 * 1000,
+    retry: 1,
+  });
+}
+
+export function useStartCalendarAgendaEvent() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (calendarEventId: string) => {
+      const res = await fetch("/api/calendar/agenda/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ calendarEventId }),
+      });
+      if (!res.ok) throw new Error("Failed to start calendar meeting");
+      return res.json() as Promise<{ meetingUrl: string | null; captureUrl: string }>;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: calendarKeys.agenda });
+      queryClient.invalidateQueries({ queryKey: meetingKeys.all });
+    },
   });
 }
 
@@ -111,6 +150,7 @@ export function useDisconnectGoogle() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: calendarKeys.status });
       queryClient.invalidateQueries({ queryKey: calendarKeys.calendars });
+      queryClient.invalidateQueries({ queryKey: calendarKeys.agenda });
     },
   });
 }

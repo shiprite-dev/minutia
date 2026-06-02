@@ -1,5 +1,6 @@
 "use client";
 
+import * as React from "react";
 import {
   useQuery,
   useMutation,
@@ -133,6 +134,182 @@ export function useStartMeeting() {
       });
     },
   });
+}
+
+// ---------------------------------------------------------------------------
+// useStartOrJoinMeeting - atomically starts or joins the one live meeting
+// ---------------------------------------------------------------------------
+export function useStartOrJoinMeeting() {
+  const supabase = createClient();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (seriesId: string) => {
+      const { data, error } = await supabase.rpc("start_or_join_meeting", {
+        target_series_id: seriesId,
+      });
+
+      if (error) throw error;
+
+      const meeting = Array.isArray(data) ? data[0] : data;
+      if (!meeting) throw new Error("Meeting was not returned");
+      return meeting as Meeting;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({
+        queryKey: meetingKeys.detail(data.id),
+      });
+      queryClient.invalidateQueries({
+        queryKey: meetingKeys.list(data.series_id),
+      });
+      queryClient.invalidateQueries({
+        queryKey: seriesKeys.detail(data.series_id),
+      });
+      queryClient.invalidateQueries({ queryKey: seriesKeys.all });
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// useMeetingRealtime - live query refresh for meeting collaboration
+// ---------------------------------------------------------------------------
+export function useMeetingRealtime(meetingId: string, seriesId: string) {
+  const queryClient = useQueryClient();
+
+  React.useEffect(() => {
+    if (!meetingId || !seriesId) return;
+
+    const supabase = createClient();
+    const refreshMeeting = () => {
+      void queryClient.invalidateQueries({
+        queryKey: meetingKeys.detail(meetingId),
+      });
+      void queryClient.invalidateQueries({
+        queryKey: meetingKeys.list(seriesId),
+      });
+      void queryClient.invalidateQueries({
+        queryKey: issueKeys.list(seriesId),
+      });
+      void queryClient.invalidateQueries({ queryKey: ["decisions"] });
+      void queryClient.invalidateQueries({
+        queryKey: seriesKeys.detail(seriesId),
+      });
+    };
+
+    const channel = supabase
+      .channel(`meeting:${meetingId}:changes`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "meetings",
+          filter: `id=eq.${meetingId}`,
+        },
+        refreshMeeting
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "issues",
+          filter: `series_id=eq.${seriesId}`,
+        },
+        refreshMeeting
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "decisions",
+          filter: `meeting_id=eq.${meetingId}`,
+        },
+        refreshMeeting
+      )
+      .subscribe();
+    const interval = window.setInterval(refreshMeeting, 2000);
+
+    return () => {
+      window.clearInterval(interval);
+      void supabase.removeChannel(channel);
+    };
+  }, [meetingId, queryClient, seriesId]);
+}
+
+type PresenceMeta = {
+  user_id: string;
+  name: string;
+  email: string;
+  online_at: string;
+};
+
+export type MeetingPresenceUser = {
+  userId: string;
+  name: string;
+  email: string;
+  deviceCount: number;
+};
+
+// ---------------------------------------------------------------------------
+// useMeetingPresence - deduplicates the same user across multiple sessions
+// ---------------------------------------------------------------------------
+export function useMeetingPresence(meetingId: string) {
+  const [users, setUsers] = React.useState<MeetingPresenceUser[]>([]);
+
+  React.useEffect(() => {
+    if (!meetingId) return;
+
+    const supabase = createClient();
+    const channel = supabase.channel(`meeting:${meetingId}:presence`);
+
+    const syncPresence = () => {
+      const state = channel.presenceState<PresenceMeta>();
+      const nextUsers = Object.entries(state)
+        .map(([userId, metas]) => {
+          const first = metas[0];
+          return {
+            userId,
+            name: first?.name || first?.email || "Participant",
+            email: first?.email || "",
+            deviceCount: metas.length,
+          };
+        })
+        .sort((a, b) => a.name.localeCompare(b.name));
+
+      setUsers(nextUsers);
+    };
+
+    channel.on("presence", { event: "sync" }, syncPresence);
+    channel.subscribe(async (status) => {
+      if (status !== "SUBSCRIBED") return;
+
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("name,email")
+        .eq("id", user.id)
+        .single();
+
+      await channel.track({
+        user_id: user.id,
+        name: profile?.name || user.email || "Participant",
+        email: profile?.email || user.email || "",
+        online_at: new Date().toISOString(),
+      });
+    });
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [meetingId]);
+
+  return users;
 }
 
 // ---------------------------------------------------------------------------

@@ -14,6 +14,7 @@ test.describe("Widget system", () => {
     await page.evaluate(() => localStorage.removeItem("minutia-widgets"));
     await page.goto("/dashboard", { waitUntil: "domcontentloaded" });
     await waitForApp(page);
+    await expect(page.getByRole("button", { name: "Add widget" })).toBeVisible();
   });
 
   test("dashboard renders default widgets on fresh state", async ({ page }) => {

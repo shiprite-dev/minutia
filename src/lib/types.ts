@@ -10,6 +10,7 @@ export type ShareResourceType = "meeting" | "series" | "issue";
 export type Theme = "light" | "dark" | "system";
 export type UserRole = "user" | "admin";
 export type OrganizationRole = "admin" | "member";
+export type SeriesParticipantRole = "owner" | "facilitator" | "participant";
 
 export interface Profile {
   id: string;
@@ -89,8 +90,20 @@ export interface MeetingSeries {
   default_attendees: string[];
   gcal_calendar_id: string | null;
   gcal_sync_enabled: boolean;
+  gcal_series_key: string | null;
+  gcal_series_kind: "recurring" | "adhoc" | null;
+  gcal_last_synced_at: Date | null;
   created_at: Date;
   updated_at: Date;
+}
+
+export interface SeriesParticipant {
+  series_id: string;
+  user_id: string;
+  role: SeriesParticipantRole;
+  invited_by: string | null;
+  joined_at: Date;
+  created_at: Date;
 }
 
 export interface GoogleCalendarEntry {
@@ -105,6 +118,26 @@ export interface GoogleCalendarEvent {
   start: { dateTime?: string; date?: string };
   end: { dateTime?: string; date?: string };
   htmlLink?: string;
+}
+
+export interface GoogleCalendarAgendaItem {
+  id: string;
+  calendarId: string;
+  eventId: string;
+  seriesId: string;
+  meetingId: string;
+  seriesKind: "recurring" | "adhoc";
+  title: string;
+  description: string | null;
+  startAt: string;
+  endAt: string;
+  htmlLink: string | null;
+  meetingUrl: string | null;
+  attendeeEmails: string[];
+  organizerEmail: string | null;
+  eventType: string;
+  eventStatus: string;
+  meetingStatus: MeetingStatus;
 }
 
 export interface GoogleCalendarStatus {
@@ -122,6 +155,13 @@ export interface Meeting {
   attendees: string[];
   notes_markdown: string;
   transcript_raw: string | null;
+  gcal_meeting_key: string | null;
+  gcal_calendar_id: string | null;
+  gcal_event_id: string | null;
+  gcal_original_start_time: string | null;
+  gcal_meeting_url: string | null;
+  gcal_html_link: string | null;
+  gcal_last_synced_at: Date | null;
   created_at: Date;
   completed_at: Date | null;
 }

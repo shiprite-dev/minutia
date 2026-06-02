@@ -32,7 +32,7 @@ import { cn } from "@/lib/utils";
 import type { OrganizationOption, Profile } from "@/lib/types";
 
 function isActive(pathname: string, href: string): boolean {
-  if (href === "/") return pathname === "/";
+  if (href === "/") return pathname === "/" || pathname === "/dashboard";
   return pathname.startsWith(href);
 }
 

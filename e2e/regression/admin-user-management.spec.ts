@@ -9,6 +9,7 @@ import { waitForApp } from "./seed-data";
 
 const SUPABASE_URL = process.env.SUPABASE_URL ?? "http://127.0.0.1:54321";
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
+const APP_URL = process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3000";
 const TEST_USER_ID = "00000000-0000-0000-0000-000000000001";
 
 test.describe.configure({ mode: "serial" });
@@ -130,7 +131,7 @@ async function deleteInvitation(
 
 async function newAnonymousApi() {
   return playwrightRequest.newContext({
-    baseURL: "http://localhost:3000",
+    baseURL: APP_URL,
     storageState: { cookies: [], origins: [] },
   });
 }
