@@ -1,5 +1,6 @@
 "use client";
 
+import * as React from "react";
 import type { ReactNode } from "react";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/minutia/app-sidebar";
@@ -19,6 +20,12 @@ interface AppShellProps {
 }
 
 export function AppShell({ profile, organizations, children }: AppShellProps) {
+  const shellRef = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    shellRef.current?.setAttribute("data-hydrated", "true");
+  }, []);
+
   if (profile && !profile.has_completed_onboarding) {
     return (
       <OnboardingWizard userName={profile.name} userEmail={profile.email} />
@@ -26,7 +33,13 @@ export function AppShell({ profile, organizations, children }: AppShellProps) {
   }
 
   return (
-    <SidebarProvider>
+    <div
+      ref={shellRef}
+      className="contents"
+      data-minutia-app-shell
+      data-hydrated="false"
+    >
+      <SidebarProvider>
       <a
         href="#main-content"
         className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[100] focus:rounded-md focus:bg-accent focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:text-white"
@@ -47,6 +60,7 @@ export function AppShell({ profile, organizations, children }: AppShellProps) {
       <KeyboardShortcutsDialog />
       <GotoShortcuts />
       {profile && <FirstRunTour userId={profile.id} />}
-    </SidebarProvider>
+      </SidebarProvider>
+    </div>
   );
 }

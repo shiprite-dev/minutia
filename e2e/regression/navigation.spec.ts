@@ -18,7 +18,7 @@ test.describe("Sidebar & Navigation", () => {
       page.getByRole("link", { name: "Outstanding" })
     ).toBeVisible();
     await expect(
-      sidebar.getByRole("link", { name: "Series" })
+      sidebar.getByRole("link", { name: "Series", exact: true })
     ).toBeVisible();
     await expect(
       page.getByRole("link", { name: "My actions" })
@@ -55,7 +55,7 @@ test.describe("Sidebar & Navigation", () => {
     await page.getByRole("link", { name: "Inbox" }).click();
     await expect(page).toHaveURL("/inbox");
 
-    await sidebar.getByRole("link", { name: "Series" }).click();
+    await sidebar.getByRole("link", { name: "Series", exact: true }).click();
     await expect(page).toHaveURL("/series");
 
     await sidebar.getByRole("link", { name: "Settings" }).click();
