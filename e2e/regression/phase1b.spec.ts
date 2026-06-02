@@ -51,7 +51,7 @@ test.describe("Issue metadata on OIL board (MIN-043)", () => {
     await waitForApp(page);
 
     const dueDatePattern = page.getByText(
-      /Due (today|tomorrow|in \d+d|May|Jun|Jul|Overdue)/
+      /Overdue by \d+d|Due (today|tomorrow|in \d+d|May|Jun|Jul)/
     );
     await expect(dueDatePattern.first()).toBeVisible();
   });

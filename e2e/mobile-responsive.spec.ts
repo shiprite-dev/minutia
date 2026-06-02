@@ -21,6 +21,34 @@ test.describe("Mobile Responsive", () => {
     await expect(page.getByText("Add update")).toBeVisible();
   });
 
+  test("issue detail chrome stays readable and uses styled date controls", async ({ page }) => {
+    await page.goto("/issues/30000000-0000-0000-0000-000000000001");
+
+    const backButton = page.getByRole("button", { name: "Back" });
+    const issueKey = page.getByLabel(/Issue key OIL-/);
+    await expect(backButton).toBeVisible();
+    await expect(issueKey).toBeVisible();
+    await expect(issueKey).toHaveText(/^OIL-\d+$/);
+
+    const backBox = await backButton.boundingBox();
+    const keyBox = await issueKey.boundingBox();
+    expect(backBox).not.toBeNull();
+    expect(keyBox).not.toBeNull();
+
+    const overlaps =
+      backBox!.x < keyBox!.x + keyBox!.width &&
+      backBox!.x + backBox!.width > keyBox!.x &&
+      backBox!.y < keyBox!.y + keyBox!.height &&
+      backBox!.y + backBox!.height > keyBox!.y;
+
+    expect(overlaps).toBe(false);
+
+    const dueDate = page.getByLabel("Due date");
+    await expect(dueDate).toBeVisible();
+    await expect(dueDate).toHaveAttribute("data-slot", "input");
+    await expect(page.locator('input[type="date"]:not([data-slot="input"])')).toHaveCount(0);
+  });
+
   test("inbox renders on mobile", async ({ page }) => {
     await page.goto("/inbox");
     await expect(page.getByRole("heading", { name: "Inbox" }).first()).toBeVisible();

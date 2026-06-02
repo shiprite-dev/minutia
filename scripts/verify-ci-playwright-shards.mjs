@@ -8,6 +8,8 @@ const checks = [
   ["E2E job name includes shard", /name:\s+E2E Tests \$\{\{ matrix\.shard \}\}\/16/],
   ["Playwright receives the shard argument", /pnpm test:e2e --shard=\$\{\{ matrix\.shard \}\}\/16/],
   ["Each shard uploads a separate report", /name:\s+playwright-report-\$\{\{ matrix\.shard \}\}/],
+  ["Supabase ports are isolated per shard", /MATRIX_SHARD:\s+\$\{\{ matrix\.shard \}\}[\s\S]*base_port = 55000 \+ shard \* 20/],
+  ["Supabase URL is exported for direct API tests", /echo "SUPABASE_URL=\$API_URL" >> "\$GITHUB_ENV"/],
   ["Single-worker override is removed", /PLAYWRIGHT_WORKERS:\s+1/],
 ];
 
