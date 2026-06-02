@@ -238,6 +238,9 @@ test.describe("Quick-Add Submit Flow", () => {
     // Wait for series select to populate so meetings can load
     const select = page.locator("select");
     await expect(select).not.toHaveValue("", { timeout: 10000 });
+    await page
+      .getByLabel("Select series")
+      .selectOption({ label: "Platform Team Standup" });
 
     await titleInput.fill("Regression test quick-add");
 
