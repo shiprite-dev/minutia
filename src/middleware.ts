@@ -122,7 +122,8 @@ export async function middleware(request: NextRequest) {
   }
 
   if (pathname.startsWith("/api/")) {
-    if (isRateLimited(ip, 100, 60_000)) {
+    const apiRateLimit = process.env.NODE_ENV === "production" ? 100 : 2_000;
+    if (isRateLimited(ip, apiRateLimit, 60_000)) {
       return new NextResponse("Too Many Requests", { status: 429 });
     }
   }
