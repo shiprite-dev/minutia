@@ -100,6 +100,7 @@ export function AppHeader({ profile }: AppHeaderProps) {
           variant="ghost"
           size="icon-sm"
           onClick={openCommandPalette}
+          data-tour="command-palette"
           className="text-ink-3 hover:text-ink sm:hidden"
         >
           <Search className="size-4" />

@@ -11,23 +11,7 @@ setup("authenticate", async ({ browser, request, baseURL }) => {
     throw new Error("NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY are required for E2E auth setup.");
   }
 
-  const authResponse = await request.post(`${supabaseUrl}/auth/v1/token?grant_type=password`, {
-    headers: {
-      apikey: anonKey,
-      Authorization: `Bearer ${anonKey}`,
-      "Content-Type": "application/json",
-    },
-    data: {
-      email: "test@example.com",
-      password: "password123",
-    },
-  });
-
-  if (!authResponse.ok()) {
-    throw new Error(`E2E auth setup failed: ${authResponse.status()} ${await authResponse.text()}`);
-  }
-
-  const session = await authResponse.json();
+  const session = await signInSeedUser(request, supabaseUrl, anonKey);
   const context = await browser.newContext();
   await context.addCookies([
     {
@@ -51,4 +35,55 @@ setup("authenticate", async ({ browser, request, baseURL }) => {
 
 function getSupabaseAuthCookieName(supabaseUrl: string) {
   return `sb-${new URL(supabaseUrl).hostname.split(".")[0]}-auth-token`;
+}
+
+async function signInSeedUser(
+  request: import("@playwright/test").APIRequestContext,
+  supabaseUrl: string,
+  anonKey: string
+) {
+  const deadline = Date.now() + (process.env.CI ? 90_000 : 30_000);
+  let lastError = "";
+
+  while (Date.now() < deadline) {
+    try {
+      const authResponse = await request.post(`${supabaseUrl}/auth/v1/token?grant_type=password`, {
+        headers: {
+          apikey: anonKey,
+          Authorization: `Bearer ${anonKey}`,
+          "Content-Type": "application/json",
+        },
+        data: {
+          email: "test@example.com",
+          password: "password123",
+        },
+        timeout: 5_000,
+      });
+
+      const body = await authResponse.text();
+      if (authResponse.ok()) return JSON.parse(body);
+
+      lastError = `${authResponse.status()} ${body}`;
+      if (!isTransientAuthStartupError(lastError)) {
+        throw new Error(`E2E auth setup failed: ${lastError}`);
+      }
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : String(error);
+      if (!isTransientAuthStartupError(lastError)) {
+        throw new Error(`E2E auth setup failed: ${lastError}`);
+      }
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+
+  throw new Error(`E2E auth setup timed out waiting for local auth: ${lastError}`);
+}
+
+function isTransientAuthStartupError(message: string) {
+  return (
+    message.includes("email_provider_disabled") ||
+    message.includes("ECONNREFUSED") ||
+    message.includes("Timeout")
+  );
 }

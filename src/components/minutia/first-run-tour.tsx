@@ -87,6 +87,22 @@ function subscribeNoop() {
   return () => {};
 }
 
+function findVisibleTargetRect(selector: string) {
+  for (const target of document.querySelectorAll(selector)) {
+    const rect = target.getBoundingClientRect();
+    const style = window.getComputedStyle(target);
+    if (
+      rect.width > 0 &&
+      rect.height > 0 &&
+      style.display !== "none" &&
+      style.visibility !== "hidden"
+    ) {
+      return rect;
+    }
+  }
+  return null;
+}
+
 export function FirstRunTour({ userId }: { userId: string }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -108,25 +124,36 @@ export function FirstRunTour({ userId }: { userId: string }) {
     if (!open || !step) return;
 
     function syncTarget() {
-      const target = document.querySelector(step.target);
-      const rect = target?.getBoundingClientRect() ?? null;
+      const rect = findVisibleTargetRect(step.target);
       setTargetRect(rect);
       setTargetInLowerHalf(rect ? rect.top > window.innerHeight / 2 : false);
     }
 
     syncTarget();
+    const observer = new MutationObserver(syncTarget);
+    observer.observe(document.body, { childList: true, subtree: true });
     window.addEventListener("resize", syncTarget);
     window.addEventListener("scroll", syncTarget, true);
     return () => {
+      observer.disconnect();
       window.removeEventListener("resize", syncTarget);
       window.removeEventListener("scroll", syncTarget, true);
     };
   }, [open, step]);
 
-  function dismiss(value: TourState) {
+  const dismiss = React.useCallback((value: TourState) => {
     setStoredState(userId, value);
     setOpen(false);
-  }
+  }, [userId]);
+
+  React.useEffect(() => {
+    if (!open) return;
+    function handleEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") dismiss("dismissed");
+    }
+    window.addEventListener("keydown", handleEscape);
+    return () => window.removeEventListener("keydown", handleEscape);
+  }, [dismiss, open]);
 
   function startTour() {
     setStepIndex(0);

@@ -1109,13 +1109,13 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen bg-paper" data-tour="oil-board">
       <div className="mx-auto max-w-6xl px-6 py-8">
+        <div className="flex items-center justify-end mb-5">
+          <AddWidgetButton />
+        </div>
         {isLoading ? (
           <DashboardSkeleton />
         ) : (
           <>
-            <div className="flex items-center justify-end mb-5">
-              <AddWidgetButton />
-            </div>
             <DndContext
               sensors={sensors}
               collisionDetection={closestCenter}
