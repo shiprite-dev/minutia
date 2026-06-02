@@ -41,6 +41,7 @@ import { MinutiaCadenceIcon } from "@/components/minutia/minutia-icons";
 import { IssueKey } from "@/components/minutia/issue-key";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
+import { HintTooltip } from "@/components/minutia/hint-tooltip";
 import { cn } from "@/lib/utils";
 import { formatShortDate, daysBetween } from "@/lib/date-utils";
 import { isOpen, isOverdue } from "@/lib/issue-utils";
@@ -797,20 +798,23 @@ function QuickAddButton({
 
   return (
     <>
-      <motion.button
-        type="button"
-        aria-label="Quick add issue"
-        onClick={() => setOpen((prev) => !prev)}
-        className={cn(
-          "fixed bottom-6 right-6 z-50 flex items-center justify-center size-12 rounded-full shadow-lg transition-colors",
-          open
-            ? "bg-ink text-paper"
-            : "bg-accent text-white hover:bg-accent-hover"
-        )}
-        whileTap={{ scale: 0.9 }}
-      >
-        {open ? <X className="size-5" /> : <Plus className="size-5" />}
-      </motion.button>
+      <HintTooltip label="Quick add an issue from anywhere on the board. Shortcut: N.">
+        <motion.button
+          type="button"
+          data-tour="quick-add"
+          aria-label="Quick add issue"
+          onClick={() => setOpen((prev) => !prev)}
+          className={cn(
+            "fixed bottom-6 right-6 z-50 flex items-center justify-center size-12 rounded-full shadow-lg transition-colors",
+            open
+              ? "bg-ink text-paper"
+              : "bg-accent text-white hover:bg-accent-hover"
+          )}
+          whileTap={{ scale: 0.9 }}
+        >
+          {open ? <X className="size-5" /> : <Plus className="size-5" />}
+        </motion.button>
+      </HintTooltip>
 
       <AnimatePresence>
         {open && (
@@ -1103,15 +1107,15 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-paper">
+    <div className="min-h-screen bg-paper" data-tour="oil-board">
       <div className="mx-auto max-w-6xl px-6 py-8">
+        <div className="flex items-center justify-end mb-5">
+          <AddWidgetButton />
+        </div>
         {isLoading ? (
           <DashboardSkeleton />
         ) : (
           <>
-            <div className="flex items-center justify-end mb-5">
-              <AddWidgetButton />
-            </div>
             <DndContext
               sensors={sensors}
               collisionDetection={closestCenter}

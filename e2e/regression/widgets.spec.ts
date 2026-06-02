@@ -5,6 +5,7 @@ import {
   createDashboardIssue,
   deleteIssue,
   HAS_SERVICE_ROLE,
+  openWidgetPicker,
   widgetWithText,
 } from "./dashboard-helpers";
 
@@ -26,9 +27,7 @@ test.describe("Widget system", () => {
   });
 
   test("add widget button opens picker with groups", async ({ page }) => {
-    const addBtn = page.getByRole("button", { name: "Add widget" });
-    await expect(addBtn).toBeVisible();
-    await addBtn.click();
+    await openWidgetPicker(page);
 
     await expect(page.getByText("Widgets")).toBeVisible();
     await expect(page.getByText("Health", { exact: true })).toBeVisible();
@@ -37,7 +36,7 @@ test.describe("Widget system", () => {
   });
 
   test("default widgets show as disabled in picker", async ({ page }) => {
-    await page.getByRole("button", { name: "Add widget" }).click();
+    await openWidgetPicker(page);
 
     const summaryBtn = page.getByRole("button", { name: /Summary.*added/ });
     await expect(summaryBtn).toBeVisible();
@@ -128,7 +127,7 @@ test.describe("Widget system", () => {
     await addWidget(page, /Stale Items/);
     await expect(page.getByText("Needs attention")).toBeVisible();
 
-    await page.getByRole("button", { name: "Add widget" }).click();
+    await openWidgetPicker(page);
     await page.getByRole("button", { name: "Reset" }).click();
 
     await expect(page.getByText("Needs attention")).not.toBeVisible();
@@ -146,7 +145,7 @@ test.describe("Widget system", () => {
   });
 
   test("picker closes on Escape", async ({ page }) => {
-    await page.getByRole("button", { name: "Add widget" }).click();
+    await openWidgetPicker(page);
     const healthLabel = page.getByText("Health", { exact: true });
     await expect(healthLabel).toBeVisible();
 

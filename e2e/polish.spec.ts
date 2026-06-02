@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { waitForApp } from "./regression/seed-data";
 
 test.describe("Error & 404 Pages", () => {
   test("404 page renders for unknown routes", async ({ page }) => {
@@ -106,6 +107,7 @@ test.describe("Navigation Polish", () => {
 
   test("all sidebar nav items are functional", async ({ page }) => {
     await page.goto("/dashboard");
+    await waitForApp(page);
 
     const routes = [
       { name: "Outstanding", url: "/dashboard" },
@@ -115,7 +117,10 @@ test.describe("Navigation Polish", () => {
     ];
 
     for (const route of routes) {
-      const link = page.getByRole("link", { name: route.name });
+      const link = page.getByRole("link", {
+        name: route.name,
+        exact: route.name === "Series",
+      });
       await link.click();
       await expect(page).toHaveURL(route.url);
     }

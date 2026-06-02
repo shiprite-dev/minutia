@@ -4,6 +4,7 @@ import * as React from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Plus, RotateCcw } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { HintTooltip } from "@/components/minutia/hint-tooltip";
 import { useWidgetStore } from "@/lib/stores/widget-store";
 import { WIDGET_REGISTRY, type WidgetMeta } from "./widget-registry";
 
@@ -50,17 +51,20 @@ export function AddWidgetButton() {
 
   return (
     <div ref={ref} className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen((p) => !p)}
-        className={cn(
-          "flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition-colors cursor-pointer",
-          "border border-dashed border-rule-strong text-ink-3 hover:text-ink hover:border-ink-3"
-        )}
-      >
-        <Plus className="size-3.5" />
-        Add widget
-      </button>
+      <HintTooltip label="Add widgets to customize your dashboard.">
+        <button
+          type="button"
+          data-tour="add-widget"
+          onClick={() => setOpen((p) => !p)}
+          className={cn(
+            "flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition-colors cursor-pointer",
+            "border border-dashed border-rule-strong text-ink-3 hover:text-ink hover:border-ink-3"
+          )}
+        >
+          <Plus className="size-3.5" />
+          Add widget
+        </button>
+      </HintTooltip>
 
       <AnimatePresence>
         {open && (

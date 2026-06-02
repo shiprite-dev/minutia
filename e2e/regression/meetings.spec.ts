@@ -226,6 +226,9 @@ test.describe("Meeting Lifecycle", () => {
       await expect(page.getByText(fixture.decisionTitle).first()).toBeVisible();
 
       await page.getByPlaceholder("Type meeting notes here...").fill(fixture.noteText);
+      await expect(
+        page.getByPlaceholder("Type meeting notes here...")
+      ).toHaveValue(fixture.noteText);
       await expect
         .poll(async () => {
           const rows = await rest(
@@ -233,7 +236,7 @@ test.describe("Meeting Lifecycle", () => {
             `meetings?id=eq.${fixture.meetingId}&select=notes_markdown`
           );
           return rows[0]?.notes_markdown;
-        })
+        }, { timeout: 20_000 })
         .toBe(fixture.noteText);
 
       await page.getByRole("button", { name: "End meeting" }).click();

@@ -1,5 +1,4 @@
-import type { Page } from "@playwright/test";
-import type { APIRequestContext } from "@playwright/test";
+import { expect, type APIRequestContext, type Page } from "@playwright/test";
 
 export const SERIES = {
   platformStandup: "10000000-0000-0000-0000-000000000001",
@@ -73,4 +72,14 @@ export async function resetSeedNotifications(request: APIRequestContext) {
 export async function waitForApp(page: Page) {
   await page.waitForLoadState("domcontentloaded");
   await page.locator("body").waitFor({ state: "visible" });
+  await expect
+    .poll(
+      async () =>
+        page.evaluate(() => {
+          const shell = document.querySelector("[data-minutia-app-shell]");
+          return !shell || shell.getAttribute("data-hydrated") === "true";
+        }),
+      { timeout: 30_000 }
+    )
+    .toBe(true);
 }
