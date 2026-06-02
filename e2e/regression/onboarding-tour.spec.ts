@@ -72,4 +72,23 @@ test.describe("First-run tour", () => {
       page.getByRole("tooltip", { name: "Add widgets to customize your dashboard." })
     ).toBeVisible();
   });
+
+  test("targets the visible mobile search control", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await waitForApp(page);
+    await expect(page.getByRole("button", { name: "Add widget" })).toBeVisible();
+
+    await page.getByRole("button", { name: "Start tour" }).click();
+    await page.getByRole("button", { name: "Next", exact: true }).click();
+    await page.getByRole("button", { name: "Next", exact: true }).click();
+    await page.getByRole("button", { name: "Next", exact: true }).click();
+
+    await expect(page.getByRole("heading", { name: "Search and shortcuts" })).toBeVisible();
+    const spotlight = page.getByTestId("tour-spotlight");
+    await expect(spotlight).toBeVisible();
+    const box = await spotlight.boundingBox();
+    expect(box?.width ?? 0).toBeGreaterThan(20);
+    expect(box?.height ?? 0).toBeGreaterThan(20);
+  });
 });
