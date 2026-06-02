@@ -28,6 +28,11 @@ setup("authenticate", async ({ browser, request, baseURL }) => {
   const page = await context.newPage();
   await page.goto("/dashboard");
   await expect(page).toHaveURL("/dashboard");
+  await page.evaluate((userId) => {
+    if (userId) {
+      localStorage.setItem(`minutia:first-run-tour:${userId}:v1`, "dismissed");
+    }
+  }, session.user?.id);
 
   await page.context().storageState({ path: "e2e/.auth/user.json" });
   await context.close();
