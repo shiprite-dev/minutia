@@ -1,8 +1,10 @@
 import { test, expect } from "@playwright/test";
+import { waitForApp } from "./regression/seed-data";
 
 test.describe("Light Mode Parity", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/settings");
+    await waitForApp(page);
   });
 
   test("theme toggle exists with Light, Dark, System options", async ({ page }) => {
@@ -24,9 +26,10 @@ test.describe("Light Mode Parity", () => {
   test("light mode renders readable sidebar text", async ({ page }) => {
     await page.getByRole("button", { name: "Light" }).click();
 
-    // Sidebar navigation items should be visible
     await expect(page.getByText("Outstanding")).toBeVisible();
-    await expect(page.getByRole("link", { name: "Series" })).toBeVisible();
+    await expect(
+      page.getByRole("link", { name: "Series", exact: true })
+    ).toBeVisible();
     await expect(page.getByRole("link", { name: "Settings" })).toBeVisible();
   });
 });

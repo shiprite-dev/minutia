@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { readOutbox, withOutbox } from "../helpers/outbox";
 import { MEETINGS, SHARE_TOKENS, waitForApp } from "./seed-data";
 
-const APP_URL = "http://localhost:3000";
+const APP_URL = process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3000";
 const SUPABASE_URL = process.env.SUPABASE_URL ?? "http://127.0.0.1:54321";
 const ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
