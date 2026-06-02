@@ -32,7 +32,7 @@ import { cn } from "@/lib/utils";
 import type { OrganizationOption, Profile } from "@/lib/types";
 
 function isActive(pathname: string, href: string): boolean {
-  if (href === "/") return pathname === "/";
+  if (href === "/") return pathname === "/" || pathname === "/dashboard";
   return pathname.startsWith(href);
 }
 
@@ -136,8 +136,13 @@ export function AppSidebar({ profile, organizations }: AppSidebarProps) {
                     >
                       <Link href={item.href}>
                         <item.icon className="size-4" />
-                        <span>{item.label}</span>
-                        <CountBadge count={item.count} accent={item.href === "/" || item.href === "/actions"} />
+                        <span data-tour={item.href === "/series" ? "series-nav" : undefined}>
+                          {item.label}
+                        </span>
+                        <CountBadge
+                          count={item.count}
+                          accent={item.href === "/" || item.href === "/actions"}
+                        />
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
