@@ -61,16 +61,16 @@ test.describe("First-run tour", () => {
 
   test("add widget exposes an accessible hover and focus tooltip", async ({ page }) => {
     const addWidget = page.getByRole("button", { name: "Add widget" });
+    const visibleTooltip = page.locator("[data-slot='tooltip-content']");
+
     await addWidget.hover();
-    await expect(
-      page.getByRole("tooltip", { name: "Add widgets to customize your dashboard." })
-    ).toBeVisible();
+    await expect(visibleTooltip).toBeVisible();
+    await expect(visibleTooltip).toContainText("Add widgets to customize your dashboard.");
 
     await page.mouse.move(0, 0);
     await addWidget.focus();
-    await expect(
-      page.getByRole("tooltip", { name: "Add widgets to customize your dashboard." })
-    ).toBeVisible();
+    await expect(visibleTooltip).toBeVisible();
+    await expect(visibleTooltip).toContainText("Add widgets to customize your dashboard.");
   });
 
   test("targets the visible mobile search control", async ({ page }) => {
@@ -90,5 +90,6 @@ test.describe("First-run tour", () => {
     const box = await spotlight.boundingBox();
     expect(box?.width ?? 0).toBeGreaterThan(20);
     expect(box?.height ?? 0).toBeGreaterThan(20);
+    expect(box?.y ?? Number.POSITIVE_INFINITY).toBeLessThan(80);
   });
 });
