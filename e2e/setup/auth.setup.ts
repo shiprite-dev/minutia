@@ -2,10 +2,12 @@ import { test as setup, expect } from "@playwright/test";
 
 setup.setTimeout(process.env.CI ? 90_000 : 30_000);
 
+const APP_URL = process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3000";
+
 setup("authenticate", async ({ browser, request, baseURL }) => {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  const appOrigin = new URL(baseURL ?? "http://localhost:3000").origin;
+  const appOrigin = new URL(baseURL ?? APP_URL).origin;
 
   if (!supabaseUrl || !anonKey) {
     throw new Error("NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY are required for E2E auth setup.");
@@ -26,8 +28,8 @@ setup("authenticate", async ({ browser, request, baseURL }) => {
   ]);
 
   const page = await context.newPage();
-  await page.goto("/dashboard");
-  await expect(page).toHaveURL("/dashboard");
+  await page.goto(`${appOrigin}/dashboard`);
+  await expect(page).toHaveURL(`${appOrigin}/dashboard`);
   await page.evaluate((userId) => {
     if (userId) {
       localStorage.setItem(`minutia:first-run-tour:${userId}:v1`, "dismissed");

@@ -5,9 +5,9 @@ import path from "path";
 dotenv.config({ path: path.resolve(__dirname, ".env.local") });
 
 const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3000";
-const devUrl = new URL(baseURL);
-const devHost = devUrl.hostname;
-const devPort = devUrl.port || "3000";
+const serverURL = new URL(baseURL);
+const serverHost = serverURL.hostname;
+const serverPort = serverURL.port || "3000";
 
 export default defineConfig({
   testDir: "./e2e",
@@ -48,7 +48,7 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: `MINUTIA_TEST_EMAIL_OUTBOX=test-results/meeting-notes-email-outbox.jsonl pnpm dev -H ${devHost} -p ${devPort}`,
+    command: `MINUTIA_TEST_EMAIL_OUTBOX=test-results/meeting-notes-email-outbox.jsonl pnpm dev --hostname ${serverHost} --port ${serverPort}`,
     url: baseURL,
     reuseExistingServer: !process.env.CI,
   },
