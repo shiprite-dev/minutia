@@ -5,11 +5,15 @@ import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { motion } from "motion/react";
-import { useSeriesDetail, useUpdateSeries } from "@/lib/hooks/use-series";
 import {
-  useCreateMeeting,
+  useSeriesDetail,
+  useSeriesParticipantRole,
+  useSeriesRealtime,
+  useUpdateSeries,
+} from "@/lib/hooks/use-series";
+import {
   useMeetings,
-  useStartMeeting,
+  useStartOrJoinMeeting,
 } from "@/lib/hooks/use-meetings";
 import { useIssues } from "@/lib/hooks/use-issues";
 import { useDecisions } from "@/lib/hooks/use-decisions";
@@ -52,19 +56,25 @@ const cadenceLabels: Record<Cadence, string> = {
   adhoc: "Ad hoc",
 };
 
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 interface SeriesDetailContentProps {
   seriesId: string;
 }
 
 export function SeriesDetailContent({ seriesId }: SeriesDetailContentProps) {
   const router = useRouter();
+  const validSeriesId = UUID_PATTERN.test(seriesId);
+  const querySeriesId = validSeriesId ? seriesId : "";
   const { data: series, isLoading: seriesLoading } = useSeriesDetail(seriesId);
-  const { data: meetings, isLoading: meetingsLoading } = useMeetings(seriesId);
-  const { data: issues } = useIssues(seriesId);
-  const { data: decisions } = useDecisions(undefined, seriesId);
+  const { data: meetings, isLoading: meetingsLoading } = useMeetings(querySeriesId);
+  const { data: issues } = useIssues(querySeriesId, validSeriesId);
+  const { data: decisions } = useDecisions(undefined, querySeriesId, validSeriesId);
+  const { data: participantRole } = useSeriesParticipantRole(querySeriesId);
 
-  const createMeeting = useCreateMeeting();
-  const startMeeting = useStartMeeting();
+  useSeriesRealtime(querySeriesId);
+  const startOrJoinMeeting = useStartOrJoinMeeting();
 
   const [settingsOpen, setSettingsOpen] = React.useState(false);
   const [importOpen, setImportOpen] = React.useState(false);
@@ -91,6 +101,9 @@ export function SeriesDetailContent({ seriesId }: SeriesDetailContentProps) {
   const nextMeeting = sortedMeetings.find(
     (m) => m.status === "upcoming" || m.status === "live"
   );
+  const liveMeeting = sortedMeetings.find((m) => m.status === "live");
+  const canManageSeries =
+    participantRole === "owner" || participantRole === "facilitator";
 
   const showBrief =
     openIssues.length > 0 ||
@@ -113,13 +126,7 @@ export function SeriesDetailContent({ seriesId }: SeriesDetailContentProps) {
     if (!series) return;
     setStartingMeeting(true);
     try {
-      const meeting = await createMeeting.mutateAsync({
-        series_id: seriesId,
-        title: `${series.name} #${(meetings?.length ?? 0) + 1}`,
-        date: new Date().toISOString(),
-        attendees: series.default_attendees ?? [],
-      });
-      await startMeeting.mutateAsync(meeting.id);
+      const meeting = await startOrJoinMeeting.mutateAsync(seriesId);
       router.push(`/series/${seriesId}/meetings/${meeting.id}`);
     } finally {
       setStartingMeeting(false);
@@ -170,23 +177,27 @@ export function SeriesDetailContent({ seriesId }: SeriesDetailContentProps) {
             </div>
             <div className="flex items-center gap-1 sm:gap-2 shrink-0">
               <ShareButton resource_type="series" resource_id={seriesId} />
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setImportOpen(true)}
-                aria-label="Import CSV"
-                className="hidden sm:inline-flex"
-              >
-                <Upload className="size-4" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setSettingsOpen(true)}
-                aria-label="Series settings"
-              >
-                <Settings className="size-4" />
-              </Button>
+              {canManageSeries && (
+                <>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setImportOpen(true)}
+                    aria-label="Import CSV"
+                    className="hidden sm:inline-flex"
+                  >
+                    <Upload className="size-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setSettingsOpen(true)}
+                    aria-label="Series settings"
+                  >
+                    <Settings className="size-4" />
+                  </Button>
+                </>
+              )}
               <Button
                 onClick={handleStartMeeting}
                 disabled={startingMeeting}
@@ -198,8 +209,10 @@ export function SeriesDetailContent({ seriesId }: SeriesDetailContentProps) {
                 ) : (
                   <Play className="size-4" data-icon="inline-start" />
                 )}
-                <span className="hidden sm:inline">Start meeting</span>
-                <span className="sm:hidden">Start</span>
+                <span className="hidden sm:inline">
+                  {liveMeeting ? "Join live meeting" : "Start meeting"}
+                </span>
+                <span className="sm:hidden">{liveMeeting ? "Join" : "Start"}</span>
               </Button>
             </div>
           </div>

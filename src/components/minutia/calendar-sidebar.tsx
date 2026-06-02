@@ -2,11 +2,18 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "motion/react";
 import {
+  ArrowLeft,
   Calendar,
   ChevronLeft,
   ChevronRight,
+  Clock,
+  ExternalLink,
+  Radio,
+  Users,
+  Video,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MinutiaMeetingStatusIcon } from "@/components/minutia/minutia-icons";
@@ -21,6 +28,12 @@ import { cn } from "@/lib/utils";
 import { useUIStore } from "@/lib/stores/ui-store";
 import { useMeetingsByMonth } from "@/lib/hooks/use-meetings";
 import type { MeetingWithSeries } from "@/lib/hooks/use-meetings";
+import {
+  useCalendarAgenda,
+  useGoogleCalendarStatus,
+  useStartCalendarAgendaEvent,
+} from "@/lib/hooks/use-google-calendar";
+import type { GoogleCalendarAgendaItem } from "@/lib/types";
 
 const DAYS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
 const MONTHS = [
@@ -154,12 +167,23 @@ function MiniCalendar({
 function DayAgenda({
   date,
   meetings,
+  calendarEvents,
+  calendarConnected,
+  agendaLoading,
+  onOpenCalendarEvent,
 }: {
   date: Date;
   meetings: MeetingWithSeries[];
+  calendarEvents: GoogleCalendarAgendaItem[];
+  calendarConnected: boolean;
+  agendaLoading: boolean;
+  onOpenCalendarEvent: (event: GoogleCalendarAgendaItem) => void;
 }) {
   const dayMeetings = meetings.filter((m) =>
     isSameDay(new Date(m.date), date)
+  );
+  const dayCalendarEvents = calendarEvents.filter((event) =>
+    isSameDay(new Date(event.startAt), date)
   );
 
   const formattedDate = date.toLocaleDateString("en-US", {
@@ -167,6 +191,7 @@ function DayAgenda({
     month: "short",
     day: "numeric",
   });
+  const hasCalendarEvents = calendarConnected && dayCalendarEvents.length > 0;
 
   return (
     <div className="flex-1 overflow-y-auto px-4 pb-4">
@@ -174,7 +199,73 @@ function DayAgenda({
         {formattedDate}
       </p>
 
-      {dayMeetings.length === 0 ? (
+      {calendarConnected && agendaLoading ? (
+        <div className="flex flex-col items-center justify-center py-8 text-center">
+          <Calendar className="size-8 text-ink-4/50 mb-2" />
+          <p className="text-sm text-ink-3">Syncing agenda...</p>
+        </div>
+      ) : hasCalendarEvents ? (
+        <div className="space-y-1.5">
+          {dayCalendarEvents.map((event) => {
+            const time = new Date(event.startAt);
+            const timeStr = time.toLocaleTimeString("en-US", {
+              hour: "numeric",
+              minute: "2-digit",
+            });
+
+            return (
+              <button
+                key={event.id}
+                type="button"
+                onClick={() => onOpenCalendarEvent(event)}
+                className="block w-full text-left group"
+              >
+                <div className="flex items-start gap-3 rounded-lg p-2.5 transition-colors hover:bg-paper-3 group-focus-visible:ring-1 group-focus-visible:ring-accent">
+                  <div className="flex-shrink-0 pt-0.5">
+                    <span className="text-[11px] font-mono text-ink-3 tabular-nums">
+                      {timeStr}
+                    </span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-ink truncate leading-tight">
+                      {event.title}
+                    </p>
+                    <p className="text-xs text-ink-3 mt-0.5 truncate">
+                      {event.attendeeEmails.length} attendees
+                    </p>
+                    <div className="flex items-center gap-1.5 mt-1">
+                      <span
+                        className={cn(
+                          "inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full font-medium",
+                          event.meetingStatus === "live"
+                            ? "bg-accent-soft text-accent"
+                            : "bg-paper-3 text-ink-3"
+                        )}
+                      >
+                        {event.meetingStatus === "live" && (
+                          <span className="size-1.5 rounded-full bg-accent animate-pulse" />
+                        )}
+                        {event.seriesKind === "recurring" ? "Recurring" : "Ad hoc"}
+                      </span>
+                      {event.meetingUrl && (
+                        <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full bg-paper-3 text-ink-3 font-medium">
+                          <Video className="size-2.5" />
+                          Meet
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      ) : calendarConnected ? (
+        <div className="flex flex-col items-center justify-center py-8 text-center">
+          <Calendar className="size-8 text-ink-4/50 mb-2" />
+          <p className="text-sm text-ink-3">No calendar meetings</p>
+        </div>
+      ) : dayMeetings.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-8 text-center">
           <Calendar className="size-8 text-ink-4/50 mb-2" />
           <p className="text-sm text-ink-3">No meetings</p>
@@ -237,18 +328,26 @@ function CalendarContent({
   selectedDate,
   meetingDays,
   meetings,
+  calendarEvents,
+  calendarConnected,
+  agendaLoading,
   onSelectDate,
   onPrevMonth,
   onNextMonth,
+  onOpenCalendarEvent,
 }: {
   viewYear: number;
   viewMonth: number;
   selectedDate: Date;
   meetingDays: Set<number>;
   meetings: MeetingWithSeries[];
+  calendarEvents: GoogleCalendarAgendaItem[];
+  calendarConnected: boolean;
+  agendaLoading: boolean;
   onSelectDate: (date: Date) => void;
   onPrevMonth: () => void;
   onNextMonth: () => void;
+  onOpenCalendarEvent: (event: GoogleCalendarAgendaItem) => void;
 }) {
   return (
     <>
@@ -262,8 +361,124 @@ function CalendarContent({
         onNextMonth={onNextMonth}
       />
       <div className="border-t border-rule" />
-      <DayAgenda date={selectedDate} meetings={meetings} />
+      <DayAgenda
+        date={selectedDate}
+        meetings={meetings}
+        calendarEvents={calendarEvents}
+        calendarConnected={calendarConnected}
+        agendaLoading={agendaLoading}
+        onOpenCalendarEvent={onOpenCalendarEvent}
+      />
     </>
+  );
+}
+
+function formatEventRange(event: GoogleCalendarAgendaItem) {
+  const start = new Date(event.startAt);
+  const end = new Date(event.endAt);
+  const date = start.toLocaleDateString("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  });
+  const startTime = start.toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+  const endTime = end.toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+  return `${date}, ${startTime} to ${endTime}`;
+}
+
+function CalendarEventDetail({
+  event,
+  isStarting,
+  onBack,
+  onStart,
+}: {
+  event: GoogleCalendarAgendaItem;
+  isStarting: boolean;
+  onBack: () => void;
+  onStart: (event: GoogleCalendarAgendaItem) => void;
+}) {
+  return (
+    <div className="flex flex-1 flex-col overflow-y-auto px-4 pb-4 pt-3">
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        className="mb-3 w-fit px-0 text-ink-3 hover:text-ink"
+        onClick={onBack}
+      >
+        <ArrowLeft className="size-3.5" />
+        Agenda
+      </Button>
+
+      <div className="space-y-4">
+        <div className="space-y-2">
+          <div className="flex flex-wrap gap-1.5">
+            <span className="inline-flex items-center gap-1 rounded-full bg-paper-3 px-2 py-1 text-[10px] font-medium text-ink-3">
+              {event.seriesKind === "recurring" ? "Recurring series" : "Ad hoc series"}
+            </span>
+            {event.meetingStatus === "live" && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-accent-soft px-2 py-1 text-[10px] font-medium text-accent">
+                <Radio className="size-3" />
+                Live
+              </span>
+            )}
+          </div>
+          <h3 className="font-display text-lg font-medium leading-tight text-ink">
+            {event.title}
+          </h3>
+          {event.description && (
+            <p className="text-sm leading-relaxed text-ink-3 line-clamp-4">
+              {event.description}
+            </p>
+          )}
+        </div>
+
+        <div className="space-y-2 text-sm text-ink-2">
+          <div className="flex items-start gap-2">
+            <Clock className="mt-0.5 size-4 text-ink-4" />
+            <span>{formatEventRange(event)}</span>
+          </div>
+          <div className="flex items-start gap-2">
+            <Users className="mt-0.5 size-4 text-ink-4" />
+            <span>
+              {event.attendeeEmails.length > 0
+                ? event.attendeeEmails.slice(0, 4).join(", ")
+                : "No attendees listed"}
+              {event.attendeeEmails.length > 4 ? ` +${event.attendeeEmails.length - 4}` : ""}
+            </span>
+          </div>
+          {event.meetingUrl && (
+            <div className="flex items-start gap-2">
+              <Video className="mt-0.5 size-4 text-ink-4" />
+              <span>Google Meet link available</span>
+            </div>
+          )}
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <Button
+            type="button"
+            className="bg-accent text-white hover:bg-accent-hover"
+            disabled={isStarting}
+            onClick={() => onStart(event)}
+          >
+            {event.meetingStatus === "live" ? "Join live meeting" : "Start meeting"}
+          </Button>
+          <Button variant="outline" asChild>
+            <Link href={`/series/${event.seriesId}`}>
+              Open series
+              <ExternalLink className="size-3.5" />
+            </Link>
+          </Button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -280,6 +495,7 @@ function useIsMobile() {
 }
 
 export function CalendarSidebar() {
+  const router = useRouter();
   const {
     calendarSidebarOpen,
     toggleCalendarSidebar,
@@ -291,6 +507,11 @@ export function CalendarSidebar() {
   const isMobile = useIsMobile();
   const [viewYear, setViewYear] = React.useState(selectedDate.getFullYear());
   const [viewMonth, setViewMonth] = React.useState(selectedDate.getMonth());
+  const [selectedCalendarEvent, setSelectedCalendarEvent] =
+    React.useState<GoogleCalendarAgendaItem | null>(null);
+  const { data: calendarStatus } = useGoogleCalendarStatus();
+  const { data: agendaData, isLoading: agendaLoading } = useCalendarAgenda();
+  const startCalendarEvent = useStartCalendarAgendaEvent();
 
   // Hydrate persisted sidebar state from localStorage after mount
   React.useEffect(() => {
@@ -299,17 +520,22 @@ export function CalendarSidebar() {
   }, [setCalendarSidebarOpen]);
 
   const { data: meetings = [] } = useMeetingsByMonth(viewYear, viewMonth);
+  const calendarEvents = React.useMemo(() => agendaData?.events ?? [], [agendaData?.events]);
+  const calendarConnected = !!calendarStatus?.connected;
 
   const meetingDays = React.useMemo(() => {
     const days = new Set<number>();
-    for (const m of meetings) {
-      const d = new Date(m.date);
+    const sourceDates = calendarConnected
+      ? calendarEvents.map((event) => event.startAt)
+      : meetings.map((meeting) => meeting.date);
+    for (const sourceDate of sourceDates) {
+      const d = new Date(sourceDate);
       if (d.getMonth() === viewMonth && d.getFullYear() === viewYear) {
         days.add(d.getDate());
       }
     }
     return days;
-  }, [meetings, viewMonth, viewYear]);
+  }, [calendarConnected, calendarEvents, meetings, viewMonth, viewYear]);
 
   function handlePrevMonth() {
     if (viewMonth === 0) {
@@ -330,11 +556,21 @@ export function CalendarSidebar() {
   }
 
   function handleSelectDate(date: Date) {
+    setSelectedCalendarEvent(null);
     setSelectedDate(date);
     if (date.getMonth() !== viewMonth || date.getFullYear() !== viewYear) {
       setViewMonth(date.getMonth());
       setViewYear(date.getFullYear());
     }
+  }
+
+  function handleStartCalendarEvent(event: GoogleCalendarAgendaItem) {
+    if (event.meetingUrl) {
+      window.open(event.meetingUrl, "_blank", "noopener,noreferrer");
+    }
+    startCalendarEvent.mutate(event.id, {
+      onSuccess: (result) => router.push(result.captureUrl),
+    });
   }
 
   React.useEffect(() => {
@@ -356,10 +592,25 @@ export function CalendarSidebar() {
     selectedDate,
     meetingDays,
     meetings,
+    calendarEvents,
+    calendarConnected,
+    agendaLoading,
     onSelectDate: handleSelectDate,
     onPrevMonth: handlePrevMonth,
     onNextMonth: handleNextMonth,
+    onOpenCalendarEvent: setSelectedCalendarEvent,
   };
+
+  const content = selectedCalendarEvent ? (
+    <CalendarEventDetail
+      event={selectedCalendarEvent}
+      isStarting={startCalendarEvent.isPending}
+      onBack={() => setSelectedCalendarEvent(null)}
+      onStart={handleStartCalendarEvent}
+    />
+  ) : (
+    <CalendarContent {...sharedProps} />
+  );
 
   return (
     <>
@@ -379,7 +630,7 @@ export function CalendarSidebar() {
               <h2 className="text-sm font-semibold text-ink">Calendar</h2>
             </div>
 
-            <CalendarContent {...sharedProps} />
+            {content}
           </motion.aside>
         )}
       </AnimatePresence>
@@ -400,7 +651,7 @@ export function CalendarSidebar() {
             </SheetDescription>
           </SheetHeader>
           <div className="flex flex-col overflow-y-auto">
-            <CalendarContent {...sharedProps} />
+            {content}
           </div>
         </SheetContent>
       </Sheet>

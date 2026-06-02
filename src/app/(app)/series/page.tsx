@@ -31,6 +31,12 @@ function formatDate(date: Date | string): string {
 export default function SeriesListPage() {
   const { data: seriesList, isLoading } = useSeries();
   const [dialogOpen, setDialogOpen] = React.useState(false);
+  const mounted = React.useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false
+  );
+  const showLoading = !mounted || isLoading;
 
   return (
     <div className="min-h-full bg-paper">
@@ -50,7 +56,7 @@ export default function SeriesListPage() {
         </div>
 
         {/* Loading state */}
-        {isLoading && (
+        {showLoading && (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {Array.from({ length: 3 }).map((_, i) => (
               <div
@@ -67,7 +73,7 @@ export default function SeriesListPage() {
         )}
 
         {/* Empty state */}
-        {!isLoading && seriesList && seriesList.length === 0 && (
+        {mounted && !isLoading && seriesList && seriesList.length === 0 && (
           <EmptyState
             variant="no-series"
             onAction={() => setDialogOpen(true)}
@@ -75,7 +81,7 @@ export default function SeriesListPage() {
         )}
 
         {/* Series grid */}
-        {!isLoading && seriesList && seriesList.length > 0 && (
+        {mounted && !isLoading && seriesList && seriesList.length > 0 && (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {seriesList.map((series, i) => (
               <motion.div
