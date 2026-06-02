@@ -120,7 +120,7 @@ export function FirstRunTour({ userId }: { userId: string }) {
   const step = TOUR_STEPS[stepIndex];
   const showPrompt = hydrated && stored === null && !open && isDashboard(pathname);
 
-  React.useEffect(() => {
+  React.useLayoutEffect(() => {
     if (!open || !step) return;
 
     function syncTarget() {
@@ -165,6 +165,8 @@ export function FirstRunTour({ userId }: { userId: string }) {
       dismiss("completed");
       return;
     }
+    setTargetRect(null);
+    setTargetInLowerHalf(false);
     setStepIndex((current) => current + 1);
   }
 
@@ -181,7 +183,7 @@ export function FirstRunTour({ userId }: { userId: string }) {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 16, scale: 0.98 }}
             transition={{ duration: 0.18 }}
-            className="fixed right-4 top-16 z-[70] w-[min(calc(100vw-2rem),420px)] rounded-xl border border-rule bg-card p-4 shadow-[0_18px_70px_-24px_oklch(0%_0_0/0.35)] sm:right-6"
+            className="fixed bottom-24 right-4 z-[70] w-[min(calc(100vw-2rem),420px)] rounded-xl border border-rule bg-card p-4 shadow-[0_18px_70px_-24px_oklch(0%_0_0/0.35)] sm:right-6"
           >
             <div className="flex items-start gap-3">
               <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full bg-accent text-sm font-semibold text-white">
