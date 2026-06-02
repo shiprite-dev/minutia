@@ -10,6 +10,7 @@ import type { Profile } from "@/lib/types";
 
 const pageTitles: Record<string, string> = {
   "/": "OIL Board",
+  "/dashboard": "OIL Board",
   "/series": "Series",
   "/actions": "My Actions",
   "/inbox": "Inbox",
