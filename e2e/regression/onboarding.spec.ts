@@ -168,14 +168,14 @@ test.describe("Onboarding wizard", () => {
   test.describe.configure({ mode: "serial" });
   let state: OnboardingState | null = null;
 
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page, baseURL }) => {
     state = await createOnboardingAuthState();
+    const appOrigin = new URL(baseURL ?? "http://localhost:3000").origin;
     await page.context().addCookies([
       {
         name: "sb-127-auth-token",
         value: state.cookieValue,
-        domain: "localhost",
-        path: "/",
+        url: appOrigin,
         expires: Math.floor(Date.now() / 1000) + 60 * 60,
         httpOnly: false,
         secure: false,

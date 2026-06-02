@@ -9,6 +9,7 @@ import { KeyboardShortcutsDialog } from "@/components/minutia/keyboard-shortcuts
 import { GotoShortcuts } from "@/components/minutia/goto-shortcuts";
 import { CalendarSidebar } from "@/components/minutia/calendar-sidebar";
 import { OnboardingWizard } from "@/components/minutia/onboarding-wizard";
+import { FirstRunTour } from "@/components/minutia/first-run-tour";
 import type { OrganizationOption, Profile } from "@/lib/types";
 
 interface AppShellProps {
@@ -45,6 +46,7 @@ export function AppShell({ profile, organizations, children }: AppShellProps) {
       <CommandPalette />
       <KeyboardShortcutsDialog />
       <GotoShortcuts />
+      {profile && <FirstRunTour userId={profile.id} />}
     </SidebarProvider>
   );
 }

@@ -6,6 +6,7 @@ import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { GripVertical, X, Maximize2, Minimize2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { HintTooltip } from "@/components/minutia/hint-tooltip";
 import { useWidgetStore } from "@/lib/stores/widget-store";
 import { getWidgetMeta } from "./widget-registry";
 
@@ -72,6 +73,7 @@ export function WidgetShell({
           hovered ? "opacity-100" : "opacity-0 pointer-events-none"
         )}
       >
+        <HintTooltip label="Drag to reorder this widget.">
           <button
             ref={setActivatorNodeRef}
             type="button"
@@ -81,7 +83,11 @@ export function WidgetShell({
           >
             <GripVertical className="size-3" />
           </button>
-          {canResize && (
+        </HintTooltip>
+        {canResize && (
+          <HintTooltip
+            label={currentSpan === 2 ? "Make this widget narrow." : "Make this widget wide."}
+          >
             <button
               type="button"
               onClick={() => toggleSpan(id)}
@@ -94,7 +100,9 @@ export function WidgetShell({
                 <Maximize2 className="size-3" />
               )}
             </button>
-          )}
+          </HintTooltip>
+        )}
+        <HintTooltip label="Remove this widget from the dashboard.">
           <button
             type="button"
             onClick={() => removeWidget(id)}
@@ -103,7 +111,8 @@ export function WidgetShell({
           >
             <X className="size-3" />
           </button>
-        </div>
+        </HintTooltip>
+      </div>
       {children}
     </motion.div>
   );

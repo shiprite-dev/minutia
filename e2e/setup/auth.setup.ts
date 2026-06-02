@@ -2,9 +2,10 @@ import { test as setup, expect } from "@playwright/test";
 
 setup.setTimeout(process.env.CI ? 90_000 : 30_000);
 
-setup("authenticate", async ({ browser, request }) => {
+setup("authenticate", async ({ browser, request, baseURL }) => {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const appOrigin = new URL(baseURL ?? "http://localhost:3000").origin;
 
   if (!supabaseUrl || !anonKey) {
     throw new Error("NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY are required for E2E auth setup.");
@@ -32,8 +33,7 @@ setup("authenticate", async ({ browser, request }) => {
     {
       name: getSupabaseAuthCookieName(supabaseUrl),
       value: `base64-${Buffer.from(JSON.stringify(session)).toString("base64")}`,
-      domain: "localhost",
-      path: "/",
+      url: appOrigin,
       expires: session.expires_at ?? Math.floor(Date.now() / 1000) + session.expires_in,
       httpOnly: false,
       secure: false,
