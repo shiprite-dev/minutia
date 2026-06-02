@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { useUIStore } from "@/lib/stores/ui-store";
 import { Separator } from "@/components/ui/separator";
+import { HintTooltip } from "@/components/minutia/hint-tooltip";
 import type { Profile } from "@/lib/types";
 
 const pageTitles: Record<string, string> = {
@@ -78,54 +79,64 @@ export function AppHeader({ profile }: AppHeaderProps) {
 
       <div className="flex-1" />
 
-      <Button
-        variant="ghost"
-        size="sm"
-        onClick={openCommandPalette}
-        className="hidden gap-1.5 text-ink-3 hover:text-ink sm:flex"
-      >
-        <Search className="size-3.5" />
-        <span className="text-xs">Search</span>
-        <kbd className="pointer-events-none ml-1 inline-flex h-5 select-none items-center gap-0.5 rounded border border-rule bg-paper-2 px-1.5 font-mono text-[10px] font-medium text-ink-3">
-          <span className="text-xs">&#8984;</span>K
-        </kbd>
-      </Button>
+      <HintTooltip label="Search pages, series, issues, and decisions with Command K.">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={openCommandPalette}
+          data-tour="command-palette"
+          className="hidden gap-1.5 text-ink-3 hover:text-ink sm:flex"
+        >
+          <Search className="size-3.5" />
+          <span className="text-xs">Search</span>
+          <kbd className="pointer-events-none ml-1 inline-flex h-5 select-none items-center gap-0.5 rounded border border-rule bg-paper-2 px-1.5 font-mono text-[10px] font-medium text-ink-3">
+            <span className="text-xs">&#8984;</span>K
+          </kbd>
+        </Button>
+      </HintTooltip>
 
-      <Button
-        variant="ghost"
-        size="icon-sm"
-        onClick={openCommandPalette}
-        className="text-ink-3 hover:text-ink sm:hidden"
-      >
-        <Search className="size-4" />
-        <span className="sr-only">Search</span>
-      </Button>
+      <HintTooltip label="Search pages, series, issues, and decisions.">
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          onClick={openCommandPalette}
+          data-tour="command-palette"
+          className="text-ink-3 hover:text-ink sm:hidden"
+        >
+          <Search className="size-4" />
+          <span className="sr-only">Search</span>
+        </Button>
+      </HintTooltip>
 
       {/* Desktop: panel toggle */}
-      <Button
-        variant="ghost"
-        size="icon"
-        className="hidden size-8 text-ink-3 hover:text-ink md:flex"
-        onClick={toggleCalendarSidebar}
-        aria-label={calendarSidebarOpen ? "Close calendar" : "Open calendar"}
-      >
-        {calendarSidebarOpen ? (
-          <PanelRightClose className="size-4" />
-        ) : (
-          <PanelRightOpen className="size-4" />
-        )}
-      </Button>
+      <HintTooltip label={calendarSidebarOpen ? "Close the calendar agenda." : "Open the calendar agenda."}>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="hidden size-8 text-ink-3 hover:text-ink md:flex"
+          onClick={toggleCalendarSidebar}
+          aria-label={calendarSidebarOpen ? "Close calendar" : "Open calendar"}
+        >
+          {calendarSidebarOpen ? (
+            <PanelRightClose className="size-4" />
+          ) : (
+            <PanelRightOpen className="size-4" />
+          )}
+        </Button>
+      </HintTooltip>
 
       {/* Mobile: calendar icon */}
-      <Button
-        variant="ghost"
-        size="icon-sm"
-        className="text-ink-3 hover:text-ink md:hidden"
-        onClick={toggleCalendarSidebar}
-        aria-label="Open calendar"
-      >
-        <Calendar className="size-4" />
-      </Button>
+      <HintTooltip label="Open the calendar agenda.">
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          className="text-ink-3 hover:text-ink md:hidden"
+          onClick={toggleCalendarSidebar}
+          aria-label="Open calendar"
+        >
+          <Calendar className="size-4" />
+        </Button>
+      </HintTooltip>
 
       {profile && (
         <UserAvatar

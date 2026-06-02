@@ -41,6 +41,13 @@ export function issueRow(page: Page, title: string) {
     .first();
 }
 
+export async function openWidgetPicker(page: Page) {
+  const addButton = page.getByRole("button", { name: "Add widget" });
+  await expect(addButton).toBeVisible();
+  await addButton.click();
+  await expect(page.getByText("Widgets", { exact: true })).toBeVisible();
+}
+
 export async function expandOutstandingPreview(page: Page) {
   const more = outstandingWidget(page).getByRole("button", { name: /^\+\d+ more$/ }).first();
   if (!(await more.isVisible().catch(() => false))) return more;
@@ -56,7 +63,7 @@ export async function selectRowStatus(row: Locator, statusLabel: string) {
 }
 
 export async function addWidget(page: Page, name: RegExp | string) {
-  await page.getByRole("button", { name: "Add widget" }).click();
+  await openWidgetPicker(page);
   await page.getByRole("button", { name }).click();
 }
 

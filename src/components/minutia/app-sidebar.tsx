@@ -136,8 +136,13 @@ export function AppSidebar({ profile, organizations }: AppSidebarProps) {
                     >
                       <Link href={item.href}>
                         <item.icon className="size-4" />
-                        <span>{item.label}</span>
-                        <CountBadge count={item.count} accent={item.href === "/" || item.href === "/actions"} />
+                        <span data-tour={item.href === "/series" ? "series-nav" : undefined}>
+                          {item.label}
+                        </span>
+                        <CountBadge
+                          count={item.count}
+                          accent={item.href === "/" || item.href === "/actions"}
+                        />
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
