@@ -56,19 +56,24 @@ const cadenceLabels: Record<Cadence, string> = {
   adhoc: "Ad hoc",
 };
 
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 interface SeriesDetailContentProps {
   seriesId: string;
 }
 
 export function SeriesDetailContent({ seriesId }: SeriesDetailContentProps) {
   const router = useRouter();
+  const validSeriesId = UUID_PATTERN.test(seriesId);
+  const querySeriesId = validSeriesId ? seriesId : "";
   const { data: series, isLoading: seriesLoading } = useSeriesDetail(seriesId);
-  const { data: meetings, isLoading: meetingsLoading } = useMeetings(seriesId);
-  const { data: issues } = useIssues(seriesId);
-  const { data: decisions } = useDecisions(undefined, seriesId);
-  const { data: participantRole } = useSeriesParticipantRole(seriesId);
+  const { data: meetings, isLoading: meetingsLoading } = useMeetings(querySeriesId);
+  const { data: issues } = useIssues(querySeriesId, validSeriesId);
+  const { data: decisions } = useDecisions(undefined, querySeriesId, validSeriesId);
+  const { data: participantRole } = useSeriesParticipantRole(querySeriesId);
 
-  useSeriesRealtime(seriesId);
+  useSeriesRealtime(querySeriesId);
   const startOrJoinMeeting = useStartOrJoinMeeting();
 
   const [settingsOpen, setSettingsOpen] = React.useState(false);

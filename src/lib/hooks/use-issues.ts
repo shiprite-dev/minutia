@@ -30,11 +30,12 @@ export const issueKeys = {
 // ---------------------------------------------------------------------------
 // useIssues - list issues, optionally filtered by series
 // ---------------------------------------------------------------------------
-export function useIssues(seriesId?: string) {
+export function useIssues(seriesId?: string, enabled = true) {
   const supabase = createClient();
 
   return useQuery<Issue[]>({
     queryKey: issueKeys.list(seriesId),
+    enabled,
     queryFn: async () => {
       let query = supabase
         .from("issues")

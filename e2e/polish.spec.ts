@@ -128,8 +128,7 @@ test.describe("Navigation Polish", () => {
     await page.keyboard.press("Tab");
     await page.keyboard.press("Tab");
 
-    const focused = page.locator(":focus");
-    const tagName = await focused.evaluate((el) => el.tagName);
+    const tagName = await page.evaluate(() => document.activeElement?.tagName);
     expect(["A", "BUTTON", "INPUT"]).toContain(tagName);
   });
 });

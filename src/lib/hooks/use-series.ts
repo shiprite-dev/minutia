@@ -19,6 +19,9 @@ export const seriesKeys = {
   role: (id: string) => ["series", id, "participant-role"] as const,
 };
 
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 // ---------------------------------------------------------------------------
 // useSeries - all series for the current user with open issue counts
 // ---------------------------------------------------------------------------
@@ -54,18 +57,22 @@ export function useSeries() {
 // ---------------------------------------------------------------------------
 export function useSeriesDetail(id: string) {
   const supabase = createClient();
+  const validId = UUID_PATTERN.test(id);
 
-  return useQuery<SeriesWithMeetings>({
+  return useQuery<SeriesWithMeetings | null>({
     queryKey: seriesKeys.detail(id),
     enabled: !!id,
     queryFn: async () => {
+      if (!validId) return null;
+
       const { data, error } = await supabase
         .from("meeting_series")
         .select("*, meetings(*), issues(count)")
         .eq("id", id)
-        .single();
+        .maybeSingle();
 
       if (error) throw error;
+      if (!data) return null;
 
       return {
         ...data,
