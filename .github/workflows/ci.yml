@@ -74,6 +74,44 @@ jobs:
         if: steps.playwright-cache.outputs.cache-hit == 'true'
         run: npx playwright install-deps chromium
 
+      - name: Configure Supabase ports for shard
+        env:
+          MATRIX_SHARD: ${{ matrix.shard }}
+        run: |
+          python3 <<'PY'
+          import os
+          from pathlib import Path
+
+          shard = int(os.environ["MATRIX_SHARD"])
+          base_port = 55000 + shard * 20
+          ports = {
+            ("api", "port"): base_port + 1,
+            ("db", "port"): base_port + 2,
+            ("db", "shadow_port"): base_port + 3,
+            ("db.pooler", "port"): base_port + 4,
+            ("studio", "port"): base_port + 5,
+            ("inbucket", "port"): base_port + 6,
+            ("analytics", "port"): base_port + 7,
+            ("edge_runtime", "inspector_port"): base_port + 8,
+          }
+
+          path = Path("supabase/config.toml")
+          section = ""
+          lines = []
+          for line in path.read_text().splitlines():
+            stripped = line.strip()
+            if stripped.startswith("[") and stripped.endswith("]") and not stripped.startswith("[["):
+              section = stripped.strip("[]")
+            key = stripped.split("=", 1)[0].strip() if "=" in stripped else None
+            if key and not stripped.startswith("#") and (section, key) in ports:
+              indent = line[:len(line) - len(line.lstrip())]
+              lines.append(f"{indent}{key} = {ports[(section, key)]}")
+            else:
+              lines.append(line)
+
+          path.write_text("\n".join(lines) + "\n")
+          PY
+
       - name: Stop stale Supabase containers
         run: npx supabase stop --no-backup || true
 
@@ -98,6 +136,7 @@ jobs:
         run: |
           eval "$(npx supabase status -o env)"
           echo "NEXT_PUBLIC_SUPABASE_URL=$API_URL" >> "$GITHUB_ENV"
+          echo "SUPABASE_URL=$API_URL" >> "$GITHUB_ENV"
           echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$ANON_KEY" >> "$GITHUB_ENV"
           echo "SUPABASE_SERVICE_ROLE_KEY=$SERVICE_ROLE_KEY" >> "$GITHUB_ENV"
 

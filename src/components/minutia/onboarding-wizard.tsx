@@ -3,7 +3,7 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "motion/react";
-import { ArrowRight, Check, ChevronRight, Sparkles } from "lucide-react";
+import { ArrowRight, ChevronRight, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -29,10 +29,11 @@ interface OnboardingWizardProps {
   userEmail: string;
 }
 
-export function OnboardingWizard({ userName, userEmail }: OnboardingWizardProps) {
+export function OnboardingWizard({ userName }: OnboardingWizardProps) {
   const router = useRouter();
   const [step, setStep] = React.useState(0);
   const [direction, setDirection] = React.useState(1);
+  const nameInputRef = React.useRef<HTMLInputElement>(null);
 
   const [name, setName] = React.useState(userName ?? "");
   const [seriesName, setSeriesName] = React.useState("");
@@ -50,8 +51,13 @@ export function OnboardingWizard({ userName, userEmail }: OnboardingWizardProps)
   }
 
   async function handleFinishStep0() {
-    if (name.trim() && name.trim() !== userName) {
-      await updateProfile.mutateAsync({ name: name.trim() });
+    const fieldValue = nameInputRef.current?.value ?? name;
+    const trimmedName = fieldValue.trim();
+    if (!trimmedName) return;
+    if (fieldValue !== name) setName(fieldValue);
+
+    if (trimmedName !== userName) {
+      await updateProfile.mutateAsync({ name: trimmedName });
     }
     goNext();
   }
@@ -125,6 +131,7 @@ export function OnboardingWizard({ userName, userEmail }: OnboardingWizardProps)
               >
                 <StepWelcome
                   name={name}
+                  inputRef={nameInputRef}
                   onNameChange={setName}
                   onNext={handleFinishStep0}
                   isPending={updateProfile.isPending}
@@ -195,11 +202,13 @@ export function OnboardingWizard({ userName, userEmail }: OnboardingWizardProps)
 
 function StepWelcome({
   name,
+  inputRef,
   onNameChange,
   onNext,
   isPending,
 }: {
   name: string;
+  inputRef: React.RefObject<HTMLInputElement | null>;
   onNameChange: (v: string) => void;
   onNext: () => void;
   isPending: boolean;
@@ -228,9 +237,11 @@ function StepWelcome({
           What should we call you?
         </Label>
         <Input
+          ref={inputRef}
           id="onboard-name"
           value={name}
           onChange={(e) => onNameChange(e.target.value)}
+          onInput={(e) => onNameChange(e.currentTarget.value)}
           placeholder="Your name"
           autoFocus
           onKeyDown={(e) => {

@@ -28,14 +28,15 @@ test.describe("Authenticated Navigation", () => {
     await page.goto("/dashboard");
 
     const navItems = [
-      { label: "Outstanding", href: "/dashboard" },
-      { label: "Series", href: "/series" },
-      { label: "My actions", href: "/actions" },
-      { label: "Inbox", href: "/inbox" },
+      { name: /^Outstanding(?: \d+)?$/, href: "/dashboard" },
+      { name: /^Series$/, href: "/series" },
+      { name: /^My actions(?: \d+)?$/, href: "/actions" },
+      { name: /^Inbox(?: \d+)?$/, href: "/inbox" },
     ];
 
+    const nav = page.getByRole("navigation", { name: "Main navigation" });
     for (const item of navItems) {
-      const link = page.getByRole("link", { name: item.label });
+      const link = nav.getByRole("link", { name: item.name });
       await expect(link).toBeVisible();
       await link.click();
       await expect(page).toHaveURL(item.href);

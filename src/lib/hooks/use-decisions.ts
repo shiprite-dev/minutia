@@ -22,11 +22,12 @@ export const decisionKeys = {
 // ---------------------------------------------------------------------------
 // useDecisions - fetch decisions, optionally filtered by meeting or series
 // ---------------------------------------------------------------------------
-export function useDecisions(meetingId?: string, seriesId?: string) {
+export function useDecisions(meetingId?: string, seriesId?: string, enabled = true) {
   const supabase = createClient();
 
   return useQuery<Decision[]>({
     queryKey: decisionKeys.list({ meetingId, seriesId }),
+    enabled,
     queryFn: async () => {
       let query = supabase
         .from("decisions")

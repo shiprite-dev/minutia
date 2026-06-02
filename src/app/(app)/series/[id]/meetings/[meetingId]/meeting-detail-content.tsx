@@ -3,8 +3,15 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "motion/react";
-import { useMeeting, useEndMeeting, useStartMeeting, useUpdateMeetingNotes } from "@/lib/hooks/use-meetings";
-import { useSeriesDetail } from "@/lib/hooks/use-series";
+import {
+  useMeeting,
+  useEndMeeting,
+  useMeetingPresence,
+  useMeetingRealtime,
+  useStartOrJoinMeeting,
+  useUpdateMeetingNotes,
+} from "@/lib/hooks/use-meetings";
+import { useSeriesDetail, useSeriesParticipantRole } from "@/lib/hooks/use-series";
 import { useIssues, useCreateIssue, useUpdateIssueStatus, useUpdateIssue } from "@/lib/hooks/use-issues";
 import { useDecisions, useCreateDecision } from "@/lib/hooks/use-decisions";
 import { SyncIndicator } from "@/components/minutia/sync-indicator";
@@ -588,11 +595,14 @@ export function MeetingDetailContent({
   const router = useRouter();
   const { data: meeting, isLoading: meetingLoading } = useMeeting(meetingId);
   const { data: series } = useSeriesDetail(seriesId);
+  const { data: participantRole } = useSeriesParticipantRole(seriesId);
   const { data: seriesIssues } = useIssues(seriesId);
   const { data: decisions } = useDecisions(meetingId);
 
+  useMeetingRealtime(meetingId, seriesId);
+  const presenceUsers = useMeetingPresence(meeting?.status === "live" ? meetingId : "");
   const endMeeting = useEndMeeting();
-  const startMeeting = useStartMeeting();
+  const startOrJoinMeeting = useStartOrJoinMeeting();
   const createIssue = useCreateIssue();
   const createDecision = useCreateDecision();
   const updateIssueStatus = useUpdateIssueStatus();
@@ -672,6 +682,17 @@ export function MeetingDetailContent({
         .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
         .findIndex((m) => m.id === meetingId) + 1
     : null;
+  const liveMeetingInSeries = series?.meetings?.find((m) => m.status === "live");
+  const canManageMeeting =
+    participantRole === "owner" || participantRole === "facilitator";
+  const activePresenceLabel =
+    presenceUsers.length > 0
+      ? presenceUsers
+          .map((user) =>
+            user.deviceCount > 1 ? `${user.name} (${user.deviceCount} devices)` : user.name
+          )
+          .join(", ")
+      : "Waiting for participants";
 
   // Handlers
   async function handleCapture(text: string, category: IssueCategory) {
@@ -741,7 +762,10 @@ export function MeetingDetailContent({
   }
 
   async function handleStartMeeting() {
-    await startMeeting.mutateAsync(meetingId);
+    const liveMeeting = await startOrJoinMeeting.mutateAsync(seriesId);
+    if (liveMeeting.id !== meetingId) {
+      router.push(`/series/${seriesId}/meetings/${liveMeeting.id}`);
+    }
   }
 
   function handleTitleChange(issueId: string, title: string) {
@@ -782,6 +806,9 @@ export function MeetingDetailContent({
                 <p className="text-xs font-mono text-ink-4">
                   {formatShortDate(meeting.date)} · {meeting.attendees?.length ?? 0} attendees present
                 </p>
+                <p className="text-xs text-ink-3">
+                  Active now: {activePresenceLabel}
+                </p>
               </div>
             </div>
 
@@ -804,15 +831,17 @@ export function MeetingDetailContent({
                 </div>
               )}
 
-              <Button
-                onClick={handleEndMeeting}
-                disabled={endMeeting.isPending}
-                variant="outline"
-                className="text-ink border-rule hover:bg-paper-2"
-              >
-                <Square className="size-3" />
-                End meeting
-              </Button>
+              {canManageMeeting && (
+                <Button
+                  onClick={handleEndMeeting}
+                  disabled={endMeeting.isPending}
+                  variant="outline"
+                  className="text-ink border-rule hover:bg-paper-2"
+                >
+                  <Square className="size-3" />
+                  End meeting
+                </Button>
+              )}
             </div>
           </div>
         </div>
@@ -1009,11 +1038,11 @@ export function MeetingDetailContent({
             </div>
             <Button
               onClick={handleStartMeeting}
-              disabled={startMeeting.isPending}
+              disabled={startOrJoinMeeting.isPending}
               className="bg-accent text-white hover:bg-accent-hover"
             >
               <Play className="size-4" />
-              Start meeting
+              {liveMeetingInSeries ? "Join live meeting" : "Start meeting"}
             </Button>
           </div>
 
