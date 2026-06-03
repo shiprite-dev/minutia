@@ -22,7 +22,7 @@ test.describe("Inline Tasks", () => {
   });
 
   test("inline task items show issue keys", async ({ page }) => {
-    await expect(page.getByText("OIL-1").first()).toBeVisible();
+    await expect(page.getByLabel(/Issue key OIL-/).first()).toBeVisible();
   });
 
   test("resolved items show checked checkbox and strikethrough", async ({
@@ -46,6 +46,38 @@ test.describe("Inline Tasks", () => {
 
   test("assignee chips are shown", async ({ page }) => {
     await expect(page.getByText("Test User").first()).toBeVisible();
+  });
+
+  test("assignee picker includes Google Workspace Directory matches", async ({
+    page,
+  }) => {
+    await page.route("**/api/workspace/directory?q=mina", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          people: [
+            {
+              resourceName: "people/c123",
+              name: "Mina Director",
+              email: "mina@example.com",
+              organization: "Product",
+            },
+          ],
+        }),
+      });
+    });
+
+    await page.getByRole("button", { name: "T Test User" }).first().click();
+    await page.getByPlaceholder("Search people...").fill("mina");
+
+    const directoryMatch = page.getByRole("button", {
+      name: /Assign Mina Director mina@example.com/,
+    });
+    await expect(directoryMatch).toBeVisible();
+    await directoryMatch.click();
+
+    await expect(page.getByText("mina@example.com").first()).toBeVisible();
   });
 
   test("clicking checkbox toggles issue status", async ({ page }) => {
@@ -75,10 +107,6 @@ test.describe("Inline Tasks", () => {
   test("adding inline item creates new issue in the list", async ({
     page,
   }) => {
-    const initialCount = await page
-      .getByRole("heading", { name: /Items raised/ })
-      .textContent();
-
     await page.getByRole("button", { name: "Add item" }).click();
 
     const input = page.getByPlaceholder("Type item title, press Enter...");
