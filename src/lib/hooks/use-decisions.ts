@@ -15,18 +15,23 @@ import { meetingKeys } from "./use-meetings";
 // ---------------------------------------------------------------------------
 export const decisionKeys = {
   all: ["decisions"] as const,
-  list: (filters: { meetingId?: string; seriesId?: string }) =>
+  list: (filters: { meetingId?: string; seriesId?: string; limit?: number }) =>
     ["decisions", filters] as const,
 };
 
 // ---------------------------------------------------------------------------
 // useDecisions - fetch decisions, optionally filtered by meeting or series
 // ---------------------------------------------------------------------------
-export function useDecisions(meetingId?: string, seriesId?: string, enabled = true) {
+export function useDecisions(
+  meetingId?: string,
+  seriesId?: string,
+  enabled = true,
+  limit?: number
+) {
   const supabase = createClient();
 
   return useQuery<Decision[]>({
-    queryKey: decisionKeys.list({ meetingId, seriesId }),
+    queryKey: decisionKeys.list({ meetingId, seriesId, limit }),
     enabled,
     queryFn: async () => {
       let query = supabase
@@ -39,6 +44,9 @@ export function useDecisions(meetingId?: string, seriesId?: string, enabled = tr
       }
       if (seriesId) {
         query = query.eq("series_id", seriesId);
+      }
+      if (limit !== undefined) {
+        query = query.limit(limit);
       }
 
       const { data, error } = await query;
