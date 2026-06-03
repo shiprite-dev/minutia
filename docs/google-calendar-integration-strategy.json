@@ -406,7 +406,8 @@
       ],
       "test_strategy": [
         "API tests cover valid channel token, invalid channel token, sync message, exists message, and channel renewal.",
-        "Security tests verify webhook cannot trigger cross-user sync."
+        "Security tests verify webhook cannot trigger cross-user sync.",
+        "Implementation stores only channel token hashes, never raw channel tokens."
       ],
       "backend_boundary": "Privileged webhook handling must live in an isolated backend or Supabase Edge Function, not browser code."
     },
