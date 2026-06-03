@@ -1,8 +1,9 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect, type Locator, type Page } from "@playwright/test";
 import { waitForApp } from "./seed-data";
 import {
   addWidget,
   createDashboardIssue,
+  createDashboardIssueUpdate,
   deleteIssue,
   HAS_SERVICE_ROLE,
   openWidgetPicker,
@@ -18,6 +19,16 @@ async function setStoredWidgets(page: Page, widgets: StoredWidget[]) {
       JSON.stringify({ state: { widgets: nextWidgets }, version: 0 })
     );
   }, widgets);
+}
+
+async function requiredBox(locator: Locator) {
+  const box = await locator.boundingBox();
+  expect(box).not.toBeNull();
+  return box!;
+}
+
+function centerY(box: { y: number; height: number }) {
+  return box.y + box.height / 2;
 }
 
 test.describe("Widget system", () => {
@@ -43,6 +54,26 @@ test.describe("Widget system", () => {
     await expect(page.getByText("Your series").first()).toBeVisible();
     await expect(page.getByText("Recent decisions")).toBeVisible();
     await expect(page.getByText("Age of open items")).toBeVisible();
+  });
+
+  test("outstanding widget keeps the original wide card layout on desktop", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await setStoredWidgets(page, [
+      { id: "hero-1", type: "hero" },
+      { id: "next-meeting-1", type: "next-meeting" },
+      { id: "series-1", type: "series" },
+      { id: "outstanding-1", type: "outstanding" },
+    ]);
+    await page.reload();
+    await waitForApp(page);
+
+    const outstandingBox = await requiredBox(page.getByTestId("widget-outstanding-1"));
+
+    expect(outstandingBox.width).toBeGreaterThan(1000);
+
+    const outstanding = page.getByTestId("widget-outstanding-1");
+    await outstanding.hover();
+    await expect(outstanding.getByLabel("Make narrow")).not.toBeVisible();
   });
 
   test("add widget button opens picker with groups", async ({ page }) => {
@@ -118,12 +149,12 @@ test.describe("Widget system", () => {
     await expect(page.getByText("New since last").first()).toBeVisible();
   });
 
-  test("wide widgets pack under shorter cards instead of leaving grid gaps", async ({ page }) => {
+  test("wide widgets pack around the full-width outstanding card", async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 1000 });
     await setStoredWidgets(page, [
       { id: "hero-1", type: "hero" },
-      { id: "outstanding-1", type: "outstanding" },
       { id: "meeting-triage-1", type: "meeting-triage" },
+      { id: "outstanding-1", type: "outstanding" },
       { id: "workload-1", type: "workload" },
     ]);
 
@@ -133,15 +164,21 @@ test.describe("Widget system", () => {
     const heroBox = await page.getByTestId("widget-hero-1").boundingBox();
     const outstandingBox = await page.getByTestId("widget-outstanding-1").boundingBox();
     const triageBox = await page.getByTestId("widget-meeting-triage-1").boundingBox();
+    const workloadBox = await page.getByTestId("widget-workload-1").boundingBox();
 
     expect(heroBox).not.toBeNull();
     expect(outstandingBox).not.toBeNull();
     expect(triageBox).not.toBeNull();
-    expect(Math.abs((heroBox?.y ?? 0) - (outstandingBox?.y ?? 0))).toBeLessThan(2);
-    expect((triageBox?.y ?? 0) - ((heroBox?.y ?? 0) + (heroBox?.height ?? 0))).toBeLessThan(64);
-    expect(triageBox?.y ?? 0).toBeLessThan(
-      (outstandingBox?.y ?? 0) + (outstandingBox?.height ?? 0) - 80
+    expect(workloadBox).not.toBeNull();
+    expect(outstandingBox?.width ?? 0).toBeGreaterThan(900);
+    expect(Math.abs((heroBox?.y ?? 0) - (triageBox?.y ?? 0))).toBeLessThan(2);
+
+    const topRowBottom = Math.max(
+      (heroBox?.y ?? 0) + (heroBox?.height ?? 0),
+      (triageBox?.y ?? 0) + (triageBox?.height ?? 0)
     );
+    expect((outstandingBox?.y ?? 0) - topRowBottom).toBeLessThan(64);
+    expect((workloadBox?.y ?? 0) - ((outstandingBox?.y ?? 0) + (outstandingBox?.height ?? 0))).toBeLessThan(64);
   });
 
   test("meeting triage uses ordinal suffixes for carried meeting counts", async ({ page, request }) => {
@@ -184,6 +221,7 @@ test.describe("Widget system", () => {
 
   test("outstanding item metadata lanes stay aligned and assignee avatar reveals details", async ({ page, request }) => {
     test.skip(!HAS_SERVICE_ROLE, "SUPABASE_SERVICE_ROLE_KEY is required for isolated outstanding item data");
+    await page.setViewportSize({ width: 1440, height: 1000 });
 
     const created: { id: string; title: string }[] = [];
     const ownerTitle = `Lane assigned ${Date.now()}`;
@@ -204,6 +242,8 @@ test.describe("Widget system", () => {
           due_date: "2026-06-30",
         })
       );
+      await createDashboardIssueUpdate(request, created[0].id);
+      await createDashboardIssueUpdate(request, created[1].id);
 
       await page.reload();
       await waitForApp(page);
@@ -219,29 +259,47 @@ test.describe("Widget system", () => {
 
       await expect(assignedRow).toBeVisible();
       await expect(unassignedRow).toBeVisible();
-      await expect
-        .poll(async () => {
-          const assignedBox = await assignedRow.getByTestId("issue-due-lane").boundingBox();
-          const unassignedBox = await unassignedRow.getByTestId("issue-due-lane").boundingBox();
-          if (!assignedBox || !unassignedBox) return Number.POSITIVE_INFINITY;
-          return Math.abs(assignedBox.x - unassignedBox.x);
-        })
-        .toBeLessThan(2);
+      const laneIds = [
+        "issue-status-lane",
+        "issue-assignee-lane",
+        "issue-update-lane",
+        "issue-due-lane",
+      ] as const;
+      for (const laneId of laneIds) {
+        await expect
+          .poll(async () => {
+            const assignedBox = await assignedRow.getByTestId(laneId).boundingBox();
+            const unassignedBox = await unassignedRow.getByTestId(laneId).boundingBox();
+            if (!assignedBox || !unassignedBox) return Number.POSITIVE_INFINITY;
+            const leftDelta = Math.abs(assignedBox.x - unassignedBox.x);
+            const rightDelta = Math.abs(
+              assignedBox.x + assignedBox.width - (unassignedBox.x + unassignedBox.width)
+            );
+            return Math.max(leftDelta, rightDelta);
+          })
+          .toBeLessThan(2);
 
-      const assignedDue = await assignedRow.getByTestId("issue-due-lane").boundingBox();
-      const unassignedDue = await unassignedRow.getByTestId("issue-due-lane").boundingBox();
+        const assignedBox = await requiredBox(assignedRow.getByTestId(laneId));
+        const unassignedBox = await requiredBox(unassignedRow.getByTestId(laneId));
+        expect(Math.abs(assignedBox.x - unassignedBox.x)).toBeLessThan(2);
+        expect(
+          Math.abs(
+            assignedBox.x + assignedBox.width - (unassignedBox.x + unassignedBox.width)
+          )
+        ).toBeLessThan(2);
+      }
 
-      expect(assignedDue).not.toBeNull();
-      expect(unassignedDue).not.toBeNull();
-      expect(Math.abs((assignedDue?.x ?? 0) - (unassignedDue?.x ?? 0))).toBeLessThan(2);
-      expect(
-        Math.abs(
-          ((assignedDue?.x ?? 0) + (assignedDue?.width ?? 0)) -
-            ((unassignedDue?.x ?? 0) + (unassignedDue?.width ?? 0))
-        )
-      ).toBeLessThan(2);
+      for (const row of [assignedRow, unassignedRow]) {
+        const rowBox = await requiredBox(row);
+        for (const laneId of laneIds) {
+          const laneBox = await requiredBox(row.getByTestId(laneId));
+          expect(Math.abs(centerY(laneBox) - centerY(rowBox))).toBeLessThan(3);
+        }
+      }
       await expect(assignedRow.getByTestId("issue-due-lane")).toContainText("Due Jun 30");
       await expect(unassignedRow.getByTestId("issue-due-lane")).toContainText("Due Jun 30");
+      await expect(assignedRow.getByTestId("issue-update-lane")).toContainText("1 update");
+      await expect(unassignedRow.getByTestId("issue-update-lane")).toContainText("1 update");
 
       const assignee = assignedRow.getByRole("button", { name: "Assignee: Jordan Rivera" });
       await assignee.hover();
