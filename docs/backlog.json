@@ -1,7 +1,7 @@
 [
   {
     "id": "CAL-001",
-    "status": "backlog",
+    "status": "shipped",
     "priority": "high",
     "title": "Show join state for synced calendar events with active meetings",
     "source": "user-feedback-2026-06-03",
@@ -14,6 +14,24 @@
       "The action must not create a duplicate meeting for the same synced calendar event.",
       "Regression coverage verifies the sidebar live state for a synced event with meetingStatus live."
     ],
-    "product_note": "This is a trust signal in the calendar workflow. The sidebar should reflect the canonical meeting state, not only the calendar event state."
+    "product_note": "This is a trust signal in the calendar workflow. The sidebar should reflect the canonical meeting state, not only the calendar event state.",
+    "shipped": {
+      "pr": "https://github.com/shiprite-dev/minutia/pull/59",
+      "merged_at": "2026-06-03T01:02:51Z",
+      "implementation": [
+        "Calendar sidebar details now show Meeting in progress for synced events linked to live Minutia meetings.",
+        "The primary action changes to Join now and routes to the existing live capture without calling the calendar start endpoint.",
+        "Meeting cache invalidation now refreshes month-level sidebar data after start, join, or end mutations."
+      ],
+      "verification": [
+        "pnpm exec playwright test e2e/regression/google-calendar-agenda.spec.ts --project=chromium --grep \"shows join state\"",
+        "pnpm exec playwright test e2e/regression/google-calendar-agenda.spec.ts e2e/regression/google-calendar-sync.spec.ts e2e/regression/meetings.spec.ts e2e/regression/realtime-collaboration.spec.ts --project=chromium",
+        "pnpm lint",
+        "pnpm build",
+        "pnpm audit --audit-level moderate",
+        "pnpm test:oss-boundaries",
+        "GitHub CI: Dependency Audit, Lint & Typecheck, E2E Tests 1/16 through 16/16"
+      ]
+    }
   }
 ]
