@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -16,6 +16,22 @@ type InviteState = "idle" | "loading" | "sent" | "error";
 
 const GUEST_LOGIN_ERROR_MESSAGE =
   "Guest login is unavailable because the local test user is missing or out of sync. Run `supabase db reset` to reseed test@example.com.";
+
+const LOGIN_FOOTER_PHRASES = [
+  "Own your meeting memory.",
+  "Control every note, action, and decision.",
+  "Keep meeting history portable.",
+  "Inspect the source. Run it on your terms.",
+  "Build on open source meeting memory.",
+  "Host the workflow where your team works.",
+  "Turn recurring meetings into durable context.",
+  "Keep decisions and follow-ups in one system.",
+  "Run the meeting memory layer yourself.",
+  "Make every meeting leave a useful trail.",
+  "Own the path from transcript to action.",
+  "Self-host your team's meeting brain.",
+] as const;
+
 export default function LoginPage() {
   return (
     <Suspense fallback={null}>
@@ -35,7 +51,17 @@ function LoginForm() {
   const [sentMessage, setSentMessage] = useState(
     "We sent a magic link to"
   );
+  const footerPhraseRef = useRef<HTMLSpanElement>(null);
   const supabase = createClient();
+
+  useEffect(() => {
+    const phrase = LOGIN_FOOTER_PHRASES[
+      Math.floor(Math.random() * LOGIN_FOOTER_PHRASES.length)
+    ];
+    if (footerPhraseRef.current) {
+      footerPhraseRef.current.textContent = phrase;
+    }
+  }, []);
 
   const publicSignupEnabled =
     process.env.NEXT_PUBLIC_ENABLE_PUBLIC_SIGNUP === "true";
@@ -427,8 +453,11 @@ function LoginForm() {
       </div>
 
       {/* Footer */}
-      <p className="mt-6 text-center font-sans text-xs text-ink-4">
-        Open source. Self-host free forever.{" "}
+      <p
+        data-testid="login-footer"
+        className="mt-6 text-center font-sans text-xs text-ink-4"
+      >
+        <span ref={footerPhraseRef}>{LOGIN_FOOTER_PHRASES[0]}</span>{" "}
         <a
           href="https://github.com/minutia-dev/minutia"
           target="_blank"

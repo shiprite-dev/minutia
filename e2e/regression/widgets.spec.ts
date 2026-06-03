@@ -79,7 +79,7 @@ test.describe("Widget system", () => {
   test("add widget button opens picker with groups", async ({ page }) => {
     await openWidgetPicker(page);
 
-    await expect(page.getByText("Widgets")).toBeVisible();
+    await expect(page.getByText("Widgets", { exact: true })).toBeVisible();
     await expect(page.getByText("Health", { exact: true })).toBeVisible();
     await expect(page.getByText("Meeting", { exact: true }).first()).toBeVisible();
     await expect(page.getByText("People", { exact: true }).first()).toBeVisible();
