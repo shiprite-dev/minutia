@@ -63,7 +63,12 @@ export function useCalendarEvents(seriesId: string | undefined) {
 export function useCalendarAgenda() {
   const { data: status } = useGoogleCalendarStatus();
 
-  return useQuery<{ connected: boolean; syncedAt?: string; events: GoogleCalendarAgendaItem[] }>({
+  return useQuery<{
+    connected: boolean;
+    syncedAt?: string;
+    syncMode?: "full" | "incremental";
+    events: GoogleCalendarAgendaItem[];
+  }>({
     queryKey: calendarKeys.agenda,
     queryFn: async () => {
       const res = await fetch("/api/calendar/agenda");
