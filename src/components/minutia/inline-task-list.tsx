@@ -12,6 +12,7 @@ import {
 import { cn } from "@/lib/utils";
 import { CATEGORY_CONFIG } from "@/lib/constants";
 import { IssueKey } from "@/components/minutia/issue-key";
+import { useWorkspaceDirectorySearch } from "@/lib/hooks/use-google-workspace";
 import type { Issue, IssueCategory, IssueStatus } from "@/lib/types";
 
 interface InlineTaskListProps {
@@ -139,6 +140,19 @@ function InlineTaskItem({
   const filteredAttendees = attendees.filter((a) =>
     a.toLowerCase().includes(mentionFilter.toLowerCase())
   );
+  const {
+    data: directoryPeople = [],
+    isError: directoryError,
+    isLoading: directoryLoading,
+  } = useWorkspaceDirectorySearch(mentionFilter, mentionOpen && !readOnly);
+  const directoryMatches = directoryPeople.filter((person) => {
+    const email = person.email.toLowerCase();
+    const name = person.name.toLowerCase();
+    return !attendees.some((attendee) => {
+      const value = attendee.toLowerCase();
+      return value === email || value === name;
+    });
+  });
 
   const config = CATEGORY_CONFIG[issue.category];
 
@@ -215,7 +229,7 @@ function InlineTaskItem({
                 type="text"
                 value={mentionFilter}
                 onChange={(e) => setMentionFilter(e.target.value)}
-                placeholder="Search attendees..."
+                placeholder="Search people..."
                 className="w-full text-xs bg-paper-2 rounded px-2 py-1.5 outline-none border border-rule"
                 autoFocus
                 onKeyDown={(e) => {
@@ -226,7 +240,9 @@ function InlineTaskItem({
                 }}
               />
             </div>
-            {filteredAttendees.length === 0 ? (
+            {filteredAttendees.length === 0 &&
+            directoryMatches.length === 0 &&
+            !directoryLoading ? (
               <p className="text-xs text-ink-4 px-3 py-2">No matches</p>
             ) : (
               filteredAttendees.map((name) => (
@@ -234,6 +250,7 @@ function InlineTaskItem({
                   key={name}
                   type="button"
                   onClick={() => handleAssign(name)}
+                  aria-label={`Assign ${name}`}
                   className="w-full text-left px-3 py-1.5 text-sm text-ink hover:bg-paper-2 transition-colors flex items-center gap-2"
                 >
                   <span className="inline-flex items-center justify-center size-5 rounded-full bg-accent text-white text-[9px] font-medium shrink-0">
@@ -242,6 +259,36 @@ function InlineTaskItem({
                   {name}
                 </button>
               ))
+            )}
+            {directoryMatches.map((person) => (
+              <button
+                key={person.resourceName}
+                type="button"
+                onClick={() => handleAssign(person.email)}
+                aria-label={`Assign ${person.name} ${person.email}`}
+                className="w-full text-left px-3 py-1.5 text-sm text-ink hover:bg-paper-2 transition-colors flex items-center gap-2"
+              >
+                <span className="inline-flex items-center justify-center size-5 rounded-full bg-ink text-paper text-[9px] font-medium shrink-0">
+                  {person.name.charAt(0).toUpperCase()}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate">{person.name}</span>
+                  <span className="block truncate text-[11px] text-ink-4">
+                    {person.email}
+                  </span>
+                </span>
+              </button>
+            ))}
+            {directoryLoading && (
+              <p className="text-xs text-ink-4 px-3 py-2">Searching...</p>
+            )}
+            {directoryError && (
+              <Link
+                href="/settings"
+                className="block px-3 py-2 text-xs text-accent hover:underline"
+              >
+                Connect Google Workspace
+              </Link>
             )}
           </div>
         )}

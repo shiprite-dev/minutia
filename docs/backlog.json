@@ -1,0 +1,19 @@
+[
+  {
+    "id": "CAL-001",
+    "status": "backlog",
+    "priority": "high",
+    "title": "Show join state for synced calendar events with active meetings",
+    "source": "user-feedback-2026-06-03",
+    "problem": "When a synced Google Calendar event already has an active Minutia meeting, the calendar sidebar still shows Start meeting, which implies a duplicate meeting will be created.",
+    "user_story": "As a meeting participant viewing a synced calendar event, I want the sidebar to recognize that the linked meeting is already live so I can join the active capture instead of starting a duplicate.",
+    "acceptance_criteria": [
+      "If the calendar event is linked to a live Minutia meeting, the sidebar shows Meeting in progress.",
+      "The primary action label changes from Start meeting to Join now.",
+      "Join now opens the meeting URL when available and focuses the existing live Minutia capture tab or route.",
+      "The action must not create a duplicate meeting for the same synced calendar event.",
+      "Regression coverage verifies the sidebar live state for a synced event with meetingStatus live."
+    ],
+    "product_note": "This is a trust signal in the calendar workflow. The sidebar should reflect the canonical meeting state, not only the calendar event state."
+  }
+]
