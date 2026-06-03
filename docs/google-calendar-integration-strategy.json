@@ -372,20 +372,21 @@
     },
     {
       "id": "CAL-STORY-008",
-      "status": "next",
+      "status": "shipped",
       "priority": "P1",
-      "title": "Add incremental calendar sync tokens",
+      "title": "Add incremental agenda sync state",
       "user_story": "As a workspace member, I want Minutia to keep calendar data fresh without repeated full agenda scans so my sidebar is fast and accurate.",
-      "product_decision": "Persist per-user, per-calendar sync tokens and run incremental sync after the first full sync.",
+      "product_decision": "Persist per-user, per-calendar agenda sync state and use updatedMin for the 14-day sidebar window. Full Calendar syncToken support is reserved for a later full-collection or webhook-backed sync path because Google does not allow syncToken with timeMin, timeMax, or orderBy.",
       "acceptance_criteria": [
-        "Initial sync stores nextSyncToken for each watched calendar.",
-        "Incremental sync calls events.list with syncToken.",
+        "Initial sidebar sync performs a full 14-day agenda window refresh and stores sync state.",
+        "Later sidebar sync calls events.list with updatedMin and showDeleted=true.",
+        "Incremental sidebar sync does not send syncToken, timeMin, timeMax, or orderBy together.",
         "Deleted calendar entries are processed and reflected safely.",
-        "Expired or invalid sync tokens trigger a controlled full resync.",
-        "Sync token state is scoped by user, organization, and calendar."
+        "Expired or invalid incremental state triggers a controlled full window resync.",
+        "Agenda sync state is scoped by user, organization, calendar, and sync mode."
       ],
       "test_strategy": [
-        "Unit tests cover token persistence, pagination, deleted event handling, and invalid token reset.",
+        "Unit tests cover updatedMin query construction, pagination, deleted event handling, and invalid state reset.",
         "API regression covers first sync followed by incremental sync with no duplicates."
       ]
     },
