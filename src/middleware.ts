@@ -137,7 +137,7 @@ export async function middleware(request: NextRequest) {
   }
 
   // Setup guard: redirect to /setup if instance hasn't been configured
-  const setupExemptPaths = ["/setup", "/api/setup", "/api/admin"];
+  const setupExemptPaths = ["/setup", "/api/setup", "/api/admin", "/api/calendar/webhook"];
   const isSetupExempt = setupExemptPaths.some((p) => pathname.startsWith(p));
 
   if (!isSetupExempt) {
@@ -189,6 +189,7 @@ export async function middleware(request: NextRequest) {
     "/api/admin",
     "/api/invite-requests",
     "/api/password-reset-requests",
+    "/api/calendar/webhook",
   ];
   const isPublicPath = publicPaths.some((p) => pathname.startsWith(p));
 
