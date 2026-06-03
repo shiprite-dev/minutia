@@ -10,6 +10,8 @@ const checks = [
   ["Each shard uploads a separate report", /name:\s+playwright-report-\$\{\{ matrix\.shard \}\}/],
   ["Supabase ports are isolated per shard", /MATRIX_SHARD:\s+\$\{\{ matrix\.shard \}\}[\s\S]*base_port = 55000 \+ shard \* 20/],
   ["Supabase URL is exported for direct API tests", /echo "SUPABASE_URL=\$API_URL" >> "\$GITHUB_ENV"/],
+  ["OSS boundary guard runs in CI", /pnpm test:oss-boundaries/],
+  ["Runtime config guard runs in CI", /pnpm test:runtime-config/],
   ["Single-worker override is removed", /PLAYWRIGHT_WORKERS:\s+1/],
 ];
 
