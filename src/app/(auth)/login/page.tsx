@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Mail, ArrowRight, ExternalLink } from "lucide-react";
 import { motion } from "motion/react";
-import { GOOGLE_IDENTITY_SCOPES } from "@/lib/google-oauth-scopes";
+import { GOOGLE_WORKSPACE_SCOPES } from "@/lib/google-oauth-scopes";
 
 type FormState = "idle" | "loading" | "sent" | "error";
 type InviteState = "idle" | "loading" | "sent" | "error";
@@ -148,7 +148,11 @@ function LoginForm() {
       provider: "google",
       options: {
         redirectTo: callbackUrl,
-        scopes: GOOGLE_IDENTITY_SCOPES,
+        scopes: GOOGLE_WORKSPACE_SCOPES,
+        queryParams: {
+          access_type: "offline",
+          prompt: "consent",
+        },
       },
     });
 
