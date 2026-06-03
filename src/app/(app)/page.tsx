@@ -1027,7 +1027,7 @@ export default function Dashboard() {
   const { data: issues, isLoading: issuesLoading } = useIssues();
   const { data: seriesList, isLoading: seriesLoading } = useSeries();
   const { data: meetings, isLoading: meetingsLoading } = useAllMeetings();
-  const { data: allDecisions } = useDecisions();
+  const { data: allDecisions } = useDecisions(undefined, undefined, true, 5);
   const updateStatus = useUpdateIssueStatus();
   const widgets = useWidgetStore((s) => s.widgets);
   const moveWidget = useWidgetStore((s) => s.moveWidget);
