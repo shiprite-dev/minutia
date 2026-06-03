@@ -39,7 +39,8 @@ test.describe("Sidebar & Navigation", () => {
     ).toBeVisible();
 
     await expect(page.getByText("Test User").first()).toBeVisible();
-    await expect(page.getByText("Free plan")).toBeVisible();
+    await expect(page.getByText("test@example.com")).toBeVisible();
+    await expect(page.getByText("Free plan", { exact: true })).not.toBeVisible();
     await expect(page.getByRole("button", { name: "Sign out" })).toBeVisible();
   });
 

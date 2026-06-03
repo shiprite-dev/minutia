@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
 import { waitForApp } from "./seed-data";
 import {
   addWidget,
@@ -9,6 +9,17 @@ import {
   widgetWithText,
 } from "./dashboard-helpers";
 
+type StoredWidget = { id: string; type: string; span?: 1 | 2 };
+
+async function setStoredWidgets(page: Page, widgets: StoredWidget[]) {
+  await page.evaluate((nextWidgets) => {
+    localStorage.setItem(
+      "minutia-widgets",
+      JSON.stringify({ state: { widgets: nextWidgets }, version: 0 })
+    );
+  }, widgets);
+}
+
 test.describe("Widget system", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/dashboard", { waitUntil: "domcontentloaded" });
@@ -16,6 +27,14 @@ test.describe("Widget system", () => {
     await page.goto("/dashboard", { waitUntil: "domcontentloaded" });
     await waitForApp(page);
     await expect(page.getByRole("button", { name: "Add widget" })).toBeVisible();
+  });
+
+  test("dashboard sidebar does not show a fake plan label", async ({ page }) => {
+    const sidebar = page.locator("[data-slot='sidebar']").first();
+
+    await expect(sidebar.getByText("Test User").first()).toBeVisible();
+    await expect(sidebar.getByText("test@example.com")).toBeVisible();
+    await expect(sidebar.getByText("Free plan", { exact: true })).not.toBeVisible();
   });
 
   test("dashboard renders default widgets on fresh state", async ({ page }) => {
@@ -97,6 +116,137 @@ test.describe("Widget system", () => {
     await expect(page.getByRole("heading", { name: "Meeting triage" })).toBeVisible();
     await expect(page.getByText("Carried").first()).toBeVisible();
     await expect(page.getByText("New since last").first()).toBeVisible();
+  });
+
+  test("wide widgets can share a desktop row without wasting the right lane", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await setStoredWidgets(page, [
+      { id: "hero-1", type: "hero" },
+      { id: "outstanding-1", type: "outstanding" },
+      { id: "meeting-triage-1", type: "meeting-triage" },
+      { id: "workload-1", type: "workload" },
+    ]);
+
+    await page.reload();
+    await waitForApp(page);
+
+    const heroBox = await page.getByTestId("widget-hero-1").boundingBox();
+    const outstandingBox = await page.getByTestId("widget-outstanding-1").boundingBox();
+
+    expect(heroBox).not.toBeNull();
+    expect(outstandingBox).not.toBeNull();
+    expect(Math.abs((heroBox?.y ?? 0) - (outstandingBox?.y ?? 0))).toBeLessThan(2);
+  });
+
+  test("meeting triage uses ordinal suffixes for carried meeting counts", async ({ page, request }) => {
+    test.skip(!HAS_SERVICE_ROLE, "SUPABASE_SERVICE_ROLE_KEY is required for isolated meeting triage data");
+
+    const created: { id: string }[] = [];
+
+    try {
+      created.push(
+        await createDashboardIssue(request, `Ordinal first ${Date.now()}`, {
+          created_at: "2026-04-21T10:00:00Z",
+          updated_at: "2026-04-21T10:00:00Z",
+          priority: "critical",
+        })
+      );
+      created.push(
+        await createDashboardIssue(request, `Ordinal second ${Date.now()}`, {
+          created_at: "2026-04-14T10:00:00Z",
+          updated_at: "2026-04-14T10:00:00Z",
+          priority: "critical",
+        })
+      );
+
+      await page.clock.setFixedTime(new Date("2026-04-26T12:00:00Z"));
+      await page.reload();
+      await waitForApp(page);
+      await addWidget(page, /Meeting Triage/);
+
+      const triage = widgetWithText(page, "Meeting triage");
+      await expect(triage.getByText("1st meeting")).toBeVisible();
+      await expect(triage.getByText("2nd meeting")).toBeVisible();
+      await expect(triage.getByText("1th meeting")).not.toBeVisible();
+      await expect(triage.getByText("2th meeting")).not.toBeVisible();
+    } finally {
+      for (const issue of created) {
+        await deleteIssue(request, issue.id);
+      }
+    }
+  });
+
+  test("outstanding item metadata lanes stay aligned and assignee avatar reveals details", async ({ page, request }) => {
+    test.skip(!HAS_SERVICE_ROLE, "SUPABASE_SERVICE_ROLE_KEY is required for isolated outstanding item data");
+
+    const created: { id: string; title: string }[] = [];
+    const ownerTitle = `Lane assigned ${Date.now()}`;
+    const unassignedTitle = `Lane unassigned ${Date.now()}`;
+
+    try {
+      created.push(
+        await createDashboardIssue(request, ownerTitle, {
+          owner_name: "Jordan Rivera",
+          priority: "critical",
+          due_date: "2026-06-30",
+        })
+      );
+      created.push(
+        await createDashboardIssue(request, unassignedTitle, {
+          owner_name: "",
+          priority: "critical",
+          due_date: "2026-06-30",
+        })
+      );
+
+      await page.reload();
+      await waitForApp(page);
+
+      const assignedRow = widgetWithText(page, "Outstanding items")
+        .locator('[aria-label*=","]')
+        .filter({ hasText: ownerTitle })
+        .first();
+      const unassignedRow = widgetWithText(page, "Outstanding items")
+        .locator('[aria-label*=","]')
+        .filter({ hasText: unassignedTitle })
+        .first();
+
+      await expect(assignedRow).toBeVisible();
+      await expect(unassignedRow).toBeVisible();
+      await expect
+        .poll(async () => {
+          const assignedBox = await assignedRow.getByTestId("issue-due-lane").boundingBox();
+          const unassignedBox = await unassignedRow.getByTestId("issue-due-lane").boundingBox();
+          if (!assignedBox || !unassignedBox) return Number.POSITIVE_INFINITY;
+          return Math.abs(assignedBox.x - unassignedBox.x);
+        })
+        .toBeLessThan(2);
+
+      const assignedDue = await assignedRow.getByTestId("issue-due-lane").boundingBox();
+      const unassignedDue = await unassignedRow.getByTestId("issue-due-lane").boundingBox();
+
+      expect(assignedDue).not.toBeNull();
+      expect(unassignedDue).not.toBeNull();
+      expect(Math.abs((assignedDue?.x ?? 0) - (unassignedDue?.x ?? 0))).toBeLessThan(2);
+      expect(
+        Math.abs(
+          ((assignedDue?.x ?? 0) + (assignedDue?.width ?? 0)) -
+            ((unassignedDue?.x ?? 0) + (unassignedDue?.width ?? 0))
+        )
+      ).toBeLessThan(2);
+      await expect(assignedRow.getByTestId("issue-due-lane")).toContainText("Due Jun 30");
+      await expect(unassignedRow.getByTestId("issue-due-lane")).toContainText("Due Jun 30");
+
+      const assignee = assignedRow.getByRole("button", { name: "Assignee: Jordan Rivera" });
+      await assignee.hover();
+      await expect(page.locator("[data-slot='tooltip-content']")).toContainText("Jordan Rivera");
+      await assignee.focus();
+      await expect(page.locator("[data-slot='tooltip-content']")).toContainText("Jordan Rivera");
+    } finally {
+      for (const issue of created) {
+        await deleteIssue(request, issue.id);
+      }
+    }
   });
 
   test("can add workload widget", async ({ page }) => {
