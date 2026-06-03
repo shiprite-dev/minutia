@@ -458,7 +458,17 @@ function CalendarEventDetail({
           {event.meetingUrl && (
             <div className="flex items-start gap-2">
               <Video className="mt-0.5 size-4 text-ink-4" />
-              <span>Google Meet link available</span>
+              <span className="min-w-0">
+                <span className="block">Google Meet link available</span>
+                <a
+                  href={event.meetingUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-0.5 block break-all text-xs text-accent hover:underline"
+                >
+                  {event.meetingUrl}
+                </a>
+              </span>
             </div>
           )}
         </div>

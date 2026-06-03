@@ -1,6 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { test, expect, type APIRequestContext } from "@playwright/test";
 import { waitForApp } from "./seed-data";
+import { syncCalendarAgenda } from "../../src/lib/google-calendar-agenda-sync";
+import type { NormalizedGoogleCalendarEvent } from "../../src/lib/google-calendar-sync";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "http://127.0.0.1:54321";
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
@@ -91,7 +93,88 @@ async function createLinkedCalendarMeeting(
   return { seriesId, meetingId };
 }
 
+function agendaEvent(overrides: Partial<NormalizedGoogleCalendarEvent> = {}): NormalizedGoogleCalendarEvent {
+  const eventId = randomUUID();
+  return {
+    calendarId: "primary",
+    providerEventId: `event-${eventId}`,
+    iCalUID: `event-${eventId}@example.com`,
+    recurringEventId: null,
+    originalStartTime: null,
+    seriesKey: `gcal:primary:event:${eventId}`,
+    meetingKey: `gcal:primary:event:${eventId}`,
+    seriesKind: "adhoc",
+    cadence: "adhoc",
+    title: "Calendar described meeting",
+    description: "Calendar description syncs into the Minutia meeting.",
+    startAt: "2026-06-10T15:00:00Z",
+    endAt: "2026-06-10T15:30:00Z",
+    htmlLink: "https://calendar.google.com/event?eid=description-sync",
+    meetingUrl: "https://meet.google.com/description-sync",
+    attendeeEmails: ["pratik@example.com"],
+    organizerEmail: "pratik@example.com",
+    eventType: "default",
+    status: "confirmed",
+    ...overrides,
+  };
+}
+
 test.describe("Google Calendar agenda", () => {
+  test("syncs calendar description into new meeting notes without overwriting captured notes", async ({
+    request,
+  }) => {
+    await prepareAppForSeedUser(request);
+    const orgId = await getSeedWorkspaceId(request);
+    const event = agendaEvent();
+    let meetingId: string | null = null;
+
+    try {
+      const [synced] = await syncCalendarAgenda({
+        userId: TEST_USER_ID,
+        organizationId: orgId,
+        events: [event],
+      });
+      meetingId = synced.meetingId;
+
+      const createdRows = await rest(
+        request,
+        `meetings?id=eq.${meetingId}&select=notes_markdown,gcal_meeting_url`
+      );
+      expect(createdRows[0]).toMatchObject({
+        notes_markdown: event.description,
+        gcal_meeting_url: event.meetingUrl,
+      });
+
+      await rest(request, `meetings?id=eq.${meetingId}`, {
+        method: "PATCH",
+        data: { notes_markdown: "Captured live notes stay intact." },
+      });
+
+      await syncCalendarAgenda({
+        userId: TEST_USER_ID,
+        organizationId: orgId,
+        events: [
+          {
+            ...event,
+            description: "Updated calendar description should not overwrite notes.",
+          },
+        ],
+      });
+
+      const updatedRows = await rest(
+        request,
+        `meetings?id=eq.${meetingId}&select=notes_markdown`
+      );
+      expect(updatedRows[0]?.notes_markdown).toBe("Captured live notes stay intact.");
+    } finally {
+      await rest(
+        request,
+        `meeting_series?organization_id=eq.${orgId}&gcal_series_key=eq.${encodeURIComponent(event.seriesKey)}`,
+        { method: "DELETE" }
+      ).catch(() => undefined);
+    }
+  });
+
   test("opens calendar event details and starts capture from the sidebar", async ({
     page,
     request,
@@ -170,6 +253,9 @@ test.describe("Google Calendar agenda", () => {
     await sidebar.getByRole("button", { name: /Product operating review/ }).click();
     await expect(sidebar.getByText("Review open launch blockers.")).toBeVisible();
     await expect(sidebar.getByText("Google Meet link available")).toBeVisible();
+    await expect(
+      sidebar.getByRole("link", { name: "https://meet.google.com/abc-defg-hij" })
+    ).toBeVisible();
 
     const popupPromise = page.waitForEvent("popup");
     await sidebar.getByRole("button", { name: "Start meeting" }).click();
