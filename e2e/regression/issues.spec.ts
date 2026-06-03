@@ -1,4 +1,4 @@
-import { test, expect, type APIRequestContext } from "@playwright/test";
+import { test, expect, type APIRequestContext, type Page } from "@playwright/test";
 import { SERIES, MEETINGS, ISSUES, waitForApp } from "./seed-data";
 import {
   createDashboardIssue,
@@ -66,6 +66,15 @@ async function getIssueUpdates(request: APIRequestContext, issueId: string) {
   >;
 }
 
+async function delayIssueUpdateInserts(page: Page, delayMs = 1200) {
+  await page.route("**/rest/v1/issue_updates**", async (route, request) => {
+    if (request.method() !== "POST") return route.continue();
+    const response = await route.fetch();
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
+    await route.fulfill({ response });
+  });
+}
+
 test.describe("Issue Detail", () => {
   const url = `/issues/${ISSUES.migrateCI}`;
 
@@ -119,6 +128,45 @@ test.describe("Issue Detail", () => {
     await waitForApp(page);
 
     await expect(page.getByText("OIL-1").first()).toBeVisible();
+  });
+
+  test("new update appears in the timeline before Supabase responds", async ({
+    page,
+    request,
+  }) => {
+    test.skip(!HAS_SERVICE_ROLE, "Requires service role cleanup for isolated issue data");
+
+    const stamp = Date.now();
+    const issue = await createDashboardIssue(
+      request,
+      `Optimistic comment coverage ${stamp}`,
+      {
+        description: "Initial optimistic comment coverage description.",
+      }
+    );
+    const updateNote = `Optimistic timeline update ${stamp}`;
+
+    try {
+      await delayIssueUpdateInserts(page);
+      await page.goto(`/issues/${issue.id}`);
+      await waitForApp(page);
+
+      await page.getByRole("button", { name: /Add update/ }).click();
+      await page
+        .getByPlaceholder("What's the latest on this issue?")
+        .fill(updateNote);
+      await page.getByRole("button", { name: "Add update" }).last().click();
+
+      await expect(
+        page
+          .locator("section", { hasText: "Lifecycle timeline" })
+          .getByText(updateNote)
+      ).toBeVisible({ timeout: 300 });
+      await page.waitForTimeout(1400);
+    } finally {
+      await page.unrouteAll({ behavior: "ignoreErrors" });
+      await deleteIssue(request, issue.id).catch(() => undefined);
+    }
   });
 
   test("issue key URL opens the canonical issue detail", async ({ page }) => {

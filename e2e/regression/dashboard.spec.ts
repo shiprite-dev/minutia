@@ -11,6 +11,21 @@ import {
   widget,
 } from "./dashboard-helpers";
 
+async function delaySupabaseIssueWrites(page: import("@playwright/test").Page, delayMs = 1200) {
+  await page.route("**/rest/v1/issues**", async (route, request) => {
+    if (request.method() !== "PATCH") return route.continue();
+    const response = await route.fetch();
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
+    await route.fulfill({ response });
+  });
+  await page.route("**/rest/v1/issue_updates**", async (route, request) => {
+    if (request.method() !== "POST") return route.continue();
+    const response = await route.fetch();
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
+    await route.fulfill({ response });
+  });
+}
+
 test.describe("OIL Board Dashboard", () => {
   test("hero card displays open count and metrics", async ({ page }) => {
     await gotoDashboard(page);
@@ -263,6 +278,30 @@ test.describe("Quick-Add Submit Flow", () => {
 
 test.describe("Dashboard status controls", () => {
   test.skip(!HAS_SERVICE_ROLE, "SUPABASE_SERVICE_ROLE_KEY is required for isolated dashboard data");
+
+  test("status chip reflects the selected status before Supabase responds", async ({ page, request }) => {
+    const issue = await createDashboardIssue(request);
+
+    try {
+      await delaySupabaseIssueWrites(page);
+      await gotoDashboard(page);
+      await expandOutstandingPreview(page);
+
+      const row = issueRow(page, issue.title);
+      await expect(row).toBeVisible();
+
+      await row.getByRole("combobox", { name: "Status: Open" }).click();
+      await row.getByRole("option", { name: "Pending", exact: true }).click();
+
+      await expect(
+        row.getByRole("combobox", { name: "Status: Pending" })
+      ).toBeVisible({ timeout: 300 });
+    } finally {
+      await page.waitForTimeout(1400);
+      await page.unrouteAll({ behavior: "ignoreErrors" });
+      await deleteIssue(request, issue.id);
+    }
+  });
 
   test("issue status chip updates row state and filter membership", async ({ page, request }) => {
     const issue = await createDashboardIssue(request);
