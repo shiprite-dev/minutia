@@ -511,8 +511,9 @@ export function CalendarSidebar() {
   const [viewMonth, setViewMonth] = React.useState(selectedDate.getMonth());
   const [selectedCalendarEvent, setSelectedCalendarEvent] =
     React.useState<GoogleCalendarAgendaItem | null>(null);
-  const { data: calendarStatus } = useGoogleCalendarStatus();
-  const { data: agendaData, isLoading: agendaLoading } = useCalendarAgenda();
+  const { data: calendarStatus } = useGoogleCalendarStatus(calendarSidebarOpen);
+  const { data: agendaData, isLoading: agendaLoading } =
+    useCalendarAgenda(calendarSidebarOpen);
   const startCalendarEvent = useStartCalendarAgendaEvent();
 
   // Hydrate persisted sidebar state from localStorage after mount
@@ -521,7 +522,11 @@ export function CalendarSidebar() {
     if (saved === "true") setCalendarSidebarOpen(true);
   }, [setCalendarSidebarOpen]);
 
-  const { data: meetings = [] } = useMeetingsByMonth(viewYear, viewMonth);
+  const { data: meetings = [] } = useMeetingsByMonth(
+    viewYear,
+    viewMonth,
+    calendarSidebarOpen
+  );
   const calendarEvents = React.useMemo(() => agendaData?.events ?? [], [agendaData?.events]);
   const calendarConnected = !!calendarStatus?.connected;
 

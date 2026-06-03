@@ -17,9 +17,10 @@ export const calendarKeys = {
   agenda: ["calendar", "agenda"] as const,
 };
 
-export function useGoogleCalendarStatus() {
+export function useGoogleCalendarStatus(enabled = true) {
   return useQuery<GoogleCalendarStatus>({
     queryKey: calendarKeys.status,
+    enabled,
     queryFn: async () => {
       const res = await fetch("/api/calendar/status");
       if (!res.ok) throw new Error("Failed to fetch calendar status");
@@ -60,8 +61,8 @@ export function useCalendarEvents(seriesId: string | undefined) {
   });
 }
 
-export function useCalendarAgenda() {
-  const { data: status } = useGoogleCalendarStatus();
+export function useCalendarAgenda(enabled = true) {
+  const { data: status } = useGoogleCalendarStatus(enabled);
 
   return useQuery<{
     connected: boolean;
@@ -75,7 +76,7 @@ export function useCalendarAgenda() {
       if (!res.ok) throw new Error("Failed to fetch calendar agenda");
       return res.json();
     },
-    enabled: !!status?.connected,
+    enabled: enabled && !!status?.connected,
     staleTime: 2 * 60 * 1000,
     retry: 1,
   });
