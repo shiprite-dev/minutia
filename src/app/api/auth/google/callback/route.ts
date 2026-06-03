@@ -1,9 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { storeTokens } from "@/lib/google-calendar";
+import { googleCalendarSettingsRedirectUrl } from "@/lib/google-oauth-redirect";
 
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 const GOOGLE_USERINFO_URL = "https://www.googleapis.com/oauth2/v2/userinfo";
+
+function redirectToSettings(request: NextRequest, path: string) {
+  return NextResponse.redirect(googleCalendarSettingsRedirectUrl(request.url, path));
+}
 
 export async function GET(request: NextRequest) {
   const { searchParams } = request.nextUrl;
@@ -12,11 +17,11 @@ export async function GET(request: NextRequest) {
   const error = searchParams.get("error");
 
   if (error) {
-    return NextResponse.redirect(new URL("/settings?gcal=error", request.url));
+    return redirectToSettings(request, "/settings?gcal=error");
   }
 
   if (!code || !state) {
-    return NextResponse.redirect(new URL("/settings?gcal=error", request.url));
+    return redirectToSettings(request, "/settings?gcal=error");
   }
 
   const cookieStore = await cookies();
@@ -24,12 +29,12 @@ export async function GET(request: NextRequest) {
   cookieStore.delete("gcal_oauth_state");
 
   if (!stateCookie) {
-    return NextResponse.redirect(new URL("/settings?gcal=error", request.url));
+    return redirectToSettings(request, "/settings?gcal=error");
   }
 
   const [savedState, userId] = stateCookie.split(":");
   if (savedState !== state || !userId) {
-    return NextResponse.redirect(new URL("/settings?gcal=error", request.url));
+    return redirectToSettings(request, "/settings?gcal=error");
   }
 
   const tokenRes = await fetch(GOOGLE_TOKEN_URL, {
@@ -45,12 +50,12 @@ export async function GET(request: NextRequest) {
   });
 
   if (!tokenRes.ok) {
-    return NextResponse.redirect(new URL("/settings?gcal=error", request.url));
+    return redirectToSettings(request, "/settings?gcal=error");
   }
 
   const tokens = await tokenRes.json();
   if (!tokens.refresh_token) {
-    return NextResponse.redirect(new URL("/settings?gcal=error&reason=no_refresh", request.url));
+    return redirectToSettings(request, "/settings?gcal=error&reason=no_refresh");
   }
 
   const userinfoRes = await fetch(GOOGLE_USERINFO_URL, {
@@ -68,8 +73,8 @@ export async function GET(request: NextRequest) {
     );
   } catch (err) {
     console.error("Failed to store Google tokens:", err);
-    return NextResponse.redirect(new URL("/settings?gcal=error&reason=store_failed", request.url));
+    return redirectToSettings(request, "/settings?gcal=error&reason=store_failed");
   }
 
-  return NextResponse.redirect(new URL("/settings?gcal=connected", request.url));
+  return redirectToSettings(request, "/settings?gcal=connected");
 }
