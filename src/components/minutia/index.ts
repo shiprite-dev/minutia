@@ -2,6 +2,7 @@ export { StatusChip } from "./status-chip";
 export { CategoryBadge } from "./category-badge";
 export { PriorityIndicator } from "./priority-indicator";
 export { IssueCard } from "./issue-card";
+export { PrefetchIssueLink } from "./prefetch-issue-link";
 export { IssueKey } from "./issue-key";
 export { BriefCard } from "./brief-card";
 export { TimelineNode } from "./timeline-node";

@@ -12,6 +12,7 @@ import {
 import { cn } from "@/lib/utils";
 import { CATEGORY_CONFIG } from "@/lib/constants";
 import { IssueKey } from "@/components/minutia/issue-key";
+import { PrefetchIssueLink } from "@/components/minutia/prefetch-issue-link";
 import { useWorkspaceDirectorySearch } from "@/lib/hooks/use-google-workspace";
 import type { Issue, IssueCategory, IssueStatus } from "@/lib/types";
 
@@ -295,13 +296,13 @@ function InlineTaskItem({
       </div>
 
       {/* Open detail */}
-      <Link
-        href={`/issues/${issue.id}`}
+      <PrefetchIssueLink
+        issueId={issue.id}
         className="shrink-0 flex items-center justify-center size-6 rounded-full text-ink-4 hover:text-accent hover:bg-paper-3 transition-colors opacity-0 group-hover:opacity-100"
         aria-label="Open issue detail"
       >
         <ExternalLink className="size-3" />
-      </Link>
+      </PrefetchIssueLink>
 
       {/* Category pill */}
       <span

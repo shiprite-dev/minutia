@@ -68,7 +68,10 @@ test.describe("Inline Tasks", () => {
       });
     });
 
-    await page.getByRole("button", { name: "T Test User" }).first().click();
+    await page
+      .getByRole("button", { name: /^(?:[A-Z] .+|Assign)$/ })
+      .first()
+      .click();
     await page.getByPlaceholder("Search people...").fill("mina");
 
     const directoryMatch = page.getByRole("button", {
