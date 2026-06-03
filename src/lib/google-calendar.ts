@@ -109,7 +109,15 @@ type GoogleCalendarListResponse = {
 
 type GoogleCalendarEventsResponse = {
   items?: GoogleCalendarRawEvent[];
+  nextPageToken?: string;
 };
+
+export class GoogleCalendarSyncExpiredError extends Error {
+  constructor() {
+    super("Google Calendar sync state expired");
+    this.name = "GoogleCalendarSyncExpiredError";
+  }
+}
 
 export async function listCalendars(accessToken: string): Promise<CalendarEntry[]> {
   const res = await fetch(`${GOOGLE_CALENDAR_API}/users/me/calendarList`, {
@@ -189,14 +197,59 @@ export async function listAgendaEvents({
     showDeleted: "false",
   });
 
-  const res = await fetch(
-    `${GOOGLE_CALENDAR_API}/calendars/${encodeURIComponent(calendarId)}/events?${params}`,
-    { headers: { Authorization: `Bearer ${accessToken}` } }
-  );
+  return fetchCalendarEvents(accessToken, calendarId, params, "Agenda fetch failed");
+}
 
-  if (!res.ok) throw new Error(`Agenda fetch failed: ${res.status}`);
-  const data = (await res.json()) as GoogleCalendarEventsResponse;
-  return data.items ?? [];
+export async function listAgendaEventChanges({
+  accessToken,
+  calendarId = "primary",
+  updatedMin,
+  maxResults = 250,
+}: {
+  accessToken: string;
+  calendarId?: string;
+  updatedMin: Date;
+  maxResults?: number;
+}): Promise<GoogleCalendarRawEvent[]> {
+  const params = new URLSearchParams({
+    updatedMin: updatedMin.toISOString(),
+    maxResults: String(maxResults),
+    singleEvents: "true",
+    showDeleted: "true",
+  });
+
+  return fetchCalendarEvents(accessToken, calendarId, params, "Agenda change fetch failed");
+}
+
+async function fetchCalendarEvents(
+  accessToken: string,
+  calendarId: string,
+  params: URLSearchParams,
+  errorPrefix: string
+): Promise<GoogleCalendarRawEvent[]> {
+  const events: GoogleCalendarRawEvent[] = [];
+  let pageToken: string | undefined;
+
+  do {
+    if (pageToken) {
+      params.set("pageToken", pageToken);
+    } else {
+      params.delete("pageToken");
+    }
+
+    const res = await fetch(
+      `${GOOGLE_CALENDAR_API}/calendars/${encodeURIComponent(calendarId)}/events?${params}`,
+      { headers: { Authorization: `Bearer ${accessToken}` } }
+    );
+
+    if (res.status === 410) throw new GoogleCalendarSyncExpiredError();
+    if (!res.ok) throw new Error(`${errorPrefix}: ${res.status}`);
+    const data = (await res.json()) as GoogleCalendarEventsResponse;
+    events.push(...(data.items ?? []));
+    pageToken = data.nextPageToken;
+  } while (pageToken);
+
+  return events;
 }
 
 export async function revokeToken(token: string) {
