@@ -348,11 +348,12 @@ export function useAllMeetings() {
 // ---------------------------------------------------------------------------
 export type MeetingWithSeries = Meeting & { series_name: string; series_id: string };
 
-export function useMeetingsByMonth(year: number, month: number) {
+export function useMeetingsByMonth(year: number, month: number, enabled = true) {
   const supabase = createClient();
 
   return useQuery<MeetingWithSeries[]>({
     queryKey: [...meetingKeys.all, "month", year, month],
+    enabled,
     queryFn: async () => {
       const start = new Date(year, month, 1);
       const end = new Date(year, month + 1, 0, 23, 59, 59);
