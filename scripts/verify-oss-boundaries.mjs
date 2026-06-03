@@ -79,6 +79,7 @@ assert.match(generatedEnvScript, /ADDITIONAL_REDIRECT_URLS=\$\{inviteRedirectUrl
 assert.match(dockerCompose, /GOTRUE_URI_ALLOW_LIST: .*\/accept-invite/, "docker compose must allow invite redirects by default");
 assert.match(dockerCompose, /MINUTIA_SETUP_TOKEN=\$\{MINUTIA_SETUP_TOKEN/, "docker compose must pass setup token to the web app");
 assert.match(dockerCompose, /NEXT_PUBLIC_SUPABASE_URL=\$\{NEXT_PUBLIC_SUPABASE_URL/, "docker compose must use the configured public Supabase URL");
+assert.match(dockerCompose, /GOOGLE_CALENDAR_WEBHOOK_URL=\$\{GOOGLE_CALENDAR_WEBHOOK_URL/, "docker compose must pass the calendar webhook URL to the web app");
 assert.doesNotMatch(envExample, /***/, "Stripe configuration belongs in ***, not OSS setup docs");
 assert.doesNotMatch(generatedEnvScript, /***/, "Stripe configuration belongs in ***, not OSS env generation");
 
