@@ -51,4 +51,28 @@ test.describe("Google OAuth configuration", () => {
       restoreEnv("GOOGLE_REDIRECT_URI", previousGoogleRedirectUri);
     }
   });
+
+  test("ignores wildcard Google callback origin when site URL is unset", () => {
+    const previousSiteUrl = process.env.SITE_URL;
+    const previousNextPublicSiteUrl = process.env.NEXT_PUBLIC_SITE_URL;
+    const previousGoogleRedirectUri = process.env.GOOGLE_REDIRECT_URI;
+
+    delete process.env.SITE_URL;
+    delete process.env.NEXT_PUBLIC_SITE_URL;
+    process.env.GOOGLE_REDIRECT_URI =
+      "https://0.0.0.0:3000/api/auth/google/callback";
+
+    try {
+      expect(
+        googleCalendarSettingsRedirectUrl(
+          "http://localhost:3000/api/auth/google/callback",
+          "/settings?gcal=connected"
+        ).toString()
+      ).toBe("http://localhost:3000/settings?gcal=connected");
+    } finally {
+      restoreEnv("SITE_URL", previousSiteUrl);
+      restoreEnv("NEXT_PUBLIC_SITE_URL", previousNextPublicSiteUrl);
+      restoreEnv("GOOGLE_REDIRECT_URI", previousGoogleRedirectUri);
+    }
+  });
 });
