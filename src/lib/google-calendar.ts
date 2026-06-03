@@ -72,7 +72,8 @@ export async function storeTokens(
   accessToken: string,
   refreshToken: string,
   expiresIn: number,
-  googleEmail: string
+  googleEmail: string,
+  scopes: string[]
 ) {
   const supabase = getServiceClient();
   const { ciphertext: encAccess, iv: accessIv } = encrypt(accessToken);
@@ -88,6 +89,7 @@ export async function storeTokens(
       refresh_iv: refreshIv,
       token_expiry: expiry.toISOString(),
       google_email: googleEmail,
+      scopes: Array.from(new Set(scopes)),
     },
     { onConflict: "user_id" }
   );

@@ -26,7 +26,6 @@ import {
   Moon,
   Monitor,
   Download,
-  Calendar,
   Unplug,
   UserPlus,
   Users,
@@ -508,20 +507,27 @@ export default function SettingsPage() {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="flex items-center justify-center size-9 rounded-lg bg-paper-2">
-                  <Calendar className="size-4 text-ink-2" />
+                  <Users className="size-4 text-ink-2" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-ink">Google Calendar</p>
+                  <p className="text-sm font-medium text-ink">Google Workspace</p>
                   {gcalStatus?.connected ? (
-                    <p className="text-xs text-ink-3">{gcalStatus.googleEmail}</p>
+                    <>
+                      <p className="text-xs text-ink-3">{gcalStatus.googleEmail}</p>
+                      {!gcalStatus.directoryConnected && (
+                        <p className="text-xs text-ink-3">
+                          Reconnect to enable directory assignment.
+                        </p>
+                      )}
+                    </>
                   ) : (
                     <p className="text-xs text-ink-3">
-                      Show real meeting times on your dashboard.
+                      Sync calendar meetings and directory assignees.
                     </p>
                   )}
                 </div>
               </div>
-              {gcalStatus?.connected ? (
+              {gcalStatus?.connected && gcalStatus.directoryConnected ? (
                 <Button
                   variant="outline"
                   size="sm"
@@ -530,6 +536,10 @@ export default function SettingsPage() {
                 >
                   <Unplug className="size-3.5" />
                   {disconnectGoogle.isPending ? "Disconnecting..." : "Disconnect"}
+                </Button>
+              ) : gcalStatus?.connected ? (
+                <Button variant="outline" size="sm" asChild>
+                  <a href="/api/auth/google">Reconnect</a>
                 </Button>
               ) : (
                 <Button variant="outline" size="sm" asChild>

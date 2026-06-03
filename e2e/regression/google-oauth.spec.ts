@@ -1,7 +1,9 @@
 import { test, expect } from "@playwright/test";
 import {
-  GOOGLE_CALENDAR_SCOPES,
+  GOOGLE_CALENDAR_SCOPE,
+  GOOGLE_DIRECTORY_SCOPE,
   GOOGLE_IDENTITY_SCOPES,
+  GOOGLE_WORKSPACE_SCOPES,
 } from "../../src/lib/google-oauth-scopes";
 import { googleCalendarSettingsRedirectUrl } from "../../src/lib/google-oauth-redirect";
 
@@ -14,16 +16,16 @@ function restoreEnv(key: string, value: string | undefined) {
 }
 
 test.describe("Google OAuth configuration", () => {
-  test("keeps sign-in identity-only and Calendar Connect calendar-scoped", () => {
+  test("keeps sign-in identity-only and Workspace Connect calendar plus directory scoped", () => {
     expect(GOOGLE_IDENTITY_SCOPES.split(" ").sort()).toEqual(
       ["email", "openid", "profile"]
     );
     expect(GOOGLE_IDENTITY_SCOPES).not.toContain("calendar");
+    expect(GOOGLE_IDENTITY_SCOPES).not.toContain("directory");
 
-    expect(GOOGLE_CALENDAR_SCOPES).toContain(
-      "https://www.googleapis.com/auth/calendar.readonly"
+    expect(GOOGLE_WORKSPACE_SCOPES.split(" ").sort()).toEqual(
+      [GOOGLE_CALENDAR_SCOPE, GOOGLE_DIRECTORY_SCOPE, "email"].sort()
     );
-    expect(GOOGLE_CALENDAR_SCOPES).toContain("email");
   });
 
   test("redirects Calendar callback to public Google callback origin when site URL is unset", () => {

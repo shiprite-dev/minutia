@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import {
+  GOOGLE_CALENDAR_SCOPE,
+  GOOGLE_DIRECTORY_SCOPE,
+} from "@/lib/google-oauth-scopes";
 
 export async function GET() {
   const supabase = await createClient();
@@ -10,12 +14,15 @@ export async function GET() {
 
   const { data } = await supabase
     .from("google_oauth_tokens")
-    .select("google_email")
+    .select("google_email, scopes")
     .eq("user_id", user.id)
     .single();
 
+  const scopes = Array.isArray(data?.scopes) ? data.scopes : [];
+
   return NextResponse.json({
-    connected: !!data,
+    connected: scopes.includes(GOOGLE_CALENDAR_SCOPE),
+    directoryConnected: scopes.includes(GOOGLE_DIRECTORY_SCOPE),
     googleEmail: data?.google_email ?? null,
   });
 }
