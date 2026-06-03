@@ -7,6 +7,7 @@ import { CheckCircle2, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CategoryBadge } from "@/components/minutia/category-badge";
 import { MinutiaMeetingStatusIcon } from "@/components/minutia/minutia-icons";
+import { PrefetchIssueLink } from "@/components/minutia/prefetch-issue-link";
 import { useUIStore } from "@/lib/stores/ui-store";
 import type { Meeting, Issue, Decision } from "@/lib/types";
 
@@ -158,9 +159,9 @@ function MeetingSection({
                   </p>
                   <div className="space-y-1">
                     {(showAllIssues ? meeting.issues : meeting.issues.slice(0, ISSUE_PREVIEW_LIMIT)).map((issue) => (
-                      <Link
+                      <PrefetchIssueLink
                         key={issue.id}
-                        href={`/issues/${issue.id}`}
+                        issueId={issue.id}
                         className="flex items-center gap-2 py-1.5 px-2 -mx-2 rounded-md hover:bg-paper-3 transition-colors group/issue"
                       >
                         <span
@@ -190,7 +191,7 @@ function MeetingSection({
                           {issue.title}
                         </span>
                         <CategoryBadge category={issue.category} size="sm" />
-                      </Link>
+                      </PrefetchIssueLink>
                     ))}
                   </div>
                   {!showAllIssues && meeting.issues.length > ISSUE_PREVIEW_LIMIT && (

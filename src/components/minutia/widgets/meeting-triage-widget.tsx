@@ -1,10 +1,10 @@
 "use client";
 
 import * as React from "react";
-import Link from "next/link";
 import { WidgetShell } from "./widget-shell";
 import { StatusChip } from "@/components/minutia/status-chip";
 import { CategoryBadge } from "@/components/minutia/category-badge";
+import { PrefetchIssueLink } from "@/components/minutia/prefetch-issue-link";
 import { cn } from "@/lib/utils";
 import type { Issue, IssueStatus, Meeting, MeetingSeries } from "@/lib/types";
 import { daysSince } from "@/lib/date-utils";
@@ -183,12 +183,12 @@ function TriageRow({
   return (
     <div className="group flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg px-3 py-2.5 hover:bg-paper-2 transition-colors">
       <CategoryBadge category={issue.category} size="sm" />
-      <Link
-        href={`/issues/${issue.id}`}
+      <PrefetchIssueLink
+        issueId={issue.id}
         className="flex-1 min-w-0 text-sm font-medium text-ink group-hover:text-accent transition-colors truncate basis-[120px]"
       >
         {issue.title}
-      </Link>
+      </PrefetchIssueLink>
       {badge}
       <StatusChip
         status={issue.status}
