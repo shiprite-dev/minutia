@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
 import {
   createDashboardIssue,
   deleteIssue,
@@ -10,6 +10,31 @@ import {
   selectRowStatus,
   widget,
 } from "./dashboard-helpers";
+
+async function watchDelayedIssueDetailFetch(page: Page, delayMs = 1200) {
+  let completedDetailFetches = 0;
+
+  await page.route("**/rest/v1/issues?**", async (route, request) => {
+    if (request.method() !== "GET") return route.continue();
+
+    const url = decodeURIComponent(request.url());
+    if (
+      !url.includes("updates:issue_updates") ||
+      !url.includes("raised_in_meeting:meetings")
+    ) {
+      return route.continue();
+    }
+
+    const response = await route.fetch();
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
+    await route.fulfill({ response });
+    completedDetailFetches += 1;
+  });
+
+  return {
+    completedCount: () => completedDetailFetches,
+  };
+}
 
 test.describe("OIL Board Dashboard", () => {
   test("hero card displays open count and metrics", async ({ page }) => {
@@ -49,6 +74,27 @@ test.describe("OIL Board Dashboard", () => {
     await expect(
       issueRow(page, "Update API rate limiting config").getByText("OIL-6")
     ).toBeVisible();
+  });
+
+  test("hovered issue link prefetches detail data before navigation", async ({ page }) => {
+    const detailFetch = await watchDelayedIssueDetailFetch(page);
+    await gotoDashboard(page);
+    await expandOutstandingPreview(page);
+
+    const title = "Migrate CI from Jenkins to GitHub Actions";
+    const issueLink = issueRow(page, title).getByRole("link", { name: title });
+    await expect(issueLink).toBeVisible();
+
+    await issueLink.hover();
+    await expect
+      .poll(detailFetch.completedCount, { timeout: 3000 })
+      .toBeGreaterThan(0);
+    const completedFetchesBeforeClick = detailFetch.completedCount();
+
+    await issueLink.click();
+
+    await expect(page.locator("h1", { hasText: title })).toBeVisible();
+    expect(detailFetch.completedCount()).toBe(completedFetchesBeforeClick);
   });
 
   test("filter pills work correctly", async ({ page }) => {

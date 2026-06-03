@@ -1,9 +1,8 @@
 "use client";
 
 import * as React from "react";
-import Link from "next/link";
-import { AlertTriangle } from "lucide-react";
 import { WidgetShell } from "./widget-shell";
+import { PrefetchIssueLink } from "@/components/minutia/prefetch-issue-link";
 import type { Issue } from "@/lib/types";
 import { daysSince } from "@/lib/date-utils";
 
@@ -49,12 +48,12 @@ export function StaleItemsWidget({
       {oldest && (
         <div className="border-t border-rule pt-3">
           <p className="text-[11px] text-ink-4 mb-1">Oldest stale item</p>
-          <Link
-            href={`/issues/${oldest.id}`}
+          <PrefetchIssueLink
+            issueId={oldest.id}
             className="text-sm font-medium text-ink hover:text-accent transition-colors"
           >
             {oldest.title}
-          </Link>
+          </PrefetchIssueLink>
           <p className="text-xs font-mono text-accent mt-0.5">
             {daysSince(oldest.updated_at)}d, no updates
           </p>
