@@ -29,6 +29,12 @@ jobs:
       - name: Lint
         run: pnpm lint
 
+      - name: Verify OSS boundaries
+        run: pnpm test:oss-boundaries
+
+      - name: Verify runtime config contracts
+        run: pnpm test:runtime-config
+
       - name: Verify CI workflow contracts
         run: pnpm test:ci-workflows
 

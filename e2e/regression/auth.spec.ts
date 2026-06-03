@@ -71,8 +71,36 @@ test.describe("Login Page", () => {
     await expect(signInButton).toBeEnabled();
   });
 
+  test("password login reaches Supabase auth without a browser fetch failure", async ({ page }) => {
+    const authRequests: string[] = [];
+    const authFailures: string[] = [];
+
+    page.on("request", (request) => {
+      if (isPasswordAuthRequest(request.url())) authRequests.push(request.url());
+    });
+    page.on("requestfailed", (request) => {
+      if (isPasswordAuthRequest(request.url())) {
+        authFailures.push(request.failure()?.errorText ?? "unknown request failure");
+      }
+    });
+
+    await page.goto("/login");
+    await page.getByLabel("Email address").fill(`missing-${Date.now()}@example.com`);
+    await page.getByLabel("Password").fill("password123");
+    await page.getByRole("button", { name: "Sign in", exact: true }).click();
+
+    await expect(page.getByText("Invalid login credentials")).toBeVisible();
+    expect(authRequests.length).toBeGreaterThan(0);
+    expect(authFailures).toEqual([]);
+    await expect(page.getByText("Failed to fetch")).toHaveCount(0);
+  });
+
   test("unauthenticated user is redirected to login", async ({ page }) => {
     await page.goto("/dashboard");
     await page.waitForURL(/\/login/, { timeout: 10000 });
   });
 });
+
+function isPasswordAuthRequest(url: string) {
+  return url.includes("/auth/v1/token") && url.includes("grant_type=password");
+}
