@@ -19,6 +19,7 @@ const defaultApiUrl = isLocalUrl(siteUrl) ? replacePort(siteUrl, "8000") : siteU
 const apiUrl = normalizeUrl(String(args.get("api-url") || defaultApiUrl));
 const siteAddress = siteUrl.startsWith("https://") ? new URL(siteUrl).host : siteUrl;
 const inviteRedirectUrl = `${siteUrl}/accept-invite`;
+const calendarWebhookUrl = siteUrl.startsWith("https://") ? `${siteUrl}/api/calendar/webhook` : "";
 
 if (existsSync(out) && !force) {
   console.error(`${out} already exists. Pass --force to replace it.`);
@@ -85,6 +86,7 @@ GOOGLE_AUTH_CLIENT_SECRET=
 GOOGLE_CLIENT_ID=
 GOOGLE_CLIENT_SECRET=
 GOOGLE_REDIRECT_URI=${siteUrl}/api/auth/google/callback
+GOOGLE_CALENDAR_WEBHOOK_URL=${calendarWebhookUrl}
 GOOGLE_TOKEN_ENCRYPTION_KEY=
 
 `;
