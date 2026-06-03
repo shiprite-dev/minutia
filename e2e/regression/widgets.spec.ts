@@ -118,7 +118,7 @@ test.describe("Widget system", () => {
     await expect(page.getByText("New since last").first()).toBeVisible();
   });
 
-  test("wide widgets can share a desktop row without wasting the right lane", async ({ page }) => {
+  test("wide widgets pack under shorter cards instead of leaving grid gaps", async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 1000 });
     await setStoredWidgets(page, [
       { id: "hero-1", type: "hero" },
@@ -132,10 +132,16 @@ test.describe("Widget system", () => {
 
     const heroBox = await page.getByTestId("widget-hero-1").boundingBox();
     const outstandingBox = await page.getByTestId("widget-outstanding-1").boundingBox();
+    const triageBox = await page.getByTestId("widget-meeting-triage-1").boundingBox();
 
     expect(heroBox).not.toBeNull();
     expect(outstandingBox).not.toBeNull();
+    expect(triageBox).not.toBeNull();
     expect(Math.abs((heroBox?.y ?? 0) - (outstandingBox?.y ?? 0))).toBeLessThan(2);
+    expect((triageBox?.y ?? 0) - ((heroBox?.y ?? 0) + (heroBox?.height ?? 0))).toBeLessThan(64);
+    expect(triageBox?.y ?? 0).toBeLessThan(
+      (outstandingBox?.y ?? 0) + (outstandingBox?.height ?? 0) - 80
+    );
   });
 
   test("meeting triage uses ordinal suffixes for carried meeting counts", async ({ page, request }) => {
