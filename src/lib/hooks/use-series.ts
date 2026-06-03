@@ -25,11 +25,12 @@ const UUID_PATTERN =
 // ---------------------------------------------------------------------------
 // useSeries - all series for the current user with open issue counts
 // ---------------------------------------------------------------------------
-export function useSeries() {
+export function useSeries(enabled = true) {
   const supabase = createClient();
 
   return useQuery<(MeetingSeries & { open_issues_count: number })[]>({
     queryKey: seriesKeys.all,
+    enabled,
     queryFn: async () => {
       const {
         data: { user },
