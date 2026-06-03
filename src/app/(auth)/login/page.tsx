@@ -9,15 +9,13 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Mail, ArrowRight, ExternalLink } from "lucide-react";
 import { motion } from "motion/react";
+import { GOOGLE_IDENTITY_SCOPES } from "@/lib/google-oauth-scopes";
 
 type FormState = "idle" | "loading" | "sent" | "error";
 type InviteState = "idle" | "loading" | "sent" | "error";
 
 const GUEST_LOGIN_ERROR_MESSAGE =
   "Guest login is unavailable because the local test user is missing or out of sync. Run `supabase db reset` to reseed test@example.com.";
-const GOOGLE_WORKSPACE_SCOPES =
-  "openid email profile https://www.googleapis.com/auth/calendar.readonly";
-
 export default function LoginPage() {
   return (
     <Suspense fallback={null}>
@@ -150,11 +148,7 @@ function LoginForm() {
       provider: "google",
       options: {
         redirectTo: callbackUrl,
-        scopes: GOOGLE_WORKSPACE_SCOPES,
-        queryParams: {
-          access_type: "offline",
-          prompt: "consent",
-        },
+        scopes: GOOGLE_IDENTITY_SCOPES,
       },
     });
 

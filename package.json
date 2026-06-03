@@ -93,6 +93,7 @@
   },
   "pnpm": {
     "overrides": {
+      "brace-expansion@>=5.0.0 <5.0.6": "5.0.6",
       "postcss": "8.5.15",
       "ws": "8.20.1"
     },
