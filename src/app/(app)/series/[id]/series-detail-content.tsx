@@ -12,7 +12,6 @@ import {
   useUpdateSeries,
 } from "@/lib/hooks/use-series";
 import {
-  useMeetings,
   useStartOrJoinMeeting,
 } from "@/lib/hooks/use-meetings";
 import { useIssues } from "@/lib/hooks/use-issues";
@@ -68,7 +67,6 @@ export function SeriesDetailContent({ seriesId }: SeriesDetailContentProps) {
   const validSeriesId = UUID_PATTERN.test(seriesId);
   const querySeriesId = validSeriesId ? seriesId : "";
   const { data: series, isLoading: seriesLoading } = useSeriesDetail(seriesId);
-  const { data: meetings, isLoading: meetingsLoading } = useMeetings(querySeriesId);
   const { data: issues } = useIssues(querySeriesId, validSeriesId);
   const { data: decisions } = useDecisions(undefined, querySeriesId, validSeriesId);
   const { data: participantRole } = useSeriesParticipantRole(querySeriesId);
@@ -89,10 +87,12 @@ export function SeriesDetailContent({ seriesId }: SeriesDetailContentProps) {
     [issues]
   );
 
+  const meetings = React.useMemo(() => series?.meetings ?? [], [series?.meetings]);
+
   // Determine if brief should show
   const sortedMeetings = React.useMemo(
     () =>
-      [...(meetings ?? [])].sort(
+      [...meetings].sort(
         (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
       ),
     [meetings]
@@ -239,25 +239,11 @@ export function SeriesDetailContent({ seriesId }: SeriesDetailContentProps) {
             Timeline
           </h2>
 
-          {meetingsLoading && (
-            <div className="space-y-4">
-              {Array.from({ length: 3 }).map((_, i) => (
-                <div key={i} className="flex gap-4">
-                  <Skeleton className="size-3 rounded-full shrink-0 mt-1" />
-                  <div className="flex-1">
-                    <Skeleton className="h-4 w-24 mb-1" />
-                    <Skeleton className="h-3 w-32" />
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {!meetingsLoading && sortedMeetings.length === 0 && (
+          {sortedMeetings.length === 0 && (
             <EmptyState variant="no-meetings" />
           )}
 
-          {!meetingsLoading && timelineMeetings.length > 0 && (
+          {timelineMeetings.length > 0 && (
             <DateAnchoredTimeline
               meetings={timelineMeetings}
               seriesId={seriesId}

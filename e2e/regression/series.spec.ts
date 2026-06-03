@@ -207,6 +207,25 @@ test.describe("Series Detail Page", () => {
     await expect(page.getByText("Platform Standup #4")).toBeVisible();
   });
 
+  test("uses embedded series meetings without a duplicate meetings request", async ({
+    page,
+  }) => {
+    const seriesMeetingRequests: string[] = [];
+
+    await page.route("**/rest/v1/meetings?**", async (route, request) => {
+      const decodedUrl = decodeURIComponent(request.url());
+      if (decodedUrl.includes(`series_id=eq.${SERIES.platformStandup}`)) {
+        seriesMeetingRequests.push(decodedUrl);
+      }
+      await route.continue();
+    });
+
+    await gotoSeriesDetail(page);
+
+    await expect(page.getByText("Platform Standup #1")).toBeVisible();
+    expect(seriesMeetingRequests).toHaveLength(0);
+  });
+
   test("open issues section lists active issues", async ({ page }) => {
     await gotoSeriesDetail(page);
 
