@@ -7,6 +7,7 @@ import {
 } from "../../src/lib/google-calendar-watch";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "http://127.0.0.1:54321";
+const APP_URL = process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3000";
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
 const TEST_USER_ID = "00000000-0000-0000-0000-000000000001";
 
@@ -133,6 +134,22 @@ async function createWatchChannel(
 }
 
 test.describe("Google Calendar push notifications", () => {
+  test("webhook stays public for unauthenticated Google notifications", async ({
+    playwright,
+  }) => {
+    const publicRequest = await playwright.request.newContext({
+      baseURL: APP_URL,
+      storageState: { cookies: [], origins: [] },
+    });
+
+    try {
+      const response = await publicRequest.post("/api/calendar/webhook");
+      expect(response.status()).toBe(400);
+    } finally {
+      await publicRequest.dispose();
+    }
+  });
+
   test("creates an Events watch request with token, webhook address, and ttl", async () => {
     const originalFetch = globalThis.fetch;
     let requestedUrl: URL | null = null;
