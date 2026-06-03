@@ -52,7 +52,6 @@ CREATE TABLE IF NOT EXISTS public.google_calendar_events (
   UNIQUE (user_id, calendar_id, event_id)
 );
 
-DROP TRIGGER IF EXISTS set_google_calendar_events_updated_at ON public.google_calendar_events;
 CREATE TRIGGER set_google_calendar_events_updated_at
   BEFORE UPDATE ON public.google_calendar_events
   FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
@@ -65,12 +64,10 @@ CREATE INDEX IF NOT EXISTS idx_google_calendar_events_series
 
 ALTER TABLE public.google_calendar_events ENABLE ROW LEVEL SECURITY;
 
-DROP POLICY IF EXISTS "google_calendar_events_select_own" ON public.google_calendar_events;
 CREATE POLICY "google_calendar_events_select_own"
   ON public.google_calendar_events FOR SELECT
   USING (auth.uid() = user_id);
 
-DROP POLICY IF EXISTS "google_calendar_events_delete_own" ON public.google_calendar_events;
 CREATE POLICY "google_calendar_events_delete_own"
   ON public.google_calendar_events FOR DELETE
   USING (auth.uid() = user_id);

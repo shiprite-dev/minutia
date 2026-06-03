@@ -18,128 +18,8 @@ type CalendarEventRow = {
   id: string;
 };
 
-type CalendarSyncStateRow = {
-  id: string;
-  last_success_at: string | null;
-};
-
-type StoredCalendarAgendaRow = {
-  id: string;
-  calendar_id: string;
-  event_id: string;
-  series_id: string;
-  meeting_id: string;
-  series_kind: "recurring" | "adhoc";
-  summary: string;
-  description: string | null;
-  start_at: string;
-  end_at: string;
-  html_link: string | null;
-  meeting_url: string | null;
-  attendee_emails: string[];
-  organizer_email: string | null;
-  event_type: string;
-  event_status: string;
-  meeting: { status: MeetingStatus } | { status: MeetingStatus }[] | null;
-};
-
-const AGENDA_SYNC_MODE = "agenda_window";
-
 function dateOnly(isoDateTime: string) {
   return new Date(isoDateTime).toISOString().slice(0, 10);
-}
-
-export async function getCalendarAgendaSyncState({
-  userId,
-  organizationId,
-  calendarId,
-}: {
-  userId: string;
-  organizationId: string;
-  calendarId: string;
-}): Promise<CalendarSyncStateRow | null> {
-  const supabase = createServiceRoleClient();
-  const { data, error } = await supabase
-    .from("google_calendar_sync_state")
-    .select("id, last_success_at")
-    .eq("user_id", userId)
-    .eq("organization_id", organizationId)
-    .eq("calendar_id", calendarId)
-    .eq("sync_mode", AGENDA_SYNC_MODE)
-    .maybeSingle<CalendarSyncStateRow>();
-
-  if (error) throw error;
-  return data;
-}
-
-export async function recordCalendarAgendaSyncSuccess({
-  userId,
-  organizationId,
-  calendarId,
-  syncStartedAt,
-  syncType,
-}: {
-  userId: string;
-  organizationId: string;
-  calendarId: string;
-  syncStartedAt: string;
-  syncType: "full" | "incremental";
-}) {
-  const supabase = createServiceRoleClient();
-  const payload = {
-    user_id: userId,
-    organization_id: organizationId,
-    calendar_id: calendarId,
-    sync_mode: AGENDA_SYNC_MODE,
-    status: "synced",
-    last_success_at: syncStartedAt,
-    last_sync_started_at: syncStartedAt,
-    error_message: null,
-    ...(syncType === "full" ? { last_full_synced_at: syncStartedAt } : {}),
-    ...(syncType === "incremental" ? { last_incremental_synced_at: syncStartedAt } : {}),
-  };
-
-  const { error } = await supabase
-    .from("google_calendar_sync_state")
-    .upsert(payload, {
-      onConflict: "user_id,organization_id,calendar_id,sync_mode",
-    });
-
-  if (error) throw error;
-}
-
-export async function recordCalendarAgendaSyncFailure({
-  userId,
-  organizationId,
-  calendarId,
-  syncStartedAt,
-  errorMessage,
-}: {
-  userId: string;
-  organizationId: string;
-  calendarId: string;
-  syncStartedAt: string;
-  errorMessage: string;
-}) {
-  const supabase = createServiceRoleClient();
-  const { error } = await supabase
-    .from("google_calendar_sync_state")
-    .upsert(
-      {
-        user_id: userId,
-        organization_id: organizationId,
-        calendar_id: calendarId,
-        sync_mode: AGENDA_SYNC_MODE,
-        status: "failed",
-        last_sync_started_at: syncStartedAt,
-        error_message: errorMessage,
-      },
-      {
-        onConflict: "user_id,organization_id,calendar_id,sync_mode",
-      }
-    );
-
-  if (error) throw error;
 }
 
 async function ensureSeries({
@@ -157,7 +37,6 @@ async function ensureSeries({
     .from("meeting_series")
     .select("id, name")
     .eq("owner_id", userId)
-    .eq("organization_id", organizationId)
     .eq("gcal_series_key", event.seriesKey)
     .maybeSingle<SeriesRow>();
 
@@ -309,7 +188,7 @@ async function upsertCalendarEvent({
         event_status: event.status,
         last_synced_at: new Date().toISOString(),
       },
-      { onConflict: "user_id,organization_id,calendar_id,event_id" }
+      { onConflict: "user_id,calendar_id,event_id" }
     )
     .select("id")
     .single<CalendarEventRow>();
@@ -364,125 +243,6 @@ export async function syncCalendarAgenda({
   }
 
   return agenda.sort((a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime());
-}
-
-export async function deleteCalendarAgendaEventsByProviderId({
-  userId,
-  organizationId,
-  calendarId,
-  eventIds,
-}: {
-  userId: string;
-  organizationId: string;
-  calendarId: string;
-  eventIds: string[];
-}) {
-  const uniqueEventIds = Array.from(new Set(eventIds)).filter(Boolean);
-  if (uniqueEventIds.length === 0) return;
-
-  const supabase = createServiceRoleClient();
-  const { error } = await supabase
-    .from("google_calendar_events")
-    .delete()
-    .eq("user_id", userId)
-    .eq("organization_id", organizationId)
-    .eq("calendar_id", calendarId)
-    .in("event_id", uniqueEventIds);
-
-  if (error) throw error;
-}
-
-export async function deleteStoredCalendarAgendaWindow({
-  userId,
-  organizationId,
-  calendarId,
-  timeMin,
-  timeMax,
-}: {
-  userId: string;
-  organizationId: string;
-  calendarId: string;
-  timeMin: Date;
-  timeMax: Date;
-}) {
-  const supabase = createServiceRoleClient();
-  const { error } = await supabase
-    .from("google_calendar_events")
-    .delete()
-    .eq("user_id", userId)
-    .eq("organization_id", organizationId)
-    .eq("calendar_id", calendarId)
-    .gte("start_at", timeMin.toISOString())
-    .lt("start_at", timeMax.toISOString());
-
-  if (error) throw error;
-}
-
-export async function listStoredCalendarAgenda({
-  userId,
-  organizationId,
-  timeMin,
-  timeMax,
-}: {
-  userId: string;
-  organizationId: string;
-  timeMin: Date;
-  timeMax: Date;
-}): Promise<GoogleCalendarAgendaItem[]> {
-  const supabase = createServiceRoleClient();
-  const { data, error } = await supabase
-    .from("google_calendar_events")
-    .select(`
-      id,
-      calendar_id,
-      event_id,
-      series_id,
-      meeting_id,
-      series_kind,
-      summary,
-      description,
-      start_at,
-      end_at,
-      html_link,
-      meeting_url,
-      attendee_emails,
-      organizer_email,
-      event_type,
-      event_status,
-      meeting:meetings!inner(status)
-    `)
-    .eq("user_id", userId)
-    .eq("organization_id", organizationId)
-    .gte("start_at", timeMin.toISOString())
-    .lt("start_at", timeMax.toISOString())
-    .order("start_at", { ascending: true })
-    .returns<StoredCalendarAgendaRow[]>();
-
-  if (error) throw error;
-
-  return (data ?? []).map((row) => {
-    const meeting = Array.isArray(row.meeting) ? row.meeting[0] : row.meeting;
-
-    return {
-      id: row.id,
-      calendarId: row.calendar_id,
-      eventId: row.event_id,
-      seriesId: row.series_id,
-      meetingId: row.meeting_id,
-      seriesKind: row.series_kind,
-      title: row.summary,
-      description: row.description,
-      startAt: row.start_at,
-      endAt: row.end_at,
-      htmlLink: row.html_link,
-      meetingUrl: row.meeting_url,
-      attendeeEmails: row.attendee_emails,
-      organizerEmail: row.organizer_email,
-      eventType: row.event_type,
-      eventStatus: row.event_status,
-      meetingStatus: meeting?.status ?? "upcoming",
-    };
-  });
 }
 
 export async function startCalendarAgendaEvent({
