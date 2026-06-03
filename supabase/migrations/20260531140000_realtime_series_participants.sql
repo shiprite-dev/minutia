@@ -391,28 +391,36 @@ ALTER TABLE public.decisions REPLICA IDENTITY FULL;
 
 DO $$
 BEGIN
-  ALTER PUBLICATION supabase_realtime ADD TABLE public.meeting_series;
+  IF EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime') THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.meeting_series;
+  END IF;
 EXCEPTION WHEN duplicate_object THEN
   NULL;
 END $$;
 
 DO $$
 BEGIN
-  ALTER PUBLICATION supabase_realtime ADD TABLE public.meetings;
+  IF EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime') THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.meetings;
+  END IF;
 EXCEPTION WHEN duplicate_object THEN
   NULL;
 END $$;
 
 DO $$
 BEGIN
-  ALTER PUBLICATION supabase_realtime ADD TABLE public.issues;
+  IF EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime') THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.issues;
+  END IF;
 EXCEPTION WHEN duplicate_object THEN
   NULL;
 END $$;
 
 DO $$
 BEGIN
-  ALTER PUBLICATION supabase_realtime ADD TABLE public.decisions;
+  IF EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime') THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.decisions;
+  END IF;
 EXCEPTION WHEN duplicate_object THEN
   NULL;
 END $$;
