@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { test, expect, type APIRequestContext, type Browser } from "@playwright/test";
-import { MEETINGS, SERIES, waitForApp } from "./seed-data";
+import { waitForApp } from "./seed-data";
 
 const APP_URL = process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3000";
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL ?? "http://127.0.0.1:54321";
@@ -37,13 +37,24 @@ async function rest<T>(
 }
 
 async function getCurrentOrgId(request: APIRequestContext) {
-  const rows = await rest<{ current_organization_id: string | null }[]>(
+  const orgRows = await rest<{ id: string }[]>(
     request,
-    `profiles?id=eq.${TEST_USER_ID}&select=current_organization_id`
+    "organizations?select=id&limit=1"
   );
-  const orgId = rows[0]?.current_organization_id;
-  expect(orgId).toBeTruthy();
-  return orgId as string;
+  if (orgRows[0]?.id) return orgRows[0].id;
+
+  const orgId = randomUUID();
+  await rest<null>(request, "organizations", {
+    method: "POST",
+    data: {
+      id: orgId,
+      name: "Regression Workspace",
+      slug: `regression-${Date.now()}`,
+      created_by: TEST_USER_ID,
+    },
+    headers: serviceHeaders("return=minimal"),
+  });
+  return orgId;
 }
 
 async function createAuthUser(request: APIRequestContext, email: string) {
@@ -90,13 +101,49 @@ async function finishProfileSetup(
 
 async function addSeriesParticipant(
   request: APIRequestContext,
-  userId: string
+  userId: string,
+  seriesId: string
 ) {
   await rest<null>(request, "series_participants?on_conflict=series_id,user_id", {
     method: "POST",
-    data: { series_id: SERIES.platformStandup, user_id: userId, role: "participant", invited_by: TEST_USER_ID },
+    data: { series_id: seriesId, user_id: userId, role: "participant", invited_by: TEST_USER_ID },
     headers: serviceHeaders("resolution=merge-duplicates,return=minimal"),
   });
+}
+
+async function createWorkspace(request: APIRequestContext, userId = TEST_USER_ID) {
+  const orgId = await getCurrentOrgId(request);
+  const seriesId = randomUUID();
+  const meetingId = randomUUID();
+  const seriesName = `Platform Team Standup ${Date.now()}`;
+
+  await finishProfileSetup(request, orgId, userId);
+  await rest<null>(request, "meeting_series", {
+    method: "POST",
+    data: {
+      id: seriesId,
+      organization_id: orgId,
+      name: seriesName,
+      cadence: "weekly",
+      owner_id: userId,
+    },
+    headers: serviceHeaders("return=minimal"),
+  });
+  await addSeriesParticipant(request, userId, seriesId);
+  await rest<null>(request, "meetings", {
+    method: "POST",
+    data: {
+      id: meetingId,
+      series_id: seriesId,
+      sequence_number: 1,
+      title: `${seriesName} Meeting`,
+      date: new Date().toISOString().slice(0, 10),
+      status: "completed",
+    },
+    headers: serviceHeaders("return=minimal"),
+  });
+
+  return { orgId, seriesId, meetingId, seriesName };
 }
 
 async function createIssue(
@@ -109,8 +156,8 @@ async function createIssue(
     method: "POST",
     data: {
       id,
-      series_id: SERIES.platformStandup,
-      raised_in_meeting_id: MEETINGS.standup1,
+      series_id: "",
+      raised_in_meeting_id: "",
       title,
       description: "Created by My Actions regression coverage.",
       category: "info",
@@ -132,6 +179,42 @@ async function deleteIssue(request: APIRequestContext, id: string | null) {
     method: "DELETE",
     headers: serviceHeaders("return=minimal"),
   });
+}
+
+async function deleteSeries(request: APIRequestContext, id: string | null) {
+  if (!id) return;
+  await rest<null>(request, `meeting_series?id=eq.${id}`, {
+    method: "DELETE",
+    headers: serviceHeaders("return=minimal"),
+  });
+}
+
+async function withIssues<T>(
+  request: APIRequestContext,
+  issueSpecs: Array<{ title: string; overrides?: Record<string, unknown> }>,
+  fn: (
+    issues: Array<{ id: string; title: string }>,
+    workspace: Awaited<ReturnType<typeof createWorkspace>>
+  ) => Promise<T>,
+  userId = TEST_USER_ID
+) {
+  const issues: Array<{ id: string; title: string }> = [];
+  const workspace = await createWorkspace(request, userId);
+  try {
+    for (const spec of issueSpecs) {
+      issues.push(
+        await createIssue(request, spec.title, {
+          series_id: workspace.seriesId,
+          raised_in_meeting_id: workspace.meetingId,
+          ...spec.overrides,
+        })
+      );
+    }
+    return await fn(issues, workspace);
+  } finally {
+    await Promise.all(issues.map((issue) => deleteIssue(request, issue.id)));
+    await deleteSeries(request, workspace.seriesId);
+  }
 }
 
 async function getAccessToken(request: APIRequestContext, email: string) {
@@ -169,79 +252,169 @@ async function newAuthedPage(
 }
 
 test.describe("My Actions Page", () => {
-  test("renders heading and summary counts", async ({ page }) => {
-    await page.goto("/actions");
-    await waitForApp(page);
+  test("renders heading and summary counts", async ({ page, request }) => {
+    test.skip(!SERVICE_KEY, "Requires Supabase service role for isolated issues");
 
-    await expect(
-      page.getByRole("heading", { name: "My Actions" }).first()
-    ).toBeVisible();
+    await withIssues(
+      request,
+      [
+        {
+          title: `Summary action ${Date.now()}`,
+          overrides: { category: "action", owner_user_id: TEST_USER_ID },
+        },
+      ],
+      async () => {
+        await page.goto("/actions");
+        await waitForApp(page);
 
-    await expect(page.getByText(/OPEN/).first()).toBeVisible();
+        await expect(
+          page.getByRole("heading", { name: "My Actions" }).first()
+        ).toBeVisible();
+
+        await expect(page.getByText(/OPEN/).first()).toBeVisible();
+      }
+    );
   });
 
   test("needs attention section shows open/in_progress issues owned by user", async ({
     page,
+    request,
   }) => {
-    await page.goto("/actions");
-    await waitForApp(page);
+    test.skip(!SERVICE_KEY, "Requires Supabase service role for isolated issues");
 
-    await expect(
-      page.getByText("Needs attention").first()
-    ).toBeVisible();
+    const stamp = Date.now();
+    await withIssues(
+      request,
+      [
+        {
+          title: `Needs attention open ${stamp}`,
+          overrides: { category: "action", owner_user_id: TEST_USER_ID },
+        },
+        {
+          title: `Needs attention progress ${stamp}`,
+          overrides: {
+            category: "blocker",
+            status: "in_progress",
+            owner_user_id: TEST_USER_ID,
+          },
+        },
+      ],
+      async ([openIssue, progressIssue]) => {
+        await page.goto("/actions");
+        await waitForApp(page);
 
-    await expect(
-      page.getByText("Set up staging environment monitoring").first()
-    ).toBeVisible({ timeout: 10000 });
-    await expect(
-      page.getByText("Write user research summary for Q2 features").first()
-    ).toBeVisible();
+        await expect(
+          page.getByText("Needs attention").first()
+        ).toBeVisible();
+
+        await expect(page.getByText(openIssue.title).first()).toBeVisible();
+        await expect(page.getByText(progressIssue.title).first()).toBeVisible();
+      }
+    );
   });
 
-  test("issue cards show issue keys", async ({ page }) => {
-    await page.goto("/actions");
-    await waitForApp(page);
+  test("issue cards show issue keys", async ({ page, request }) => {
+    test.skip(!SERVICE_KEY, "Requires Supabase service role for isolated issues");
 
-    await expect(page.getByText("OIL-2").first()).toBeVisible();
+    await withIssues(
+      request,
+      [
+        {
+          title: `Issue key action ${Date.now()}`,
+          overrides: { category: "action", owner_user_id: TEST_USER_ID },
+        },
+      ],
+      async () => {
+        await page.goto("/actions");
+        await waitForApp(page);
+
+        await expect(page.getByText(/OIL-\d+/).first()).toBeVisible();
+      }
+    );
   });
 
-  test("pending section shows pending issues", async ({ page }) => {
-    await page.goto("/actions");
-    await waitForApp(page);
+  test("pending section shows pending issues", async ({ page, request }) => {
+    test.skip(!SERVICE_KEY, "Requires Supabase service role for isolated issues");
 
-    await expect(
-      page.locator("button").filter({ hasText: "Pending" }).first()
-    ).toBeVisible();
-    await expect(
-      page.getByText("Evaluate Kubernetes vs ECS for new services")
-    ).toBeVisible();
+    await withIssues(
+      request,
+      [
+        {
+          title: `Pending action ${Date.now()}`,
+          overrides: {
+            category: "action",
+            status: "pending",
+            owner_user_id: TEST_USER_ID,
+          },
+        },
+      ],
+      async ([issue]) => {
+        await page.goto("/actions");
+        await waitForApp(page);
+
+        await expect(
+          page.locator("button").filter({ hasText: "Pending" }).first()
+        ).toBeVisible();
+        await expect(page.getByText(issue.title)).toBeVisible();
+      }
+    );
   });
 
-  test("completed section is collapsed by default", async ({ page }) => {
-    await page.goto("/actions");
-    await waitForApp(page);
+  test("completed section is collapsed by default", async ({ page, request }) => {
+    test.skip(!SERVICE_KEY, "Requires Supabase service role for isolated issues");
 
-    await expect(
-      page.locator("button").filter({ hasText: "Completed" }).first()
-    ).toBeVisible();
+    await withIssues(
+      request,
+      [
+        {
+          title: `Completed action ${Date.now()}`,
+          overrides: {
+            category: "action",
+            status: "resolved",
+            owner_user_id: TEST_USER_ID,
+          },
+        },
+      ],
+      async ([issue]) => {
+        await page.goto("/actions");
+        await waitForApp(page);
 
-    await expect(
-      page.getByText("Fix flaky integration tests")
-    ).not.toBeVisible();
+        await expect(
+          page.locator("button").filter({ hasText: "Completed" }).first()
+        ).toBeVisible();
+
+        await expect(page.getByText(issue.title)).not.toBeVisible();
+      }
+    );
   });
 
-  test("completed section expands on click", async ({ page }) => {
-    await page.goto("/actions");
-    await waitForApp(page);
+  test("completed section expands on click", async ({ page, request }) => {
+    test.skip(!SERVICE_KEY, "Requires Supabase service role for isolated issues");
 
-    await page
-      .locator("button")
-      .filter({ hasText: "Completed" })
-      .first()
-      .click();
-    await expect(
-      page.getByText("Fix flaky integration tests")
-    ).toBeVisible();
+    await withIssues(
+      request,
+      [
+        {
+          title: `Completed expandable action ${Date.now()}`,
+          overrides: {
+            category: "action",
+            status: "resolved",
+            owner_user_id: TEST_USER_ID,
+          },
+        },
+      ],
+      async ([issue]) => {
+        await page.goto("/actions");
+        await waitForApp(page);
+
+        await page
+          .locator("button")
+          .filter({ hasText: "Completed" })
+          .first()
+          .click();
+        await expect(page.getByText(issue.title)).toBeVisible();
+      }
+    );
   });
 
   test("issues not owned by user are excluded", async ({ page }) => {
@@ -263,43 +436,38 @@ test.describe("My Actions Page", () => {
   }) => {
     test.skip(!SERVICE_KEY || !ANON_KEY, "Requires Supabase service and anon keys");
 
-    const orgId = await getCurrentOrgId(request);
     const email = `actions-mixed-${Date.now()}@example.com`;
     let userId: string | null = null;
-    let actionIssueId: string | null = null;
-    let infoIssueId: string | null = null;
 
     try {
       userId = await createAuthUser(request, email);
-      await finishProfileSetup(request, orgId, userId);
-      await addSeriesParticipant(request, userId);
-
-      const actionIssue = await createIssue(
+      await withIssues(
         request,
-        `Assigned action ${Date.now()}`,
-        { category: "action", owner_user_id: userId }
-      );
-      const infoIssue = await createIssue(
-        request,
-        `Assigned info ${Date.now()}`,
-        { owner_user_id: userId }
-      );
-      actionIssueId = actionIssue.id;
-      infoIssueId = infoIssue.id;
+        [
+          {
+            title: `Assigned action ${Date.now()}`,
+            overrides: { category: "action", owner_user_id: userId },
+          },
+          {
+            title: `Assigned info ${Date.now()}`,
+            overrides: { owner_user_id: userId },
+          },
+        ],
+        async ([actionIssue, infoIssue]) => {
+          const { context, page } = await newAuthedPage(browser, request, email);
+          try {
+            await page.goto(`${APP_URL}/actions`);
+            await waitForApp(page);
 
-      const { context, page } = await newAuthedPage(browser, request, email);
-      try {
-        await page.goto(`${APP_URL}/actions`);
-        await waitForApp(page);
-
-        await expect(page.getByText(actionIssue.title)).toBeVisible();
-        await expect(page.getByText(infoIssue.title)).not.toBeVisible();
-      } finally {
-        await context.close();
-      }
+            await expect(page.getByText(actionIssue.title)).toBeVisible();
+            await expect(page.getByText(infoIssue.title)).not.toBeVisible();
+          } finally {
+            await context.close();
+          }
+        },
+        userId
+      );
     } finally {
-      await deleteIssue(request, infoIssueId);
-      await deleteIssue(request, actionIssueId);
       await deleteAuthUser(request, userId);
     }
   });
@@ -310,50 +478,62 @@ test.describe("My Actions Page", () => {
   }) => {
     test.skip(!SERVICE_KEY || !ANON_KEY, "Requires Supabase service and anon keys");
 
-    const orgId = await getCurrentOrgId(request);
     const email = `actions-info-only-${Date.now()}@example.com`;
     let userId: string | null = null;
-    let issueId: string | null = null;
 
     try {
       userId = await createAuthUser(request, email);
-      await finishProfileSetup(request, orgId, userId);
-      await addSeriesParticipant(request, userId);
-
-      const infoIssue = await createIssue(
+      await withIssues(
         request,
-        `Only assigned info ${Date.now()}`,
-        { owner_user_id: userId }
+        [
+          {
+            title: `Only assigned info ${Date.now()}`,
+            overrides: { owner_user_id: userId },
+          },
+        ],
+        async ([infoIssue]) => {
+          const { context, page } = await newAuthedPage(browser, request, email);
+          try {
+            await page.goto(`${APP_URL}/actions`);
+            await waitForApp(page);
+
+            await expect(page.getByText(infoIssue.title)).not.toBeVisible();
+            await expect(
+              page.getByText("You owe nobody anything right now.")
+            ).toBeVisible();
+            await expect(
+              page.getByText(/Needs attention|Pending|Completed/).first()
+            ).not.toBeVisible();
+          } finally {
+            await context.close();
+          }
+        },
+        userId
       );
-      issueId = infoIssue.id;
-
-      const { context, page } = await newAuthedPage(browser, request, email);
-      try {
-        await page.goto(`${APP_URL}/actions`);
-        await waitForApp(page);
-
-        await expect(page.getByText(infoIssue.title)).not.toBeVisible();
-        await expect(
-          page.getByText("You owe nobody anything right now.")
-        ).toBeVisible();
-        await expect(
-          page.getByText(/Needs attention|Pending|Completed/).first()
-        ).not.toBeVisible();
-      } finally {
-        await context.close();
-      }
     } finally {
-      await deleteIssue(request, issueId);
       await deleteAuthUser(request, userId);
     }
   });
 
-  test("series tag overlays are visible on issue cards", async ({ page }) => {
-    await page.goto("/actions");
-    await waitForApp(page);
+  test("series tag overlays are visible on issue cards", async ({ page, request }) => {
+    test.skip(!SERVICE_KEY, "Requires Supabase service role for isolated issues");
 
-    await expect(
-      page.getByText("Platform Team Standup").first()
-    ).toBeVisible();
+    await withIssues(
+      request,
+      [
+        {
+          title: `Series tag action ${Date.now()}`,
+          overrides: { category: "action", owner_user_id: TEST_USER_ID },
+        },
+      ],
+      async () => {
+        await page.goto("/actions");
+        await waitForApp(page);
+
+        await expect(
+          page.getByText("Platform Team Standup").first()
+        ).toBeVisible();
+      }
+    );
   });
 });
