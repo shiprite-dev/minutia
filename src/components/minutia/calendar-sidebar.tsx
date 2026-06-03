@@ -16,6 +16,7 @@ import {
   Video,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { MinutiaMeetingStatusIcon } from "@/components/minutia/minutia-icons";
 import {
   Sheet,
   SheetContent,
@@ -306,9 +307,7 @@ function DayAgenda({
                           meeting.status === "upcoming" && "bg-paper-3 text-ink-3"
                         )}
                       >
-                        {meeting.status === "live" && (
-                          <span className="size-1.5 rounded-full bg-accent animate-pulse" />
-                        )}
+                        <MinutiaMeetingStatusIcon status={meeting.status} className="size-3 text-ink" />
                         {meeting.status}
                       </span>
                     </div>
@@ -404,6 +403,8 @@ function CalendarEventDetail({
   onBack: () => void;
   onStart: (event: GoogleCalendarAgendaItem) => void;
 }) {
+  const isLive = event.meetingStatus === "live";
+
   return (
     <div className="flex flex-1 flex-col overflow-y-auto px-4 pb-4 pt-3">
       <Button
@@ -423,10 +424,10 @@ function CalendarEventDetail({
             <span className="inline-flex items-center gap-1 rounded-full bg-paper-3 px-2 py-1 text-[10px] font-medium text-ink-3">
               {event.seriesKind === "recurring" ? "Recurring series" : "Ad hoc series"}
             </span>
-            {event.meetingStatus === "live" && (
+            {isLive && (
               <span className="inline-flex items-center gap-1 rounded-full bg-accent-soft px-2 py-1 text-[10px] font-medium text-accent">
                 <Radio className="size-3" />
-                Live
+                Meeting in progress
               </span>
             )}
           </div>
@@ -466,10 +467,10 @@ function CalendarEventDetail({
           <Button
             type="button"
             className="bg-accent text-white hover:bg-accent-hover"
-            disabled={isStarting}
+            disabled={!isLive && isStarting}
             onClick={() => onStart(event)}
           >
-            {event.meetingStatus === "live" ? "Join live meeting" : "Start meeting"}
+            {isLive ? "Join now" : "Start meeting"}
           </Button>
           <Button variant="outline" asChild>
             <Link href={`/series/${event.seriesId}`}>
@@ -510,8 +511,9 @@ export function CalendarSidebar() {
   const [viewMonth, setViewMonth] = React.useState(selectedDate.getMonth());
   const [selectedCalendarEvent, setSelectedCalendarEvent] =
     React.useState<GoogleCalendarAgendaItem | null>(null);
-  const { data: calendarStatus } = useGoogleCalendarStatus();
-  const { data: agendaData, isLoading: agendaLoading } = useCalendarAgenda();
+  const { data: calendarStatus } = useGoogleCalendarStatus(calendarSidebarOpen);
+  const { data: agendaData, isLoading: agendaLoading } =
+    useCalendarAgenda(calendarSidebarOpen);
   const startCalendarEvent = useStartCalendarAgendaEvent();
 
   // Hydrate persisted sidebar state from localStorage after mount
@@ -520,7 +522,11 @@ export function CalendarSidebar() {
     if (saved === "true") setCalendarSidebarOpen(true);
   }, [setCalendarSidebarOpen]);
 
-  const { data: meetings = [] } = useMeetingsByMonth(viewYear, viewMonth);
+  const { data: meetings = [] } = useMeetingsByMonth(
+    viewYear,
+    viewMonth,
+    calendarSidebarOpen
+  );
   const calendarEvents = React.useMemo(() => agendaData?.events ?? [], [agendaData?.events]);
   const calendarConnected = !!calendarStatus?.connected;
 
@@ -569,10 +575,34 @@ export function CalendarSidebar() {
     if (event.meetingUrl) {
       window.open(event.meetingUrl, "_blank", "noopener,noreferrer");
     }
+    if (event.meetingStatus === "live") {
+      router.push(`/series/${event.seriesId}/meetings/${event.meetingId}`);
+      return;
+    }
     startCalendarEvent.mutate(event.id, {
       onSuccess: (result) => router.push(result.captureUrl),
     });
   }
+
+  const selectedCalendarEventForDetail = React.useMemo(() => {
+    if (!selectedCalendarEvent) return null;
+
+    const currentEvent =
+      calendarEvents.find((event) => event.id === selectedCalendarEvent.id) ??
+      selectedCalendarEvent;
+    const linkedMeeting = meetings.find(
+      (meeting) => meeting.id === currentEvent.meetingId
+    );
+
+    if (!linkedMeeting || linkedMeeting.status === currentEvent.meetingStatus) {
+      return currentEvent;
+    }
+
+    return {
+      ...currentEvent,
+      meetingStatus: linkedMeeting.status,
+    };
+  }, [calendarEvents, meetings, selectedCalendarEvent]);
 
   React.useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
@@ -602,9 +632,9 @@ export function CalendarSidebar() {
     onOpenCalendarEvent: setSelectedCalendarEvent,
   };
 
-  const content = selectedCalendarEvent ? (
+  const content = selectedCalendarEventForDetail ? (
     <CalendarEventDetail
-      event={selectedCalendarEvent}
+      event={selectedCalendarEventForDetail}
       isStarting={startCalendarEvent.isPending}
       onBack={() => setSelectedCalendarEvent(null)}
       onStart={handleStartCalendarEvent}
