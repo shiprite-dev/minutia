@@ -74,11 +74,22 @@ export async function waitForApp(page: Page) {
   await page.locator("body").waitFor({ state: "visible" });
   await expect
     .poll(
-      async () =>
-        page.evaluate(() => {
-          const shell = document.querySelector("[data-minutia-app-shell]");
-          return !shell || shell.getAttribute("data-hydrated") === "true";
-        }),
+      async () => {
+        try {
+          return await page.evaluate(() => {
+            const shell = document.querySelector("[data-minutia-app-shell]");
+            return !shell || shell.getAttribute("data-hydrated") === "true";
+          });
+        } catch (error) {
+          if (
+            error instanceof Error &&
+            error.message.includes("Execution context was destroyed")
+          ) {
+            return false;
+          }
+          throw error;
+        }
+      },
       { timeout: 30_000 }
     )
     .toBe(true);
