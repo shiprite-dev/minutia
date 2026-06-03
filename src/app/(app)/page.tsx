@@ -100,6 +100,54 @@ function ageGroup(days: number): string {
   return "30d+";
 }
 
+const DASHBOARD_ROW_HEIGHT = 8;
+const DASHBOARD_GRID_GAP = 20;
+
+function DashboardGridItem({
+  children,
+  span,
+}: {
+  children: React.ReactNode;
+  span: 1 | 2;
+}) {
+  const ref = React.useRef<HTMLDivElement>(null);
+  const [rowSpan, setRowSpan] = React.useState(1);
+
+  React.useLayoutEffect(() => {
+    const node = ref.current;
+    if (!node) return;
+
+    const measure = () => {
+      const height = node.getBoundingClientRect().height;
+      const nextSpan = Math.max(
+        1,
+        Math.ceil((height + DASHBOARD_GRID_GAP) / (DASHBOARD_ROW_HEIGHT + DASHBOARD_GRID_GAP))
+      );
+      setRowSpan(nextSpan);
+    };
+
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(node);
+    window.addEventListener("resize", measure);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, []);
+
+  return (
+    <div
+      className={cn(span === 2 && "lg:col-span-2")}
+      style={{ gridRowEnd: `span ${rowSpan}` }}
+    >
+      <div ref={ref}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Hero summary widget
 // ---------------------------------------------------------------------------
@@ -1141,11 +1189,14 @@ export default function Dashboard() {
               onDragEnd={handleDragEnd}
             >
               <SortableContext items={widgetIds} strategy={rectSortingStrategy}>
-                <div className="grid grid-cols-1 gap-5 [grid-auto-flow:dense] lg:grid-cols-2 xl:grid-cols-4">
+                <div
+                  className="grid grid-cols-1 gap-5 [grid-auto-flow:dense] lg:grid-cols-2 xl:grid-cols-4"
+                  style={{ gridAutoRows: `${DASHBOARD_ROW_HEIGHT}px` }}
+                >
                   {widgetSpans.map((w, i) => (
-                    <div
+                    <DashboardGridItem
                       key={w.id}
-                      className={cn(w._span === 2 && "lg:col-span-2")}
+                      span={w._span === 2 ? 2 : 1}
                     >
                       <WidgetRenderer
                         widgetId={w.id}
@@ -1153,7 +1204,7 @@ export default function Dashboard() {
                         widgetIndex={i}
                         {...sharedProps}
                       />
-                    </div>
+                    </DashboardGridItem>
                   ))}
                 </div>
               </SortableContext>
