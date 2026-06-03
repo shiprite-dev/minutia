@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { storeTokens } from "@/lib/google-calendar";
 import { googleCalendarSettingsRedirectUrl } from "@/lib/google-oauth-redirect";
+import { GOOGLE_WORKSPACE_SCOPES } from "@/lib/google-oauth-scopes";
 
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 const GOOGLE_USERINFO_URL = "https://www.googleapis.com/oauth2/v2/userinfo";
@@ -69,7 +70,10 @@ export async function GET(request: NextRequest) {
       tokens.access_token,
       tokens.refresh_token,
       tokens.expires_in,
-      userinfo.email
+      userinfo.email,
+      typeof tokens.scope === "string"
+        ? tokens.scope.split(/\s+/).filter(Boolean)
+        : GOOGLE_WORKSPACE_SCOPES.split(" ")
     );
   } catch (err) {
     console.error("Failed to store Google tokens:", err);
