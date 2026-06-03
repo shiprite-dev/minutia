@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import {
   Home,
@@ -20,6 +20,7 @@ import {
 import { useIssues } from "@/lib/hooks/use-issues";
 import { useSeries } from "@/lib/hooks/use-series";
 import { useDecisions } from "@/lib/hooks/use-decisions";
+import { useUIStore } from "@/lib/stores/ui-store";
 import { CATEGORY_CONFIG, STATUS_CONFIG } from "@/lib/constants";
 import { formatIssueKey } from "@/lib/issue-utils";
 import { IssueKey } from "@/components/minutia/issue-key";
@@ -35,30 +36,33 @@ const NAV_ITEMS = [
 ] as const;
 
 export function CommandPalette() {
-  const [open, setOpen] = useState(false);
   const router = useRouter();
-  const { data: issues } = useIssues();
-  const { data: seriesList } = useSeries();
-  const { data: decisions } = useDecisions();
+  const open = useUIStore((s) => s.commandPaletteOpen);
+  const openCommandPalette = useUIStore((s) => s.openCommandPalette);
+  const closeCommandPalette = useUIStore((s) => s.closeCommandPalette);
+  const toggleCommandPalette = useUIStore((s) => s.toggleCommandPalette);
+  const { data: issues } = useIssues(undefined, open);
+  const { data: seriesList } = useSeries(open);
+  const { data: decisions } = useDecisions(undefined, undefined, open);
 
   // Cmd+K / Ctrl+K listener
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if (e.key === "k" && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
-        setOpen((prev) => !prev);
+        toggleCommandPalette();
       }
     }
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, []);
+  }, [toggleCommandPalette]);
 
   const runCommand = useCallback(
     (command: () => void) => {
-      setOpen(false);
+      closeCommandPalette();
       command();
     },
-    []
+    [closeCommandPalette]
   );
 
   const displayedIssues = issues ?? [];
@@ -66,7 +70,10 @@ export function CommandPalette() {
   return (
     <CommandDialog
       open={open}
-      onOpenChange={setOpen}
+      onOpenChange={(nextOpen) => {
+        if (nextOpen) openCommandPalette();
+        else closeCommandPalette();
+      }}
       className="sm:max-w-lg shadow-[0_16px_70px_-12px_oklch(0%_0_0/0.25)] backdrop:backdrop-blur-sm"
     >
       <CommandInput placeholder="Search pages, series, issues..." />
