@@ -43,7 +43,7 @@ export function WidgetShell({
 
   const registrySpan = widget ? getWidgetMeta(widget.type)?.span : undefined;
   const currentSpan = widget?.span ?? registrySpan ?? 1;
-  const canResize = registrySpan !== undefined;
+  const canResize = registrySpan !== undefined && widget?.type !== "outstanding";
 
   return (
     <motion.div
