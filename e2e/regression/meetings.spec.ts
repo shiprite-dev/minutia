@@ -166,6 +166,28 @@ test.describe("Meeting Detail (Completed)", () => {
     ).toBeVisible();
   });
 
+  test("uses embedded meeting decisions without a duplicate decisions request", async ({
+    page,
+  }) => {
+    const meetingDecisionRequests: string[] = [];
+
+    await page.route("**/rest/v1/decisions?**", async (route, request) => {
+      const decodedUrl = decodeURIComponent(request.url());
+      if (decodedUrl.includes(`meeting_id=eq.${MEETINGS.standup2}`)) {
+        meetingDecisionRequests.push(decodedUrl);
+      }
+      await route.continue();
+    });
+
+    await page.goto(url);
+    await waitForApp(page);
+
+    await expect(
+      page.getByText("Use GitHub Actions for CI/CD")
+    ).toBeVisible();
+    expect(meetingDecisionRequests).toHaveLength(0);
+  });
+
   test("notes textarea is editable", async ({ page }) => {
     await page.goto(url);
     await waitForApp(page);
