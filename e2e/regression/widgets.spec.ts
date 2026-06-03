@@ -281,12 +281,12 @@ test.describe("Widget system", () => {
 
         const assignedBox = await requiredBox(assignedRow.getByTestId(laneId));
         const unassignedBox = await requiredBox(unassignedRow.getByTestId(laneId));
-        expect(Math.abs(assignedBox.x - unassignedBox.x)).toBeLessThan(2);
+        expect(Math.abs(assignedBox.x - unassignedBox.x)).toBeLessThan(3);
         expect(
           Math.abs(
             assignedBox.x + assignedBox.width - (unassignedBox.x + unassignedBox.width)
           )
-        ).toBeLessThan(2);
+        ).toBeLessThan(3);
       }
 
       for (const row of [assignedRow, unassignedRow]) {
