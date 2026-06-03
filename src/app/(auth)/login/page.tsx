@@ -95,7 +95,7 @@ function LoginForm() {
       setFormState("error");
       setErrorMessage(error.message);
     } else {
-      window.location.href = nextPath;
+      window.location.replace(nextPath);
     }
   }
 
@@ -117,7 +117,7 @@ function LoginForm() {
       setFormState("error");
       setErrorMessage(error.message);
     } else if (data.session) {
-      window.location.href = nextPath;
+      window.location.replace(nextPath);
     } else {
       setSentMessage("Confirm your account at");
       setFormState("sent");
@@ -205,7 +205,7 @@ function LoginForm() {
           : error.message
       );
     } else {
-      window.location.href = nextPath;
+      window.location.replace(nextPath);
     }
   }
 
