@@ -1,10 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { getValidAccessToken, listAgendaEvents } from "@/lib/google-calendar";
-import { normalizeImportableGoogleCalendarEvents } from "@/lib/google-calendar-sync";
-import { syncCalendarAgenda } from "@/lib/google-calendar-agenda-sync";
-
-const AGENDA_WINDOW_DAYS = 14;
+import { syncCalendarAgendaForUser } from "@/lib/google-calendar-agenda-service";
 
 export async function GET() {
   const supabase = await createClient();
@@ -24,34 +20,14 @@ export async function GET() {
   }
 
   try {
-    const accessToken = await getValidAccessToken(user.id);
-    const now = new Date();
-    const rawEvents = await listAgendaEvents({
-      accessToken,
-      timeMin: now,
-      timeMax: new Date(now.getTime() + AGENDA_WINDOW_DAYS * 24 * 60 * 60 * 1000),
-    });
-    const events = normalizeImportableGoogleCalendarEvents({
-      calendarId: "primary",
-      selfEmail: user.email,
-      events: rawEvents,
-    });
-    const agenda = await syncCalendarAgenda({
+    const agenda = await syncCalendarAgendaForUser({
       userId: user.id,
       organizationId: profile.current_organization_id,
-      events,
+      selfEmail: user.email,
     });
-
-    return NextResponse.json({
-      connected: true,
-      syncedAt: new Date().toISOString(),
-      events: agenda,
-    });
+    return NextResponse.json(agenda);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Calendar agenda failed";
-    if (message.includes("not connected")) {
-      return NextResponse.json({ connected: false, events: [] });
-    }
     return NextResponse.json({ error: message }, { status: 400 });
   }
 }
