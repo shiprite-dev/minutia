@@ -74,9 +74,10 @@ test.describe("Login Page", () => {
       page.getByRole("button", { name: "Request invite" })
     ).toBeVisible();
 
-    await expect(
-      page.getByText("Open source. Self-host free forever.")
-    ).toBeVisible();
+    await expect(page.getByTestId("login-footer")).toContainText(
+      /Own your meeting memory|Control every note|Keep meeting history|Inspect the source|Build on open source|Host the workflow|durable context|decisions and follow-ups|meeting memory layer|useful trail|transcript to action|meeting brain/
+    );
+    await expect(page.getByTestId("login-footer")).not.toContainText(/free/i);
     await expect(page.getByRole("link", { name: /GitHub/i })).toBeVisible();
   });
 
