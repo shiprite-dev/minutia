@@ -1,9 +1,15 @@
 import { test, expect } from "@playwright/test";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 import {
   getGoogleMeetingUrl,
   normalizeGoogleCalendarEvent,
   shouldImportGoogleCalendarEvent,
 } from "../../src/lib/google-calendar-sync";
+import {
+  GoogleCalendarSyncExpiredError,
+  listAgendaEventChanges,
+} from "../../src/lib/google-calendar";
 
 test.describe("Google Calendar event normalization", () => {
   test("recurring instances map to one series and distinct meetings", () => {
@@ -119,5 +125,72 @@ test.describe("Google Calendar event normalization", () => {
     });
 
     expect(url).toBe("https://meet.google.com/preferred");
+  });
+
+  test("incremental agenda changes use updatedMin without syncToken or window filters", async () => {
+    const originalFetch = globalThis.fetch;
+    let requestedUrl: URL | null = null;
+
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      requestedUrl = new URL(String(input));
+      return new Response(JSON.stringify({ items: [] }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }) as typeof fetch;
+
+    try {
+      await listAgendaEventChanges({
+        accessToken: "test-token",
+        calendarId: "primary",
+        updatedMin: new Date("2026-06-01T00:00:00Z"),
+        maxResults: 25,
+      });
+
+      expect(requestedUrl).not.toBeNull();
+      expect(requestedUrl?.searchParams.get("updatedMin")).toBe("2026-06-01T00:00:00.000Z");
+      expect(requestedUrl?.searchParams.get("showDeleted")).toBe("true");
+      expect(requestedUrl?.searchParams.get("singleEvents")).toBe("true");
+      expect(requestedUrl?.searchParams.get("syncToken")).toBeNull();
+      expect(requestedUrl?.searchParams.get("timeMin")).toBeNull();
+      expect(requestedUrl?.searchParams.get("timeMax")).toBeNull();
+      expect(requestedUrl?.searchParams.get("orderBy")).toBeNull();
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  test("incremental agenda changes surface expired sync state", async () => {
+    const originalFetch = globalThis.fetch;
+
+    globalThis.fetch = (async () => new Response("expired", { status: 410 })) as typeof fetch;
+
+    try {
+      await expect(
+        listAgendaEventChanges({
+          accessToken: "test-token",
+          calendarId: "primary",
+          updatedMin: new Date("2026-06-01T00:00:00Z"),
+        })
+      ).rejects.toBeInstanceOf(GoogleCalendarSyncExpiredError);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  test("stored agenda event upsert is workspace scoped", async () => {
+    const helper = await readFile(
+      path.join(process.cwd(), "src/lib/google-calendar-agenda-sync.ts"),
+      "utf8"
+    );
+    const migration = await readFile(
+      path.join(process.cwd(), "supabase/migrations/20260603012000_google_calendar_sync_state.sql"),
+      "utf8"
+    );
+
+    expect(helper).toContain('onConflict: "user_id,organization_id,calendar_id,event_id"');
+    expect(migration).toContain(
+      "idx_google_calendar_events_org_user_calendar_event"
+    );
   });
 });
