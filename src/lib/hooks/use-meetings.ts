@@ -126,6 +126,7 @@ export function useStartMeeting() {
       return data as Meeting;
     },
     onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: meetingKeys.all });
       queryClient.invalidateQueries({
         queryKey: meetingKeys.detail(data.id),
       });
@@ -156,6 +157,7 @@ export function useStartOrJoinMeeting() {
       return meeting as Meeting;
     },
     onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: meetingKeys.all });
       queryClient.invalidateQueries({
         queryKey: meetingKeys.detail(data.id),
       });
@@ -419,6 +421,7 @@ export function useEndMeeting() {
       return data as Meeting;
     },
     onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: meetingKeys.all });
       queryClient.invalidateQueries({
         queryKey: meetingKeys.detail(data.id),
       });
