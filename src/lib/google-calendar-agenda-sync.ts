@@ -12,6 +12,7 @@ type SeriesRow = {
 type MeetingRow = {
   id: string;
   status: MeetingStatus;
+  notes_markdown: string | null;
 };
 
 type CalendarEventRow = {
@@ -212,7 +213,7 @@ async function ensureMeeting({
 }): Promise<MeetingRow> {
   const { data: existing, error: existingError } = await supabase
     .from("meetings")
-    .select("id, status")
+    .select("id, status, notes_markdown")
     .eq("series_id", seriesId)
     .eq("gcal_meeting_key", event.meetingKey)
     .maybeSingle<MeetingRow>();
@@ -233,11 +234,15 @@ async function ensureMeeting({
   };
 
   if (existing) {
+    const updatePayload = event.description && !existing.notes_markdown?.trim()
+      ? { ...payload, notes_markdown: event.description }
+      : payload;
+
     const { data, error } = await supabase
       .from("meetings")
-      .update(payload)
+      .update(updatePayload)
       .eq("id", existing.id)
-      .select("id, status")
+      .select("id, status, notes_markdown")
       .single<MeetingRow>();
 
     if (error) throw error;
@@ -258,8 +263,9 @@ async function ensureMeeting({
       series_id: seriesId,
       sequence_number: (count ?? 0) + 1,
       status: "upcoming",
+      notes_markdown: event.description ?? "",
     })
-    .select("id, status")
+    .select("id, status, notes_markdown")
     .single<MeetingRow>();
 
   if (error) throw error;
