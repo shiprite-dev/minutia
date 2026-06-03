@@ -3,12 +3,12 @@
 import * as React from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { cn } from "@/lib/utils";
-import Link from "next/link";
-import type { Issue, IssueStatus, IssueUpdate } from "@/lib/types";
+import type { Issue, IssueStatus } from "@/lib/types";
 import { STATUS_CONFIG } from "@/lib/constants";
 import { StatusChip } from "./status-chip";
 import { CategoryBadge } from "./category-badge";
 import { IssueKey } from "./issue-key";
+import { PrefetchIssueLink } from "./prefetch-issue-link";
 import { PriorityIndicator } from "./priority-indicator";
 import { isDateOverdue, formatShortDate } from "@/lib/date-utils";
 
@@ -66,15 +66,15 @@ export function IssueCard({
         </div>
         <div className="flex-1 min-w-0">
           <IssueKey issue={issue} className="mb-2 h-5 px-1.5 text-[10px]" />
-          <Link
-            href={`/issues/${issue.id}`}
+          <PrefetchIssueLink
+            issueId={issue.id}
             className={cn(
               "text-left font-sans font-medium transition-colors cursor-pointer",
               isDone ? "text-ink-3 line-through" : "text-ink hover:text-ink-2"
             )}
           >
             {issue.title}
-          </Link>
+          </PrefetchIssueLink>
         </div>
       </div>
 
