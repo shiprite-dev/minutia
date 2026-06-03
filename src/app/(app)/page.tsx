@@ -108,7 +108,7 @@ function DashboardGridItem({
   span,
 }: {
   children: React.ReactNode;
-  span: 1 | 2;
+  span: 1 | 2 | 4;
 }) {
   const ref = React.useRef<HTMLDivElement>(null);
   const [rowSpan, setRowSpan] = React.useState(1);
@@ -138,7 +138,7 @@ function DashboardGridItem({
 
   return (
     <div
-      className={cn(span === 2 && "lg:col-span-2")}
+      className={cn(span >= 2 && "lg:col-span-2", span === 4 && "xl:col-span-4")}
       style={{ gridRowEnd: `span ${rowSpan}` }}
     >
       <div ref={ref}>
@@ -587,8 +587,7 @@ function IssueRow({
       data-focused={focused || undefined}
       aria-label={`${issue.title}, ${STATUS_CONFIG[issue.status].label}${overdue ? ", overdue" : ""}`}
       className={cn(
-        "group grid w-full grid-cols-[auto_auto_minmax(0,1fr)] items-center gap-x-3 gap-y-2 rounded-lg px-3 py-2.5 transition-colors outline-none",
-        "sm:grid-cols-[auto_auto_minmax(0,1fr)_376px]",
+        "group flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg px-3 py-2.5 transition-colors outline-none",
         "focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-paper",
         focused ? "bg-paper-2 ring-1 ring-accent/30" : "hover:bg-paper-2"
       )}
@@ -597,18 +596,18 @@ function IssueRow({
       <IssueKey issue={issue} className="h-5 px-1.5 text-[10px]" />
       <PrefetchIssueLink
         issueId={issue.id}
-        className="min-w-0 truncate text-sm font-medium text-ink transition-colors group-hover:text-accent"
+        className="flex-1 min-w-0 text-sm font-medium text-ink group-hover:text-accent transition-colors truncate basis-[120px]"
       >
         {issue.title}
       </PrefetchIssueLink>
-      <div className="col-span-3 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 sm:col-span-1 sm:w-[376px] sm:grid-cols-[120px_32px_76px_112px]">
-        <div className="justify-self-start sm:w-[120px]">
+      <div className="ml-auto grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 sm:w-[384px] sm:grid-cols-[132px_32px_84px_116px]">
+        <div data-testid="issue-status-lane" className="flex justify-start sm:w-[132px] sm:justify-end">
           <StatusChip
             status={issue.status}
             onChange={(newStatus) => onStatusChange(issue.id, issue.status, newStatus, issue.series_id)}
           />
         </div>
-        <div className="hidden size-6 items-center justify-center justify-self-center sm:flex">
+        <div data-testid="issue-assignee-lane" className="hidden size-6 items-center justify-center justify-self-center sm:flex">
           {issue.owner_name ? (
             <HintTooltip label={`Assignee: ${issue.owner_name}`} side="left">
               <button
@@ -621,14 +620,14 @@ function IssueRow({
             </HintTooltip>
           ) : null}
         </div>
-        <div className="hidden w-[76px] justify-self-end text-right sm:block">
+        <div data-testid="issue-update-lane" className="hidden w-[84px] justify-self-end text-right sm:block">
           {(issue.update_count ?? 0) > 0 ? (
             <span className="text-[11px] font-mono text-ink-4 tabular-nums">
               {issue.update_count} update{issue.update_count !== 1 ? "s" : ""}
             </span>
           ) : null}
         </div>
-        <div data-testid="issue-due-lane" className="justify-self-end text-right sm:w-[112px]">
+        <div data-testid="issue-due-lane" className="justify-self-end text-right sm:w-[116px]">
           {issue.due_date ? (() => {
             const rel = formatRelativeDue(issue.due_date);
             return (
@@ -1154,7 +1153,7 @@ export default function Dashboard() {
     () =>
       widgets.map((w) => ({
         ...w,
-        _span: w.span ?? getWidgetMeta(w.type)?.span ?? 1,
+        _span: w.type === "outstanding" ? 4 : w.span ?? getWidgetMeta(w.type)?.span ?? 1,
       })),
     [widgets]
   );
@@ -1196,7 +1195,7 @@ export default function Dashboard() {
                   {widgetSpans.map((w, i) => (
                     <DashboardGridItem
                       key={w.id}
-                      span={w._span === 2 ? 2 : 1}
+                      span={w._span === 4 ? 4 : w._span === 2 ? 2 : 1}
                     >
                       <WidgetRenderer
                         widgetId={w.id}
