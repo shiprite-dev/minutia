@@ -112,6 +112,13 @@ type GoogleCalendarEventsResponse = {
   nextPageToken?: string;
 };
 
+export type GoogleCalendarWatchResponse = {
+  id: string;
+  resourceId: string;
+  resourceUri: string;
+  expiration?: number;
+};
+
 export class GoogleCalendarSyncExpiredError extends Error {
   constructor() {
     super("Google Calendar sync state expired");
@@ -219,6 +226,53 @@ export async function listAgendaEventChanges({
   });
 
   return fetchCalendarEvents(accessToken, calendarId, params, "Agenda change fetch failed");
+}
+
+export async function watchCalendarEvents({
+  accessToken,
+  calendarId,
+  channelId,
+  channelToken,
+  webhookUrl,
+  ttlSeconds,
+}: {
+  accessToken: string;
+  calendarId: string;
+  channelId: string;
+  channelToken: string;
+  webhookUrl: string;
+  ttlSeconds: number;
+}): Promise<GoogleCalendarWatchResponse> {
+  const res = await fetch(
+    `${GOOGLE_CALENDAR_API}/calendars/${encodeURIComponent(calendarId)}/events/watch`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        id: channelId,
+        type: "web_hook",
+        address: webhookUrl,
+        token: channelToken,
+        params: { ttl: String(ttlSeconds) },
+      }),
+    }
+  );
+
+  if (!res.ok) throw new Error(`Calendar watch failed: ${res.status}`);
+  const data = (await res.json()) as Partial<GoogleCalendarWatchResponse>;
+  if (!data.id || !data.resourceId || !data.resourceUri) {
+    throw new Error("Calendar watch response missing channel fields");
+  }
+
+  return {
+    id: data.id,
+    resourceId: data.resourceId,
+    resourceUri: data.resourceUri,
+    expiration: data.expiration,
+  };
 }
 
 async function fetchCalendarEvents(
