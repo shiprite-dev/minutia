@@ -226,7 +226,7 @@ export function AppSidebar({ profile, organizations }: AppSidebarProps) {
               {profile?.name || "User"}
             </span>
             <span className="truncate text-xs text-ink-4">
-              Free plan
+              {profile?.email ?? ""}
             </span>
           </div>
           <form action={signOut}>

@@ -539,7 +539,8 @@ function IssueRow({
       data-focused={focused || undefined}
       aria-label={`${issue.title}, ${STATUS_CONFIG[issue.status].label}${overdue ? ", overdue" : ""}`}
       className={cn(
-        "group flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg px-3 py-2.5 transition-colors outline-none",
+        "group grid w-full grid-cols-[auto_auto_minmax(0,1fr)] items-center gap-x-3 gap-y-2 rounded-lg px-3 py-2.5 transition-colors outline-none",
+        "sm:grid-cols-[auto_auto_minmax(0,1fr)_376px]",
         "focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-paper",
         focused ? "bg-paper-2 ring-1 ring-accent/30" : "hover:bg-paper-2"
       )}
@@ -548,32 +549,48 @@ function IssueRow({
       <IssueKey issue={issue} className="h-5 px-1.5 text-[10px]" />
       <PrefetchIssueLink
         issueId={issue.id}
-        className="flex-1 min-w-0 text-sm font-medium text-ink group-hover:text-accent transition-colors truncate basis-[120px]"
+        className="min-w-0 truncate text-sm font-medium text-ink transition-colors group-hover:text-accent"
       >
         {issue.title}
       </PrefetchIssueLink>
-      <StatusChip
-        status={issue.status}
-        onChange={(newStatus) => onStatusChange(issue.id, issue.status, newStatus, issue.series_id)}
-      />
-      {issue.owner_name && (
-        <span className="hidden sm:inline-flex items-center justify-center size-6 rounded-full bg-paper-3 text-[10px] font-medium text-ink shrink-0" title={issue.owner_name}>
-          {issue.owner_name.charAt(0).toUpperCase()}
-        </span>
-      )}
-      {(issue.update_count ?? 0) > 0 && (
-        <span className="hidden sm:inline text-[11px] font-mono text-ink-4 tabular-nums shrink-0">
-          {issue.update_count} update{issue.update_count !== 1 ? "s" : ""}
-        </span>
-      )}
-      {issue.due_date && (() => {
-        const rel = formatRelativeDue(issue.due_date);
-        return (
-          <span className={cn("text-xs font-mono tabular-nums shrink-0", rel.overdue ? "text-accent font-medium" : "text-ink-4")}>
-            {rel.label}
-          </span>
-        );
-      })()}
+      <div className="col-span-3 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 sm:col-span-1 sm:w-[376px] sm:grid-cols-[120px_32px_76px_112px]">
+        <div className="justify-self-start sm:w-[120px]">
+          <StatusChip
+            status={issue.status}
+            onChange={(newStatus) => onStatusChange(issue.id, issue.status, newStatus, issue.series_id)}
+          />
+        </div>
+        <div className="hidden size-6 items-center justify-center justify-self-center sm:flex">
+          {issue.owner_name ? (
+            <HintTooltip label={`Assignee: ${issue.owner_name}`} side="left">
+              <button
+                type="button"
+                aria-label={`Assignee: ${issue.owner_name}`}
+                className="flex size-6 items-center justify-center rounded-full bg-paper-3 text-[10px] font-medium text-ink outline-none transition-colors hover:bg-paper-2 focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-paper"
+              >
+                {issue.owner_name.charAt(0).toUpperCase()}
+              </button>
+            </HintTooltip>
+          ) : null}
+        </div>
+        <div className="hidden w-[76px] justify-self-end text-right sm:block">
+          {(issue.update_count ?? 0) > 0 ? (
+            <span className="text-[11px] font-mono text-ink-4 tabular-nums">
+              {issue.update_count} update{issue.update_count !== 1 ? "s" : ""}
+            </span>
+          ) : null}
+        </div>
+        <div data-testid="issue-due-lane" className="justify-self-end text-right sm:w-[112px]">
+          {issue.due_date ? (() => {
+            const rel = formatRelativeDue(issue.due_date);
+            return (
+              <span className={cn("text-xs font-mono tabular-nums", rel.overdue ? "text-accent font-medium" : "text-ink-4")}>
+                {rel.label}
+              </span>
+            );
+          })() : null}
+        </div>
+      </div>
     </motion.div>
   );
 }
@@ -874,7 +891,7 @@ function QuickAddButton({
 
 function DashboardSkeleton() {
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+    <div className="grid grid-cols-1 gap-5 lg:grid-cols-2 xl:grid-cols-4">
       <Skeleton className="h-40 lg:col-span-2 rounded-xl" />
       <Skeleton className="h-40 rounded-xl" />
       <Skeleton className="h-80 lg:col-span-2 rounded-xl" />
@@ -1124,7 +1141,7 @@ export default function Dashboard() {
               onDragEnd={handleDragEnd}
             >
               <SortableContext items={widgetIds} strategy={rectSortingStrategy}>
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 [grid-auto-flow:dense]">
+                <div className="grid grid-cols-1 gap-5 [grid-auto-flow:dense] lg:grid-cols-2 xl:grid-cols-4">
                   {widgetSpans.map((w, i) => (
                     <div
                       key={w.id}
