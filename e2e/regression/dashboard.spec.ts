@@ -158,6 +158,24 @@ test.describe("OIL Board Dashboard", () => {
     await expect(decisions.getByText("Platform Team Standup")).toBeVisible();
   });
 
+  test("dashboard limits recent decisions request to rendered rows", async ({
+    page,
+  }) => {
+    const decisionsRequestUrls: string[] = [];
+
+    await page.route("**/rest/v1/decisions?**", async (route, request) => {
+      decisionsRequestUrls.push(decodeURIComponent(request.url()));
+      await route.continue();
+    });
+
+    await gotoDashboard(page);
+    await expect(widget(page, "decisions-1")).toBeVisible();
+
+    expect(decisionsRequestUrls.some((url) => url.includes("limit=5"))).toBe(
+      true
+    );
+  });
+
   test("quick-add FAB is visible", async ({ page }) => {
     await gotoDashboard(page);
     await expect(page.getByLabel("Quick add issue")).toBeVisible();
