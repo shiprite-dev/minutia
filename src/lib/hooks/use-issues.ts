@@ -12,10 +12,7 @@ import type {
   IssueStatus,
   IssueUpdate,
 } from "@/lib/types";
-import type {
-  CreateIssueInput,
-  UpdateIssueStatusInput,
-} from "@/lib/schemas";
+import type { CreateIssueInput } from "@/lib/schemas";
 
 // ---------------------------------------------------------------------------
 // Query key factory
@@ -26,6 +23,44 @@ export const issueKeys = {
     seriesId ? (["issues", seriesId] as const) : (["issues"] as const),
   detail: (id: string) => ["issues", "detail", id] as const,
 };
+
+type IssueListSnapshot = [readonly unknown[], Issue[] | undefined][];
+type IssueListRow = Issue & { issue_updates?: { count: number }[] | null };
+
+function issueListQueriesOnly(query: { state: { data: unknown } }) {
+  return Array.isArray(query.state.data);
+}
+
+function getIssueListSnapshots(
+  queryClient: ReturnType<typeof useQueryClient>
+): IssueListSnapshot {
+  return queryClient.getQueriesData<Issue[]>({
+    queryKey: issueKeys.all,
+    predicate: issueListQueriesOnly,
+  });
+}
+
+function restoreIssueListSnapshots(
+  queryClient: ReturnType<typeof useQueryClient>,
+  snapshots: IssueListSnapshot
+) {
+  for (const [queryKey, data] of snapshots) {
+    queryClient.setQueryData(queryKey, data);
+  }
+}
+
+function updateCachedIssueLists(
+  queryClient: ReturnType<typeof useQueryClient>,
+  updater: (issue: Issue) => Issue
+) {
+  queryClient.setQueriesData<Issue[]>(
+    {
+      queryKey: issueKeys.all,
+      predicate: issueListQueriesOnly,
+    },
+    (old) => old?.map(updater)
+  );
+}
 
 // ---------------------------------------------------------------------------
 // useIssues - list issues, optionally filtered by series
@@ -48,7 +83,7 @@ export function useIssues(seriesId?: string, enabled = true) {
 
       const { data, error } = await query;
       if (error) throw error;
-      return (data ?? []).map((row: any) => ({
+      return (data ?? []).map((row: IssueListRow) => ({
         ...row,
         update_count: row.issue_updates?.[0]?.count ?? 0,
         issue_updates: undefined,
@@ -146,7 +181,10 @@ export function useUpdateIssueStatus() {
       note?: string;
       meetingId?: string;
     },
-    { previousIssues: Issue[] | undefined; seriesId: string }
+    {
+      previousIssueLists: IssueListSnapshot;
+      previousDetail: IssueWithUpdates | undefined;
+    }
   >({
     mutationFn: async ({ issueId, oldStatus, newStatus, note, meetingId }) => {
       const {
@@ -184,42 +222,71 @@ export function useUpdateIssueStatus() {
       return issue as Issue;
     },
 
-    // Optimistic update
-    onMutate: async ({ issueId, newStatus, seriesId }) => {
-      await queryClient.cancelQueries({ queryKey: issueKeys.list(seriesId) });
+    onMutate: async ({ issueId, newStatus, meetingId }) => {
+      await queryClient.cancelQueries({ queryKey: issueKeys.all });
+      await queryClient.cancelQueries({ queryKey: issueKeys.detail(issueId) });
 
-      const previousIssues = queryClient.getQueryData<Issue[]>(
-        issueKeys.list(seriesId)
+      const previousIssueLists = getIssueListSnapshots(queryClient);
+      const previousDetail = queryClient.getQueryData<IssueWithUpdates>(
+        issueKeys.detail(issueId)
+      );
+      const resolvedMeetingId = newStatus === "resolved" ? meetingId ?? null : null;
+
+      updateCachedIssueLists(queryClient, (issue) =>
+        issue.id === issueId
+          ? {
+              ...issue,
+              status: newStatus,
+              resolved_in_meeting_id: resolvedMeetingId,
+              update_count: (issue.update_count ?? 0) + 1,
+            }
+          : issue
       );
 
-      queryClient.setQueryData<Issue[]>(
-        issueKeys.list(seriesId),
+      queryClient.setQueryData<IssueWithUpdates>(
+        issueKeys.detail(issueId),
         (old) =>
-          old?.map((issue) =>
-            issue.id === issueId ? { ...issue, status: newStatus } : issue
-          )
+          old
+            ? {
+                ...old,
+                status: newStatus,
+                resolved_in_meeting_id: resolvedMeetingId,
+              }
+            : old
       );
 
-      return { previousIssues, seriesId };
+      return { previousIssueLists, previousDetail };
     },
 
-    onError: (_err, _vars, context) => {
-      if (context?.previousIssues) {
+    onError: (_err, vars, context) => {
+      if (context) {
+        restoreIssueListSnapshots(queryClient, context.previousIssueLists);
         queryClient.setQueryData(
-          issueKeys.list(context.seriesId),
-          context.previousIssues
+          issueKeys.detail(vars.issueId),
+          context.previousDetail
         );
       }
     },
 
+    onSuccess: (data, variables) => {
+      updateCachedIssueLists(queryClient, (issue) =>
+        issue.id === data.id ? { ...issue, ...data } : issue
+      );
+      queryClient.setQueryData<IssueWithUpdates>(
+        issueKeys.detail(variables.issueId),
+        (old) => (old ? { ...old, ...data, updates: old.updates } : old)
+      );
+    },
+
     onSettled: (_data, _error, variables) => {
-      queryClient.invalidateQueries({ queryKey: issueKeys.all });
       queryClient.invalidateQueries({
         queryKey: issueKeys.detail(variables.issueId),
+        refetchType: "inactive",
       });
       if (variables.meetingId) {
         queryClient.invalidateQueries({
           queryKey: ["meetings", "detail", variables.meetingId],
+          refetchType: "inactive",
         });
       }
     },
@@ -269,23 +336,32 @@ export function useAddIssueUpdate() {
   const supabase = createClient();
   const queryClient = useQueryClient();
 
-  return useMutation({
+  return useMutation<
+    IssueUpdate,
+    Error,
+    {
+      issueId: string;
+      note?: string;
+      newStatus?: IssueStatus;
+      oldStatus?: IssueStatus;
+    },
+    {
+      tempUpdateId: string;
+      previousIssueLists: IssueListSnapshot;
+      previousDetail: IssueWithUpdates | undefined;
+    }
+  >({
     mutationFn: async ({
       issueId,
       note,
       newStatus,
       oldStatus,
-    }: {
-      issueId: string;
-      note?: string;
-      newStatus?: IssueStatus;
-      oldStatus?: IssueStatus;
     }) => {
       const {
         data: { user },
       } = await supabase.auth.getUser();
 
-      const { error: updateError } = await supabase
+      const { data: update, error: updateError } = await supabase
         .from("issue_updates")
         .insert({
           issue_id: issueId,
@@ -295,7 +371,9 @@ export function useAddIssueUpdate() {
           previous_status: oldStatus ?? null,
           new_status: newStatus ?? null,
           note: note ?? null,
-        });
+        })
+        .select()
+        .single();
 
       if (updateError) throw updateError;
 
@@ -307,12 +385,87 @@ export function useAddIssueUpdate() {
 
         if (issueError) throw issueError;
       }
+
+      return update as IssueUpdate;
     },
-    onSuccess: (_data, variables) => {
+
+    onMutate: async ({ issueId, note, newStatus, oldStatus }) => {
+      await queryClient.cancelQueries({ queryKey: issueKeys.all });
+      await queryClient.cancelQueries({ queryKey: issueKeys.detail(issueId) });
+
+      const previousIssueLists = getIssueListSnapshots(queryClient);
+      const previousDetail = queryClient.getQueryData<IssueWithUpdates>(
+        issueKeys.detail(issueId)
+      );
+      const tempUpdateId =
+        globalThis.crypto?.randomUUID?.() ?? `optimistic-${Date.now()}`;
+      const optimisticUpdate: IssueUpdate = {
+        id: tempUpdateId,
+        issue_id: issueId,
+        meeting_id: null,
+        updated_by: "",
+        author_type: "human",
+        previous_status: oldStatus ?? null,
+        new_status: newStatus ?? null,
+        note: note ?? null,
+        created_at: new Date(),
+      };
+      const statusChanged = !!newStatus && newStatus !== oldStatus;
+
+      queryClient.setQueryData<IssueWithUpdates>(
+        issueKeys.detail(issueId),
+        (old) =>
+          old
+            ? {
+                ...old,
+                status: statusChanged ? newStatus : old.status,
+                updates: [optimisticUpdate, ...(old.updates ?? [])],
+              }
+            : old
+      );
+
+      updateCachedIssueLists(queryClient, (issue) =>
+        issue.id === issueId
+          ? {
+              ...issue,
+              status: statusChanged ? newStatus : issue.status,
+              update_count: (issue.update_count ?? 0) + 1,
+            }
+          : issue
+      );
+
+      return { tempUpdateId, previousIssueLists, previousDetail };
+    },
+
+    onError: (_err, variables, context) => {
+      if (!context) return;
+      restoreIssueListSnapshots(queryClient, context.previousIssueLists);
+      queryClient.setQueryData(
+        issueKeys.detail(variables.issueId),
+        context.previousDetail
+      );
+    },
+
+    onSuccess: (data, variables, context) => {
+      queryClient.setQueryData<IssueWithUpdates>(
+        issueKeys.detail(variables.issueId),
+        (old) =>
+          old
+            ? {
+                ...old,
+                updates: (old.updates ?? []).map((update) =>
+                  update.id === context?.tempUpdateId ? data : update
+                ),
+              }
+            : old
+      );
+    },
+
+    onSettled: (_data, _error, variables) => {
       queryClient.invalidateQueries({
         queryKey: issueKeys.detail(variables.issueId),
+        refetchType: "inactive",
       });
-      queryClient.invalidateQueries({ queryKey: issueKeys.all });
     },
   });
 }
