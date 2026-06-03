@@ -21,6 +21,7 @@ import { CaptureInput } from "@/components/minutia/capture-input";
 import { InlineTaskList } from "@/components/minutia/inline-task-list";
 import { IssueCard } from "@/components/minutia/issue-card";
 import { BriefCard } from "@/components/minutia/brief-card";
+import { PrefetchIssueLink } from "@/components/minutia/prefetch-issue-link";
 import { StatusChip } from "@/components/minutia/status-chip";
 import { CategoryBadge } from "@/components/minutia/category-badge";
 import { Button } from "@/components/ui/button";
@@ -441,8 +442,8 @@ function CarriedIssueCard({
 
       {/* Content */}
       <div className="flex-1 min-w-0">
-        <Link
-          href={`/issues/${issue.id}`}
+        <PrefetchIssueLink
+          issueId={issue.id}
           onClick={(e) => e.stopPropagation()}
           className={cn(
             "text-sm font-medium transition-all hover:text-accent",
@@ -450,7 +451,7 @@ function CarriedIssueCard({
           )}
         >
           {issue.title}
-        </Link>
+        </PrefetchIssueLink>
         <div className="flex items-center gap-2 mt-0.5">
           <CategoryBadge category={issue.category} size="sm" />
           {issue.owner_name && (
@@ -563,12 +564,12 @@ function CapturedItem({
         {String(index + 1).padStart(2, "0")}
       </span>
       <CategoryBadge category={issue.category} size="sm" />
-      <Link
-        href={`/issues/${issue.id}`}
+      <PrefetchIssueLink
+        issueId={issue.id}
         className="flex-1 min-w-0 text-sm font-medium text-ink group-hover:text-accent transition-colors truncate"
       >
         {issue.title}
-      </Link>
+      </PrefetchIssueLink>
       {issue.owner_name && (
         <span className="text-xs font-mono text-ink-4">{issue.owner_name}</span>
       )}

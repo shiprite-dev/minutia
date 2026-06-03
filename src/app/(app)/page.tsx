@@ -39,6 +39,7 @@ import { StatusChip } from "@/components/minutia/status-chip";
 import { CategoryBadge } from "@/components/minutia/category-badge";
 import { MinutiaCadenceIcon } from "@/components/minutia/minutia-icons";
 import { IssueKey } from "@/components/minutia/issue-key";
+import { PrefetchIssueLink } from "@/components/minutia/prefetch-issue-link";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { HintTooltip } from "@/components/minutia/hint-tooltip";
@@ -545,12 +546,12 @@ function IssueRow({
     >
       <CategoryBadge category={issue.category} size="sm" />
       <IssueKey issue={issue} className="h-5 px-1.5 text-[10px]" />
-      <Link
-        href={`/issues/${issue.id}`}
+      <PrefetchIssueLink
+        issueId={issue.id}
         className="flex-1 min-w-0 text-sm font-medium text-ink group-hover:text-accent transition-colors truncate basis-[120px]"
       >
         {issue.title}
-      </Link>
+      </PrefetchIssueLink>
       <StatusChip
         status={issue.status}
         onChange={(newStatus) => onStatusChange(issue.id, issue.status, newStatus, issue.series_id)}
