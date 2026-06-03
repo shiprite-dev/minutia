@@ -190,7 +190,7 @@ export interface Issue {
 export interface IssueUpdate {
   id: string;
   issue_id: string;
-  meeting_id: string;
+  meeting_id: string | null;
   previous_status: IssueStatus | null;
   new_status: IssueStatus | null;
   note: string | null;
