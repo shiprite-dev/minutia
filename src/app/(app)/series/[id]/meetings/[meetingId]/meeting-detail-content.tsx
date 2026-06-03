@@ -13,7 +13,7 @@ import {
 } from "@/lib/hooks/use-meetings";
 import { useSeriesDetail, useSeriesParticipantRole } from "@/lib/hooks/use-series";
 import { useIssues, useCreateIssue, useUpdateIssueStatus, useUpdateIssue } from "@/lib/hooks/use-issues";
-import { useDecisions, useCreateDecision } from "@/lib/hooks/use-decisions";
+import { useCreateDecision } from "@/lib/hooks/use-decisions";
 import { SyncIndicator } from "@/components/minutia/sync-indicator";
 import { useOfflineSync } from "@/lib/hooks/use-offline-sync";
 import { addPendingItem } from "@/lib/offline-buffer";
@@ -598,7 +598,6 @@ export function MeetingDetailContent({
   const { data: series } = useSeriesDetail(seriesId);
   const { data: participantRole } = useSeriesParticipantRole(seriesId);
   const { data: seriesIssues } = useIssues(seriesId);
-  const { data: decisions } = useDecisions(meetingId);
 
   useMeetingRealtime(meetingId, seriesId);
   const presenceUsers = useMeetingPresence(meeting?.status === "live" ? meetingId : "");
@@ -661,7 +660,7 @@ export function MeetingDetailContent({
   }
 
   const meetingIssues = meeting.issues ?? [];
-  const meetingDecisions = meeting.decisions ?? decisions ?? [];
+  const meetingDecisions = meeting.decisions ?? [];
   const raisedInThisMeeting = meetingIssues;
 
   const allCarriedIssues = (seriesIssues ?? []).filter(
@@ -932,19 +931,19 @@ export function MeetingDetailContent({
             </section>
 
             {/* Decisions */}
-            {(decisions ?? []).length > 0 && (
+            {meetingDecisions.length > 0 && (
               <section>
                 <div className="flex items-center gap-3 mb-3">
                   <h2 className="text-[11px] font-mono uppercase tracking-wider text-ink-4 font-medium">
                     Decisions
                   </h2>
                   <span className="text-[11px] font-mono text-ink-4 tabular-nums">
-                    {(decisions ?? []).length}
+                    {meetingDecisions.length}
                   </span>
                   <div className="flex-1 border-t border-dashed border-rule" />
                 </div>
                 <div className="space-y-1">
-                  {(decisions ?? []).map((d) => (
+                  {meetingDecisions.map((d) => (
                     <div
                       key={d.id}
                       className="flex items-center gap-3 rounded-lg px-3 py-2.5 hover:bg-paper-2 transition-colors"
