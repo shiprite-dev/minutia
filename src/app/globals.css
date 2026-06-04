@@ -192,7 +192,23 @@
   }
 
   .grid-stack > .grid-stack-item > .grid-stack-item-content {
-    overflow: hidden !important;
+    container-type: inline-size;
+    overflow: auto !important;
+    scrollbar-width: thin;
+  }
+
+  .grid-stack > .grid-stack-item > .grid-stack-item-content > .widget-card-content {
+    min-height: 100%;
+    min-width: 0;
+  }
+
+  .grid-stack > .grid-stack-item[gs-w="3"] > .grid-stack-item-content {
+    padding: 1.25rem;
+  }
+
+  .grid-stack > .grid-stack-item[gs-w="3"] > .grid-stack-item-content h2,
+  .grid-stack > .grid-stack-item[gs-w="3"] > .grid-stack-item-content h3 {
+    overflow-wrap: anywhere;
   }
 
   .grid-stack > .grid-stack-item.ui-draggable-dragging > .grid-stack-item-content,

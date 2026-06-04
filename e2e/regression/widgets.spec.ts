@@ -43,6 +43,23 @@ function storedHeroWidth() {
   return parsed.state?.widgets?.find((w) => w.type === "hero")?.layout?.w;
 }
 
+async function expectResponsiveCard(locator: Locator, expectedWidth: string, expectedMinHeight: number) {
+  await expect(locator).toHaveAttribute("gs-w", expectedWidth);
+  await expect.poll(async () => Number(await locator.getAttribute("gs-h")))
+    .toBeGreaterThanOrEqual(expectedMinHeight);
+
+  const overflow = await locator.evaluate((node) => {
+    const content = node.querySelector(".grid-stack-item-content");
+    if (!content) return { overflowX: true, scrollWidth: 0, clientWidth: 0 };
+    return {
+      overflowX: content.scrollWidth > content.clientWidth + 1,
+      scrollWidth: content.scrollWidth,
+      clientWidth: content.clientWidth,
+    };
+  });
+  expect(overflow.overflowX).toBe(false);
+}
+
 test.describe("Widget system", () => {
   test.beforeEach(async ({ page }) => {
     await page.addInitScript(() => {
@@ -448,6 +465,32 @@ test.describe("Widget system", () => {
 
     const stored = await page.evaluate(storedHeroWidth);
     expect(stored).toBe(3);
+  });
+
+  test("resized narrow widgets keep responsive card content", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 1000 });
+
+    const hero = page.getByTestId("widget-hero-1");
+    await hero.hover();
+    await hero.getByLabel("Make narrow").click();
+    await expectResponsiveCard(hero, "3", 4);
+
+    await addWidget(page, /Meeting Triage/);
+    const triage = page.locator('[data-widget-type="meeting-triage"]').first();
+    await triage.hover();
+    await triage.getByLabel("Make narrow").click();
+    await expectResponsiveCard(triage, "3", 5);
+
+    await addWidget(page, /Workload.*Open items/);
+    const workload = page.locator('[data-widget-type="workload"]').first();
+    await workload.hover();
+    await workload.getByLabel("Make narrow").click();
+    await expectResponsiveCard(workload, "3", 5);
+
+    const pageOverflow = await page.evaluate(() => (
+      document.documentElement.scrollWidth > document.documentElement.clientWidth + 1
+    ));
+    expect(pageOverflow).toBe(false);
   });
 
   test("resize persists across reload", async ({ page }) => {

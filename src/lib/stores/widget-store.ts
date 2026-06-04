@@ -69,6 +69,19 @@ const DEFAULT_SIZES: Record<string, Pick<WidgetLayout, "w" | "h">> = {
   workload: { w: 6, h: 4 },
 };
 
+const NARROW_HEIGHTS: Record<string, number> = {
+  hero: 4,
+  "next-meeting": 4,
+  "series-health": 5,
+  "meeting-triage": 5,
+  workload: 5,
+};
+
+export function getWidgetMinHeight(type: string, width: number) {
+  if (width <= 3) return NARROW_HEIGHTS[type] ?? DEFAULT_SIZES[type]?.h ?? 3;
+  return DEFAULT_SIZES[type]?.h ?? 3;
+}
+
 function isDesktopLayout(layout: WidgetLayout | undefined): layout is WidgetLayout {
   if (!layout) return false;
   return (
@@ -86,7 +99,12 @@ function isDesktopLayout(layout: WidgetLayout | undefined): layout is WidgetLayo
 }
 
 export function getWidgetLayout(widget: WidgetInstance, index: number): WidgetLayout {
-  if (isDesktopLayout(widget.layout)) return widget.layout;
+  if (isDesktopLayout(widget.layout)) {
+    return {
+      ...widget.layout,
+      h: Math.max(widget.layout.h, getWidgetMinHeight(widget.type, widget.layout.w)),
+    };
+  }
 
   const fallback = DEFAULT_WIDGET_IDS.has(widget.id)
     ? DEFAULT_LAYOUTS[widget.type]
@@ -143,6 +161,7 @@ export const useWidgetStore = create<WidgetState>()(
             if (w.id !== id) return w;
             const current = getWidgetLayout(w, index);
             const nextWidth = current.w > 3 ? 3 : 6;
+            const nextHeight = Math.max(current.h, getWidgetMinHeight(w.type, nextWidth));
             return {
               ...w,
               span: nextWidth === 6 ? 2 : 1,
@@ -150,6 +169,7 @@ export const useWidgetStore = create<WidgetState>()(
                 ...current,
                 x: Math.min(current.x, 12 - nextWidth),
                 w: nextWidth,
+                h: nextHeight,
               },
             };
           }),
