@@ -33,5 +33,39 @@
         "GitHub CI: Dependency Audit, Lint & Typecheck, E2E Tests 1/16 through 16/16"
       ]
     }
+  },
+  {
+    "id": "FRICTION-001",
+    "status": "pending",
+    "priority": "high",
+    "title": "Reduce process fatigue with frictionless capture",
+    "source": "user-feedback-2026-06-03",
+    "problem": "Minutia requires manual discipline to log updates. During chaotic sprints, teams skip logging and the system becomes unreliable, causing reversion to old tools like spreadsheets.",
+    "user_story": "As a team member, I want to capture meeting updates so quickly and effortlessly that it beats opening a scratchpad or Slack message, ensuring the system stays reliable even during chaos.",
+    "acceptance_criteria": [
+      "Slack/Teams bot integration for async logging without leaving chat",
+      "Quick-add keyboard shortcuts accessible from any screen",
+      "Mobile-first capture for on-the-go updates",
+      "Calendar auto-draft agenda items from event descriptions",
+      "Auto-create follow-up tasks from meeting decisions"
+    ],
+    "product_note": "This addresses the core reliability issue: if entry isn't near-frictionless, the system fails during stress. Quick wins first (Slack bot, shortcuts), then deeper integrations (voice-to-text, AI-assisted generation)."
+  },
+  {
+    "id": "EXEC-001",
+    "status": "pending",
+    "priority": "high",
+    "title": "Bridge decisions to execution tools",
+    "source": "user-feedback-2026-06-03",
+    "problem": "Minutia tracks agenda items (what's owed) but actual work happens in GitHub Issues or Jira. Without bridging this gap, Minutia becomes a passive duplicate layer rather than an active bridge.",
+    "user_story": "As a developer, I want high-fidelity decisions from Minutia to automatically flow into my execution tools (GitHub/Jira) so I don't have to manually duplicate work.",
+    "acceptance_criteria": [
+      "GitHub Issues integration: sync agenda items to issues, push decisions back",
+      "Jira integration: bidirectional sync between Minutia decisions and Jira tickets",
+      "Webhooks/API to push decisions to any execution tool",
+      "Auto-create follow-up tasks from meeting decisions",
+      "VS Code extension for in-IDE capture"
+    ],
+    "product_note": "Start with GitHub sync (high impact, medium effort), then expand to Jira and generic webhooks. Long-term: IDE integration to make Minutia the source of truth."
   }
 ]
