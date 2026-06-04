@@ -12,6 +12,7 @@ import {
   useUpdateSeries,
 } from "@/lib/hooks/use-series";
 import {
+  useMeetings,
   useStartOrJoinMeeting,
 } from "@/lib/hooks/use-meetings";
 import { useIssues } from "@/lib/hooks/use-issues";
@@ -85,6 +86,7 @@ export function SeriesDetailContent({ seriesId }: SeriesDetailContentProps) {
   const validSeriesId = UUID_PATTERN.test(seriesId);
   const querySeriesId = validSeriesId ? seriesId : "";
   const { data: series, isLoading: seriesLoading } = useSeriesDetail(seriesId);
+  const { data: meetings } = useMeetings(querySeriesId);
   const { data: issues } = useIssues(querySeriesId, validSeriesId);
   const { data: decisions } = useDecisions(undefined, querySeriesId, validSeriesId);
   const { data: participantRole } = useSeriesParticipantRole(querySeriesId);
@@ -109,12 +111,10 @@ export function SeriesDetailContent({ seriesId }: SeriesDetailContentProps) {
     [issues]
   );
 
-  const meetings = React.useMemo(() => series?.meetings ?? [], [series?.meetings]);
-
   // Determine if brief should show
   const sortedMeetings = React.useMemo(
     () =>
-      [...meetings].sort(
+      [...(meetings ?? [])].sort(
         (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
       ),
     [meetings]

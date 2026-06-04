@@ -256,7 +256,7 @@ test.describe("Series Detail Page", () => {
     await expect(page.getByText("Platform Standup #4")).toBeVisible();
   });
 
-  test("uses embedded series meetings without a duplicate meetings request", async ({
+  test("loads live series meetings for realtime timeline freshness", async ({
     page,
   }) => {
     const seriesMeetingRequests: string[] = [];
@@ -272,7 +272,11 @@ test.describe("Series Detail Page", () => {
     await gotoSeriesDetail(page);
 
     await expect(page.getByText("Platform Standup #1")).toBeVisible();
-    expect(seriesMeetingRequests).toHaveLength(0);
+    expect(seriesMeetingRequests).toHaveLength(1);
+    expect(seriesMeetingRequests[0]).toContain(
+      `series_id=eq.${SERIES.platformStandup}`
+    );
+    expect(seriesMeetingRequests[0]).toContain("order=date.desc");
   });
 
   test("open issues section lists active issues", async ({ page }) => {
