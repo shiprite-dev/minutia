@@ -334,7 +334,7 @@ export function IssueDetailContent({ issueId }: IssueDetailContentProps) {
   return (
     <div className="min-h-full bg-paper">
       <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6 lg:px-8">
-        <div className="mb-6 flex flex-wrap items-center gap-2">
+        <div className="mb-6 flex items-center justify-between gap-4">
           <Button
             type="button"
             variant="ghost"
@@ -345,7 +345,7 @@ export function IssueDetailContent({ issueId }: IssueDetailContentProps) {
             <ArrowLeft className="size-4" />
             Back
           </Button>
-          <IssueKey issue={issue} />
+          <IssueKey issue={issue} className="shrink-0" />
         </div>
 
         {/* Title (inline editable) */}

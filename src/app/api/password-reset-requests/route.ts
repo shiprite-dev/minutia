@@ -33,7 +33,7 @@ export async function POST(request: NextRequest) {
 
   const email = parsed.data.email.toLowerCase();
   const supabase = createServiceRoleClient();
-  const redirectTo = absoluteAppUrl(request.url, "/auth/callback?next=/reset-password");
+  const redirectTo = absoluteAppUrl(request.url, "/reset-password");
   const { data, error } = await supabase.auth.admin.generateLink({
     type: "recovery",
     email,

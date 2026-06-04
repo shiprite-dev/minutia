@@ -11,6 +11,7 @@ import { IssueCard, EmptyState } from "@/components/minutia";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { Issue, IssueStatus } from "@/lib/types";
 import { isOverdue } from "@/lib/issue-utils";
+import { isMyActionIssue } from "@/lib/my-actions";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -125,16 +126,7 @@ export default function MyActionsPage() {
   // Filter issues assigned to the current user
   const myIssues = React.useMemo(() => {
     if (!issues || !profile) return [];
-    return issues.filter((i) => {
-      if (i.owner_name) {
-        const name = i.owner_name.toLowerCase();
-        return (
-          name === profile.email.toLowerCase() ||
-          name === profile.name?.toLowerCase()
-        );
-      }
-      return i.owner_user_id === profile.id;
-    });
+    return issues.filter((issue) => isMyActionIssue(issue, profile));
   }, [issues, profile]);
 
   // Group into sections

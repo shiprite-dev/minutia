@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { motion } from "motion/react";
+import { AnimatePresence, motion } from "motion/react";
 import Link from "next/link";
 import { useSeries } from "@/lib/hooks/use-series";
 import { EmptyState } from "@/components/minutia/empty-state";
@@ -21,6 +21,13 @@ const cadenceLabels: Record<Cadence, string> = {
   adhoc: "Ad hoc",
 };
 
+const detailPanelMotion = {
+  initial: { opacity: 0, y: 8, scale: 0.98 },
+  animate: { opacity: 1, y: 0, scale: 1 },
+  exit: { opacity: 0, y: 6, scale: 0.98 },
+  transition: { duration: 0.18, ease: [0.2, 0.8, 0.2, 1] },
+} as const;
+
 function formatDate(date: Date | string): string {
   return new Date(date).toLocaleDateString("en-US", {
     month: "short",
@@ -31,6 +38,9 @@ function formatDate(date: Date | string): string {
 export default function SeriesListPage() {
   const { data: seriesList, isLoading } = useSeries();
   const [dialogOpen, setDialogOpen] = React.useState(false);
+  const [activeSeriesId, setActiveSeriesId] = React.useState<string | null>(
+    null
+  );
   const mounted = React.useSyncExternalStore(
     () => () => {},
     () => true,
@@ -93,51 +103,90 @@ export default function SeriesListPage() {
                   delay: i * 0.06,
                   ease: [0.2, 0.8, 0.2, 1],
                 }}
+                onHoverStart={() => setActiveSeriesId(series.id)}
+                onHoverEnd={() =>
+                  setActiveSeriesId((current) =>
+                    current === series.id ? null : current
+                  )
+                }
               >
                 <Link
                   href={`/series/${series.id}`}
-                  className="block bg-card border border-rule rounded-md p-5 hover:border-rule-strong transition-colors group"
+                  onFocus={() => setActiveSeriesId(series.id)}
+                  onBlur={() =>
+                    setActiveSeriesId((current) =>
+                      current === series.id ? null : current
+                    )
+                  }
+                  className="group relative flex h-44 flex-col overflow-visible bg-card border border-rule rounded-md p-5 hover:border-rule-strong focus-visible:border-rule-strong focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-paper outline-none transition-colors"
                 >
-                  {/* Name + cadence */}
-                  <div className="flex items-start justify-between gap-2 mb-2">
-                    <h2 className="font-display font-medium text-ink text-base group-hover:text-accent transition-colors truncate">
-                      {series.name}
-                    </h2>
-                    <Badge
-                      variant="secondary"
-                      className="shrink-0 gap-1 text-[10px]"
-                    >
-                      <MinutiaCadenceIcon cadence={series.cadence} className="size-3 text-ink" />
-                      {cadenceLabels[series.cadence]}
-                    </Badge>
-                  </div>
-
-                  {/* Description */}
-                  {series.description && (
-                    <p className="text-sm text-ink-2 line-clamp-2 mb-3">
-                      {series.description}
-                    </p>
-                  )}
-
-                  {/* Footer meta */}
-                  <div className="flex items-center gap-3 text-xs text-ink-3">
-                    {series.open_issues_count > 0 && (
-                      <span
-                        className={cn(
-                          "font-medium",
-                          series.open_issues_count > 5
-                            ? "text-accent"
-                            : "text-ink-3"
-                        )}
+                  <div className="flex h-full flex-col">
+                    {/* Name + cadence */}
+                    <div className="flex items-start justify-between gap-2 mb-2">
+                      <h2 className="font-display font-medium text-ink text-base leading-5 group-hover:text-accent group-focus:text-accent transition-colors line-clamp-2">
+                        {series.name}
+                      </h2>
+                      <Badge
+                        variant="secondary"
+                        className="shrink-0 gap-1 text-[10px]"
                       >
-                        {series.open_issues_count} open{" "}
-                        {series.open_issues_count === 1 ? "issue" : "issues"}
+                        <MinutiaCadenceIcon cadence={series.cadence} className="size-3 text-ink" />
+                        {cadenceLabels[series.cadence]}
+                      </Badge>
+                    </div>
+
+                    <div className="h-10 mb-3">
+                      {series.description && (
+                        <p className="text-sm leading-5 text-ink-2 line-clamp-2">
+                          {series.description}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Footer meta */}
+                    <div className="mt-auto flex min-h-5 items-center gap-3 text-xs text-ink-3">
+                      {series.open_issues_count > 0 && (
+                        <span
+                          className={cn(
+                            "font-medium",
+                            series.open_issues_count > 5
+                              ? "text-accent"
+                              : "text-ink-3"
+                          )}
+                        >
+                          {series.open_issues_count} open{" "}
+                          {series.open_issues_count === 1 ? "issue" : "issues"}
+                        </span>
+                      )}
+                      <span className="font-mono text-ink-4">
+                        Updated {formatDate(series.updated_at)}
                       </span>
-                    )}
-                    <span className="font-mono text-ink-4">
-                      Updated {formatDate(series.updated_at)}
-                    </span>
+                    </div>
                   </div>
+
+                  <AnimatePresence>
+                    {activeSeriesId === series.id && (
+                      <motion.div
+                        data-testid="series-card-detail-panel"
+                        className="pointer-events-none absolute left-3 right-3 top-[calc(100%-0.5rem)] z-20 rounded-md border border-rule-strong bg-card px-3 py-2.5 shadow-lg"
+                        {...detailPanelMotion}
+                      >
+                        <p className="font-display text-sm font-medium leading-5 text-ink">
+                          {series.name}
+                        </p>
+                        {series.description && (
+                          <p className="mt-1 text-xs leading-5 text-ink-2">
+                            {series.description}
+                          </p>
+                        )}
+                        <div className="mt-2 flex items-center gap-2 text-[10px] font-mono uppercase tracking-wider text-ink-4">
+                          <span>{cadenceLabels[series.cadence]}</span>
+                          <span aria-hidden="true">/</span>
+                          <span>Updated {formatDate(series.updated_at)}</span>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </Link>
               </motion.div>
             ))}

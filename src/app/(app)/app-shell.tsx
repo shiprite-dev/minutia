@@ -57,7 +57,7 @@ export function AppShell({ profile, organizations, children }: AppShellProps) {
       </a>
       <AppSidebar profile={profile} organizations={organizations} />
       <SidebarInset>
-        <AppHeader profile={profile} />
+        <AppHeader />
         <div className="flex flex-1 overflow-hidden">
           <main id="main-content" className="flex flex-1 flex-col overflow-y-auto bg-paper">
             {children}

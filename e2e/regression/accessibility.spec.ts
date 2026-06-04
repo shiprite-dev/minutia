@@ -92,4 +92,12 @@ test.describe("Semantic HTML landmarks and page titles (MIN-046)", () => {
     const header = page.locator("header[aria-label='Page header']");
     await expect(header).toBeVisible();
   });
+
+  test("header contains only functional controls", async ({ page }) => {
+    await page.goto("/");
+    await waitForApp(page);
+
+    const header = page.locator("header[aria-label='Page header']");
+    await expect(header.locator(".size-7.rounded-full")).toHaveCount(0);
+  });
 });

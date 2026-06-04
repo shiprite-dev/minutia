@@ -9,6 +9,22 @@ import { cn } from "@/lib/utils";
 import type { Issue, IssueStatus, Meeting, MeetingSeries } from "@/lib/types";
 import { daysSince } from "@/lib/date-utils";
 
+function formatOrdinal(value: number): string {
+  const tens = value % 100;
+  if (tens >= 11 && tens <= 13) return `${value}th`;
+
+  switch (value % 10) {
+    case 1:
+      return `${value}st`;
+    case 2:
+      return `${value}nd`;
+    case 3:
+      return `${value}rd`;
+    default:
+      return `${value}th`;
+  }
+}
+
 export function MeetingTriageWidget({
   id,
   index,
@@ -95,7 +111,7 @@ export function MeetingTriageWidget({
                 issue={issue}
                 badge={
                   <span className="text-[10px] font-mono text-accent bg-accent-soft px-1.5 py-0.5 rounded">
-                    {meetingCount(issue)}th meeting
+                    {formatOrdinal(meetingCount(issue))} meeting
                   </span>
                 }
                 onStatusChange={onStatusChange}

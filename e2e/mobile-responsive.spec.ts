@@ -40,8 +40,10 @@ test.describe("Mobile Responsive", () => {
       backBox!.x + backBox!.width > keyBox!.x &&
       backBox!.y < keyBox!.y + keyBox!.height &&
       backBox!.y + backBox!.height > keyBox!.y;
+    const horizontalGap = keyBox!.x - (backBox!.x + backBox!.width);
 
     expect(overlaps).toBe(false);
+    expect(horizontalGap).toBeGreaterThanOrEqual(24);
 
     const dueDate = page.getByLabel("Due date");
     await expect(dueDate).toBeVisible();

@@ -7,7 +7,6 @@ import { SidebarTrigger } from "@/components/ui/sidebar";
 import { useUIStore } from "@/lib/stores/ui-store";
 import { Separator } from "@/components/ui/separator";
 import { HintTooltip } from "@/components/minutia/hint-tooltip";
-import type { Profile } from "@/lib/types";
 
 const pageTitles: Record<string, string> = {
   "/": "OIL Board",
@@ -38,33 +37,7 @@ function resolveTitle(pathname: string): string {
   return prefix ? pageTitles[prefix] : "Minutia";
 }
 
-function UserAvatar({
-  name,
-  email,
-}: {
-  name: string | null;
-  email: string;
-}) {
-  const display = name || email;
-  const initials = display
-    .split(" ")
-    .map((s) => s[0])
-    .slice(0, 2)
-    .join("")
-    .toUpperCase();
-
-  return (
-    <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-paper-3 text-xs font-medium text-ink">
-      {initials}
-    </div>
-  );
-}
-
-interface AppHeaderProps {
-  profile: Profile | null;
-}
-
-export function AppHeader({ profile }: AppHeaderProps) {
+export function AppHeader() {
   const pathname = usePathname();
   const openCommandPalette = useUIStore((s) => s.openCommandPalette);
   const calendarSidebarOpen = useUIStore((s) => s.calendarSidebarOpen);
@@ -138,12 +111,6 @@ export function AppHeader({ profile }: AppHeaderProps) {
         </Button>
       </HintTooltip>
 
-      {profile && (
-        <UserAvatar
-          name={profile.name}
-          email={profile.email}
-        />
-      )}
     </header>
   );
 }

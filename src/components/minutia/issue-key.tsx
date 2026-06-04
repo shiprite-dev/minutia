@@ -14,7 +14,7 @@ export function IssueKey({ issue, className }: IssueKeyProps) {
     <span
       aria-label={`Issue key ${key}`}
       className={cn(
-        "inline-flex h-6 items-center rounded border border-rule bg-paper-2 px-2 font-mono text-[11px] font-medium uppercase text-ink-3",
+        "inline-flex h-6 items-center whitespace-nowrap rounded border border-rule bg-paper-2 px-2 font-mono text-[11px] font-medium uppercase text-ink-3",
         className
       )}
     >
