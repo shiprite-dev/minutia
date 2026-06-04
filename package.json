@@ -66,6 +66,7 @@
     "papaparse": "^5.5.3",
     "radix-ui": "^1.4.3",
     "react": "19.2.4",
+    "react-day-picker": "^10.0.1",
     "react-dom": "19.2.4",
     "react-hook-form": "^7.74.0",
     "tailwind-merge": "^3.5.0",
@@ -87,8 +88,8 @@
     "esbuild": "^0.28.0",
     "eslint": "^9",
     "eslint-config-next": "16.2.6",
-    "shadcn": "^4.7.0",
     "serwist": "^9.5.10",
+    "shadcn": "^4.7.0",
     "tailwindcss": "^4",
     "typescript": "^5"
   },
