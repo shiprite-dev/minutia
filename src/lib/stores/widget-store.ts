@@ -17,6 +17,11 @@ export interface WidgetLayout {
   h: number;
 }
 
+type StoredWidgetInstance = Omit<WidgetInstance, "layout"> & {
+  layout?: WidgetLayout;
+  span?: 1 | 2;
+};
+
 const DEFAULT_WIDGETS: WidgetInstance[] = [
   { id: "hero-1", type: "hero" },
   { id: "next-meeting-1", type: "next-meeting" },
@@ -156,7 +161,6 @@ export const useWidgetStore = create<WidgetState>()(
           const widgets = state.widgets.map((w) => {
             const next = layouts[w.id];
             if (!isDesktopLayout(next)) return w;
-            if (!next) return w;
             if (
               w.layout?.x === next.x &&
               w.layout?.y === next.y &&
@@ -177,10 +181,13 @@ export const useWidgetStore = create<WidgetState>()(
       name: "minutia-widgets",
       version: 2,
       migrate: (persisted) => {
-        const state = persisted as Partial<WidgetState> | undefined;
+        const state = persisted as { widgets?: StoredWidgetInstance[] } | undefined;
         return {
-          ...state,
-          widgets: state?.widgets?.map(({ id, type }) => ({ id, type })) ?? DEFAULT_WIDGETS,
+          widgets: (state?.widgets ?? DEFAULT_WIDGETS).map(({
+            layout: _layout,
+            span: _span,
+            ...widget
+          }) => widget),
         };
       },
     }
