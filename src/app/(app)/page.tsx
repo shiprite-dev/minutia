@@ -119,7 +119,7 @@ function HeroWidget({
       <p className="text-[11px] font-mono uppercase tracking-wider text-ink-4 mb-3">
         {formatWeekday(new Date())}
       </p>
-      <div className="flex items-baseline gap-4 mb-2">
+      <div className="flex flex-wrap items-baseline gap-x-4 gap-y-2 mb-2">
         <span className="font-display text-5xl font-bold text-ink tabular-nums leading-none">
           {openCount}
         </span>
@@ -129,7 +129,7 @@ function HeroWidget({
           </h2>
         </div>
       </div>
-      <div className="flex items-center gap-2 text-sm text-ink-2 mt-1">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-ink-2 mt-1">
         <span>{openCount} open</span>
         <span className="text-ink-4">·</span>
         <span>{pendingCount} pending</span>
@@ -145,7 +145,7 @@ function HeroWidget({
 
       {recentMeetings.length > 0 && (
         <div className="mt-6 pt-5 border-t border-rule">
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
             <p className="text-xs text-ink-3">
               Issues across last {recentMeetings.length} meetings
             </p>
@@ -192,7 +192,7 @@ function HeroWidget({
               );
             })}
           </div>
-          <div className="flex items-center gap-4 mt-3">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mt-3">
             <div className="flex items-center gap-1.5">
               <span className="size-2 rounded-sm bg-ink/20" />
               <span className="text-[10px] text-ink-4">Raised</span>
@@ -241,7 +241,7 @@ function NextMeetingWidget({
           Next meeting
         </span>
       </div>
-      <h3 className="font-display text-lg font-semibold text-ink mb-1">
+      <h3 className="font-display text-lg font-semibold text-ink mb-1 break-words">
         {nextSeries.name}
       </h3>
       {eventTime ? (
@@ -270,8 +270,8 @@ function NextMeetingWidget({
         </p>
       )}
       <div className="flex items-center gap-3">
-        <Link href={`/series/${nextSeries.id}`}>
-          <Button className="bg-ink text-paper hover:bg-ink-2 flex-1 h-10">
+        <Link href={`/series/${nextSeries.id}`} className="w-full">
+          <Button className="w-full bg-ink text-paper hover:bg-ink-2 h-10">
             Open series
             <ArrowRight className="size-3.5 ml-1.5" />
           </Button>
@@ -368,7 +368,7 @@ function OutstandingWidget({
 
   return (
     <WidgetShell id={id} index={widgetIndex}>
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-1">
+      <div className="flex flex-wrap items-start justify-between gap-2 mb-1">
         <h3 className="font-display text-lg font-semibold text-ink">Outstanding items</h3>
         <div className="flex items-center gap-1 overflow-x-auto" role="tablist" aria-label="Filter outstanding items">
           {filters.map((f) => (
@@ -410,7 +410,7 @@ function OutstandingWidget({
 
             return (
               <div key={series.id} className="py-5 first:pt-0 last:pb-0">
-                <div className="flex items-center gap-3 mb-3">
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mb-3">
                   <MinutiaCadenceIcon cadence={series.cadence} className="size-4 shrink-0 text-ink" />
                   <Link
                     href={`/series/${series.id}`}
@@ -609,7 +609,7 @@ function AgeWidget({ id, widgetIndex, issues }: { id: string; widgetIndex: numbe
 
   return (
     <WidgetShell id={id} index={widgetIndex}>
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex flex-wrap items-start justify-between gap-2 mb-4">
         <h3 className="font-display text-base font-semibold text-ink">Age of open items</h3>
         <span className="text-[11px] text-ink-4">oldest first</span>
       </div>
@@ -620,7 +620,7 @@ function AgeWidget({ id, widgetIndex, issues }: { id: string; widgetIndex: numbe
       )}
       <div className="space-y-2.5">
         {order.map((key) => (
-          <div key={key} className="flex items-center justify-between">
+          <div key={key} className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2.5">
               <span className={cn("size-2 rounded-full", dotColor(key))} />
               <span className="text-sm text-ink-2">{key}</span>
@@ -700,7 +700,7 @@ function SeriesWidget({
 }) {
   return (
     <WidgetShell id={id} index={widgetIndex}>
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
         <h3 className="font-display text-base font-semibold text-ink">Your series</h3>
         <Link href="/series" className="text-xs text-ink-3 hover:text-accent transition-colors">
           View all
@@ -711,10 +711,10 @@ function SeriesWidget({
           <Link
             key={series.id}
             href={`/series/${series.id}`}
-            className="flex items-center gap-3 rounded-lg px-3 py-2.5 hover:bg-paper-2 transition-colors group"
+            className="flex items-center gap-3 rounded-lg px-3 py-2.5 hover:bg-paper-2 transition-colors group min-w-0"
           >
             <Calendar className="size-4 text-ink-4 group-hover:text-accent transition-colors" />
-            <span className="flex-1 text-sm text-ink group-hover:text-accent transition-colors">{series.name}</span>
+            <span className="flex-1 min-w-0 text-sm text-ink group-hover:text-accent transition-colors break-words">{series.name}</span>
             {series.open_issues_count > 0 && (
               <span className="text-xs text-accent font-medium tabular-nums">
                 {series.open_issues_count} open
