@@ -83,6 +83,7 @@ const route = read("src/app/api/meetings/[meetingId]/enhance-notes/route.ts");
 assert(route.includes("minimax/minimax-m3"), "Enhance route must use minimax/minimax-m3");
 assert(route.includes("OPENROUTER_API_KEY"), "Enhance route must read OPENROUTER_API_KEY");
 assert(route.includes("https://openrouter.ai/api/v1/chat/completions"), "Enhance route must call OpenRouter chat completions");
+assert(route.includes("ai_notes: parsed"), "Enhance route must return structured AI notes JSON");
 
 const suggestionsRoute = read("src/app/api/meetings/[meetingId]/suggestions/route.ts");
 assert(suggestionsRoute.includes("minimax/minimax-m3"), "Suggestions route must use minimax/minimax-m3");
@@ -99,8 +100,12 @@ const meetingDetail = read("src/app/(app)/series/[id]/meetings/[meetingId]/meeti
 for (const copy of [
   "Enhance notes",
   "AI notes preview",
+  "Structured record",
+  "Structured draft",
   "Apply AI notes",
   "Raw notes",
+  "Action items",
+  "Open questions",
   "Review AI suggestions",
   "AI suggestions",
   "Accept suggestion",
@@ -108,6 +113,10 @@ for (const copy of [
 ]) {
   assert(meetingDetail.includes(copy), `Meeting detail missing UI copy: ${copy}`);
 }
+assert(
+  meetingDetail.includes("normalizeAiNotesPreview"),
+  "Meeting detail must render structured AI notes from JSON"
+);
 
 const seriesDetail = read("src/app/(app)/series/[id]/series-detail-content.tsx");
 for (const copy of [
