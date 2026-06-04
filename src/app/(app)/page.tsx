@@ -100,6 +100,54 @@ function ageGroup(days: number): string {
   return "30d+";
 }
 
+const DASHBOARD_ROW_HEIGHT = 8;
+const DASHBOARD_GRID_GAP = 20;
+
+function DashboardGridItem({
+  children,
+  span,
+}: {
+  children: React.ReactNode;
+  span: 1 | 2 | 4;
+}) {
+  const ref = React.useRef<HTMLDivElement>(null);
+  const [rowSpan, setRowSpan] = React.useState(1);
+
+  React.useLayoutEffect(() => {
+    const node = ref.current;
+    if (!node) return;
+
+    const measure = () => {
+      const height = node.getBoundingClientRect().height;
+      const nextSpan = Math.max(
+        1,
+        Math.ceil((height + DASHBOARD_GRID_GAP) / (DASHBOARD_ROW_HEIGHT + DASHBOARD_GRID_GAP))
+      );
+      setRowSpan(nextSpan);
+    };
+
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(node);
+    window.addEventListener("resize", measure);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, []);
+
+  return (
+    <div
+      className={cn(span >= 2 && "lg:col-span-2", span === 4 && "xl:col-span-4")}
+      style={{ gridRowEnd: `span ${rowSpan}` }}
+    >
+      <div ref={ref}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Hero summary widget
 // ---------------------------------------------------------------------------
@@ -552,28 +600,44 @@ function IssueRow({
       >
         {issue.title}
       </PrefetchIssueLink>
-      <StatusChip
-        status={issue.status}
-        onChange={(newStatus) => onStatusChange(issue.id, issue.status, newStatus, issue.series_id)}
-      />
-      {issue.owner_name && (
-        <span className="hidden sm:inline-flex items-center justify-center size-6 rounded-full bg-paper-3 text-[10px] font-medium text-ink shrink-0" title={issue.owner_name}>
-          {issue.owner_name.charAt(0).toUpperCase()}
-        </span>
-      )}
-      {(issue.update_count ?? 0) > 0 && (
-        <span className="hidden sm:inline text-[11px] font-mono text-ink-4 tabular-nums shrink-0">
-          {issue.update_count} update{issue.update_count !== 1 ? "s" : ""}
-        </span>
-      )}
-      {issue.due_date && (() => {
-        const rel = formatRelativeDue(issue.due_date);
-        return (
-          <span className={cn("text-xs font-mono tabular-nums shrink-0", rel.overdue ? "text-accent font-medium" : "text-ink-4")}>
-            {rel.label}
-          </span>
-        );
-      })()}
+      <div className="ml-auto grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 sm:w-[384px] sm:grid-cols-[132px_32px_84px_116px]">
+        <div data-testid="issue-status-lane" className="flex justify-start sm:w-[132px] sm:justify-end">
+          <StatusChip
+            status={issue.status}
+            onChange={(newStatus) => onStatusChange(issue.id, issue.status, newStatus, issue.series_id)}
+          />
+        </div>
+        <div data-testid="issue-assignee-lane" className="hidden size-6 items-center justify-center justify-self-center sm:flex">
+          {issue.owner_name ? (
+            <HintTooltip label={`Assignee: ${issue.owner_name}`} side="left">
+              <button
+                type="button"
+                aria-label={`Assignee: ${issue.owner_name}`}
+                className="flex size-6 items-center justify-center rounded-full bg-paper-3 text-[10px] font-medium text-ink outline-none transition-colors hover:bg-paper-2 focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-paper"
+              >
+                {issue.owner_name.charAt(0).toUpperCase()}
+              </button>
+            </HintTooltip>
+          ) : null}
+        </div>
+        <div data-testid="issue-update-lane" className="hidden w-[84px] justify-self-end text-right sm:block">
+          {(issue.update_count ?? 0) > 0 ? (
+            <span className="text-[11px] font-mono text-ink-4 tabular-nums">
+              {issue.update_count} update{issue.update_count !== 1 ? "s" : ""}
+            </span>
+          ) : null}
+        </div>
+        <div data-testid="issue-due-lane" className="justify-self-end text-right sm:w-[116px]">
+          {issue.due_date ? (() => {
+            const rel = formatRelativeDue(issue.due_date);
+            return (
+              <span className={cn("text-xs font-mono tabular-nums", rel.overdue ? "text-accent font-medium" : "text-ink-4")}>
+                {rel.label}
+              </span>
+            );
+          })() : null}
+        </div>
+      </div>
     </motion.div>
   );
 }
@@ -874,7 +938,7 @@ function QuickAddButton({
 
 function DashboardSkeleton() {
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+    <div className="grid grid-cols-1 gap-5 lg:grid-cols-2 xl:grid-cols-4">
       <Skeleton className="h-40 lg:col-span-2 rounded-xl" />
       <Skeleton className="h-40 rounded-xl" />
       <Skeleton className="h-80 lg:col-span-2 rounded-xl" />
@@ -1089,7 +1153,7 @@ export default function Dashboard() {
     () =>
       widgets.map((w) => ({
         ...w,
-        _span: w.span ?? getWidgetMeta(w.type)?.span ?? 1,
+        _span: w.type === "outstanding" ? 4 : w.span ?? getWidgetMeta(w.type)?.span ?? 1,
       })),
     [widgets]
   );
@@ -1124,11 +1188,14 @@ export default function Dashboard() {
               onDragEnd={handleDragEnd}
             >
               <SortableContext items={widgetIds} strategy={rectSortingStrategy}>
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 [grid-auto-flow:dense]">
+                <div
+                  className="grid grid-cols-1 gap-5 [grid-auto-flow:dense] lg:grid-cols-2 xl:grid-cols-4"
+                  style={{ gridAutoRows: `${DASHBOARD_ROW_HEIGHT}px` }}
+                >
                   {widgetSpans.map((w, i) => (
-                    <div
+                    <DashboardGridItem
                       key={w.id}
-                      className={cn(w._span === 2 && "lg:col-span-2")}
+                      span={w._span === 4 ? 4 : w._span === 2 ? 2 : 1}
                     >
                       <WidgetRenderer
                         widgetId={w.id}
@@ -1136,7 +1203,7 @@ export default function Dashboard() {
                         widgetIndex={i}
                         {...sharedProps}
                       />
-                    </div>
+                    </DashboardGridItem>
                   ))}
                 </div>
               </SortableContext>

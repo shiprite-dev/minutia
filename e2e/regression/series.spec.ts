@@ -176,6 +176,55 @@ test.describe("Series List Page", () => {
       .click();
     await expect(page).toHaveURL(`/series/${SERIES.platformStandup}`);
   });
+
+  test("series cards keep stable summary height and reveal details", async ({
+    page,
+    request,
+  }) => {
+    test.skip(!HAS_SERVICE_ROLE, "Requires service role cleanup for isolated series data");
+
+    const longDescription = [
+      "This series has a deliberately long summary so the list card must keep a fixed visual height.",
+      "The expanded panel should expose this detail without pushing nearby cards around.",
+      "That keeps the grid scannable even when teams write verbose series context.",
+    ].join(" ");
+    const longSeries = await createTempSeries(request, {
+      name: `Long series summary coverage ${Date.now()}`,
+      description: longDescription,
+    });
+    const compactSeries = await createTempSeries(request, {
+      name: `Compact series coverage ${Date.now()}`,
+      description: "",
+    });
+
+    try {
+      await page.goto("/series");
+      await waitForApp(page);
+
+      const longCard = page.locator(`main a[href="/series/${longSeries.id}"]`);
+      const compactCard = page.locator(`main a[href="/series/${compactSeries.id}"]`);
+      await expect(longCard).toBeVisible();
+      await expect(compactCard).toBeVisible();
+
+      const longBox = await longCard.boundingBox();
+      const compactBox = await compactCard.boundingBox();
+      expect(longBox).not.toBeNull();
+      expect(compactBox).not.toBeNull();
+      expect(Math.abs(longBox!.height - compactBox!.height)).toBeLessThanOrEqual(1);
+
+      const detailPanel = longCard.locator('[data-testid="series-card-detail-panel"]');
+      await longCard.hover();
+      await expect(detailPanel).toBeVisible();
+      await expect(detailPanel).toContainText(longDescription);
+
+      await compactCard.focus();
+      await longCard.focus();
+      await expect(detailPanel).toBeVisible();
+    } finally {
+      await deleteSeries(request, longSeries.id);
+      await deleteSeries(request, compactSeries.id);
+    }
+  });
 });
 
 test.describe("Series Detail Page", () => {

@@ -29,6 +29,7 @@ import {
 } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { isMyActionIssue } from "@/lib/my-actions";
 import type { OrganizationOption, Profile } from "@/lib/types";
 
 function isActive(pathname: string, href: string): boolean {
@@ -85,16 +86,7 @@ export function AppSidebar({ profile, organizations }: AppSidebarProps) {
   );
   const outstandingCount = openIssues.length;
   const myActionsCount = profile
-    ? openIssues.filter((i) => {
-        if (i.owner_name) {
-          const name = i.owner_name.toLowerCase();
-          return (
-            name === profile.email.toLowerCase() ||
-            name === profile.name?.toLowerCase()
-          );
-        }
-        return i.owner_user_id === profile.id;
-      }).length
+    ? openIssues.filter((issue) => isMyActionIssue(issue, profile)).length
     : 0;
 
   const navItems = [
@@ -226,7 +218,7 @@ export function AppSidebar({ profile, organizations }: AppSidebarProps) {
               {profile?.name || "User"}
             </span>
             <span className="truncate text-xs text-ink-4">
-              Free plan
+              {profile?.email ?? ""}
             </span>
           </div>
           <form action={signOut}>

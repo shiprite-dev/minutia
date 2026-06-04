@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { LockKeyhole, ArrowRight } from "lucide-react";
 import { motion } from "motion/react";
@@ -11,14 +11,74 @@ import { Label } from "@/components/ui/label";
 
 type FormState = "idle" | "loading" | "success" | "error";
 
+const RESET_LINK_ERROR =
+  "Password reset link missing or expired. Request a new reset email.";
+
 export default function ResetPasswordPage() {
   const [password, setPassword] = useState("");
   const [passwordConfirm, setPasswordConfirm] = useState("");
   const [formState, setFormState] = useState<FormState>("idle");
   const [message, setMessage] = useState("");
+  const [openingLink, setOpeningLink] = useState(true);
 
   const passwordsMatch = password === passwordConfirm;
   const canSubmit = password.length >= 8 && passwordsMatch;
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function openRecoverySession() {
+      try {
+        const supabase = createClient();
+        const url = new URL(window.location.href);
+        const hash = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+        const hashError = hash.get("error_description") || hash.get("error");
+
+        if (hashError) {
+          throw new Error(hashError);
+        }
+
+        const code = url.searchParams.get("code");
+        if (code) {
+          const { error } = await supabase.auth.exchangeCodeForSession(code);
+          if (error) throw error;
+          window.history.replaceState({}, "", window.location.pathname);
+        } else {
+          const accessToken = hash.get("access_token");
+          const refreshToken = hash.get("refresh_token");
+
+          if (accessToken && refreshToken) {
+            const { error } = await supabase.auth.setSession({
+              access_token: accessToken,
+              refresh_token: refreshToken,
+            });
+            if (error) throw error;
+
+            window.history.replaceState(
+              {},
+              "",
+              `${window.location.pathname}${window.location.search}`
+            );
+          }
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setFormState("error");
+          setMessage(err instanceof Error ? err.message : RESET_LINK_ERROR);
+        }
+      } finally {
+        if (!cancelled) {
+          setOpeningLink(false);
+        }
+      }
+    }
+
+    openRecoverySession();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -69,6 +129,10 @@ export default function ResetPasswordPage() {
             <Button asChild className="h-10 w-full rounded-[12px] bg-accent font-sans font-medium text-white hover:bg-accent-hover">
               <Link href="/login">Back to sign in</Link>
             </Button>
+          </div>
+        ) : openingLink ? (
+          <div className="rounded-[14px] border border-rule bg-paper px-4 py-4">
+            <p className="font-sans text-sm text-ink-3">Opening reset link</p>
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
