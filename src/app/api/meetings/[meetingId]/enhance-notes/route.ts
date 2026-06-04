@@ -222,6 +222,7 @@ export async function POST(
   }
 
   return NextResponse.json({
+    ai_notes: parsed,
     ai_notes_markdown: aiNotes,
     model: OPENROUTER_MODEL,
     prompt_version: PROMPT_VERSION,

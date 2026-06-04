@@ -136,6 +136,12 @@ test.describe("AI notes", () => {
       );
       expect(response.status()).toBe(200);
       await expect(response.json()).resolves.toMatchObject({
+        ai_notes: {
+          summary: ["Alice owns onboarding and launch scope stays small."],
+          action_items: ["Alice owns onboarding by Friday."],
+          decisions: ["Keep launch scope small."],
+          risks: ["Support queue may spike."],
+        },
         model: "minimax/minimax-m3",
         prompt_version: "ai-notes-v1",
       });
@@ -170,6 +176,17 @@ test.describe("AI notes", () => {
           status: 200,
           contentType: "application/json",
           body: JSON.stringify({
+            ai_notes: {
+              summary: [
+                "The team kept launch scope small and identified a support queue risk."
+              ],
+              action_items: ["Alice owns the onboarding checklist by Friday."],
+              decisions: ["Keep the launch scope small."],
+              risks: ["Support queue may spike after launch."],
+              blockers: [],
+              follow_ups: [],
+              open_questions: [],
+            },
             ai_notes_markdown: [
               "## Summary",
               "The team kept launch scope small and identified a support queue risk.",
@@ -198,8 +215,17 @@ test.describe("AI notes", () => {
 
       await page.getByRole("button", { name: "Enhance notes" }).click();
       await expect(page.getByRole("dialog", { name: "AI notes preview" })).toBeVisible();
-      await expect(page.getByRole("heading", { name: "Raw notes" })).toBeVisible();
-      await expect(page.getByText("The team kept launch scope small")).toBeVisible();
+      const dialog = page.getByRole("dialog", { name: "AI notes preview" });
+      await expect(dialog.getByRole("heading", { name: "Raw notes" })).toBeVisible();
+      await expect(dialog.getByRole("heading", { name: "Summary" })).toBeVisible();
+      await expect(dialog.getByRole("heading", { name: "Action items" })).toBeVisible();
+      await expect(dialog.getByText("The team kept launch scope small")).toBeVisible();
+      await expect(
+        dialog.getByRole("listitem").filter({
+          hasText: "Alice owns the onboarding checklist by Friday.",
+        })
+      ).toBeVisible();
+      await expect(dialog.getByText("## Summary")).toHaveCount(0);
 
       await page.getByRole("button", { name: "Apply AI notes" }).click();
       await expect(page.getByRole("dialog", { name: "AI notes preview" })).toBeHidden();
