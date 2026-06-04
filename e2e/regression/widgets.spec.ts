@@ -489,13 +489,39 @@ test.describe("Widget system", () => {
   });
 
   test("remove widget button still works with drag handle present", async ({ page }) => {
-    await addWidget(page, /Stale Items/);
-    await expect(page.getByText("Needs attention")).toBeVisible();
+    const widgets = [
+      { id: "hero-1", type: "hero" },
+      { id: "next-meeting-1", type: "next-meeting" },
+      { id: "outstanding-1", type: "outstanding" },
+      { id: "series-1", type: "series" },
+      { id: "decisions-1", type: "decisions" },
+      { id: "age-1", type: "age" },
+      { id: "stale-items-remove", type: "stale-items" },
+    ];
+    await page.evaluate((nextWidgets) => {
+      localStorage.setItem(
+        "minutia-widgets",
+        JSON.stringify({ state: { widgets: nextWidgets }, version: 0 })
+      );
+    }, widgets);
 
-    const stale = widgetWithText(page, "Needs attention");
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await waitForApp(page);
+
+    const stale = page.getByTestId("widget-stale-items-remove");
+    await expect(stale).toBeVisible();
     await stale.hover();
-    await stale.getByLabel("Remove widget").click({ force: true });
+    await expect(stale.getByLabel("Remove widget")).toBeVisible();
+    await stale.getByLabel("Remove widget").click();
 
-    await expect(page.getByText("Needs attention")).not.toBeVisible({ timeout: 10000 });
+    await expect(stale).not.toBeVisible({ timeout: 10000 });
+
+    const removed = await page.evaluate(() => {
+      const raw = localStorage.getItem("minutia-widgets");
+      if (!raw) return false;
+      const parsed = JSON.parse(raw) as { state?: { widgets?: StoredWidget[] } };
+      return !parsed.state?.widgets?.some((w) => w.type === "stale-items");
+    });
+    expect(removed).toBe(true);
   });
 });
