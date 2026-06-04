@@ -3,22 +3,6 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "motion/react";
-import {
-  DndContext,
-  DragOverlay,
-  PointerSensor,
-  KeyboardSensor,
-  closestCenter,
-  useSensor,
-  useSensors,
-  type DragStartEvent,
-  type DragEndEvent,
-} from "@dnd-kit/core";
-import {
-  SortableContext,
-  sortableKeyboardCoordinates,
-  rectSortingStrategy,
-} from "@dnd-kit/sortable";
 import Link from "next/link";
 import {
   ArrowRight,
@@ -47,8 +31,8 @@ import { cn } from "@/lib/utils";
 import { formatShortDate, daysBetween } from "@/lib/date-utils";
 import { isOpen, isOverdue } from "@/lib/issue-utils";
 import { useWidgetStore } from "@/lib/stores/widget-store";
-import { getWidgetMeta } from "@/components/minutia/widgets/widget-registry";
 import { WidgetShell } from "@/components/minutia/widgets/widget-shell";
+import { WidgetCanvas } from "@/components/minutia/widgets/widget-canvas";
 import { AddWidgetButton } from "@/components/minutia/widgets/add-widget";
 import { StaleItemsWidget } from "@/components/minutia/widgets/stale-items-widget";
 import { SeriesHealthWidget } from "@/components/minutia/widgets/series-health-widget";
@@ -98,54 +82,6 @@ function ageGroup(days: number): string {
   if (days <= 14) return "8–14d";
   if (days <= 30) return "15–30d";
   return "30d+";
-}
-
-const DASHBOARD_ROW_HEIGHT = 8;
-const DASHBOARD_GRID_GAP = 20;
-
-function DashboardGridItem({
-  children,
-  span,
-}: {
-  children: React.ReactNode;
-  span: 1 | 2 | 4;
-}) {
-  const ref = React.useRef<HTMLDivElement>(null);
-  const [rowSpan, setRowSpan] = React.useState(1);
-
-  React.useLayoutEffect(() => {
-    const node = ref.current;
-    if (!node) return;
-
-    const measure = () => {
-      const height = node.getBoundingClientRect().height;
-      const nextSpan = Math.max(
-        1,
-        Math.ceil((height + DASHBOARD_GRID_GAP) / (DASHBOARD_ROW_HEIGHT + DASHBOARD_GRID_GAP))
-      );
-      setRowSpan(nextSpan);
-    };
-
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(node);
-    window.addEventListener("resize", measure);
-    return () => {
-      observer.disconnect();
-      window.removeEventListener("resize", measure);
-    };
-  }, []);
-
-  return (
-    <div
-      className={cn(span >= 2 && "lg:col-span-2", span === 4 && "xl:col-span-4")}
-      style={{ gridRowEnd: `span ${rowSpan}` }}
-    >
-      <div ref={ref}>
-        {children}
-      </div>
-    </div>
-  );
 }
 
 // ---------------------------------------------------------------------------
@@ -1095,29 +1031,6 @@ export default function Dashboard() {
   const { data: allDecisions } = useDecisions(undefined, undefined, true, 5);
   const updateStatus = useUpdateIssueStatus();
   const widgets = useWidgetStore((s) => s.widgets);
-  const moveWidget = useWidgetStore((s) => s.moveWidget);
-
-  const [activeId, setActiveId] = React.useState<string | null>(null);
-
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
-  );
-
-  function handleDragStart(event: DragStartEvent) {
-    setActiveId(String(event.active.id));
-  }
-
-  function handleDragEnd(event: DragEndEvent) {
-    setActiveId(null);
-    const { active, over } = event;
-    if (!over || active.id === over.id) return;
-    const fromIndex = widgets.findIndex((w) => w.id === active.id);
-    const toIndex = widgets.findIndex((w) => w.id === over.id);
-    if (fromIndex !== -1 && toIndex !== -1) {
-      moveWidget(fromIndex, toIndex);
-    }
-  }
 
   const firstSeriesId = seriesList?.[0]?.gcal_sync_enabled ? seriesList[0].id : undefined;
   const { data: calendarEvents } = useCalendarEvents(firstSeriesId);
@@ -1147,17 +1060,6 @@ export default function Dashboard() {
     updateStatus.mutate({ issueId, seriesId, oldStatus, newStatus });
   }
 
-  const widgetIds = React.useMemo(() => widgets.map((w) => w.id), [widgets]);
-
-  const widgetSpans = React.useMemo(
-    () =>
-      widgets.map((w) => ({
-        ...w,
-        _span: w.type === "outstanding" ? 4 : w.span ?? getWidgetMeta(w.type)?.span ?? 1,
-      })),
-    [widgets]
-  );
-
   const sharedProps = {
     issues: issues ?? [],
     seriesList: seriesList ?? [],
@@ -1171,6 +1073,24 @@ export default function Dashboard() {
     calendarEvents: calendarEvents ?? undefined,
   };
 
+  const widgetLayoutKey = React.useMemo(
+    () =>
+      widgets
+        .map((w) =>
+          [
+            w.id,
+            w.type,
+            w.layout?.x ?? "",
+            w.layout?.y ?? "",
+            w.layout?.w ?? "",
+            w.layout?.h ?? "",
+          ].join(":")
+        )
+        .join("|"),
+    [widgets]
+  );
+  const widgetIds = React.useMemo(() => widgets.map((w) => w.id), [widgets]);
+
   return (
     <div className="min-h-screen bg-paper" data-tour="oil-board">
       <div className="mx-auto max-w-6xl px-6 py-8">
@@ -1180,44 +1100,17 @@ export default function Dashboard() {
         {isLoading ? (
           <DashboardSkeleton />
         ) : (
-          <>
-            <DndContext
-              sensors={sensors}
-              collisionDetection={closestCenter}
-              onDragStart={handleDragStart}
-              onDragEnd={handleDragEnd}
-            >
-              <SortableContext items={widgetIds} strategy={rectSortingStrategy}>
-                <div
-                  className="grid grid-cols-1 gap-5 [grid-auto-flow:dense] lg:grid-cols-2 xl:grid-cols-4"
-                  style={{ gridAutoRows: `${DASHBOARD_ROW_HEIGHT}px` }}
-                >
-                  {widgetSpans.map((w, i) => (
-                    <DashboardGridItem
-                      key={w.id}
-                      span={w._span === 4 ? 4 : w._span === 2 ? 2 : 1}
-                    >
-                      <WidgetRenderer
-                        widgetId={w.id}
-                        widgetType={w.type}
-                        widgetIndex={i}
-                        {...sharedProps}
-                      />
-                    </DashboardGridItem>
-                  ))}
-                </div>
-              </SortableContext>
-              <DragOverlay>
-                {activeId ? (
-                  <div className="rounded-xl border border-accent/50 bg-card/80 p-6 shadow-xl backdrop-blur-sm opacity-90">
-                    <p className="text-sm font-medium text-ink">
-                      {getWidgetMeta(widgets.find((w) => w.id === activeId)?.type ?? "")?.name ?? "Widget"}
-                    </p>
-                  </div>
-                ) : null}
-              </DragOverlay>
-            </DndContext>
-          </>
+          <WidgetCanvas layoutKey={widgetLayoutKey} widgetIds={widgetIds}>
+            {widgets.map((w, i) => (
+              <WidgetRenderer
+                key={w.id}
+                widgetId={w.id}
+                widgetType={w.type}
+                widgetIndex={i}
+                {...sharedProps}
+              />
+            ))}
+          </WidgetCanvas>
         )}
         <QuickAddButton seriesList={seriesList ?? []} allMeetings={meetings ?? []} />
       </div>
