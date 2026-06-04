@@ -19,6 +19,13 @@ test.describe("Inbox Page", () => {
     ).toBeVisible({ timeout: 10000 });
   });
 
+  test("has correct document title", async ({ page }) => {
+    await page.goto("/inbox");
+    await waitForApp(page);
+
+    await expect(page).toHaveTitle(/Inbox/);
+  });
+
   test("mark all read button is visible when unread exist", async ({
     page,
   }) => {
@@ -77,5 +84,42 @@ test.describe("Inbox Page", () => {
     await expect(
       page.getByRole("button", { name: "Mark all read" })
     ).not.toBeVisible({ timeout: 5000 });
+  });
+
+  test("marking individual notification as read updates count", async ({ page }) => {
+    await page.goto("/inbox");
+    await waitForApp(page);
+
+    await expect(page.getByText("3 unread notifications")).toBeVisible();
+
+    const markReadPromise = page.waitForResponse(
+      (response) =>
+        response.request().method() === "PATCH" &&
+        response.url().includes("/rest/v1/notifications")
+    );
+
+    await page
+      .getByText("Set up staging environment monitoring changed to in progress")
+      .click();
+    await markReadPromise;
+    await expect(page).toHaveURL(/\/issues\/30000000-0000-0000-0000-000000000002/);
+
+    await page.goBack();
+    await waitForApp(page);
+    await expect(page.getByText("2 unread notifications")).toBeVisible();
+  });
+
+  test("notification links navigate to relevant pages", async ({ page }) => {
+    await page.goto("/inbox");
+    await waitForApp(page);
+
+    await page
+      .getByText("You were assigned: Migrate CI from Jenkins to GitHub Actions")
+      .click();
+    await page.waitForLoadState("networkidle");
+
+    expect(page.url()).toMatch(
+      /\/issues\/30000000-0000-0000-0000-000000000001/
+    );
   });
 });

@@ -11,6 +11,12 @@ test.describe("My Actions Page", () => {
     ).toBeVisible();
   });
 
+  test("page has correct document title", async ({ page }) => {
+    await page.goto("/actions");
+
+    await expect(page).toHaveTitle(/My Actions/);
+  });
+
   test("shows summary line with OPEN/PENDING/OVERDUE counts", async ({ page }) => {
     await page.goto("/actions");
     await page.waitForLoadState("networkidle");
@@ -98,7 +104,11 @@ test.describe("My Actions Page", () => {
       .first();
     if (await issueLink.isVisible({ timeout: 5000 }).catch(() => false)) {
       await issueLink.click();
-      await expect(page).toHaveURL(/\/issues\/30000000/);
+      await expect(page).toHaveURL(/\/issues\/[0-9a-f-]+/);
+
+      await expect(
+        page.getByRole("heading", { name: /Migrate CI from Jenkins/i })
+      ).toBeVisible();
     }
   });
 
