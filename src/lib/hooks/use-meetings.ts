@@ -378,7 +378,7 @@ export function useMeetingsByMonth(year: number, month: number, enabled = true) 
 }
 
 // ---------------------------------------------------------------------------
-// useUpdateMeetingNotes - persist notes_markdown
+// useUpdateMeetingNotes - persist notes_markdown and raw_notes_markdown
 // ---------------------------------------------------------------------------
 export function useUpdateMeetingNotes() {
   const supabase = createClient();
@@ -388,7 +388,49 @@ export function useUpdateMeetingNotes() {
     mutationFn: async ({ meetingId, notes }: { meetingId: string; notes: string }) => {
       const { error } = await supabase
         .from("meetings")
-        .update({ notes_markdown: notes })
+        .update({ notes_markdown: notes, raw_notes_markdown: notes })
+        .eq("id", meetingId);
+
+      if (error) throw error;
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: meetingKeys.detail(variables.meetingId),
+      });
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// useApplyAiMeetingNotes - explicit apply from preview to visible notes
+// ---------------------------------------------------------------------------
+export function useApplyAiMeetingNotes() {
+  const supabase = createClient();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      meetingId,
+      notes,
+      model,
+      promptVersion,
+      generatedAt,
+    }: {
+      meetingId: string;
+      notes: string;
+      model: string;
+      promptVersion: string;
+      generatedAt: string;
+    }) => {
+      const { error } = await supabase
+        .from("meetings")
+        .update({
+          notes_markdown: notes,
+          ai_notes_markdown: notes,
+          ai_notes_model: model,
+          ai_notes_prompt_version: promptVersion,
+          ai_notes_generated_at: generatedAt,
+        })
         .eq("id", meetingId);
 
       if (error) throw error;
