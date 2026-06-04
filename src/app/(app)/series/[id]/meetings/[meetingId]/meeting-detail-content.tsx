@@ -32,7 +32,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { ShareButton } from "@/components/minutia/share-button";
 import { SendMeetingNotesButton } from "@/components/minutia/send-meeting-notes-button";
-import { ArrowLeft, Square, Play, Check, X, Copy, CheckCheck, Sparkles, Loader2, ListChecks } from "lucide-react";
+import { ArrowLeft, Square, Play, Check, X, Copy, CheckCheck, Sparkles, Loader2, ListChecks, FileText, CheckSquare, Gavel, AlertTriangle, Ban, RotateCcw, HelpCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatShortDate } from "@/lib/date-utils";
 import type { IssueCategory, IssueStatus, Issue, Decision, Meeting, MeetingAiSuggestion } from "@/lib/types";
@@ -270,10 +270,21 @@ interface MeetingDetailContentProps {
 }
 
 type AiNotesPreview = {
+  ai_notes?: AiNotesPayload;
   ai_notes_markdown: string;
   model: string;
   prompt_version: string;
   generated_at: string;
+};
+
+type AiNotesPayload = {
+  summary: string[];
+  action_items: string[];
+  decisions: string[];
+  risks: string[];
+  blockers: string[];
+  follow_ups: string[];
+  open_questions: string[];
 };
 
 function suggestionCategoryLabel(category: IssueCategory) {
@@ -299,6 +310,104 @@ function formatMeetingDate(date: Date | string): string {
     day: "numeric",
     year: "numeric",
   });
+}
+
+const emptyAiNotes: AiNotesPayload = {
+  summary: [],
+  action_items: [],
+  decisions: [],
+  risks: [],
+  blockers: [],
+  follow_ups: [],
+  open_questions: [],
+};
+
+function parseAiNotesMarkdown(markdown: string): Partial<AiNotesPayload> {
+  const sectionMap: Record<string, keyof AiNotesPayload> = {
+    summary: "summary",
+    "action items": "action_items",
+    decisions: "decisions",
+    risks: "risks",
+    blockers: "blockers",
+    "follow-ups": "follow_ups",
+    "follow ups": "follow_ups",
+    "open questions": "open_questions",
+  };
+  const parsed: Partial<AiNotesPayload> = {};
+  let currentKey: keyof AiNotesPayload | null = null;
+
+  for (const rawLine of markdown.split("\n")) {
+    const line = rawLine.trim();
+    if (!line) continue;
+    if (line.startsWith("## ")) {
+      currentKey = sectionMap[line.slice(3).trim().toLowerCase()] ?? null;
+      if (currentKey && !parsed[currentKey]) parsed[currentKey] = [];
+      continue;
+    }
+    if (!currentKey) continue;
+    const item = line.replace(/^[-*]\s+/, "").trim();
+    if (item) parsed[currentKey] = [...(parsed[currentKey] ?? []), item];
+  }
+
+  return parsed;
+}
+
+function normalizeAiNotesPreview(preview: AiNotesPreview): AiNotesPayload {
+  const source = preview.ai_notes ?? parseAiNotesMarkdown(preview.ai_notes_markdown);
+  return {
+    summary: source.summary ?? [],
+    action_items: source.action_items ?? [],
+    decisions: source.decisions ?? [],
+    risks: source.risks ?? [],
+    blockers: source.blockers ?? [],
+    follow_ups: source.follow_ups ?? [],
+    open_questions: source.open_questions ?? [],
+  };
+}
+
+function AiNotesSection({
+  title,
+  items,
+  icon: Icon,
+  tone = "neutral",
+}: {
+  title: string;
+  items: string[];
+  icon: React.ComponentType<{ className?: string }>;
+  tone?: "neutral" | "good" | "warn";
+}) {
+  if (items.length === 0) return null;
+
+  const toneClass = {
+    neutral: "bg-paper-2 text-ink-3",
+    good: "bg-success/10 text-success",
+    warn: "bg-warn/10 text-warn",
+  }[tone];
+
+  return (
+    <section className="rounded-lg border border-rule bg-card px-4 py-3">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <span className={cn("flex size-7 items-center justify-center rounded-md", toneClass)}>
+            <Icon className="size-3.5" />
+          </span>
+          <h4 className="text-sm font-semibold text-ink">{title}</h4>
+        </div>
+        <span className="text-[11px] font-mono tabular-nums text-ink-4">
+          {items.length}
+        </span>
+      </div>
+
+      <ul className="space-y-2">
+        {items.map((item, index) => (
+          <li key={`${title}-${index}`} className="flex gap-2 text-sm leading-5 text-ink-2">
+            <span className="mt-2 size-1.5 shrink-0 rounded-full bg-accent" />
+            <span>{item}</span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
 }
 
 
@@ -729,6 +838,11 @@ export function MeetingDetailContent({
           )
           .join(", ")
       : "Waiting for participants";
+  const structuredAiPreview = aiPreview ? normalizeAiNotesPreview(aiPreview) : emptyAiNotes;
+  const structuredAiPreviewCount = Object.values(structuredAiPreview).reduce(
+    (total, items) => total + items.length,
+    0
+  );
 
   // Handlers
   async function handleCapture(text: string, category: IssueCategory) {
@@ -1598,13 +1712,68 @@ export function MeetingDetailContent({
                   {meeting.raw_notes_markdown || notes || "No raw notes captured."}
                 </pre>
               </div>
-              <div className="min-h-0">
-                <div className="border-b border-rule px-5 py-3">
-                  <h4 className="text-sm font-semibold text-ink">AI-enhanced notes</h4>
+              <div className="min-h-0 bg-paper-2/40">
+                <div className="flex items-center justify-between gap-3 border-b border-rule px-5 py-3">
+                  <div>
+                    <h4 className="text-sm font-semibold text-ink">Structured record</h4>
+                    <p className="mt-0.5 text-xs text-ink-4">
+                      {structuredAiPreviewCount} suggested {structuredAiPreviewCount === 1 ? "entry" : "entries"}
+                    </p>
+                  </div>
+                  <span className="rounded-full bg-accent-soft px-2.5 py-1 text-[11px] font-medium text-accent">
+                    Structured draft
+                  </span>
                 </div>
-                <pre className="h-full overflow-auto whitespace-pre-wrap px-5 py-4 text-sm leading-6 text-ink">
-                  {aiPreview.ai_notes_markdown}
-                </pre>
+                <div className="h-full overflow-auto px-5 py-4">
+                  <div className="space-y-3">
+                    {structuredAiPreviewCount === 0 && (
+                      <div className="rounded-lg border border-dashed border-rule bg-card px-4 py-8 text-center">
+                        <p className="text-sm font-medium text-ink">No structured notes generated.</p>
+                        <p className="mt-1 text-xs text-ink-4">
+                          Add more raw notes, then try enhancing again.
+                        </p>
+                      </div>
+                    )}
+                    <AiNotesSection
+                      title="Summary"
+                      items={structuredAiPreview.summary}
+                      icon={FileText}
+                    />
+                    <AiNotesSection
+                      title="Action items"
+                      items={structuredAiPreview.action_items}
+                      icon={CheckSquare}
+                      tone="good"
+                    />
+                    <AiNotesSection
+                      title="Decisions"
+                      items={structuredAiPreview.decisions}
+                      icon={Gavel}
+                    />
+                    <AiNotesSection
+                      title="Risks"
+                      items={structuredAiPreview.risks}
+                      icon={AlertTriangle}
+                      tone="warn"
+                    />
+                    <AiNotesSection
+                      title="Blockers"
+                      items={structuredAiPreview.blockers}
+                      icon={Ban}
+                      tone="warn"
+                    />
+                    <AiNotesSection
+                      title="Follow-ups"
+                      items={structuredAiPreview.follow_ups}
+                      icon={RotateCcw}
+                    />
+                    <AiNotesSection
+                      title="Open questions"
+                      items={structuredAiPreview.open_questions}
+                      icon={HelpCircle}
+                    />
+                  </div>
+                </div>
               </div>
             </div>
 
