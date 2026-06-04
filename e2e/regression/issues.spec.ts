@@ -290,13 +290,13 @@ test.describe("Issue Detail", () => {
     await expect(select.locator("option")).toHaveCount(4);
   });
 
-  test("due date input is interactive", async ({ page }) => {
+  test("due date calendar trigger is interactive", async ({ page }) => {
     await page.goto(url);
     await waitForApp(page);
 
-    const dateInput = page.locator('input[type="date"]');
-    await expect(dateInput).toBeVisible();
-    await expect(dateInput).toBeEditable();
+    const dueDateButton = page.getByRole("button", { name: "Due date" });
+    await expect(dueDateButton).toBeVisible();
+    await expect(dueDateButton).toBeEnabled();
   });
 
   test("raised in meeting links to meeting detail", async ({ page }) => {
