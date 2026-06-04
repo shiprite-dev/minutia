@@ -35,9 +35,9 @@ export function WidgetShell({
         "gs-y": layout.y,
         "gs-w": layout.w,
         "gs-h": layout.h,
-        "gs-min-w": 4,
+        "gs-min-w": 3,
         "gs-min-h": 2,
-        ...(widget?.type === "outstanding" ? { "gs-no-resize": true } : {}),
+        ...(widget?.type === "outstanding" ? { "gs-no-resize": "true" } : {}),
       }
     : {};
   function handleRemove(event: React.MouseEvent<HTMLButtonElement>) {
@@ -45,7 +45,6 @@ export function WidgetShell({
     removeWidget(id);
     canvas?.dispatchEvent(
       new CustomEvent("minutia:widget-remove", {
-        bubbles: true,
         detail: { id },
       })
     );
