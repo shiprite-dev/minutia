@@ -8,6 +8,7 @@ import {
   ArrowLeft,
   Check,
   Trash2,
+  Calendar as CalendarIcon,
 } from "lucide-react";
 import {
   useIssue,
@@ -23,7 +24,8 @@ import { PriorityIndicator } from "@/components/minutia/priority-indicator";
 import { TimelineNode } from "@/components/minutia/timeline-node";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { daysBetween } from "@/lib/date-utils";
 import { PRIORITIES, STATUS_CONFIG } from "@/lib/constants";
@@ -308,8 +310,8 @@ export function IssueDetailContent({ issueId }: IssueDetailContentProps) {
     handleFieldSave("priority", e.target.value);
   }
 
-  function handleDueDateChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const val = e.target.value || null;
+  function handleDueDateSelect(date: Date | undefined) {
+    const val = date ? formatISODate(date) : null;
     handleFieldSave("due_date", val);
   }
 
@@ -383,13 +385,40 @@ export function IssueDetailContent({ issueId }: IssueDetailContentProps) {
           {/* Due date */}
           <div className="flex items-center gap-2 text-sm">
             <span className="text-ink-3 w-20 shrink-0">Due</span>
-            <Input
-              type="date"
-              aria-label="Due date"
-              value={issue.due_date ? formatISODate(issue.due_date) : ""}
-              onChange={handleDueDateChange}
-              className="h-7 w-[9.5rem] max-w-full rounded-md border-transparent bg-transparent px-2 py-0 text-sm font-mono text-ink shadow-none hover:border-rule focus-visible:border-ink-3 focus-visible:ring-0"
-            />
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className={cn(
+                    "h-7 justify-start px-2 text-left font-mono text-xs font-normal hover:bg-paper-3 focus-visible:ring-1 focus-visible:ring-accent",
+                    !issue.due_date && "text-ink-4"
+                  )}
+                >
+                  <CalendarIcon className="mr-1.5 size-3.5" />
+                  {issue.due_date ? formatDate(issue.due_date) : "No due date"}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar
+                  mode="single"
+                  selected={issue.due_date ? new Date(issue.due_date) : undefined}
+                  onSelect={handleDueDateSelect}
+                />
+                {issue.due_date && (
+                  <div className="border-t border-rule p-1.5 flex justify-end">
+                    <Button
+                      variant="ghost"
+                      size="xs"
+                      onClick={() => handleDueDateSelect(undefined)}
+                      className="text-xs text-danger hover:bg-danger-soft hover:text-danger"
+                    >
+                      Clear date
+                    </Button>
+                  </div>
+                )}
+              </PopoverContent>
+            </Popover>
           </div>
 
           {/* Priority */}
