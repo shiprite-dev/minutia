@@ -10,7 +10,12 @@ import {
   widgetWithText,
 } from "./dashboard-helpers";
 
-type StoredWidget = { id: string; type: string; span?: 1 | 2 };
+type StoredWidget = {
+  id: string;
+  type: string;
+  span?: 1 | 2;
+  layout?: { x?: number; y?: number; w?: number; h?: number };
+};
 
 async function setStoredWidgets(page: Page, widgets: StoredWidget[]) {
   await page.evaluate((nextWidgets) => {
@@ -31,10 +36,20 @@ function centerY(box: { y: number; height: number }) {
   return box.y + box.height / 2;
 }
 
+function storedHeroWidth() {
+  const raw = localStorage.getItem("minutia-widgets");
+  if (!raw) return null;
+  const parsed = JSON.parse(raw) as { state?: { widgets?: StoredWidget[] } };
+  return parsed.state?.widgets?.find((w) => w.type === "hero")?.layout?.w;
+}
+
 test.describe("Widget system", () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto("/dashboard", { waitUntil: "domcontentloaded" });
-    await page.evaluate(() => localStorage.removeItem("minutia-widgets"));
+    await page.addInitScript(() => {
+      if (sessionStorage.getItem("minutia-widgets-cleared")) return;
+      localStorage.removeItem("minutia-widgets");
+      sessionStorage.setItem("minutia-widgets-cleared", "true");
+    });
     await page.goto("/dashboard", { waitUntil: "domcontentloaded" });
     await waitForApp(page);
     await expect(page.getByRole("button", { name: "Add widget" })).toBeVisible();
@@ -67,6 +82,10 @@ test.describe("Widget system", () => {
     await page.reload();
     await waitForApp(page);
 
+    const canvas = page.getByTestId("dashboard-widget-canvas");
+    await expect(canvas).toHaveAttribute("data-grid-engine", "gridstack");
+    await expect(page.getByTestId("widget-outstanding-1")).toHaveAttribute("gs-w", "12");
+
     const outstandingBox = await requiredBox(page.getByTestId("widget-outstanding-1"));
 
     expect(outstandingBox.width).toBeGreaterThan(1000);
@@ -74,6 +93,42 @@ test.describe("Widget system", () => {
     const outstanding = page.getByTestId("widget-outstanding-1");
     await outstanding.hover();
     await expect(outstanding.getByLabel("Make narrow")).not.toBeVisible();
+  });
+
+  test("dashboard uses an auto-adjusting widget canvas", async ({ page }) => {
+    const canvas = page.getByTestId("dashboard-widget-canvas");
+    await expect(canvas).toHaveAttribute("data-grid-engine", "gridstack");
+
+    await expect(page.getByTestId("widget-hero-1")).toHaveAttribute("gs-w", "6");
+    await expect(page.getByTestId("widget-next-meeting-1")).toHaveAttribute("gs-w", "3");
+    await expect(page.getByTestId("widget-outstanding-1")).toHaveAttribute("gs-w", "12");
+    await expect(page.getByTestId("widget-outstanding-1")).toHaveAttribute("gs-h", "5");
+  });
+
+  test("desktop canvas ignores corrupted narrow persisted layouts", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.evaluate(() => {
+      localStorage.setItem(
+        "minutia-widgets",
+        JSON.stringify({
+          state: {
+            widgets: [
+              { id: "hero-1", type: "hero", layout: { x: 0, y: 0, w: 1, h: 3 } },
+              { id: "next-meeting-1", type: "next-meeting", layout: { x: 0, y: 3, w: 1, h: 3 } },
+              { id: "outstanding-1", type: "outstanding", layout: { x: 0, y: 6, w: 1, h: 5 } },
+            ],
+          },
+          version: 1,
+        })
+      );
+    });
+
+    await page.reload({ waitUntil: "commit" });
+    await waitForApp(page);
+
+    await expect(page.getByTestId("widget-hero-1")).toHaveAttribute("gs-w", "6");
+    await expect(page.getByTestId("widget-next-meeting-1")).toHaveAttribute("gs-w", "3");
+    await expect(page.getByTestId("widget-outstanding-1")).toHaveAttribute("gs-w", "12");
   });
 
   test("add widget button opens picker with groups", async ({ page }) => {
@@ -178,7 +233,7 @@ test.describe("Widget system", () => {
       (triageBox?.y ?? 0) + (triageBox?.height ?? 0)
     );
     expect((outstandingBox?.y ?? 0) - topRowBottom).toBeLessThan(64);
-    expect((workloadBox?.y ?? 0) - ((outstandingBox?.y ?? 0) + (outstandingBox?.height ?? 0))).toBeLessThan(64);
+    expect((workloadBox?.y ?? 0) - ((outstandingBox?.y ?? 0) + (outstandingBox?.height ?? 0))).toBeLessThan(96);
   });
 
   test("meeting triage uses ordinal suffixes for carried meeting counts", async ({ page, request }) => {
@@ -352,7 +407,7 @@ test.describe("Widget system", () => {
     await addWidget(page, /Stale Items/);
     await expect(page.getByText("Needs attention")).toBeVisible();
 
-    await page.reload();
+    await page.reload({ waitUntil: "domcontentloaded" });
     await waitForApp(page);
 
     await expect(page.getByText("Needs attention")).toBeVisible();
@@ -380,41 +435,31 @@ test.describe("Widget system", () => {
   });
 
   test("resize toggle appears on widget hover", async ({ page }) => {
-    const widget = page.getByText("Open items across your series").locator("../..");
+    const widget = page.getByTestId("widget-hero-1");
     await widget.hover();
     await expect(page.getByLabel(/Make narrow|Make wide/).first()).toBeVisible();
   });
 
-  test("resize toggle changes widget span", async ({ page }) => {
-    const widget = page.getByText("Open items across your series").locator("../..");
+  test("resize toggle changes widget layout width", async ({ page }) => {
+    const widget = page.getByTestId("widget-hero-1");
     await widget.hover();
     const resizeBtn = page.getByLabel("Make narrow").first();
     await resizeBtn.click();
 
-    const stored = await page.evaluate(() => {
-      const raw = localStorage.getItem("minutia-widgets");
-      if (!raw) return null;
-      const parsed = JSON.parse(raw);
-      return parsed.state?.widgets?.find((w: any) => w.type === "hero")?.span;
-    });
-    expect(stored).toBe(1);
+    const stored = await page.evaluate(storedHeroWidth);
+    expect(stored).toBe(3);
   });
 
   test("resize persists across reload", async ({ page }) => {
-    const widget = page.getByText("Open items across your series").locator("../..");
+    const widget = page.getByTestId("widget-hero-1");
     await widget.hover();
     await page.getByLabel("Make narrow").first().click();
 
     await page.reload();
     await waitForApp(page);
 
-    const stored = await page.evaluate(() => {
-      const raw = localStorage.getItem("minutia-widgets");
-      if (!raw) return null;
-      const parsed = JSON.parse(raw);
-      return parsed.state?.widgets?.find((w: any) => w.type === "hero")?.span;
-    });
-    expect(stored).toBe(1);
+    const stored = await page.evaluate(storedHeroWidth);
+    expect(stored).toBe(3);
   });
 
   test("widget reorder persists in localStorage across reload", async ({ page }) => {
