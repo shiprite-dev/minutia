@@ -390,6 +390,7 @@ export function IssueDetailContent({ issueId }: IssueDetailContentProps) {
                 <Button
                   variant="ghost"
                   size="sm"
+                  aria-label="Due date"
                   className={cn(
                     "h-7 justify-start px-2 text-left font-mono text-xs font-normal hover:bg-paper-3 focus-visible:ring-1 focus-visible:ring-accent",
                     !issue.due_date && "text-ink-4"
