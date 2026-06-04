@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { storeTokens } from "@/lib/google-calendar";
 import { GOOGLE_WORKSPACE_SCOPES } from "@/lib/google-oauth-scopes";
+import { publicAuthCallbackOrigin, safeAuthNextPath } from "@/lib/auth-callback-url";
 import type { Session } from "@supabase/supabase-js";
 
 async function storeGoogleProviderTokens(session: Session) {
@@ -29,9 +30,10 @@ async function storeGoogleProviderTokens(session: Session) {
 }
 
 export async function GET(request: Request) {
-  const { searchParams, origin } = new URL(request.url);
+  const { searchParams } = new URL(request.url);
   const code = searchParams.get("code");
-  const next = searchParams.get("next") ?? "/";
+  const origin = publicAuthCallbackOrigin(request);
+  const next = safeAuthNextPath(searchParams.get("next"));
 
   if (code) {
     const supabase = await createClient();
