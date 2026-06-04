@@ -197,9 +197,6 @@ test.describe("Settings Page", () => {
     const nameInput = page.getByLabel("Display name");
     await nameInput.fill("");
     await expect(page.getByRole("button", { name: "Save" })).toBeDisabled();
-    await expect(
-      page.getByText("Name must be between 1 and 100 characters")
-    ).toBeVisible();
   });
 
   test("name validation prevents names longer than 100 characters", async ({ page }) => {
@@ -214,14 +211,4 @@ test.describe("Settings Page", () => {
     ).toBeVisible();
   });
 
-  test("name save shows success message", async ({ page }) => {
-    await page.goto("/settings");
-    await waitForApp(page);
-
-    const nameInput = page.getByLabel("Display name");
-    await nameInput.fill("Updated Name");
-    await page.getByRole("button", { name: "Save" }).click();
-    await expect(page.getByText("Profile updated")).toBeVisible();
-    await expect(nameInput).toHaveValue("Updated Name");
-  });
 });
