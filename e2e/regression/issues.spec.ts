@@ -350,7 +350,8 @@ test.describe("Issue Detail", () => {
       await page.getByText("Source").click();
       await expect(page.getByText(editedDescription)).toBeVisible();
 
-      await page.locator('input[type="date"]').fill("2026-06-15");
+      await page.getByRole("button", { name: "Due date" }).click();
+      await page.locator('[data-day="2026-06-15"] button').click();
       await page.locator("select").first().selectOption("critical");
       await expect(page.locator('[aria-label="Priority: critical"]')).toBeVisible();
 
@@ -375,7 +376,9 @@ test.describe("Issue Detail", () => {
         page.getByRole("combobox", { name: "Status: In Progress" })
       ).toBeVisible();
       await expect(page.locator('[aria-label="Priority: critical"]')).toBeVisible();
-      await expect(page.locator('input[type="date"]')).toHaveValue("2026-06-15");
+      await expect(
+        page.getByRole("button", { name: "Due date" })
+      ).toContainText("Jun 15, 2026");
       await expect(page.getByText(updateNote)).toBeVisible();
 
       await expect
