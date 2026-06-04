@@ -2,18 +2,21 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "motion/react";
 import {
   useMeeting,
+  meetingKeys,
   useEndMeeting,
   useMeetingPresence,
   useMeetingRealtime,
   useStartOrJoinMeeting,
+  useApplyAiMeetingNotes,
   useUpdateMeetingNotes,
 } from "@/lib/hooks/use-meetings";
 import { useSeriesDetail, useSeriesParticipantRole } from "@/lib/hooks/use-series";
-import { useIssues, useCreateIssue, useUpdateIssueStatus, useUpdateIssue } from "@/lib/hooks/use-issues";
-import { useCreateDecision } from "@/lib/hooks/use-decisions";
+import { useIssues, useCreateIssue, useUpdateIssueStatus, useUpdateIssue, issueKeys } from "@/lib/hooks/use-issues";
+import { useCreateDecision, decisionKeys } from "@/lib/hooks/use-decisions";
 import { SyncIndicator } from "@/components/minutia/sync-indicator";
 import { useOfflineSync } from "@/lib/hooks/use-offline-sync";
 import { addPendingItem } from "@/lib/offline-buffer";
@@ -29,10 +32,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { ShareButton } from "@/components/minutia/share-button";
 import { SendMeetingNotesButton } from "@/components/minutia/send-meeting-notes-button";
-import { ArrowLeft, Square, Play, Check, X, Copy, CheckCheck } from "lucide-react";
+import { ArrowLeft, Square, Play, Check, X, Copy, CheckCheck, Sparkles, Loader2, ListChecks } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatShortDate } from "@/lib/date-utils";
-import type { IssueCategory, IssueStatus, Issue, Decision, Meeting } from "@/lib/types";
+import type { IssueCategory, IssueStatus, Issue, Decision, Meeting, MeetingAiSuggestion } from "@/lib/types";
 import Link from "next/link";
 
 // ---------------------------------------------------------------------------
@@ -264,6 +267,29 @@ function MeetingSummaryCard({
 interface MeetingDetailContentProps {
   seriesId: string;
   meetingId: string;
+}
+
+type AiNotesPreview = {
+  ai_notes_markdown: string;
+  model: string;
+  prompt_version: string;
+  generated_at: string;
+};
+
+function suggestionCategoryLabel(category: IssueCategory) {
+  const labels: Record<IssueCategory, string> = {
+    action: "Action",
+    decision: "Decision",
+    info: "Info",
+    risk: "Risk",
+    blocker: "Blocker",
+  };
+  return labels[category];
+}
+
+function dateInputValue(date: Date | string | null | undefined) {
+  if (!date) return "";
+  return typeof date === "string" ? date.slice(0, 10) : date.toISOString().slice(0, 10);
 }
 
 function formatMeetingDate(date: Date | string): string {
@@ -594,6 +620,7 @@ export function MeetingDetailContent({
   meetingId,
 }: MeetingDetailContentProps) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { data: meeting, isLoading: meetingLoading } = useMeeting(meetingId);
   const { data: series } = useSeriesDetail(seriesId);
   const { data: participantRole } = useSeriesParticipantRole(seriesId);
@@ -611,7 +638,16 @@ export function MeetingDetailContent({
   const { isOnline, pendingCount, syncStatus, refreshCount } = useOfflineSync();
 
   const [notes, setNotes] = React.useState(meeting?.notes_markdown ?? "");
+  const [aiPreview, setAiPreview] = React.useState<AiNotesPreview | null>(null);
+  const [aiError, setAiError] = React.useState<string | null>(null);
+  const [enhancingNotes, setEnhancingNotes] = React.useState(false);
+  const [suggestionsOpen, setSuggestionsOpen] = React.useState(false);
+  const [aiSuggestions, setAiSuggestions] = React.useState<MeetingAiSuggestion[]>([]);
+  const [suggestionsError, setSuggestionsError] = React.useState<string | null>(null);
+  const [loadingSuggestions, setLoadingSuggestions] = React.useState(false);
+  const [reviewingSuggestionId, setReviewingSuggestionId] = React.useState<string | null>(null);
   const updateNotes = useUpdateMeetingNotes();
+  const applyAiNotes = useApplyAiMeetingNotes();
   const timer = useLiveTimer(meeting?.status === "live" ? meeting.created_at : null);
 
   React.useEffect(() => {
@@ -778,6 +814,127 @@ export function MeetingDetailContent({
 
   async function handleInlineAdd(title: string, category: IssueCategory) {
     await handleCapture(title, category);
+  }
+
+  async function handleEnhanceNotes() {
+    setAiError(null);
+    setEnhancingNotes(true);
+    try {
+      const response = await fetch(`/api/meetings/${meetingId}/enhance-notes`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode: "preview" }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setAiError(payload.error ?? "AI notes could not be generated.");
+        return;
+      }
+      setAiPreview(payload as AiNotesPreview);
+    } catch {
+      setAiError("AI notes could not be generated.");
+    } finally {
+      setEnhancingNotes(false);
+    }
+  }
+
+  async function handleApplyAiNotes() {
+    if (!aiPreview) return;
+    await applyAiNotes.mutateAsync({
+      meetingId,
+      notes: aiPreview.ai_notes_markdown,
+      model: aiPreview.model,
+      promptVersion: aiPreview.prompt_version,
+      generatedAt: aiPreview.generated_at,
+    });
+    setNotes(aiPreview.ai_notes_markdown);
+    setAiPreview(null);
+    setAiError(null);
+  }
+
+  function updateSuggestionDraft(
+    suggestionId: string,
+    patch: Partial<Pick<MeetingAiSuggestion, "title" | "owner_name" | "due_date">>
+  ) {
+    setAiSuggestions((current) =>
+      current.map((suggestion) =>
+        suggestion.id === suggestionId ? { ...suggestion, ...patch } : suggestion
+      )
+    );
+  }
+
+  async function refreshTrackedMeetingData() {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: meetingKeys.detail(meetingId) }),
+      queryClient.invalidateQueries({ queryKey: issueKeys.all }),
+      queryClient.invalidateQueries({ queryKey: issueKeys.list(seriesId) }),
+      queryClient.invalidateQueries({ queryKey: decisionKeys.all }),
+    ]);
+  }
+
+  async function handleReviewAiSuggestions() {
+    setSuggestionsOpen(true);
+    setSuggestionsError(null);
+    setLoadingSuggestions(true);
+    try {
+      const response = await fetch(`/api/meetings/${meetingId}/suggestions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode: "generate" }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setSuggestionsError(payload.error ?? "AI suggestions could not be generated.");
+        return;
+      }
+      setAiSuggestions(payload.suggestions ?? []);
+    } catch {
+      setSuggestionsError("AI suggestions could not be generated.");
+    } finally {
+      setLoadingSuggestions(false);
+    }
+  }
+
+  async function handleSuggestionReview(
+    suggestion: MeetingAiSuggestion,
+    action: "accept" | "reject"
+  ) {
+    setReviewingSuggestionId(suggestion.id);
+    setSuggestionsError(null);
+    try {
+      const response = await fetch(
+        `/api/meetings/${meetingId}/suggestions/${suggestion.id}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action,
+            title: suggestion.title,
+            category: suggestion.category,
+            owner_name: suggestion.owner_name ?? "",
+            due_date: suggestion.due_date ?? null,
+          }),
+        }
+      );
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setSuggestionsError(payload.error ?? "AI suggestion could not be reviewed.");
+        return;
+      }
+      const reviewedSuggestion = payload.suggestion as MeetingAiSuggestion;
+      setAiSuggestions((current) =>
+        current.map((item) =>
+          item.id === suggestion.id ? reviewedSuggestion : item
+        )
+      );
+      if (action === "accept") {
+        await refreshTrackedMeetingData();
+      }
+    } catch {
+      setSuggestionsError("AI suggestion could not be reviewed.");
+    } finally {
+      setReviewingSuggestionId(null);
+    }
   }
 
   // =========================================================================
@@ -1139,6 +1296,162 @@ export function MeetingDetailContent({
           doneIssues={doneThisMeeting}
         />
 
+        <section className="mb-8" aria-label="AI accountability review">
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-rule bg-card px-4 py-3">
+            <div>
+              <h2 className="font-display text-base font-medium text-ink">
+                Accountability review
+              </h2>
+              <p className="mt-1 text-xs text-ink-3">
+                Extract suggested issues and decisions, then approve what should become durable work.
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleReviewAiSuggestions}
+              disabled={loadingSuggestions || !notes.trim()}
+              className="border-rule bg-paper text-ink hover:bg-paper-2"
+            >
+              {loadingSuggestions ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : (
+                <ListChecks className="size-3.5" />
+              )}
+              Review AI suggestions
+            </Button>
+          </div>
+
+          {suggestionsOpen && (
+            <div
+              role="region"
+              aria-label="AI suggestions"
+              className="mt-3 rounded-lg border border-rule bg-paper"
+            >
+              <div className="flex items-center justify-between gap-3 border-b border-rule px-4 py-3">
+                <div>
+                  <h3 className="text-sm font-semibold text-ink">AI suggestions</h3>
+                  <p className="mt-1 text-xs text-ink-3">
+                    Review each item before it enters the permanent record.
+                  </p>
+                </div>
+                {loadingSuggestions && (
+                  <Loader2 className="size-4 animate-spin text-ink-3" />
+                )}
+              </div>
+
+              {suggestionsError && (
+                <div className="mx-4 mt-3 rounded-md border border-warn/30 bg-warn/10 px-3 py-2 text-sm text-ink">
+                  {suggestionsError}
+                </div>
+              )}
+
+              {!loadingSuggestions && aiSuggestions.length === 0 && (
+                <div className="px-4 py-5 text-sm text-ink-3">
+                  No AI suggestions yet.
+                </div>
+              )}
+
+              {aiSuggestions.length > 0 && (
+                <div className="divide-y divide-rule">
+                  {aiSuggestions.map((suggestion) => {
+                    const isReviewed = suggestion.status !== "pending";
+                    return (
+                      <article key={suggestion.id} className="px-4 py-4">
+                        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                          <p className="text-xs font-semibold uppercase tracking-wide text-ink-3">
+                            {suggestionCategoryLabel(suggestion.category)}: {suggestion.title}
+                          </p>
+                          <span className="rounded-full bg-paper-2 px-2 py-1 text-[11px] font-mono text-ink-3">
+                            {Math.round(suggestion.confidence * 100)}%
+                          </span>
+                        </div>
+
+                        <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_10rem_9rem]">
+                          <input
+                            aria-label="Suggestion title"
+                            value={suggestion.title}
+                            disabled={isReviewed}
+                            onChange={(event) =>
+                              updateSuggestionDraft(suggestion.id, { title: event.target.value })
+                            }
+                            className="min-w-0 rounded-md border border-rule bg-card px-3 py-2 text-sm text-ink disabled:bg-paper-2 disabled:text-ink-3"
+                          />
+                          <input
+                            aria-label="Suggestion owner"
+                            value={suggestion.owner_name ?? ""}
+                            disabled={isReviewed}
+                            onChange={(event) =>
+                              updateSuggestionDraft(suggestion.id, { owner_name: event.target.value })
+                            }
+                            placeholder="Owner"
+                            className="min-w-0 rounded-md border border-rule bg-card px-3 py-2 text-sm text-ink disabled:bg-paper-2 disabled:text-ink-3"
+                          />
+                          <input
+                            aria-label="Suggestion due date"
+                            type="date"
+                            value={dateInputValue(suggestion.due_date)}
+                            disabled={isReviewed}
+                            onChange={(event) =>
+                              updateSuggestionDraft(suggestion.id, {
+                                due_date: event.target.value || null,
+                              })
+                            }
+                            className="min-w-0 rounded-md border border-rule bg-card px-3 py-2 text-sm text-ink disabled:bg-paper-2 disabled:text-ink-3"
+                          />
+                        </div>
+
+                        {suggestion.source_excerpt && (
+                          <p className="mt-3 rounded-md bg-paper-2 px-3 py-2 text-xs leading-5 text-ink-3">
+                            {suggestion.source_excerpt}
+                          </p>
+                        )}
+
+                        <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+                          <p className="text-xs text-ink-3">
+                            {suggestion.status === "accepted" && "Accepted into tracked work."}
+                            {suggestion.status === "rejected" && "Rejected."}
+                            {suggestion.status === "pending" && "Pending review."}
+                          </p>
+                          {suggestion.status === "pending" && (
+                            <div className="flex items-center gap-2">
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleSuggestionReview(suggestion, "reject")}
+                                disabled={reviewingSuggestionId === suggestion.id}
+                              >
+                                <X className="size-3.5" />
+                                Reject suggestion
+                              </Button>
+                              <Button
+                                type="button"
+                                size="sm"
+                                onClick={() => handleSuggestionReview(suggestion, "accept")}
+                                disabled={reviewingSuggestionId === suggestion.id || !suggestion.title.trim()}
+                                className="bg-accent text-white hover:bg-accent-hover"
+                              >
+                                {reviewingSuggestionId === suggestion.id ? (
+                                  <Loader2 className="size-3.5 animate-spin" />
+                                ) : (
+                                  <Check className="size-3.5" />
+                                )}
+                                Accept suggestion
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+        </section>
+
         <section className="mb-8">
           <h2 className="font-display text-lg font-medium text-ink mb-4">
             Items raised ({raisedInThisMeeting.length})
@@ -1206,9 +1519,38 @@ export function MeetingDetailContent({
         )}
 
         <section>
-          <h2 className="font-display text-lg font-medium text-ink mb-4">
-            Notes
-          </h2>
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="font-display text-lg font-medium text-ink">
+                Notes
+              </h2>
+              {meeting.ai_notes_generated_at && (
+                <p className="mt-1 text-xs text-ink-4">
+                  AI-enhanced with {meeting.ai_notes_model ?? "configured model"}
+                </p>
+              )}
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleEnhanceNotes}
+              disabled={enhancingNotes || !notes.trim()}
+              className="border-rule bg-card text-ink hover:bg-paper-2"
+            >
+              {enhancingNotes ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : (
+                <Sparkles className="size-3.5" />
+              )}
+              Enhance notes
+            </Button>
+          </div>
+          {aiError && (
+            <div className="mb-3 rounded-md border border-warn/30 bg-warn/10 px-3 py-2 text-sm text-ink">
+              {aiError}
+            </div>
+          )}
           <Textarea
             value={notes}
             onChange={(e) => handleNotesChange(e.target.value)}
@@ -1217,6 +1559,85 @@ export function MeetingDetailContent({
           />
         </section>
       </div>
+      {aiPreview && (
+        <div className="fixed inset-0 z-[90] bg-ink/25 px-4 py-6 backdrop-blur-sm sm:px-6">
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-label="AI notes preview"
+            className="mx-auto flex max-h-[calc(100vh-3rem)] max-w-5xl flex-col overflow-hidden rounded-lg border border-rule bg-paper shadow-2xl"
+          >
+            <div className="flex items-start justify-between gap-4 border-b border-rule px-5 py-4">
+              <div>
+                <p className="text-[11px] font-mono uppercase tracking-wider text-accent">
+                  AI notes preview
+                </p>
+                <h3 className="mt-1 font-display text-xl font-semibold text-ink">
+                  Review before applying
+                </h3>
+                <p className="mt-1 text-sm text-ink-3">
+                  Your raw notes stay preserved. Apply only when the generated record looks right.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setAiPreview(null)}
+                className="flex size-9 shrink-0 items-center justify-center rounded-full text-ink-4 transition-colors hover:bg-paper-2 hover:text-ink"
+                aria-label="Close AI notes preview"
+              >
+                <X className="size-4" />
+              </button>
+            </div>
+
+            <div className="grid min-h-0 flex-1 gap-0 overflow-hidden md:grid-cols-2">
+              <div className="min-h-0 border-b border-rule md:border-b-0 md:border-r">
+                <div className="border-b border-rule px-5 py-3">
+                  <h4 className="text-sm font-semibold text-ink">Raw notes</h4>
+                </div>
+                <pre className="h-full overflow-auto whitespace-pre-wrap px-5 py-4 text-sm leading-6 text-ink-2">
+                  {meeting.raw_notes_markdown || notes || "No raw notes captured."}
+                </pre>
+              </div>
+              <div className="min-h-0">
+                <div className="border-b border-rule px-5 py-3">
+                  <h4 className="text-sm font-semibold text-ink">AI-enhanced notes</h4>
+                </div>
+                <pre className="h-full overflow-auto whitespace-pre-wrap px-5 py-4 text-sm leading-6 text-ink">
+                  {aiPreview.ai_notes_markdown}
+                </pre>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-rule px-5 py-4">
+              <p className="text-xs text-ink-4">
+                {aiPreview.model} · {aiPreview.prompt_version}
+              </p>
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => setAiPreview(null)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  onClick={handleApplyAiNotes}
+                  disabled={applyAiNotes.isPending}
+                  className="bg-accent text-white hover:bg-accent-hover"
+                >
+                  {applyAiNotes.isPending ? (
+                    <Loader2 className="size-3.5 animate-spin" />
+                  ) : (
+                    <Check className="size-3.5" />
+                  )}
+                  Apply AI notes
+                </Button>
+              </div>
+            </div>
+          </section>
+        </div>
+      )}
     </div>
   );
 }

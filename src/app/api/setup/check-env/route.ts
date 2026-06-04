@@ -80,7 +80,7 @@ export async function GET(request: NextRequest) {
     service_role_key: checkEnvVar("SUPABASE_SERVICE_ROLE_KEY"),
     site_url: checkEnvVar("SITE_URL"),
     smtp_configured: !!process.env.SMTP_HOST,
-    ai_configured: !!process.env.AI_API_KEY,
+    ai_configured: !!process.env.OPENROUTER_API_KEY || !!process.env.AI_API_KEY,
     google_configured: !!process.env.GOOGLE_CLIENT_ID,
   };
 

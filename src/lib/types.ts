@@ -155,6 +155,11 @@ export interface Meeting {
   status: MeetingStatus;
   attendees: string[];
   notes_markdown: string;
+  raw_notes_markdown: string | null;
+  ai_notes_markdown: string | null;
+  ai_notes_generated_at: Date | null;
+  ai_notes_model: string | null;
+  ai_notes_prompt_version: string | null;
   transcript_raw: string | null;
   gcal_meeting_key: string | null;
   gcal_calendar_id: string | null;
@@ -187,6 +192,26 @@ export interface Issue {
   update_count?: number;
 }
 
+export interface MeetingAiSuggestion {
+  id: string;
+  meeting_id: string;
+  series_id: string;
+  category: IssueCategory;
+  title: string;
+  details: string | null;
+  owner_name: string | null;
+  due_date: Date | string | null;
+  confidence: number;
+  source_excerpt: string | null;
+  status: "pending" | "accepted" | "rejected";
+  ai_model: string | null;
+  ai_prompt_version: string | null;
+  created_issue_id: string | null;
+  created_decision_id: string | null;
+  created_at: Date;
+  reviewed_at: Date | null;
+}
+
 export interface IssueUpdate {
   id: string;
   issue_id: string;
@@ -206,6 +231,7 @@ export interface Decision {
   title: string;
   rationale: string | null;
   made_by: string | null;
+  source: Extract<ItemSource, "manual" | "transcript" | "ai_suggested">;
   created_by: string;
   created_at: Date;
   updated_at: Date;
