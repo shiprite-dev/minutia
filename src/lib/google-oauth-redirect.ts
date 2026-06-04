@@ -2,7 +2,15 @@ function originFromUrl(value: string | undefined) {
   if (!value) return undefined;
 
   try {
-    return new URL(value).origin;
+    const url = new URL(value);
+    if (
+      url.hostname === "0.0.0.0" ||
+      url.hostname === "::" ||
+      url.hostname === "[::]"
+    ) {
+      return undefined;
+    }
+    return url.origin;
   } catch {
     return undefined;
   }

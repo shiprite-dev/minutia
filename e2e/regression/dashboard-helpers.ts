@@ -94,6 +94,26 @@ export async function createDashboardIssue(
   return { id, title };
 }
 
+export async function createDashboardIssueUpdate(
+  request: APIRequestContext,
+  issueId: string,
+  note = `Dashboard update ${Date.now()}`
+) {
+  const response = await request.post(`${SUPABASE_URL}/rest/v1/issue_updates`, {
+    headers: serviceHeaders(),
+    data: {
+      issue_id: issueId,
+      meeting_id: MEETINGS.standup4,
+      previous_status: "open",
+      new_status: "open",
+      note,
+      author_type: "human",
+      updated_by: "00000000-0000-0000-0000-000000000001",
+    },
+  });
+  expect(response.ok()).toBeTruthy();
+}
+
 export async function deleteIssue(request: APIRequestContext, id: string) {
   const response = await request.delete(`${SUPABASE_URL}/rest/v1/issues?id=eq.${id}`, {
     headers: serviceHeaders(),
