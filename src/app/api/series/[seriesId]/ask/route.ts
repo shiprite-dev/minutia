@@ -1,61 +1,15 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
+import { parseAskSeriesAnswer } from "@/lib/ai/ask-series-answer";
 import { createClient } from "@/lib/supabase/server";
 
 const OPENROUTER_MODEL = "minimax/minimax-m3";
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 const PROMPT_VERSION = "ask-series-v1";
-const UNSUPPORTED_ANSWER = "The source context does not prove the answer.";
-const uuidLikeSchema = z.string().regex(
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-);
 
 const requestSchema = z.object({
   question: z.string().trim().min(1).max(1000),
 });
-
-const citationSchema = z.object({
-  type: z.enum(["meeting", "issue", "decision", "notes"]),
-  source_id: uuidLikeSchema,
-  title: z.string().min(1).max(300),
-  meeting_id: uuidLikeSchema.nullable().default(null),
-  meeting_title: z.string().nullable().default(null),
-});
-
-const answerSchema = z.object({
-  answer: z.string().trim().min(1).max(4000),
-  citations: z.array(citationSchema).default([]),
-  unsupported: z.boolean().default(false),
-});
-
-type AskSeriesAnswer = z.infer<typeof answerSchema>;
-type AskSeriesCitation = z.infer<typeof citationSchema> & {
-  href: string;
-  label: string;
-};
-
-function getTextFromOpenRouter(data: unknown) {
-  const parsed = z
-    .object({
-      choices: z.array(
-        z.object({
-          message: z.object({
-            content: z.union([
-              z.string(),
-              z.array(z.object({ text: z.string().optional() }).passthrough()),
-            ]),
-          }),
-        }).passthrough()
-      ).min(1),
-    })
-    .passthrough()
-    .safeParse(data);
-
-  if (!parsed.success) return "";
-  const content = parsed.data.choices[0].message.content;
-  if (typeof content === "string") return content;
-  return content.map((part) => part.text ?? "").filter(Boolean).join("\n");
-}
 
 function buildPrompt(input: {
   question: string;
@@ -111,18 +65,6 @@ function buildPrompt(input: {
 }
 
 async function getOpenRouterData(prompt: string, apiKey: string) {
-  if (process.env.MINUTIA_TEST_SERIES_ASK_RESPONSE) {
-    return {
-      choices: [
-        {
-          message: {
-            content: process.env.MINUTIA_TEST_SERIES_ASK_RESPONSE,
-          },
-        },
-      ],
-    };
-  }
-
   const providerResponse = await fetch(OPENROUTER_URL, {
     method: "POST",
     headers: {
@@ -149,62 +91,6 @@ async function getOpenRouterData(prompt: string, apiKey: string) {
   }
 
   return providerResponse.json();
-}
-
-function citationHref(citation: z.infer<typeof citationSchema>) {
-  if (citation.type === "issue") return `/issues/${citation.source_id}`;
-  const meetingId = citation.type === "meeting" || citation.type === "notes"
-    ? citation.source_id
-    : citation.meeting_id;
-  return meetingId ? `meetings/${meetingId}` : "";
-}
-
-function citationLabel(citation: z.infer<typeof citationSchema>) {
-  const sourceLabel = citation.meeting_title || citation.title;
-  return citation.type === "notes" ? `Notes: ${sourceLabel}` : sourceLabel;
-}
-
-function normalizeAnswer(input: {
-  parsed: AskSeriesAnswer;
-  seriesId: string;
-  meetingIds: Set<string>;
-  issueIds: Set<string>;
-  decisionIds: Set<string>;
-}) {
-  const validCitations: AskSeriesCitation[] = [];
-
-  for (const citation of input.parsed.citations) {
-    const valid =
-      (citation.type === "meeting" && input.meetingIds.has(citation.source_id)) ||
-      (citation.type === "notes" && input.meetingIds.has(citation.source_id)) ||
-      (citation.type === "issue" && input.issueIds.has(citation.source_id)) ||
-      (citation.type === "decision" && input.decisionIds.has(citation.source_id));
-    if (!valid) continue;
-
-    const relativeHref = citationHref(citation);
-    if (!relativeHref) continue;
-    validCitations.push({
-      ...citation,
-      href: relativeHref.startsWith("/issues")
-        ? relativeHref
-        : `/series/${input.seriesId}/${relativeHref}`,
-      label: citationLabel(citation),
-    });
-  }
-
-  if (input.parsed.unsupported || validCitations.length === 0) {
-    return {
-      answer: UNSUPPORTED_ANSWER,
-      citations: [],
-      unsupported: true,
-    };
-  }
-
-  return {
-    answer: input.parsed.answer,
-    citations: validCitations,
-    unsupported: false,
-  };
 }
 
 export async function POST(
@@ -293,23 +179,32 @@ export async function POST(
     );
   }
 
-  let parsed: AskSeriesAnswer;
+  let normalized;
   try {
-    parsed = answerSchema.parse(JSON.parse(getTextFromOpenRouter(providerData)));
+    normalized = parseAskSeriesAnswer({
+      providerData,
+      seriesId,
+      meetings: (meetings ?? []).map((meeting) => ({
+        id: meeting.id,
+        title: meeting.title,
+      })),
+      issues: (issues ?? []).map((issue) => ({
+        id: issue.id,
+        title: issue.title,
+        meeting_id: issue.raised_in_meeting_id,
+      })),
+      decisions: (decisions ?? []).map((decision) => ({
+        id: decision.id,
+        title: decision.title,
+        meeting_id: decision.meeting_id,
+      })),
+    });
   } catch {
     return NextResponse.json(
       { error: "AI provider returned an invalid answer.", request_id: requestId },
       { status: 502 }
     );
   }
-
-  const normalized = normalizeAnswer({
-    parsed,
-    seriesId,
-    meetingIds: new Set((meetings ?? []).map((meeting) => meeting.id)),
-    issueIds: new Set((issues ?? []).map((issue) => issue.id)),
-    decisionIds: new Set((decisions ?? []).map((decision) => decision.id)),
-  });
 
   return NextResponse.json({
     ...normalized,

@@ -1,5 +1,8 @@
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
+import * as esbuild from "esbuild";
 
 const root = process.cwd();
 
@@ -98,6 +101,58 @@ assert(askSeriesRoute.includes("OPENROUTER_API_KEY"), "Ask series route must rea
 assert(askSeriesRoute.includes("AI_API_KEY"), "Ask series route must support AI_API_KEY fallback");
 assert(askSeriesRoute.includes("https://openrouter.ai/api/v1/chat/completions"), "Ask series route must call OpenRouter chat completions");
 assert(askSeriesRoute.includes("The source context does not prove the answer."), "Ask series route must include unsupported-answer guard copy");
+
+const askSeriesParserPath = "src/lib/ai/ask-series-answer.ts";
+assert(exists(askSeriesParserPath), "Missing Ask this series provider parser module");
+
+const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "minutia-ai-contract-"));
+const bundledParser = path.join(tempDir, "ask-series-answer.mjs");
+await esbuild.build({
+  entryPoints: [askSeriesParserPath],
+  outfile: bundledParser,
+  bundle: true,
+  platform: "node",
+  format: "esm",
+  logLevel: "silent",
+});
+
+const { parseAskSeriesAnswer } = await import(pathToFileURL(bundledParser).href);
+const sparseAnswer = parseAskSeriesAnswer({
+  providerData: {
+    choices: [
+      {
+        message: {
+          content: JSON.stringify({
+            answer: "Use GitHub Actions for CI/CD.",
+            citations: [
+              {
+                source_id: "20000000-0000-0000-0000-000000000002",
+                quote: "Use GitHub Actions for CI/CD",
+              },
+            ],
+            unsupported: false,
+          }),
+        },
+      },
+    ],
+  },
+  seriesId: "10000000-0000-0000-0000-000000000001",
+  meetings: [
+    {
+      id: "20000000-0000-0000-0000-000000000002",
+      title: "Platform Standup #2",
+    },
+  ],
+  issues: [],
+  decisions: [],
+});
+assert(sparseAnswer.unsupported === false, "Sparse provider citations should stay supported");
+assert(sparseAnswer.citations[0]?.type === "notes", "Sparse meeting citations should resolve to notes");
+assert(
+  sparseAnswer.citations[0]?.href ===
+    "/series/10000000-0000-0000-0000-000000000001/meetings/20000000-0000-0000-0000-000000000002",
+  "Sparse meeting citations should link to the source meeting"
+);
 
 const meetingDetail = read("src/app/(app)/series/[id]/meetings/[meetingId]/meeting-detail-content.tsx");
 for (const copy of [
