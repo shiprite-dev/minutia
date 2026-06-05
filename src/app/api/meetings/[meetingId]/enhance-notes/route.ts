@@ -2,8 +2,9 @@ import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { stripJsonFences } from "@/lib/ai/ask-series-answer";
+import { getAiModel } from "@/lib/ai/model";
 
-const OPENROUTER_MODEL = "minimax/minimax-m3";
+const OPENROUTER_MODEL = getAiModel();
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 const PROMPT_VERSION = "ai-notes-v1";
 
