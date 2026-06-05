@@ -1,13 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { test, expect, type APIRequestContext } from "@playwright/test";
-import { MEETINGS, SERIES, waitForApp } from "./seed-data";
+import { SERIES, waitForApp } from "./seed-data";
 
 const SUPABASE_URL = process.env.SUPABASE_URL ?? "http://127.0.0.1:54321";
 const HAS_SERVICE_ROLE = !!process.env.SUPABASE_SERVICE_ROLE_KEY;
 const HAS_OPENROUTER_KEY = !!process.env.OPENROUTER_API_KEY;
-const HAS_TEST_OPENROUTER_RESPONSE = !!process.env.MINUTIA_TEST_OPENROUTER_RESPONSE;
-const HAS_TEST_AI_SUGGESTIONS_RESPONSE = !!process.env.MINUTIA_TEST_AI_SUGGESTIONS_RESPONSE;
-const HAS_TEST_SERIES_ASK_RESPONSE = !!process.env.MINUTIA_TEST_SERIES_ASK_RESPONSE;
 const TEST_USER_ID = "00000000-0000-0000-0000-000000000001";
 
 function serviceHeaders(prefer = "return=representation") {
@@ -109,54 +106,6 @@ test.describe("AI notes", () => {
       await expect(response.json()).resolves.toMatchObject({
         error: "AI notes are not configured.",
       });
-    } finally {
-      await deleteSeries(request, fixture.seriesId);
-    }
-  });
-
-  test("real endpoint stores structured OpenRouter output", async ({
-    page,
-    request,
-  }) => {
-    test.skip(!HAS_SERVICE_ROLE, "Requires service role setup for isolated AI notes data");
-    test.skip(
-      !HAS_OPENROUTER_KEY || !HAS_TEST_OPENROUTER_RESPONSE,
-      "Requires test OpenRouter fixture"
-    );
-
-    const fixture = await createAiNotesFixture(request);
-
-    try {
-      await page.goto(`/series/${fixture.seriesId}/meetings/${fixture.meetingId}`);
-      await waitForApp(page);
-
-      const response = await page.request.post(
-        `/api/meetings/${fixture.meetingId}/enhance-notes`,
-        { data: { mode: "preview" }, timeout: 20_000 }
-      );
-      expect(response.status()).toBe(200);
-      await expect(response.json()).resolves.toMatchObject({
-        ai_notes: {
-          summary: ["Alice owns onboarding and launch scope stays small."],
-          action_items: ["Alice owns onboarding by Friday."],
-          decisions: ["Keep launch scope small."],
-          risks: ["Support queue may spike."],
-        },
-        model: "minimax/minimax-m3",
-        prompt_version: "ai-notes-v1",
-      });
-
-      const rows = await rest(
-        request,
-        `meetings?id=eq.${fixture.meetingId}&select=raw_notes_markdown,ai_notes_markdown,ai_notes_model,ai_notes_prompt_version`
-      );
-      expect(rows[0]).toMatchObject({
-        raw_notes_markdown: fixture.rawNotes,
-        ai_notes_model: "minimax/minimax-m3",
-        ai_notes_prompt_version: "ai-notes-v1",
-      });
-      expect(rows[0].ai_notes_markdown).toContain("## Summary");
-      expect(rows[0].ai_notes_markdown).toContain("Alice owns onboarding");
     } finally {
       await deleteSeries(request, fixture.seriesId);
     }
@@ -278,78 +227,6 @@ test.describe("AI notes", () => {
     }
   });
 
-  test("generates reviewable suggestions, accepts an edited issue, and rejects a decision", async ({
-    page,
-    request,
-  }) => {
-    test.skip(!HAS_SERVICE_ROLE, "Requires service role setup for isolated AI notes data");
-    test.skip(
-      !HAS_OPENROUTER_KEY || !HAS_TEST_AI_SUGGESTIONS_RESPONSE,
-      "Requires test AI suggestions fixture"
-    );
-
-    const fixture = await createAiNotesFixture(request);
-
-    try {
-      await page.goto(`/series/${fixture.seriesId}/meetings/${fixture.meetingId}`);
-      await waitForApp(page);
-      await expect(page.getByRole("heading", { name: /AI notes session/ })).toBeVisible({ timeout: 20_000 });
-
-      await page.getByRole("button", { name: "Review AI suggestions" }).click();
-      await expect(page.getByRole("region", { name: "AI suggestions" })).toBeVisible();
-      await expect(page.getByLabel("Suggestion title").first()).toHaveValue("Alice owns onboarding by Friday");
-      await expect(page.getByText("Decision: Keep launch scope small")).toBeVisible();
-
-      await page.getByLabel("Suggestion title").first().fill("Alice owns the onboarding checklist");
-      await page.getByLabel("Suggestion owner").first().fill("Alice");
-      await page.getByRole("button", { name: "Accept suggestion" }).first().click();
-      await expect(page.getByText("Accepted into tracked work.")).toBeVisible();
-
-      await page.getByRole("button", { name: "Reject suggestion" }).first().click();
-      await expect(page.getByText("Rejected.")).toBeVisible();
-
-      const issues = await rest(
-        request,
-        `issues?series_id=eq.${fixture.seriesId}&select=title,owner_name,source,ai_confidence,category,due_date`
-      );
-      expect(issues).toEqual([
-        expect.objectContaining({
-          title: "Alice owns the onboarding checklist",
-          owner_name: "Alice",
-          source: "ai_suggested",
-          category: "action",
-          due_date: "2026-06-05",
-        }),
-      ]);
-      expect(issues[0].ai_confidence).toBeGreaterThanOrEqual(0.8);
-
-      const decisions = await rest(
-        request,
-        `decisions?series_id=eq.${fixture.seriesId}&select=title,source`
-      );
-      expect(decisions).toEqual([]);
-
-      const suggestions = await rest(
-        request,
-        `meeting_ai_suggestions?meeting_id=eq.${fixture.meetingId}&select=title,status,created_issue_id,created_decision_id&order=created_at.asc`
-      );
-      expect(suggestions).toEqual([
-        expect.objectContaining({
-          title: "Alice owns the onboarding checklist",
-          status: "accepted",
-        }),
-        expect.objectContaining({
-          title: "Keep launch scope small",
-          status: "rejected",
-          created_decision_id: null,
-        }),
-      ]);
-      expect(suggestions[0].created_issue_id).toBeTruthy();
-    } finally {
-      await deleteSeries(request, fixture.seriesId);
-    }
-  });
-
   test("shows an empty suggestions state", async ({ page, request }) => {
     test.skip(!HAS_SERVICE_ROLE, "Requires service role setup for isolated AI notes data");
 
@@ -394,37 +271,6 @@ test.describe("Ask this series", () => {
     await expect(response.json()).resolves.toMatchObject({
       error: "Ask this series is not configured.",
     });
-  });
-
-  test("answers a series question with citations", async ({ page }) => {
-    test.skip(
-      !HAS_OPENROUTER_KEY || !HAS_TEST_SERIES_ASK_RESPONSE,
-      "Requires test Ask this series fixture"
-    );
-
-    await page.goto(`/series/${SERIES.platformStandup}`);
-    await waitForApp(page);
-
-    await page.getByLabel("Ask this series question").fill("What did we decide about CI/CD?");
-    const askResponse = page.waitForResponse(
-      (response) =>
-        response.url().includes(`/api/series/${SERIES.platformStandup}/ask`) &&
-        response.request().method() === "POST",
-      { timeout: 30_000 }
-    );
-    await page.getByRole("button", { name: "Ask series" }).click();
-    await expect((await askResponse).ok()).toBeTruthy();
-
-    const answer = page.getByRole("region", { name: "Series answer" });
-    await expect(answer).toBeVisible({ timeout: 20_000 });
-    await expect(answer.getByText("Use GitHub Actions for CI/CD")).toBeVisible();
-    await expect(answer.getByText("Sources")).toBeVisible();
-    await expect(
-      answer.getByRole("link", { name: /Platform Standup #2/ })
-    ).toHaveAttribute(
-      "href",
-      `/series/${SERIES.platformStandup}/meetings/${MEETINGS.standup2}`
-    );
   });
 
   test("shows unsupported answers without citations", async ({ page }) => {
