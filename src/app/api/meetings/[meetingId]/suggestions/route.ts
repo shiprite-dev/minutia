@@ -75,18 +75,6 @@ function buildPrompt(input: {
 }
 
 async function getOpenRouterData(prompt: string, apiKey: string) {
-  if (process.env.MINUTIA_TEST_AI_SUGGESTIONS_RESPONSE) {
-    return {
-      choices: [
-        {
-          message: {
-            content: process.env.MINUTIA_TEST_AI_SUGGESTIONS_RESPONSE,
-          },
-        },
-      ],
-    };
-  }
-
   const providerResponse = await fetch(OPENROUTER_URL, {
     method: "POST",
     headers: {

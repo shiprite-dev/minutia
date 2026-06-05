@@ -35,6 +35,9 @@ jobs:
       - name: Verify runtime config contracts
         run: pnpm test:runtime-config
 
+      - name: Verify query contracts
+        run: pnpm test:query-contracts
+
       - name: Verify CI workflow contracts
         run: pnpm test:ci-workflows
 

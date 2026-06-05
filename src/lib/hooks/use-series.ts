@@ -150,10 +150,8 @@ export function useSeriesRealtime(seriesId: string) {
         refresh
       )
       .subscribe();
-    const interval = window.setInterval(refresh, 3000);
 
     return () => {
-      window.clearInterval(interval);
       void supabase.removeChannel(channel);
     };
   }, [queryClient, seriesId]);
