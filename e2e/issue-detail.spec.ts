@@ -9,7 +9,9 @@ test.describe("Issue Detail Page", () => {
   test("displays issue title and metadata", async ({ page }) => {
     await page.goto(`/issues/${ISSUE_ID}`);
 
-    await expect(page.getByText(ISSUE_TITLE)).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: ISSUE_TITLE })
+    ).toBeVisible();
     await expect(page.getByText("Owner")).toBeVisible();
     await expect(page.getByText("Due")).toBeVisible();
     await expect(page.getByText("Priority")).toBeVisible();
