@@ -45,10 +45,9 @@ test.describe("Mobile Responsive", () => {
     expect(overlaps).toBe(false);
     expect(horizontalGap).toBeGreaterThanOrEqual(24);
 
-    const dueDate = page.getByLabel("Due date");
+    const dueDate = page.getByRole("button", { name: "Due date" });
     await expect(dueDate).toBeVisible();
-    await expect(dueDate).toHaveAttribute("data-slot", "input");
-    await expect(page.locator('input[type="date"]:not([data-slot="input"])')).toHaveCount(0);
+    await expect(dueDate).toBeEnabled();
   });
 
   test("inbox renders on mobile", async ({ page }) => {
