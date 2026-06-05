@@ -7,6 +7,7 @@ import Link from "next/link";
 import {
   ArrowLeft,
   Check,
+  Pencil,
   Trash2,
   Calendar as CalendarIcon,
 } from "lucide-react";
@@ -150,6 +151,28 @@ function InlineEditText({
     );
   }
 
+  const displayValue = value || placeholder || "Click to edit";
+
+  if (Tag === "h1") {
+    return (
+      <div className="mb-3 flex items-start gap-2">
+        <h1 className={cn(!value && "text-ink-4 italic", className)}>
+          {displayValue}
+        </h1>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          onClick={() => setEditing(true)}
+          aria-label={`Edit ${placeholder ?? "field"}`}
+          className="mt-0.5 size-7 shrink-0 text-ink-3 hover:text-ink"
+        >
+          <Pencil className="size-3.5" />
+        </Button>
+      </div>
+    );
+  }
+
   return (
     <Tag
       className={cn(
@@ -165,7 +188,7 @@ function InlineEditText({
       role="button"
       aria-label={`Edit ${placeholder ?? "field"}`}
     >
-      {value || placeholder || "Click to edit"}
+      {displayValue}
     </Tag>
   );
 }
