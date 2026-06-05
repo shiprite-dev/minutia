@@ -84,7 +84,7 @@ export function MeetingTriageWidget({
 
   return (
     <WidgetShell id={id} index={index}>
-      <div className="flex items-center justify-between mb-1">
+      <div className="flex flex-wrap items-start justify-between gap-2 mb-1">
         <h3 className="font-display text-lg font-semibold text-ink">
           Meeting triage
         </h3>
@@ -96,7 +96,7 @@ export function MeetingTriageWidget({
       <div className="space-y-6 mt-5">
         {/* Carried */}
         <div>
-          <div className="flex items-center gap-2 mb-3">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mb-3">
             <span className="size-2.5 rounded-sm bg-accent" />
             <span className="text-sm font-semibold text-ink">Carried</span>
             <span className="text-xs font-mono text-accent">{carried.length}</span>
@@ -127,7 +127,7 @@ export function MeetingTriageWidget({
 
         {/* New since last */}
         <div>
-          <div className="flex items-center gap-2 mb-3">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mb-3">
             <span className="size-2.5 rounded-sm bg-success" />
             <span className="text-sm font-semibold text-ink">New since last</span>
             <span className="text-xs font-mono text-success">{newSinceLast.length}</span>
@@ -155,7 +155,7 @@ export function MeetingTriageWidget({
 
         {/* Stuck */}
         <div>
-          <div className="flex items-center gap-2 mb-3">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mb-3">
             <span className="size-2.5 rounded-sm bg-ink-4" />
             <span className="text-sm font-semibold text-ink">Stuck</span>
             <span className="text-xs font-mono text-ink-4">{stuck.length}</span>

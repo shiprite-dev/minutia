@@ -45,7 +45,7 @@ export function SeriesHealthWidget({
 
   return (
     <WidgetShell id={id} index={index}>
-      <div className="flex items-center justify-between mb-5">
+      <div className="flex flex-wrap items-start justify-between gap-2 mb-5">
         <h3 className="font-display text-lg font-semibold text-ink">
           Series health
         </h3>
@@ -60,11 +60,11 @@ export function SeriesHealthWidget({
 
           return (
             <div key={series.id}>
-              <div className="flex items-center gap-2 mb-2">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mb-2">
                 <span className={cn("size-2 rounded-full", healthDot(resolutionRate))} />
                 <Link
                   href={`/series/${series.id}`}
-                  className="text-sm font-semibold text-ink hover:text-accent transition-colors"
+                  className="min-w-0 text-sm font-semibold text-ink hover:text-accent transition-colors break-words"
                 >
                   {series.name}
                 </Link>
@@ -101,7 +101,7 @@ export function SeriesHealthWidget({
         })}
       </div>
 
-      <div className="flex items-center gap-4 mt-4 pt-3 border-t border-rule">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mt-4 pt-3 border-t border-rule">
         <div className="flex items-center gap-1.5">
           <span className="size-2 rounded-sm bg-accent" />
           <span className="text-[10px] text-ink-4">Open</span>
