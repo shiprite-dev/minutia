@@ -68,9 +68,9 @@ export function WorkloadWidget({
 
   return (
     <WidgetShell id={id} index={index}>
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-1">
+      <div className="flex flex-wrap items-start justify-between gap-2 mb-1">
         <h3 className="font-display text-lg font-semibold text-ink">Workload</h3>
-        <div className="flex items-center gap-1" role="tablist">
+        <div className="flex flex-wrap items-center gap-1" role="tablist">
           {(["owner", "series", "overdue"] as const).map((v) => (
             <button
               key={v}
@@ -91,7 +91,7 @@ export function WorkloadWidget({
         </div>
       </div>
 
-      <div className="flex items-center gap-2 text-sm text-ink-2 mt-1 mb-5">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-ink-2 mt-1 mb-5">
         <span>{openIssues.length} open</span>
         <span className="text-ink-4">·</span>
         <span>{ownerCount} owners</span>
@@ -113,10 +113,10 @@ export function WorkloadWidget({
       {view === "owner" && (
         <div className="space-y-2 mb-6">
           {ownerGroups.map((group) => (
-            <div key={group.name} className="flex items-center gap-3">
+            <div key={group.name} className="flex items-center gap-3 min-w-0">
               <span
                 className={cn(
-                  "w-20 text-sm truncate text-right",
+                  "w-20 min-w-0 text-sm truncate text-right",
                   group.name === "Unassigned" ? "text-accent" : "text-ink-2"
                 )}
               >
@@ -148,7 +148,7 @@ export function WorkloadWidget({
 
           return (
             <div key={group.name}>
-              <div className="flex items-center gap-2 mb-2">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mb-2">
                 {group.name !== "Unassigned" ? (
                   <span className="inline-flex items-center justify-center size-6 rounded-full bg-paper-3 text-[10px] font-medium text-ink">
                     {group.name.charAt(0).toUpperCase()}
@@ -185,7 +185,7 @@ export function WorkloadWidget({
                     >
                       {issue.title}
                     </PrefetchIssueLink>
-                    <span className="text-[11px] text-ink-4">
+                    <span className="min-w-0 text-[11px] text-ink-4 truncate">
                       {seriesMap.get(issue.series_id)?.name}
                     </span>
                     <StatusChip

@@ -3,22 +3,6 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "motion/react";
-import {
-  DndContext,
-  DragOverlay,
-  PointerSensor,
-  KeyboardSensor,
-  closestCenter,
-  useSensor,
-  useSensors,
-  type DragStartEvent,
-  type DragEndEvent,
-} from "@dnd-kit/core";
-import {
-  SortableContext,
-  sortableKeyboardCoordinates,
-  rectSortingStrategy,
-} from "@dnd-kit/sortable";
 import Link from "next/link";
 import {
   ArrowRight,
@@ -47,8 +31,8 @@ import { cn } from "@/lib/utils";
 import { formatShortDate, daysBetween } from "@/lib/date-utils";
 import { isOpen, isOverdue } from "@/lib/issue-utils";
 import { useWidgetStore } from "@/lib/stores/widget-store";
-import { getWidgetMeta } from "@/components/minutia/widgets/widget-registry";
 import { WidgetShell } from "@/components/minutia/widgets/widget-shell";
+import { WidgetCanvas } from "@/components/minutia/widgets/widget-canvas";
 import { AddWidgetButton } from "@/components/minutia/widgets/add-widget";
 import { StaleItemsWidget } from "@/components/minutia/widgets/stale-items-widget";
 import { SeriesHealthWidget } from "@/components/minutia/widgets/series-health-widget";
@@ -100,54 +84,6 @@ function ageGroup(days: number): string {
   return "30d+";
 }
 
-const DASHBOARD_ROW_HEIGHT = 8;
-const DASHBOARD_GRID_GAP = 20;
-
-function DashboardGridItem({
-  children,
-  span,
-}: {
-  children: React.ReactNode;
-  span: 1 | 2 | 4;
-}) {
-  const ref = React.useRef<HTMLDivElement>(null);
-  const [rowSpan, setRowSpan] = React.useState(1);
-
-  React.useLayoutEffect(() => {
-    const node = ref.current;
-    if (!node) return;
-
-    const measure = () => {
-      const height = node.getBoundingClientRect().height;
-      const nextSpan = Math.max(
-        1,
-        Math.ceil((height + DASHBOARD_GRID_GAP) / (DASHBOARD_ROW_HEIGHT + DASHBOARD_GRID_GAP))
-      );
-      setRowSpan(nextSpan);
-    };
-
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(node);
-    window.addEventListener("resize", measure);
-    return () => {
-      observer.disconnect();
-      window.removeEventListener("resize", measure);
-    };
-  }, []);
-
-  return (
-    <div
-      className={cn(span >= 2 && "lg:col-span-2", span === 4 && "xl:col-span-4")}
-      style={{ gridRowEnd: `span ${rowSpan}` }}
-    >
-      <div ref={ref}>
-        {children}
-      </div>
-    </div>
-  );
-}
-
 // ---------------------------------------------------------------------------
 // Hero summary widget
 // ---------------------------------------------------------------------------
@@ -183,7 +119,7 @@ function HeroWidget({
       <p className="text-[11px] font-mono uppercase tracking-wider text-ink-4 mb-3">
         {formatWeekday(new Date())}
       </p>
-      <div className="flex items-baseline gap-4 mb-2">
+      <div className="flex flex-wrap items-baseline gap-x-4 gap-y-2 mb-2">
         <span className="font-display text-5xl font-bold text-ink tabular-nums leading-none">
           {openCount}
         </span>
@@ -193,7 +129,7 @@ function HeroWidget({
           </h2>
         </div>
       </div>
-      <div className="flex items-center gap-2 text-sm text-ink-2 mt-1">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-ink-2 mt-1">
         <span>{openCount} open</span>
         <span className="text-ink-4">·</span>
         <span>{pendingCount} pending</span>
@@ -209,7 +145,7 @@ function HeroWidget({
 
       {recentMeetings.length > 0 && (
         <div className="mt-6 pt-5 border-t border-rule">
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
             <p className="text-xs text-ink-3">
               Issues across last {recentMeetings.length} meetings
             </p>
@@ -256,7 +192,7 @@ function HeroWidget({
               );
             })}
           </div>
-          <div className="flex items-center gap-4 mt-3">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mt-3">
             <div className="flex items-center gap-1.5">
               <span className="size-2 rounded-sm bg-ink/20" />
               <span className="text-[10px] text-ink-4">Raised</span>
@@ -305,7 +241,7 @@ function NextMeetingWidget({
           Next meeting
         </span>
       </div>
-      <h3 className="font-display text-lg font-semibold text-ink mb-1">
+      <h3 className="font-display text-lg font-semibold text-ink mb-1 break-words">
         {nextSeries.name}
       </h3>
       {eventTime ? (
@@ -334,8 +270,8 @@ function NextMeetingWidget({
         </p>
       )}
       <div className="flex items-center gap-3">
-        <Link href={`/series/${nextSeries.id}`}>
-          <Button className="bg-ink text-paper hover:bg-ink-2 flex-1 h-10">
+        <Link href={`/series/${nextSeries.id}`} className="w-full">
+          <Button className="w-full bg-ink text-paper hover:bg-ink-2 h-10">
             Open series
             <ArrowRight className="size-3.5 ml-1.5" />
           </Button>
@@ -432,7 +368,7 @@ function OutstandingWidget({
 
   return (
     <WidgetShell id={id} index={widgetIndex}>
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-1">
+      <div className="flex flex-wrap items-start justify-between gap-2 mb-1">
         <h3 className="font-display text-lg font-semibold text-ink">Outstanding items</h3>
         <div className="flex items-center gap-1 overflow-x-auto" role="tablist" aria-label="Filter outstanding items">
           {filters.map((f) => (
@@ -474,7 +410,7 @@ function OutstandingWidget({
 
             return (
               <div key={series.id} className="py-5 first:pt-0 last:pb-0">
-                <div className="flex items-center gap-3 mb-3">
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mb-3">
                   <MinutiaCadenceIcon cadence={series.cadence} className="size-4 shrink-0 text-ink" />
                   <Link
                     href={`/series/${series.id}`}
@@ -673,7 +609,7 @@ function AgeWidget({ id, widgetIndex, issues }: { id: string; widgetIndex: numbe
 
   return (
     <WidgetShell id={id} index={widgetIndex}>
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex flex-wrap items-start justify-between gap-2 mb-4">
         <h3 className="font-display text-base font-semibold text-ink">Age of open items</h3>
         <span className="text-[11px] text-ink-4">oldest first</span>
       </div>
@@ -684,7 +620,7 @@ function AgeWidget({ id, widgetIndex, issues }: { id: string; widgetIndex: numbe
       )}
       <div className="space-y-2.5">
         {order.map((key) => (
-          <div key={key} className="flex items-center justify-between">
+          <div key={key} className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2.5">
               <span className={cn("size-2 rounded-full", dotColor(key))} />
               <span className="text-sm text-ink-2">{key}</span>
@@ -764,7 +700,7 @@ function SeriesWidget({
 }) {
   return (
     <WidgetShell id={id} index={widgetIndex}>
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
         <h3 className="font-display text-base font-semibold text-ink">Your series</h3>
         <Link href="/series" className="text-xs text-ink-3 hover:text-accent transition-colors">
           View all
@@ -775,10 +711,10 @@ function SeriesWidget({
           <Link
             key={series.id}
             href={`/series/${series.id}`}
-            className="flex items-center gap-3 rounded-lg px-3 py-2.5 hover:bg-paper-2 transition-colors group"
+            className="flex items-center gap-3 rounded-lg px-3 py-2.5 hover:bg-paper-2 transition-colors group min-w-0"
           >
             <Calendar className="size-4 text-ink-4 group-hover:text-accent transition-colors" />
-            <span className="flex-1 text-sm text-ink group-hover:text-accent transition-colors">{series.name}</span>
+            <span className="flex-1 min-w-0 text-sm text-ink group-hover:text-accent transition-colors break-words">{series.name}</span>
             {series.open_issues_count > 0 && (
               <span className="text-xs text-accent font-medium tabular-nums">
                 {series.open_issues_count} open
@@ -1095,29 +1031,6 @@ export default function Dashboard() {
   const { data: allDecisions } = useDecisions(undefined, undefined, true, 5);
   const updateStatus = useUpdateIssueStatus();
   const widgets = useWidgetStore((s) => s.widgets);
-  const moveWidget = useWidgetStore((s) => s.moveWidget);
-
-  const [activeId, setActiveId] = React.useState<string | null>(null);
-
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
-  );
-
-  function handleDragStart(event: DragStartEvent) {
-    setActiveId(String(event.active.id));
-  }
-
-  function handleDragEnd(event: DragEndEvent) {
-    setActiveId(null);
-    const { active, over } = event;
-    if (!over || active.id === over.id) return;
-    const fromIndex = widgets.findIndex((w) => w.id === active.id);
-    const toIndex = widgets.findIndex((w) => w.id === over.id);
-    if (fromIndex !== -1 && toIndex !== -1) {
-      moveWidget(fromIndex, toIndex);
-    }
-  }
 
   const firstSeriesId = seriesList?.[0]?.gcal_sync_enabled ? seriesList[0].id : undefined;
   const { data: calendarEvents } = useCalendarEvents(firstSeriesId);
@@ -1147,17 +1060,6 @@ export default function Dashboard() {
     updateStatus.mutate({ issueId, seriesId, oldStatus, newStatus });
   }
 
-  const widgetIds = React.useMemo(() => widgets.map((w) => w.id), [widgets]);
-
-  const widgetSpans = React.useMemo(
-    () =>
-      widgets.map((w) => ({
-        ...w,
-        _span: w.type === "outstanding" ? 4 : w.span ?? getWidgetMeta(w.type)?.span ?? 1,
-      })),
-    [widgets]
-  );
-
   const sharedProps = {
     issues: issues ?? [],
     seriesList: seriesList ?? [],
@@ -1171,6 +1073,24 @@ export default function Dashboard() {
     calendarEvents: calendarEvents ?? undefined,
   };
 
+  const widgetLayoutKey = React.useMemo(
+    () =>
+      widgets
+        .map((w) =>
+          [
+            w.id,
+            w.type,
+            w.layout?.x ?? "",
+            w.layout?.y ?? "",
+            w.layout?.w ?? "",
+            w.layout?.h ?? "",
+          ].join(":")
+        )
+        .join("|"),
+    [widgets]
+  );
+  const widgetIds = React.useMemo(() => widgets.map((w) => w.id), [widgets]);
+
   return (
     <div className="min-h-screen bg-paper" data-tour="oil-board">
       <div className="mx-auto max-w-6xl px-6 py-8">
@@ -1180,44 +1100,17 @@ export default function Dashboard() {
         {isLoading ? (
           <DashboardSkeleton />
         ) : (
-          <>
-            <DndContext
-              sensors={sensors}
-              collisionDetection={closestCenter}
-              onDragStart={handleDragStart}
-              onDragEnd={handleDragEnd}
-            >
-              <SortableContext items={widgetIds} strategy={rectSortingStrategy}>
-                <div
-                  className="grid grid-cols-1 gap-5 [grid-auto-flow:dense] lg:grid-cols-2 xl:grid-cols-4"
-                  style={{ gridAutoRows: `${DASHBOARD_ROW_HEIGHT}px` }}
-                >
-                  {widgetSpans.map((w, i) => (
-                    <DashboardGridItem
-                      key={w.id}
-                      span={w._span === 4 ? 4 : w._span === 2 ? 2 : 1}
-                    >
-                      <WidgetRenderer
-                        widgetId={w.id}
-                        widgetType={w.type}
-                        widgetIndex={i}
-                        {...sharedProps}
-                      />
-                    </DashboardGridItem>
-                  ))}
-                </div>
-              </SortableContext>
-              <DragOverlay>
-                {activeId ? (
-                  <div className="rounded-xl border border-accent/50 bg-card/80 p-6 shadow-xl backdrop-blur-sm opacity-90">
-                    <p className="text-sm font-medium text-ink">
-                      {getWidgetMeta(widgets.find((w) => w.id === activeId)?.type ?? "")?.name ?? "Widget"}
-                    </p>
-                  </div>
-                ) : null}
-              </DragOverlay>
-            </DndContext>
-          </>
+          <WidgetCanvas layoutKey={widgetLayoutKey} widgetIds={widgetIds}>
+            {widgets.map((w, i) => (
+              <WidgetRenderer
+                key={w.id}
+                widgetId={w.id}
+                widgetType={w.type}
+                widgetIndex={i}
+                {...sharedProps}
+              />
+            ))}
+          </WidgetCanvas>
         )}
         <QuickAddButton seriesList={seriesList ?? []} allMeetings={meetings ?? []} />
       </div>
