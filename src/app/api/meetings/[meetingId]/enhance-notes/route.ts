@@ -135,7 +135,7 @@ export async function POST(
 
   void body;
 
-  const apiKey = process.env.OPENROUTER_API_KEY;
+  const apiKey = process.env.OPENROUTER_API_KEY || process.env.AI_API_KEY;
   if (!apiKey) {
     return NextResponse.json(
       { error: "AI notes are not configured.", request_id: requestId },

@@ -48,6 +48,7 @@ services:
       - SMTP_PASS=${SMTP_PASS:-}
       - SMTP_ADMIN_EMAIL=${SMTP_ADMIN_EMAIL:-admin@localhost}
       - EMAIL_FROM=${EMAIL_FROM:-noreply@localhost}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
       - AI_API_KEY=${AI_API_KEY:-}
       - AI_MODEL=${AI_MODEL:-claude-sonnet-4-6}
     depends_on:

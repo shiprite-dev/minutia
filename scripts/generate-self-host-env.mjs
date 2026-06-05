@@ -76,6 +76,7 @@ SMTP_ADMIN_EMAIL=admin@localhost
 SMTP_SENDER_NAME=Minutia
 EMAIL_FROM=noreply@localhost
 
+OPENROUTER_API_KEY=
 AI_API_KEY=
 AI_MODEL=claude-sonnet-4-6
 
