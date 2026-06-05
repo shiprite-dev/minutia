@@ -5,6 +5,8 @@ import { SERIES, waitForApp } from "./seed-data";
 const SUPABASE_URL = process.env.SUPABASE_URL ?? "http://127.0.0.1:54321";
 const HAS_SERVICE_ROLE = !!process.env.SUPABASE_SERVICE_ROLE_KEY;
 const HAS_OPENROUTER_KEY = !!process.env.OPENROUTER_API_KEY;
+const EXPECTED_MODEL =
+  process.env.OPENROUTER_MODEL || process.env.AI_MODEL || "google/gemini-3.1-flash-lite";
 const TEST_USER_ID = "00000000-0000-0000-0000-000000000001";
 
 function serviceHeaders(prefer = "return=representation") {
@@ -130,7 +132,7 @@ test.describe("AI notes", () => {
 
       const payload = await response.json();
       expect(payload).toMatchObject({
-        model: "minimax/minimax-m3",
+        model: EXPECTED_MODEL,
         prompt_version: "ai-notes-v1",
       });
       expect(payload.ai_notes_markdown).toContain("##");
@@ -147,7 +149,7 @@ test.describe("AI notes", () => {
       expect(rows[0]).toMatchObject({
         notes_markdown: fixture.rawNotes,
         raw_notes_markdown: fixture.rawNotes,
-        ai_notes_model: "minimax/minimax-m3",
+        ai_notes_model: EXPECTED_MODEL,
         ai_notes_prompt_version: "ai-notes-v1",
       });
       expect(rows[0].ai_notes_markdown).toContain("##");
@@ -194,7 +196,7 @@ test.describe("AI notes", () => {
               "## Risks",
               "- Support queue may spike after launch."
             ].join("\n"),
-            model: "minimax/minimax-m3",
+            model: EXPECTED_MODEL,
             prompt_version: "ai-notes-v1",
             generated_at: "2026-06-04T00:00:00.000Z",
           }),
@@ -231,7 +233,7 @@ test.describe("AI notes", () => {
       );
       expect(rows[0]).toMatchObject({
         raw_notes_markdown: fixture.rawNotes,
-        ai_notes_model: "minimax/minimax-m3",
+        ai_notes_model: EXPECTED_MODEL,
         ai_notes_prompt_version: "ai-notes-v1",
       });
       expect(rows[0].notes_markdown).toContain("## Summary");
