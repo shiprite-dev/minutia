@@ -229,7 +229,7 @@ export async function POST(
     return NextResponse.json({ error: "Not authenticated", request_id: requestId }, { status: 401 });
   }
 
-  const apiKey = process.env.OPENROUTER_API_KEY;
+  const apiKey = process.env.OPENROUTER_API_KEY || process.env.AI_API_KEY;
   if (!apiKey) {
     return NextResponse.json(
       { error: "Ask this series is not configured.", request_id: requestId },
