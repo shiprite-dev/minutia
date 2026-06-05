@@ -82,18 +82,6 @@ function getTextFromOpenRouter(data: unknown) {
 }
 
 async function getOpenRouterData(prompt: string, apiKey: string) {
-  if (process.env.MINUTIA_TEST_OPENROUTER_RESPONSE) {
-    return {
-      choices: [
-        {
-          message: {
-            content: process.env.MINUTIA_TEST_OPENROUTER_RESPONSE,
-          },
-        },
-      ],
-    };
-  }
-
   const providerResponse = await fetch(OPENROUTER_URL, {
     method: "POST",
     headers: {
