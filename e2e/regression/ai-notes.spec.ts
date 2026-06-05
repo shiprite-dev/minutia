@@ -5,6 +5,8 @@ import { SERIES, waitForApp } from "./seed-data";
 const SUPABASE_URL = process.env.SUPABASE_URL ?? "http://127.0.0.1:54321";
 const HAS_SERVICE_ROLE = !!process.env.SUPABASE_SERVICE_ROLE_KEY;
 const HAS_OPENROUTER_KEY = !!process.env.OPENROUTER_API_KEY;
+const EXPECTED_MODEL =
+  process.env.OPENROUTER_MODEL || process.env.AI_MODEL || "google/gemini-3.1-flash-lite";
 const TEST_USER_ID = "00000000-0000-0000-0000-000000000001";
 
 function serviceHeaders(prefer = "return=representation") {
@@ -111,6 +113,51 @@ test.describe("AI notes", () => {
     }
   });
 
+  test("generates notes through the authenticated backend route with OpenRouter", async ({
+    page,
+    request,
+  }) => {
+    test.setTimeout(90_000);
+    test.skip(!HAS_SERVICE_ROLE, "Requires service role setup for isolated AI notes data");
+    test.skip(!HAS_OPENROUTER_KEY, "Requires OpenRouter for backend AI notes coverage");
+
+    const fixture = await createAiNotesFixture(request);
+
+    try {
+      const response = await page.request.post(
+        `/api/meetings/${fixture.meetingId}/enhance-notes`,
+        { data: { mode: "preview" }, timeout: 60_000 }
+      );
+      expect(response.status()).toBe(200);
+
+      const payload = await response.json();
+      expect(payload).toMatchObject({
+        model: EXPECTED_MODEL,
+        prompt_version: "ai-notes-v1",
+      });
+      expect(payload.ai_notes_markdown).toContain("##");
+      expect(
+        Object.values(payload.ai_notes).some(
+          (items) => Array.isArray(items) && items.length > 0
+        )
+      ).toBe(true);
+
+      const rows = await rest(
+        request,
+        `meetings?id=eq.${fixture.meetingId}&select=notes_markdown,raw_notes_markdown,ai_notes_markdown,ai_notes_model,ai_notes_prompt_version`
+      );
+      expect(rows[0]).toMatchObject({
+        notes_markdown: fixture.rawNotes,
+        raw_notes_markdown: fixture.rawNotes,
+        ai_notes_model: EXPECTED_MODEL,
+        ai_notes_prompt_version: "ai-notes-v1",
+      });
+      expect(rows[0].ai_notes_markdown).toContain("##");
+    } finally {
+      await deleteSeries(request, fixture.seriesId);
+    }
+  });
+
   test("preserves raw notes and applies generated notes after preview", async ({
     page,
     request,
@@ -149,7 +196,7 @@ test.describe("AI notes", () => {
               "## Risks",
               "- Support queue may spike after launch."
             ].join("\n"),
-            model: "minimax/minimax-m3",
+            model: EXPECTED_MODEL,
             prompt_version: "ai-notes-v1",
             generated_at: "2026-06-04T00:00:00.000Z",
           }),
@@ -186,7 +233,7 @@ test.describe("AI notes", () => {
       );
       expect(rows[0]).toMatchObject({
         raw_notes_markdown: fixture.rawNotes,
-        ai_notes_model: "minimax/minimax-m3",
+        ai_notes_model: EXPECTED_MODEL,
         ai_notes_prompt_version: "ai-notes-v1",
       });
       expect(rows[0].notes_markdown).toContain("## Summary");

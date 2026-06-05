@@ -6,18 +6,21 @@ const uuidLikeSchema = z.string().regex(
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 );
 
-const providerCitationSchema = z.object({
-  type: z.enum(["meeting", "issue", "decision", "notes"]).optional(),
-  source_id: uuidLikeSchema,
-  title: z.string().min(1).max(300).optional(),
-  meeting_id: uuidLikeSchema.nullable().optional(),
-  meeting_title: z.string().nullable().optional(),
-  quote: z.string().optional(),
-});
+const providerCitationSchema = z.preprocess(
+  (value) => (typeof value === "string" ? { source_id: value } : value),
+  z.object({
+    type: z.enum(["meeting", "issue", "decision", "notes"]).optional(),
+    source_id: uuidLikeSchema,
+    title: z.string().min(1).max(300).optional(),
+    meeting_id: uuidLikeSchema.nullable().optional(),
+    meeting_title: z.string().nullable().optional(),
+    quote: z.string().optional(),
+  })
+);
 
 const providerAnswerSchema = z.object({
   answer: z.string().trim().min(1).max(4000),
-  citations: z.array(providerCitationSchema).default([]),
+  citations: z.array(z.unknown()).default([]),
   unsupported: z.boolean().default(false),
 });
 
@@ -61,13 +64,22 @@ export type AskSeriesParsedAnswer = {
   unsupported: boolean;
 };
 
+export function stripJsonFences(text: string) {
+  const trimmed = text.trim();
+  const fenced = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
+  return (fenced ? fenced[1] : trimmed).trim();
+}
+
 export function getTextFromOpenRouter(data: unknown) {
   const parsed = openRouterTextSchema.safeParse(data);
   if (!parsed.success) return "";
 
   const content = parsed.data.choices[0].message.content;
-  if (typeof content === "string") return content;
-  return content.map((part) => part.text ?? "").filter(Boolean).join("\n");
+  const text =
+    typeof content === "string"
+      ? content
+      : content.map((part) => part.text ?? "").filter(Boolean).join("\n");
+  return stripJsonFences(text);
 }
 
 function citationHref(input: {
@@ -151,14 +163,19 @@ export function parseAskSeriesAnswer(input: {
   const decisions = new Map(input.decisions.map((source) => [source.id, source]));
 
   const citations = parsed.citations
-    .map((citation) =>
-      resolveCitation({
-        citation,
-        seriesId: input.seriesId,
-        meetings,
-        issues,
-        decisions,
-      })
+    .map((raw) => providerCitationSchema.safeParse(raw))
+    .flatMap((result) =>
+      result.success
+        ? [
+            resolveCitation({
+              citation: result.data,
+              seriesId: input.seriesId,
+              meetings,
+              issues,
+              decisions,
+            }),
+          ]
+        : []
     )
     .filter((citation): citation is AskSeriesCitation => citation !== null);
 
