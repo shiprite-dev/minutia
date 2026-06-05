@@ -82,17 +82,20 @@ assert(
 const route = read("src/app/api/meetings/[meetingId]/enhance-notes/route.ts");
 assert(route.includes("minimax/minimax-m3"), "Enhance route must use minimax/minimax-m3");
 assert(route.includes("OPENROUTER_API_KEY"), "Enhance route must read OPENROUTER_API_KEY");
+assert(route.includes("AI_API_KEY"), "Enhance route must support AI_API_KEY fallback");
 assert(route.includes("https://openrouter.ai/api/v1/chat/completions"), "Enhance route must call OpenRouter chat completions");
 assert(route.includes("ai_notes: parsed"), "Enhance route must return structured AI notes JSON");
 
 const suggestionsRoute = read("src/app/api/meetings/[meetingId]/suggestions/route.ts");
 assert(suggestionsRoute.includes("minimax/minimax-m3"), "Suggestions route must use minimax/minimax-m3");
 assert(suggestionsRoute.includes("OPENROUTER_API_KEY"), "Suggestions route must read OPENROUTER_API_KEY");
+assert(suggestionsRoute.includes("AI_API_KEY"), "Suggestions route must support AI_API_KEY fallback");
 assert(suggestionsRoute.includes("https://openrouter.ai/api/v1/chat/completions"), "Suggestions route must call OpenRouter chat completions");
 
 const askSeriesRoute = read("src/app/api/series/[seriesId]/ask/route.ts");
 assert(askSeriesRoute.includes("minimax/minimax-m3"), "Ask series route must use minimax/minimax-m3");
 assert(askSeriesRoute.includes("OPENROUTER_API_KEY"), "Ask series route must read OPENROUTER_API_KEY");
+assert(askSeriesRoute.includes("AI_API_KEY"), "Ask series route must support AI_API_KEY fallback");
 assert(askSeriesRoute.includes("https://openrouter.ai/api/v1/chat/completions"), "Ask series route must call OpenRouter chat completions");
 assert(askSeriesRoute.includes("The source context does not prove the answer."), "Ask series route must include unsupported-answer guard copy");
 
