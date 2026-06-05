@@ -111,6 +111,51 @@ test.describe("AI notes", () => {
     }
   });
 
+  test("generates notes through the authenticated backend route with OpenRouter", async ({
+    page,
+    request,
+  }) => {
+    test.setTimeout(90_000);
+    test.skip(!HAS_SERVICE_ROLE, "Requires service role setup for isolated AI notes data");
+    test.skip(!HAS_OPENROUTER_KEY, "Requires OpenRouter for backend AI notes coverage");
+
+    const fixture = await createAiNotesFixture(request);
+
+    try {
+      const response = await page.request.post(
+        `/api/meetings/${fixture.meetingId}/enhance-notes`,
+        { data: { mode: "preview" }, timeout: 60_000 }
+      );
+      expect(response.status()).toBe(200);
+
+      const payload = await response.json();
+      expect(payload).toMatchObject({
+        model: "minimax/minimax-m3",
+        prompt_version: "ai-notes-v1",
+      });
+      expect(payload.ai_notes_markdown).toContain("##");
+      expect(
+        Object.values(payload.ai_notes).some(
+          (items) => Array.isArray(items) && items.length > 0
+        )
+      ).toBe(true);
+
+      const rows = await rest(
+        request,
+        `meetings?id=eq.${fixture.meetingId}&select=notes_markdown,raw_notes_markdown,ai_notes_markdown,ai_notes_model,ai_notes_prompt_version`
+      );
+      expect(rows[0]).toMatchObject({
+        notes_markdown: fixture.rawNotes,
+        raw_notes_markdown: fixture.rawNotes,
+        ai_notes_model: "minimax/minimax-m3",
+        ai_notes_prompt_version: "ai-notes-v1",
+      });
+      expect(rows[0].ai_notes_markdown).toContain("##");
+    } finally {
+      await deleteSeries(request, fixture.seriesId);
+    }
+  });
+
   test("preserves raw notes and applies generated notes after preview", async ({
     page,
     request,
