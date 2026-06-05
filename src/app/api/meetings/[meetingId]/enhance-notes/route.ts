@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
+import { stripJsonFences } from "@/lib/ai/ask-series-answer";
 
 const OPENROUTER_MODEL = "minimax/minimax-m3";
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
@@ -51,6 +52,8 @@ function buildPrompt(input: {
   return [
     "You enhance recurring meeting notes for Minutia, an Outstanding Issues Log.",
     "Return strict JSON with these array fields: summary, action_items, decisions, risks, blockers, follow_ups, open_questions.",
+    "Return only the JSON object. Do not wrap it in markdown fences or add commentary.",
+    "Each field must be an array of concise strings. Use [] when there is no evidence for a field.",
     "Do not invent owners, dates, or decisions. If uncertain, put the uncertainty in open_questions.",
     "Prefer concise, accountable wording.",
     "",
@@ -70,11 +73,16 @@ function buildPrompt(input: {
 }
 
 function getTextFromOpenRouter(data: unknown) {
-  const content = (data as any)?.choices?.[0]?.message?.content;
+  const content = (data as {
+    choices?: { message?: { content?: unknown } }[];
+  })?.choices?.[0]?.message?.content;
   if (typeof content === "string") return content;
   if (Array.isArray(content)) {
     return content
-      .map((part) => typeof part?.text === "string" ? part.text : "")
+      .map((part) => {
+        if (!part || typeof part !== "object" || !("text" in part)) return "";
+        return typeof part.text === "string" ? part.text : "";
+      })
       .filter(Boolean)
       .join("\n");
   }
@@ -114,21 +122,10 @@ export async function POST(
   const requestId = crypto.randomUUID();
   const { meetingId } = await params;
 
-  let body: z.infer<typeof requestSchema>;
   try {
-    body = requestSchema.parse(await request.json());
+    requestSchema.parse(await request.json());
   } catch {
     return NextResponse.json({ error: "Invalid request body", request_id: requestId }, { status: 400 });
-  }
-
-  void body;
-
-  const apiKey = process.env.OPENROUTER_API_KEY || process.env.AI_API_KEY;
-  if (!apiKey) {
-    return NextResponse.json(
-      { error: "AI notes are not configured.", request_id: requestId },
-      { status: 503 }
-    );
   }
 
   const supabase = await createClient();
@@ -137,6 +134,14 @@ export async function POST(
   } = await supabase.auth.getUser();
   if (!user) {
     return NextResponse.json({ error: "Not authenticated", request_id: requestId }, { status: 401 });
+  }
+
+  const apiKey = process.env.OPENROUTER_API_KEY || process.env.AI_API_KEY;
+  if (!apiKey) {
+    return NextResponse.json(
+      { error: "AI notes are not configured.", request_id: requestId },
+      { status: 503 }
+    );
   }
 
   const { data: meeting, error } = await supabase
@@ -179,7 +184,7 @@ export async function POST(
 
   let parsed: AiNotes;
   try {
-    const text = getTextFromOpenRouter(providerData);
+    const text = stripJsonFences(getTextFromOpenRouter(providerData));
     parsed = notesSchema.parse(JSON.parse(text));
   } catch {
     return NextResponse.json(

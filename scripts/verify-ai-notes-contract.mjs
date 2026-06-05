@@ -87,7 +87,11 @@ assert(route.includes("minimax/minimax-m3"), "Enhance route must use minimax/min
 assert(route.includes("OPENROUTER_API_KEY"), "Enhance route must read OPENROUTER_API_KEY");
 assert(route.includes("AI_API_KEY"), "Enhance route must support AI_API_KEY fallback");
 assert(route.includes("https://openrouter.ai/api/v1/chat/completions"), "Enhance route must call OpenRouter chat completions");
+assert(route.includes("response_format: { type: \"json_object\" }"), "Enhance route must request OpenRouter JSON mode");
+assert(route.includes("Return only the JSON object"), "Enhance prompt must forbid non-JSON wrapper text");
+assert(route.includes("Do not invent owners, dates, or decisions"), "Enhance prompt must forbid invented accountability details");
 assert(route.includes("ai_notes: parsed"), "Enhance route must return structured AI notes JSON");
+assert(route.includes("stripJsonFences"), "Enhance route must strip markdown code fences before parsing provider JSON");
 
 const suggestionsRoute = read("src/app/api/meetings/[meetingId]/suggestions/route.ts");
 assert(suggestionsRoute.includes("minimax/minimax-m3"), "Suggestions route must use minimax/minimax-m3");
@@ -116,7 +120,16 @@ await esbuild.build({
   logLevel: "silent",
 });
 
-const { parseAskSeriesAnswer } = await import(pathToFileURL(bundledParser).href);
+const { parseAskSeriesAnswer, stripJsonFences } = await import(pathToFileURL(bundledParser).href);
+
+assert(
+  stripJsonFences("```json\n{\"a\":1}\n```") === '{"a":1}',
+  "stripJsonFences must unwrap fenced provider JSON"
+);
+assert(
+  stripJsonFences('{"a":1}') === '{"a":1}',
+  "stripJsonFences must leave bare JSON untouched"
+);
 const sparseAnswer = parseAskSeriesAnswer({
   providerData: {
     choices: [
@@ -153,6 +166,57 @@ assert(
     "/series/10000000-0000-0000-0000-000000000001/meetings/20000000-0000-0000-0000-000000000002",
   "Sparse meeting citations should link to the source meeting"
 );
+
+// Model returns markdown-fenced JSON with bare-string citations (observed with minimax-m3).
+const fencedAnswer = parseAskSeriesAnswer({
+  providerData: {
+    choices: [
+      {
+        message: {
+          content:
+            "```json\n" +
+            JSON.stringify({
+              answer: "New tests need to be added; John is running a Claude POC.",
+              citations: ["20000000-0000-0000-0000-000000000002"],
+              unsupported: false,
+            }) +
+            "\n```",
+        },
+      },
+    ],
+  },
+  seriesId: "10000000-0000-0000-0000-000000000001",
+  meetings: [{ id: "20000000-0000-0000-0000-000000000002", title: "1:1 with John #7" }],
+  issues: [],
+  decisions: [],
+});
+assert(fencedAnswer.unsupported === false, "Fenced JSON should parse and stay supported");
+assert(
+  fencedAnswer.citations[0]?.source_id === "20000000-0000-0000-0000-000000000002",
+  "Bare-string citations should resolve to their source"
+);
+
+// A malformed citation must be dropped, not throw the whole answer away.
+const mixedAnswer = parseAskSeriesAnswer({
+  providerData: {
+    choices: [
+      {
+        message: {
+          content: JSON.stringify({
+            answer: "Coverage gap remains open.",
+            citations: ["not-a-uuid", "20000000-0000-0000-0000-000000000002"],
+            unsupported: false,
+          }),
+        },
+      },
+    ],
+  },
+  seriesId: "10000000-0000-0000-0000-000000000001",
+  meetings: [{ id: "20000000-0000-0000-0000-000000000002", title: "1:1 with John #7" }],
+  issues: [],
+  decisions: [],
+});
+assert(mixedAnswer.citations.length === 1, "Malformed citations should be dropped, not throw");
 
 const meetingDetail = read("src/app/(app)/series/[id]/meetings/[meetingId]/meeting-detail-content.tsx");
 for (const copy of [
