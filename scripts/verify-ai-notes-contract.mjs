@@ -82,8 +82,13 @@ assert(
   "Missing Ask this series API route"
 );
 
+const modelConfig = read("src/lib/ai/model.ts");
+assert(modelConfig.includes('"google/gemini-3.1-flash-lite"'), "AI model default must be google/gemini-3.1-flash-lite");
+assert(modelConfig.includes("AI_MODEL"), "AI model must be configurable via AI_MODEL");
+
 const route = read("src/app/api/meetings/[meetingId]/enhance-notes/route.ts");
-assert(route.includes("minimax/minimax-m3"), "Enhance route must use minimax/minimax-m3");
+assert(route.includes("getAiModel"), "Enhance route must resolve the model from config (getAiModel)");
+assert(!route.includes('"minimax/minimax-m3"'), "Enhance route must not hardcode a model");
 assert(route.includes("OPENROUTER_API_KEY"), "Enhance route must read OPENROUTER_API_KEY");
 assert(route.includes("AI_API_KEY"), "Enhance route must support AI_API_KEY fallback");
 assert(route.includes("https://openrouter.ai/api/v1/chat/completions"), "Enhance route must call OpenRouter chat completions");
@@ -94,13 +99,15 @@ assert(route.includes("ai_notes: parsed"), "Enhance route must return structured
 assert(route.includes("stripJsonFences"), "Enhance route must strip markdown code fences before parsing provider JSON");
 
 const suggestionsRoute = read("src/app/api/meetings/[meetingId]/suggestions/route.ts");
-assert(suggestionsRoute.includes("minimax/minimax-m3"), "Suggestions route must use minimax/minimax-m3");
+assert(suggestionsRoute.includes("getAiModel"), "Suggestions route must resolve the model from config (getAiModel)");
+assert(!suggestionsRoute.includes('"minimax/minimax-m3"'), "Suggestions route must not hardcode a model");
 assert(suggestionsRoute.includes("OPENROUTER_API_KEY"), "Suggestions route must read OPENROUTER_API_KEY");
 assert(suggestionsRoute.includes("AI_API_KEY"), "Suggestions route must support AI_API_KEY fallback");
 assert(suggestionsRoute.includes("https://openrouter.ai/api/v1/chat/completions"), "Suggestions route must call OpenRouter chat completions");
 
 const askSeriesRoute = read("src/app/api/series/[seriesId]/ask/route.ts");
-assert(askSeriesRoute.includes("minimax/minimax-m3"), "Ask series route must use minimax/minimax-m3");
+assert(askSeriesRoute.includes("getAiModel"), "Ask series route must resolve the model from config (getAiModel)");
+assert(!askSeriesRoute.includes('"minimax/minimax-m3"'), "Ask series route must not hardcode a model");
 assert(askSeriesRoute.includes("OPENROUTER_API_KEY"), "Ask series route must read OPENROUTER_API_KEY");
 assert(askSeriesRoute.includes("AI_API_KEY"), "Ask series route must support AI_API_KEY fallback");
 assert(askSeriesRoute.includes("https://openrouter.ai/api/v1/chat/completions"), "Ask series route must call OpenRouter chat completions");
