@@ -47,6 +47,9 @@ jobs:
       - name: Verify OpenRouter client
         run: pnpm test:ai-client
 
+      - name: Verify carry-over logic
+        run: pnpm test:ai-carryover
+
       - name: Build (includes typecheck)
         run: pnpm build
         env:
