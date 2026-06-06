@@ -323,4 +323,22 @@ for (const copy of ["Carry-over briefing", "Generate briefing"]) {
   assert(carryoverPanel.includes(copy), `Carry-over panel missing UI copy: ${copy}`);
 }
 
+// Transcript paste entry (unblocks augmented notes).
+assert(migrations.includes("transcript_raw"), "Schema must include transcript_raw column");
+assert(types.includes("transcript_raw"), "Meeting type must include transcript_raw");
+assert(
+  meetingDetail.includes("useUpdateMeetingTranscript"),
+  "Meeting detail must persist pasted transcripts via useUpdateMeetingTranscript"
+);
+assert(meetingDetail.includes(">Transcript<"), "Meeting detail must render a Transcript section");
+assert(
+  meetingDetail.includes("Paste transcript..."),
+  "Meeting detail must offer a transcript paste field"
+);
+const meetingsHook = read("src/lib/hooks/use-meetings.ts");
+assert(
+  meetingsHook.includes("transcript_raw: transcript"),
+  "useUpdateMeetingTranscript must write transcript_raw"
+);
+
 console.log("AI notes contract verified");
