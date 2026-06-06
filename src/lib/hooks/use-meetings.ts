@@ -231,10 +231,8 @@ export function useMeetingRealtime(meetingId: string, seriesId: string) {
         refreshMeeting
       )
       .subscribe();
-    const interval = window.setInterval(refreshMeeting, 2000);
 
     return () => {
-      window.clearInterval(interval);
       void supabase.removeChannel(channel);
     };
   }, [meetingId, queryClient, seriesId]);
