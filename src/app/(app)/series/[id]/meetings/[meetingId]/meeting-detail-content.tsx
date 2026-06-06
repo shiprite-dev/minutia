@@ -32,6 +32,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { ShareButton } from "@/components/minutia/share-button";
 import { SendMeetingNotesButton } from "@/components/minutia/send-meeting-notes-button";
+import { CarryoverBriefingPanel } from "@/components/minutia/carryover-briefing-panel";
 import { ArrowLeft, Square, Play, Check, X, Copy, CheckCheck, Sparkles, Loader2, ListChecks, FileText, CheckSquare, Gavel, AlertTriangle, Ban, RotateCcw, HelpCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatShortDate } from "@/lib/date-utils";
@@ -1317,12 +1318,16 @@ export function MeetingDetailContent({
             </Button>
           </div>
 
-          <div className="mb-8">
+          <div className="mb-6">
             <BriefCard
               seriesName={series?.name ?? ""}
               nextMeetingDate={new Date(meeting.date)}
               pendingIssues={openIssues.slice(0, 10)}
             />
+          </div>
+
+          <div className="mb-8">
+            <CarryoverBriefingPanel meetingId={meetingId} issueCount={openIssues.length} />
           </div>
 
           {meeting.attendees && meeting.attendees.length > 0 && (
