@@ -84,7 +84,7 @@ async function createCarryoverFixture(request: APIRequestContext) {
       category: "action",
       status: "open",
       priority: "high",
-      owner_name: null,
+      owner_name: "",
       due_date: "2026-01-01",
       source: "manual",
     },
