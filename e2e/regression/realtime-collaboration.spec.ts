@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { test, expect, type APIRequestContext, type Browser } from "@playwright/test";
+import { test, expect, type APIRequestContext, type Browser, type Request } from "@playwright/test";
 
 const APP_URL = process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3000";
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL ?? "http://127.0.0.1:54321";
@@ -291,6 +291,47 @@ test.describe("Realtime collaboration and series participation", () => {
     } finally {
       await rest(request, `meeting_series?id=eq.${seriesId}`, { method: "DELETE", headers: serviceHeaders("return=minimal") }).catch(() => undefined);
       await deleteAuthUser(request, participantId);
+    }
+  });
+
+  test("meeting page relies on realtime, not a 2s polling timer", async ({
+    browser,
+    request,
+  }) => {
+    const orgId = await getCurrentOrgId(request);
+    const seriesId = await createSeries(request, orgId, `No-poll meeting ${Date.now()}`);
+    const meetingId = await createMeeting(request, seriesId, "live");
+
+    try {
+      await addSeriesParticipant(request, seriesId, TEST_USER_ID, "owner");
+      const { context, page } = await newAuthedPage(browser, request, TEST_USER_EMAIL);
+
+      try {
+        await page.goto(`${APP_URL}/series/${seriesId}/meetings/${meetingId}`);
+        await expect(page.getByText("Live").first()).toBeVisible();
+
+        // Let the initial load and any refetch-on-mount settle.
+        await page.waitForTimeout(1500);
+
+        // Count meeting refetches during a quiet, idle window. The removed
+        // setInterval(refreshMeeting, 2000) fired roughly twice in 5s, each
+        // invalidating the meeting detail and list queries, so the old code
+        // produced several /rest/v1/meetings refetches here. Realtime is
+        // event-driven, so an idle page must issue none.
+        let meetingFetches = 0;
+        const onRequest = (req: Request) => {
+          if (req.url().includes("/rest/v1/meetings?select=")) meetingFetches += 1;
+        };
+        page.on("request", onRequest);
+        await page.waitForTimeout(5000);
+        page.off("request", onRequest);
+
+        expect(meetingFetches).toBeLessThan(2);
+      } finally {
+        await context.close();
+      }
+    } finally {
+      await rest(request, `meeting_series?id=eq.${seriesId}`, { method: "DELETE", headers: serviceHeaders("return=minimal") }).catch(() => undefined);
     }
   });
 });
