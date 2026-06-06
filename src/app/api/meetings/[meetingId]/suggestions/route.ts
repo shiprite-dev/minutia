@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
+import { getTextFromOpenRouter } from "@/lib/ai/ask-series-answer";
 import { getAiModel } from "@/lib/ai/model";
 
 const OPENROUTER_MODEL = getAiModel();
@@ -25,29 +26,6 @@ const suggestionsSchema = z.object({
   suggestions: z.array(suggestionSchema).default([]),
 });
 
-function getTextFromOpenRouter(data: unknown) {
-  const parsed = z
-    .object({
-      choices: z.array(
-        z.object({
-          message: z.object({
-            content: z.union([
-              z.string(),
-              z.array(z.object({ text: z.string().optional() }).passthrough()),
-            ]),
-          }),
-        }).passthrough()
-      ).min(1),
-    })
-    .passthrough()
-    .safeParse(data);
-
-  if (!parsed.success) return "";
-  const content = parsed.data.choices[0].message.content;
-  if (typeof content === "string") return content;
-  return content.map((part) => part.text ?? "").filter(Boolean).join("\n");
-}
-
 function buildPrompt(input: {
   title: string;
   seriesName: string;
@@ -56,12 +34,29 @@ function buildPrompt(input: {
   transcript: string | null;
 }) {
   return [
-    "Extract reviewable accountability suggestions for Minutia, an Outstanding Issues Log.",
-    "Return strict JSON with a suggestions array.",
-    "Each suggestion must include category, title, details, owner_name, due_date, confidence, and source_excerpt.",
-    "Allowed categories: action, decision, info, risk, blocker.",
-    "Only suggest durable records that a facilitator should review. Do not invent owners or due dates.",
-    "Use source_excerpt to quote the smallest supporting phrase from the notes or transcript.",
+    "You extract reviewable accountability suggestions for Minutia, an Outstanding Issues Log.",
+    "A facilitator reviews every suggestion before it enters a permanent record, so omitting a weak item is always better than inventing one.",
+    "",
+    "OUTPUT CONTRACT",
+    'Return only a single JSON object of the form {"suggestions": [ ... ]}.',
+    "Do not wrap it in markdown fences. Do not add commentary, explanations, or text before or after the JSON.",
+    "If nothing in the notes or transcript qualifies, return {\"suggestions\": []}.",
+    "",
+    "Each suggestion object must have exactly these fields:",
+    "- category: one of action, decision, info, risk, blocker.",
+    "    action = a task someone must do. decision = a choice that was made.",
+    "    risk = a possible future problem. blocker = something currently preventing progress. info = a durable fact worth tracking.",
+    "- title: concise imperative summary, max 120 characters, no trailing punctuation.",
+    "- details: one or two sentences of supporting context, or \"\" if none.",
+    "- owner_name: copy a person's name verbatim only if the source explicitly assigns them. Never guess. Use \"\" when unassigned.",
+    "- due_date: an explicit calendar date as YYYY-MM-DD, only if the source states one. Never infer from relative phrasing. Use null otherwise.",
+    "- confidence: 0 to 1. Use 0.9+ when explicitly stated and owned, 0.5 to 0.8 when implied, and omit any item you would score below 0.4.",
+    "- source_excerpt: a verbatim quote copied from the notes or transcript that supports this item. Do not paraphrase. Keep it under 160 characters.",
+    "",
+    "RULES",
+    "Only surface durable items a facilitator should track. Skip greetings, small talk, and resolved chatter.",
+    "Emit at most one suggestion per distinct item; do not duplicate.",
+    "Prefer fewer, high-signal suggestions over many speculative ones.",
     "",
     `Series: ${input.seriesName}`,
     `Meeting: ${input.title}`,

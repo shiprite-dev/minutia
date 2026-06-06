@@ -96,7 +96,10 @@ assert(route.includes("response_format: { type: \"json_object\" }"), "Enhance ro
 assert(route.includes("Return only the JSON object"), "Enhance prompt must forbid non-JSON wrapper text");
 assert(route.includes("Do not invent owners, dates, or decisions"), "Enhance prompt must forbid invented accountability details");
 assert(route.includes("ai_notes: parsed"), "Enhance route must return structured AI notes JSON");
-assert(route.includes("stripJsonFences"), "Enhance route must strip markdown code fences before parsing provider JSON");
+assert(
+  route.includes('from "@/lib/ai/ask-series-answer"') && !/function getTextFromOpenRouter/.test(route),
+  "Enhance route must reuse the shared fence-aware getTextFromOpenRouter so markdown-fenced provider JSON still parses"
+);
 
 const suggestionsRoute = read("src/app/api/meetings/[meetingId]/suggestions/route.ts");
 assert(suggestionsRoute.includes("getAiModel"), "Suggestions route must resolve the model from config (getAiModel)");
@@ -104,6 +107,26 @@ assert(!suggestionsRoute.includes('"minimax/minimax-m3"'), "Suggestions route mu
 assert(suggestionsRoute.includes("OPENROUTER_API_KEY"), "Suggestions route must read OPENROUTER_API_KEY");
 assert(suggestionsRoute.includes("AI_API_KEY"), "Suggestions route must support AI_API_KEY fallback");
 assert(suggestionsRoute.includes("https://openrouter.ai/api/v1/chat/completions"), "Suggestions route must call OpenRouter chat completions");
+assert(
+  suggestionsRoute.includes('from "@/lib/ai/ask-series-answer"'),
+  "Suggestions route must reuse the shared fence-aware OpenRouter text helper"
+);
+assert(
+  !/function getTextFromOpenRouter/.test(suggestionsRoute),
+  "Suggestions route must not redefine a non-fence-aware getTextFromOpenRouter; reuse the shared one so markdown-fenced provider JSON still parses"
+);
+assert(
+  suggestionsRoute.includes("Do not wrap it in markdown fences"),
+  "Suggestions prompt must forbid markdown-fenced output"
+);
+assert(
+  suggestionsRoute.includes('return {"suggestions": []}') || suggestionsRoute.includes('{\\"suggestions\\": []}'),
+  "Suggestions prompt must instruct an empty array when nothing qualifies"
+);
+assert(
+  suggestionsRoute.includes("verbatim") && suggestionsRoute.includes("Never guess"),
+  "Suggestions prompt must forbid invented owners and require verbatim evidence"
+);
 
 const askSeriesRoute = read("src/app/api/series/[seriesId]/ask/route.ts");
 assert(askSeriesRoute.includes("getAiModel"), "Ask series route must resolve the model from config (getAiModel)");
@@ -127,7 +150,15 @@ await esbuild.build({
   logLevel: "silent",
 });
 
-const { parseAskSeriesAnswer, stripJsonFences } = await import(pathToFileURL(bundledParser).href);
+const { parseAskSeriesAnswer, stripJsonFences, getTextFromOpenRouter } = await import(pathToFileURL(bundledParser).href);
+
+// The suggestions route shares this extractor; fenced provider JSON must round-trip to parseable text.
+assert(
+  getTextFromOpenRouter({
+    choices: [{ message: { content: "```json\n{\"suggestions\":[]}\n```" } }],
+  }) === '{"suggestions":[]}',
+  "Shared getTextFromOpenRouter must unwrap fenced suggestions JSON"
+);
 
 assert(
   stripJsonFences("```json\n{\"a\":1}\n```") === '{"a":1}',

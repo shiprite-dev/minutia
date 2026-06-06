@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
-import { stripJsonFences } from "@/lib/ai/ask-series-answer";
+import { getTextFromOpenRouter } from "@/lib/ai/ask-series-answer";
 import { getAiModel } from "@/lib/ai/model";
 
 const OPENROUTER_MODEL = getAiModel();
@@ -69,25 +69,8 @@ function buildPrompt(input: {
     input.transcript || "(not provided)",
     "",
     "Existing open context:",
-    JSON.stringify({ issues: input.issues, decisions: input.decisions }, null, 2),
+    JSON.stringify({ issues: input.issues, decisions: input.decisions }),
   ].join("\n");
-}
-
-function getTextFromOpenRouter(data: unknown) {
-  const content = (data as {
-    choices?: { message?: { content?: unknown } }[];
-  })?.choices?.[0]?.message?.content;
-  if (typeof content === "string") return content;
-  if (Array.isArray(content)) {
-    return content
-      .map((part) => {
-        if (!part || typeof part !== "object" || !("text" in part)) return "";
-        return typeof part.text === "string" ? part.text : "";
-      })
-      .filter(Boolean)
-      .join("\n");
-  }
-  return "";
 }
 
 async function getOpenRouterData(prompt: string, apiKey: string) {
@@ -185,8 +168,7 @@ export async function POST(
 
   let parsed: AiNotes;
   try {
-    const text = stripJsonFences(getTextFromOpenRouter(providerData));
-    parsed = notesSchema.parse(JSON.parse(text));
+    parsed = notesSchema.parse(JSON.parse(getTextFromOpenRouter(providerData)));
   } catch {
     return NextResponse.json(
       { error: "AI provider returned invalid notes.", request_id: requestId },
