@@ -13,6 +13,7 @@ import {
   useStartOrJoinMeeting,
   useApplyAiMeetingNotes,
   useUpdateMeetingNotes,
+  useUpdateMeetingTranscript,
 } from "@/lib/hooks/use-meetings";
 import { useSeriesDetail, useSeriesParticipantRole } from "@/lib/hooks/use-series";
 import { useIssues, useCreateIssue, useUpdateIssueStatus, useUpdateIssue, issueKeys } from "@/lib/hooks/use-issues";
@@ -33,7 +34,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { ShareButton } from "@/components/minutia/share-button";
 import { SendMeetingNotesButton } from "@/components/minutia/send-meeting-notes-button";
 import { CarryoverBriefingPanel } from "@/components/minutia/carryover-briefing-panel";
-import { ArrowLeft, Square, Play, Check, X, Copy, CheckCheck, Sparkles, Loader2, ListChecks, FileText, CheckSquare, Gavel, AlertTriangle, Ban, RotateCcw, HelpCircle } from "lucide-react";
+import { ArrowLeft, Square, Play, Check, X, Copy, CheckCheck, Sparkles, Loader2, ListChecks, FileText, CheckSquare, Gavel, AlertTriangle, Ban, RotateCcw, HelpCircle, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatShortDate } from "@/lib/date-utils";
 import type { IssueCategory, IssueStatus, Issue, Decision, Meeting, MeetingAiSuggestion } from "@/lib/types";
@@ -748,6 +749,8 @@ export function MeetingDetailContent({
   const { isOnline, pendingCount, syncStatus, refreshCount } = useOfflineSync();
 
   const [notes, setNotes] = React.useState(meeting?.notes_markdown ?? "");
+  const [transcript, setTranscript] = React.useState(meeting?.transcript_raw ?? "");
+  const [transcriptOpen, setTranscriptOpen] = React.useState(!!meeting?.transcript_raw);
   const [aiPreview, setAiPreview] = React.useState<AiNotesPreview | null>(null);
   const [aiError, setAiError] = React.useState<string | null>(null);
   const [enhancingNotes, setEnhancingNotes] = React.useState(false);
@@ -757,12 +760,17 @@ export function MeetingDetailContent({
   const [loadingSuggestions, setLoadingSuggestions] = React.useState(false);
   const [reviewingSuggestionId, setReviewingSuggestionId] = React.useState<string | null>(null);
   const updateNotes = useUpdateMeetingNotes();
+  const updateTranscript = useUpdateMeetingTranscript();
   const applyAiNotes = useApplyAiMeetingNotes();
   const timer = useLiveTimer(meeting?.status === "live" ? meeting.created_at : null);
 
   React.useEffect(() => {
     if (meeting?.notes_markdown) setNotes(meeting.notes_markdown);
   }, [meeting?.notes_markdown]);
+
+  React.useEffect(() => {
+    if (meeting?.transcript_raw != null) setTranscript(meeting.transcript_raw);
+  }, [meeting?.transcript_raw]);
 
   // Auto-save notes with debounce
   const saveTimerRef = React.useRef<ReturnType<typeof setTimeout>>(null);
@@ -777,9 +785,23 @@ export function MeetingDetailContent({
     [meetingId, updateNotes]
   );
 
+  // Auto-save transcript with its own debounce timer.
+  const saveTranscriptTimerRef = React.useRef<ReturnType<typeof setTimeout>>(null);
+  const handleTranscriptChange = React.useCallback(
+    (value: string) => {
+      setTranscript(value);
+      if (saveTranscriptTimerRef.current) clearTimeout(saveTranscriptTimerRef.current);
+      saveTranscriptTimerRef.current = setTimeout(() => {
+        updateTranscript.mutate({ meetingId, transcript: value });
+      }, 1000);
+    },
+    [meetingId, updateTranscript]
+  );
+
   React.useEffect(() => {
     return () => {
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+      if (saveTranscriptTimerRef.current) clearTimeout(saveTranscriptTimerRef.current);
     };
   }, []);
 
@@ -1430,7 +1452,7 @@ export function MeetingDetailContent({
               variant="outline"
               size="sm"
               onClick={handleReviewAiSuggestions}
-              disabled={loadingSuggestions || !notes.trim()}
+              disabled={loadingSuggestions || (!notes.trim() && !transcript.trim())}
               className="border-rule bg-paper text-ink hover:bg-paper-2"
             >
               {loadingSuggestions ? (
@@ -1654,7 +1676,7 @@ export function MeetingDetailContent({
               variant="outline"
               size="sm"
               onClick={handleEnhanceNotes}
-              disabled={enhancingNotes || !notes.trim()}
+              disabled={enhancingNotes || (!notes.trim() && !transcript.trim())}
               className="border-rule bg-card text-ink hover:bg-paper-2"
             >
               {enhancingNotes ? (
@@ -1676,6 +1698,35 @@ export function MeetingDetailContent({
             placeholder="Meeting notes..."
             className="min-h-[120px] font-sans text-sm"
           />
+        </section>
+        <section className="mt-8">
+          <button
+            type="button"
+            onClick={() => setTranscriptOpen((open) => !open)}
+            className="flex w-full items-center justify-between text-left"
+            aria-expanded={transcriptOpen}
+          >
+            <div className="flex items-center gap-2">
+              <h2 className="font-display text-lg font-medium text-ink">Transcript</h2>
+              {transcript.trim() && (
+                <span className="text-xs text-ink-4">{transcript.length} chars</span>
+              )}
+            </div>
+            <ChevronDown
+              className={`size-4 text-ink-3 transition-transform ${transcriptOpen ? "rotate-180" : ""}`}
+            />
+          </button>
+          <p className="mt-1 text-xs text-ink-4">
+            Paste a meeting transcript to power AI notes and suggestions.
+          </p>
+          {transcriptOpen && (
+            <Textarea
+              value={transcript}
+              onChange={(e) => handleTranscriptChange(e.target.value)}
+              placeholder="Paste transcript..."
+              className="mt-3 min-h-[160px] font-sans text-sm"
+            />
+          )}
         </section>
       </div>
       {aiPreview && (
