@@ -293,4 +293,34 @@ for (const copy of [
   assert(seriesDetail.includes(copy), `Series detail missing Ask UI copy: ${copy}`);
 }
 
+// Carry-over briefing (OIL-native pre-meeting intelligence).
+assert(
+  exists("src/app/api/meetings/[meetingId]/carryover-briefing/route.ts"),
+  "Missing carry-over briefing API route"
+);
+const carryoverRoute = read("src/app/api/meetings/[meetingId]/carryover-briefing/route.ts");
+assertSharedClient(carryoverRoute, "Carryover briefing");
+assert(carryoverRoute.includes("carryover-briefing-v1"), "Carryover briefing route must declare a prompt version");
+assert(
+  carryoverRoute.includes("Do not invent owners, dates, or resolutions"),
+  "Carryover briefing prompt must forbid invented content"
+);
+assert(
+  carryoverRoute.includes("Do not wrap it in markdown fences"),
+  "Carryover briefing prompt must forbid fenced output"
+);
+assert(
+  carryoverRoute.includes("summarizeCarryover"),
+  "Carryover briefing must derive counts from the deterministic summary, not the model"
+);
+
+assert(
+  meetingDetail.includes("CarryoverBriefingPanel"),
+  "Upcoming meeting view must mount the carry-over briefing panel"
+);
+const carryoverPanel = read("src/components/minutia/carryover-briefing-panel.tsx");
+for (const copy of ["Carry-over briefing", "Generate briefing"]) {
+  assert(carryoverPanel.includes(copy), `Carry-over panel missing UI copy: ${copy}`);
+}
+
 console.log("AI notes contract verified");
