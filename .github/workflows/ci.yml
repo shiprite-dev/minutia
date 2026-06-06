@@ -41,6 +41,12 @@ jobs:
       - name: Verify CI workflow contracts
         run: pnpm test:ci-workflows
 
+      - name: Verify AI contracts
+        run: pnpm test:ai-contracts
+
+      - name: Verify OpenRouter client
+        run: pnpm test:ai-client
+
       - name: Build (includes typecheck)
         run: pnpm build
         env:
