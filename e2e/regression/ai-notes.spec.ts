@@ -369,3 +369,87 @@ test.describe("AI notes API auth", () => {
     expect(response.status()).toBe(401);
   });
 });
+
+test.describe("Transcript paste", () => {
+  test("saves a pasted transcript to the meeting", async ({ page, request }) => {
+    test.skip(!HAS_SERVICE_ROLE, "Requires service role setup for isolated transcript data");
+
+    const fixture = await createAiNotesFixture(request);
+    const transcript = `Alice: ship Friday. Bob: flag the support risk. ${Date.now()}`;
+
+    try {
+      await page.goto(`/series/${fixture.seriesId}/meetings/${fixture.meetingId}`);
+      await waitForApp(page);
+      await expect(page.getByRole("heading", { name: /AI notes session/ })).toBeVisible({
+        timeout: 20_000,
+      });
+
+      await page.getByRole("button", { name: "Transcript" }).click();
+      await page.getByPlaceholder("Paste transcript...").fill(transcript);
+
+      await expect(async () => {
+        const rows = await rest(
+          request,
+          `meetings?id=eq.${fixture.meetingId}&select=transcript_raw`
+        );
+        expect(rows[0]?.transcript_raw).toBe(transcript);
+      }).toPass({ timeout: 10_000 });
+    } finally {
+      await deleteSeries(request, fixture.seriesId);
+    }
+  });
+
+  test("enables enhancement from a transcript alone", async ({ page, request }) => {
+    test.skip(!HAS_SERVICE_ROLE, "Requires service role setup for isolated transcript data");
+
+    const fixture = await createAiNotesFixture(request);
+
+    try {
+      // Strip notes so only a transcript remains.
+      await rest(request, `meetings?id=eq.${fixture.meetingId}`, {
+        method: "PATCH",
+        headers: serviceHeaders("return=minimal"),
+        data: {
+          notes_markdown: "",
+          raw_notes_markdown: "",
+          transcript_raw: "Alice owns onboarding by Friday.",
+        },
+      });
+
+      await page.route("**/api/meetings/*/enhance-notes", async (route) => {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            ai_notes: {
+              summary: ["Onboarding owned by Alice."],
+              action_items: [],
+              decisions: [],
+              risks: [],
+              blockers: [],
+              follow_ups: [],
+              open_questions: [],
+            },
+            ai_notes_markdown: "## Summary\nOnboarding owned by Alice.",
+            model: "test-model",
+            prompt_version: "ai-notes-v1",
+            generated_at: "2026-06-04T00:00:00.000Z",
+          }),
+        });
+      });
+
+      await page.goto(`/series/${fixture.seriesId}/meetings/${fixture.meetingId}`);
+      await waitForApp(page);
+      await expect(page.getByRole("heading", { name: /AI notes session/ })).toBeVisible({
+        timeout: 20_000,
+      });
+
+      const enhance = page.getByRole("button", { name: "Enhance notes" });
+      await expect(enhance).toBeEnabled();
+      await enhance.click();
+      await expect(page.getByRole("dialog", { name: "AI notes preview" })).toBeVisible();
+    } finally {
+      await deleteSeries(request, fixture.seriesId);
+    }
+  });
+});
