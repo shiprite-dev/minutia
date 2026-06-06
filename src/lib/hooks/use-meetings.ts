@@ -402,6 +402,30 @@ export function useUpdateMeetingNotes() {
 }
 
 // ---------------------------------------------------------------------------
+// useUpdateMeetingTranscript - persist a pasted transcript into transcript_raw
+// ---------------------------------------------------------------------------
+export function useUpdateMeetingTranscript() {
+  const supabase = createClient();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ meetingId, transcript }: { meetingId: string; transcript: string }) => {
+      const { error } = await supabase
+        .from("meetings")
+        .update({ transcript_raw: transcript })
+        .eq("id", meetingId);
+
+      if (error) throw error;
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: meetingKeys.detail(variables.meetingId),
+      });
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
 // useApplyAiMeetingNotes - explicit apply from preview to visible notes
 // ---------------------------------------------------------------------------
 export function useApplyAiMeetingNotes() {
