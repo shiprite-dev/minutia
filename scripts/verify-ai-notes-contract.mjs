@@ -85,14 +85,30 @@ assert(
 const modelConfig = read("src/lib/ai/model.ts");
 assert(modelConfig.includes('"google/gemini-3.1-flash-lite"'), "AI model default must be google/gemini-3.1-flash-lite");
 assert(modelConfig.includes("AI_MODEL"), "AI model must be configurable via AI_MODEL");
+assert(modelConfig.includes("getAiModels"), "model.ts must expose getAiModels for resilient fallback");
+assert(modelConfig.includes("AI_MODEL_FALLBACK"), "model.ts must support a configurable fallback model");
+
+// Transport contract lives in the shared client, not in each route.
+const client = read("src/lib/ai/openrouter.ts");
+assert(client.includes("https://openrouter.ai/api/v1/chat/completions"), "Shared client must call OpenRouter chat completions");
+assert(client.includes('response_format: { type: "json_object" }'), "Shared client must request OpenRouter JSON mode");
+assert(
+  client.includes("OPENROUTER_API_KEY") && client.includes("AI_API_KEY"),
+  "Shared client must resolve OPENROUTER_API_KEY then AI_API_KEY"
+);
+assert(client.includes("getAiModels"), "Shared client must use getAiModels for primary+fallback resilience");
+assert(client.includes("AbortController"), "Shared client must time out provider calls");
+
+function assertSharedClient(src, name) {
+  assert(!src.includes('"minimax/minimax-m3"'), `${name} route must not hardcode a model`);
+  assert(src.includes('from "@/lib/ai/openrouter"'), `${name} route must call the provider through the shared client`);
+  assert(src.includes("callOpenRouter"), `${name} route must use callOpenRouter`);
+  assert(src.includes("getOpenRouterApiKey"), `${name} route must resolve the key via getOpenRouterApiKey`);
+  assert(!/async function getOpenRouterData/.test(src), `${name} route must not re-implement the OpenRouter fetch`);
+}
 
 const route = read("src/app/api/meetings/[meetingId]/enhance-notes/route.ts");
-assert(route.includes("getAiModel"), "Enhance route must resolve the model from config (getAiModel)");
-assert(!route.includes('"minimax/minimax-m3"'), "Enhance route must not hardcode a model");
-assert(route.includes("OPENROUTER_API_KEY"), "Enhance route must read OPENROUTER_API_KEY");
-assert(route.includes("AI_API_KEY"), "Enhance route must support AI_API_KEY fallback");
-assert(route.includes("https://openrouter.ai/api/v1/chat/completions"), "Enhance route must call OpenRouter chat completions");
-assert(route.includes("response_format: { type: \"json_object\" }"), "Enhance route must request OpenRouter JSON mode");
+assertSharedClient(route, "Enhance");
 assert(route.includes("Return only the JSON object"), "Enhance prompt must forbid non-JSON wrapper text");
 assert(route.includes("Do not invent owners, dates, or decisions"), "Enhance prompt must forbid invented accountability details");
 assert(route.includes("ai_notes: parsed"), "Enhance route must return structured AI notes JSON");
@@ -102,18 +118,10 @@ assert(
 );
 
 const suggestionsRoute = read("src/app/api/meetings/[meetingId]/suggestions/route.ts");
-assert(suggestionsRoute.includes("getAiModel"), "Suggestions route must resolve the model from config (getAiModel)");
-assert(!suggestionsRoute.includes('"minimax/minimax-m3"'), "Suggestions route must not hardcode a model");
-assert(suggestionsRoute.includes("OPENROUTER_API_KEY"), "Suggestions route must read OPENROUTER_API_KEY");
-assert(suggestionsRoute.includes("AI_API_KEY"), "Suggestions route must support AI_API_KEY fallback");
-assert(suggestionsRoute.includes("https://openrouter.ai/api/v1/chat/completions"), "Suggestions route must call OpenRouter chat completions");
+assertSharedClient(suggestionsRoute, "Suggestions");
 assert(
-  suggestionsRoute.includes('from "@/lib/ai/ask-series-answer"'),
-  "Suggestions route must reuse the shared fence-aware OpenRouter text helper"
-);
-assert(
-  !/function getTextFromOpenRouter/.test(suggestionsRoute),
-  "Suggestions route must not redefine a non-fence-aware getTextFromOpenRouter; reuse the shared one so markdown-fenced provider JSON still parses"
+  suggestionsRoute.includes('from "@/lib/ai/ask-series-answer"') && !/function getTextFromOpenRouter/.test(suggestionsRoute),
+  "Suggestions route must reuse the shared fence-aware getTextFromOpenRouter so markdown-fenced provider JSON still parses"
 );
 assert(
   suggestionsRoute.includes("Do not wrap it in markdown fences"),
@@ -129,11 +137,7 @@ assert(
 );
 
 const askSeriesRoute = read("src/app/api/series/[seriesId]/ask/route.ts");
-assert(askSeriesRoute.includes("getAiModel"), "Ask series route must resolve the model from config (getAiModel)");
-assert(!askSeriesRoute.includes('"minimax/minimax-m3"'), "Ask series route must not hardcode a model");
-assert(askSeriesRoute.includes("OPENROUTER_API_KEY"), "Ask series route must read OPENROUTER_API_KEY");
-assert(askSeriesRoute.includes("AI_API_KEY"), "Ask series route must support AI_API_KEY fallback");
-assert(askSeriesRoute.includes("https://openrouter.ai/api/v1/chat/completions"), "Ask series route must call OpenRouter chat completions");
+assertSharedClient(askSeriesRoute, "Ask series");
 assert(askSeriesRoute.includes("The source context does not prove the answer."), "Ask series route must include unsupported-answer guard copy");
 
 const askSeriesParserPath = "src/lib/ai/ask-series-answer.ts";
