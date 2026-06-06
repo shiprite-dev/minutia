@@ -9,3 +9,11 @@ export function getAiModel() {
     DEFAULT_AI_MODEL
   );
 }
+
+// Ordered model list for resilient calls: the configured model first, then a
+// cheap, widely available fallback (AI_MODEL_FALLBACK, else the default).
+export function getAiModels() {
+  const primary = getAiModel();
+  const fallback = process.env.AI_MODEL_FALLBACK?.trim() || DEFAULT_AI_MODEL;
+  return primary === fallback ? [primary] : [primary, fallback];
+}

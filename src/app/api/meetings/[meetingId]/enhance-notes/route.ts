@@ -2,11 +2,10 @@ import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { getTextFromOpenRouter } from "@/lib/ai/ask-series-answer";
-import { getAiModel } from "@/lib/ai/model";
+import { callOpenRouter, getOpenRouterApiKey } from "@/lib/ai/openrouter";
 
-const OPENROUTER_MODEL = getAiModel();
-const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 const PROMPT_VERSION = "ai-notes-v1";
+const SYSTEM_PROMPT = "You are a precise meeting-notes editor. Return valid JSON only.";
 
 const requestSchema = z.object({
   mode: z.enum(["preview"]).default("preview"),
@@ -73,32 +72,6 @@ function buildPrompt(input: {
   ].join("\n");
 }
 
-async function getOpenRouterData(prompt: string, apiKey: string) {
-  const providerResponse = await fetch(OPENROUTER_URL, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-      "HTTP-Referer": process.env.SITE_URL ?? "https://example.com",
-      "X-OpenRouter-Title": "Minutia",
-    },
-    body: JSON.stringify({
-      model: OPENROUTER_MODEL,
-      messages: [
-        { role: "system", content: "You are a precise meeting-notes editor. Return valid JSON only." },
-        { role: "user", content: prompt },
-      ],
-      response_format: { type: "json_object" },
-    }),
-  });
-
-  if (!providerResponse.ok) {
-    throw new Error("Provider request failed");
-  }
-
-  return providerResponse.json();
-}
-
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ meetingId: string }> }
@@ -120,7 +93,7 @@ export async function POST(
     return NextResponse.json({ error: "Not authenticated", request_id: requestId }, { status: 401 });
   }
 
-  const apiKey = process.env.OPENROUTER_API_KEY || process.env.AI_API_KEY;
+  const apiKey = getOpenRouterApiKey();
   if (!apiKey) {
     return NextResponse.json(
       { error: "AI notes are not configured.", request_id: requestId },
@@ -157,8 +130,9 @@ export async function POST(
   });
 
   let providerData: unknown;
+  let model: string;
   try {
-    providerData = await getOpenRouterData(prompt, apiKey);
+    ({ data: providerData, model } = await callOpenRouter({ apiKey, system: SYSTEM_PROMPT, prompt }));
   } catch {
     return NextResponse.json(
       { error: "AI provider request failed.", request_id: requestId },
@@ -185,7 +159,7 @@ export async function POST(
       raw_notes_markdown: rawNotes,
       ai_notes_markdown: aiNotes,
       ai_notes_generated_at: generatedAt,
-      ai_notes_model: OPENROUTER_MODEL,
+      ai_notes_model: model,
       ai_notes_prompt_version: PROMPT_VERSION,
     })
     .eq("id", meetingId);
@@ -200,7 +174,7 @@ export async function POST(
   return NextResponse.json({
     ai_notes: parsed,
     ai_notes_markdown: aiNotes,
-    model: OPENROUTER_MODEL,
+    model,
     prompt_version: PROMPT_VERSION,
     generated_at: generatedAt,
     request_id: requestId,

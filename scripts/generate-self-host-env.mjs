@@ -79,6 +79,7 @@ EMAIL_FROM=noreply@localhost
 OPENROUTER_API_KEY=
 AI_API_KEY=
 AI_MODEL=claude-sonnet-4-6
+AI_MODEL_FALLBACK=google/gemini-3.1-flash-lite
 
 RESEND_API_KEY=
 ENABLE_GOOGLE_AUTH=false
