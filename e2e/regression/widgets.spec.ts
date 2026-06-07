@@ -13,6 +13,8 @@ import {
 type StoredWidget = {
   id: string;
   type: string;
+  colSpan?: 1 | 2 | 3 | 4;
+  // legacy GridStack fields, still accepted from old persisted state
   span?: 1 | 2;
   layout?: { x?: number; y?: number; w?: number; h?: number };
 };
@@ -36,28 +38,27 @@ function centerY(box: { y: number; height: number }) {
   return box.y + box.height / 2;
 }
 
-function storedHeroWidth() {
+function storedHeroColSpan() {
   const raw = localStorage.getItem("minutia-widgets");
   if (!raw) return null;
   const parsed = JSON.parse(raw) as { state?: { widgets?: StoredWidget[] } };
-  return parsed.state?.widgets?.find((w) => w.type === "hero")?.layout?.w;
+  return parsed.state?.widgets?.find((w) => w.type === "hero")?.colSpan ?? null;
 }
 
-async function expectResponsiveCard(locator: Locator, expectedWidth: string, expectedMinHeight: number) {
-  await expect(locator).toHaveAttribute("gs-w", expectedWidth);
-  await expect.poll(async () => Number(await locator.getAttribute("gs-h")))
-    .toBeGreaterThanOrEqual(expectedMinHeight);
+async function expectResponsiveCard(locator: Locator, expectedColSpan: string) {
+  await expect(locator).toHaveAttribute("data-col-span", expectedColSpan);
 
-  const overflow = await locator.evaluate((node) => {
-    const content = node.querySelector(".grid-stack-item-content");
-    if (!content) return { overflowX: true, scrollWidth: 0, clientWidth: 0 };
-    return {
-      overflowX: content.scrollWidth > content.clientWidth + 1,
-      scrollWidth: content.scrollWidth,
-      clientWidth: content.clientWidth,
-    };
-  });
-  expect(overflow.overflowX).toBe(false);
+  // Poll: the grid reflows a frame after the col-span attribute flips, so a
+  // one-shot read can catch a transient pre-reflow width.
+  await expect
+    .poll(async () =>
+      locator.evaluate((node) => {
+        const content = node.querySelector(".widget-card-content");
+        if (!content) return true;
+        return content.scrollWidth > content.clientWidth + 1;
+      })
+    )
+    .toBe(false);
 }
 
 test.describe("Widget system", () => {
@@ -100,8 +101,8 @@ test.describe("Widget system", () => {
     await waitForApp(page);
 
     const canvas = page.getByTestId("dashboard-widget-canvas");
-    await expect(canvas).toHaveAttribute("data-grid-engine", "gridstack");
-    await expect(page.getByTestId("widget-outstanding-1")).toHaveAttribute("gs-w", "12");
+    await expect(canvas).toHaveAttribute("data-grid-engine", "css-grid");
+    await expect(page.getByTestId("widget-outstanding-1")).toHaveAttribute("data-col-span", "4");
 
     const outstandingBox = await requiredBox(page.getByTestId("widget-outstanding-1"));
 
@@ -112,17 +113,16 @@ test.describe("Widget system", () => {
     await expect(outstanding.getByLabel("Make narrow")).not.toBeVisible();
   });
 
-  test("dashboard uses an auto-adjusting widget canvas", async ({ page }) => {
+  test("dashboard uses a CSS Grid bento canvas with footprint col-spans", async ({ page }) => {
     const canvas = page.getByTestId("dashboard-widget-canvas");
-    await expect(canvas).toHaveAttribute("data-grid-engine", "gridstack");
+    await expect(canvas).toHaveAttribute("data-grid-engine", "css-grid");
 
-    await expect(page.getByTestId("widget-hero-1")).toHaveAttribute("gs-w", "6");
-    await expect(page.getByTestId("widget-next-meeting-1")).toHaveAttribute("gs-w", "3");
-    await expect(page.getByTestId("widget-outstanding-1")).toHaveAttribute("gs-w", "12");
-    await expect(page.getByTestId("widget-outstanding-1")).toHaveAttribute("gs-h", "5");
+    await expect(page.getByTestId("widget-hero-1")).toHaveAttribute("data-col-span", "2");
+    await expect(page.getByTestId("widget-next-meeting-1")).toHaveAttribute("data-col-span", "1");
+    await expect(page.getByTestId("widget-outstanding-1")).toHaveAttribute("data-col-span", "4");
   });
 
-  test("desktop canvas ignores corrupted narrow persisted layouts", async ({ page }) => {
+  test("migrates legacy GridStack layouts to default footprints", async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 1000 });
     await page.evaluate(() => {
       localStorage.setItem(
@@ -143,9 +143,9 @@ test.describe("Widget system", () => {
     await page.reload({ waitUntil: "commit" });
     await waitForApp(page);
 
-    await expect(page.getByTestId("widget-hero-1")).toHaveAttribute("gs-w", "6");
-    await expect(page.getByTestId("widget-next-meeting-1")).toHaveAttribute("gs-w", "3");
-    await expect(page.getByTestId("widget-outstanding-1")).toHaveAttribute("gs-w", "12");
+    await expect(page.getByTestId("widget-hero-1")).toHaveAttribute("data-col-span", "2");
+    await expect(page.getByTestId("widget-next-meeting-1")).toHaveAttribute("data-col-span", "1");
+    await expect(page.getByTestId("widget-outstanding-1")).toHaveAttribute("data-col-span", "4");
   });
 
   test("add widget button opens picker with groups", async ({ page }) => {
@@ -463,8 +463,8 @@ test.describe("Widget system", () => {
     const resizeBtn = page.getByLabel("Make narrow").first();
     await resizeBtn.click();
 
-    const stored = await page.evaluate(storedHeroWidth);
-    expect(stored).toBe(3);
+    const stored = await page.evaluate(storedHeroColSpan);
+    expect(stored).toBe(1);
   });
 
   test("resized narrow widgets keep responsive card content", async ({ page }) => {
@@ -473,19 +473,19 @@ test.describe("Widget system", () => {
     const hero = page.getByTestId("widget-hero-1");
     await hero.hover();
     await hero.getByLabel("Make narrow").click();
-    await expectResponsiveCard(hero, "3", 4);
+    await expectResponsiveCard(hero, "1");
 
     await addWidget(page, /Meeting Triage/);
     const triage = page.locator('[data-widget-type="meeting-triage"]').first();
     await triage.hover();
     await triage.getByLabel("Make narrow").click();
-    await expectResponsiveCard(triage, "3", 5);
+    await expectResponsiveCard(triage, "1");
 
     await addWidget(page, /Workload.*Open items/);
     const workload = page.locator('[data-widget-type="workload"]').first();
     await workload.hover();
     await workload.getByLabel("Make narrow").click();
-    await expectResponsiveCard(workload, "3", 5);
+    await expectResponsiveCard(workload, "1");
 
     const pageOverflow = await page.evaluate(() => (
       document.documentElement.scrollWidth > document.documentElement.clientWidth + 1
@@ -501,8 +501,8 @@ test.describe("Widget system", () => {
     await page.reload();
     await waitForApp(page);
 
-    const stored = await page.evaluate(storedHeroWidth);
-    expect(stored).toBe(3);
+    const stored = await page.evaluate(storedHeroColSpan);
+    expect(stored).toBe(1);
   });
 
   test("widget reorder persists in localStorage across reload", async ({ page }) => {

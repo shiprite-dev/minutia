@@ -1,7 +1,6 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
-@import "gridstack/dist/gridstack.min.css";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -187,44 +186,74 @@
 }
 
 @layer components {
-  .grid-stack {
+  /* Bento dashboard. Row tracks are content-sized; align-items: stretch keeps
+     cards in the same band equal height (a short card matches a tall neighbor
+     instead of going ragged). Spans are clamped per breakpoint via the
+     data-col-span / data-row-span attributes so a wide card never overflows a
+     narrow grid. No fixed heights => content never clips. */
+  .widget-grid {
+    display: grid;
+    gap: 1.25rem;
+    grid-template-columns: 1fr;
+    grid-auto-rows: auto;
+    align-items: stretch;
     min-height: 24rem;
   }
 
-  .grid-stack > .grid-stack-item > .grid-stack-item-content {
-    container-type: inline-size;
-    overflow: auto !important;
-    scrollbar-width: thin;
-  }
-
-  .grid-stack > .grid-stack-item > .grid-stack-item-content > .widget-card-content {
-    min-height: 100%;
+  .widget-cell {
     min-width: 0;
+    grid-column: span 1;
   }
 
-  .grid-stack > .grid-stack-item[gs-w="3"] > .grid-stack-item-content {
-    padding: 1.25rem;
+  .widget-cell > .widget-card-content {
+    container-type: inline-size;
   }
 
-  .grid-stack > .grid-stack-item[gs-w="3"] > .grid-stack-item-content h2,
-  .grid-stack > .grid-stack-item[gs-w="3"] > .grid-stack-item-content h3 {
-    overflow-wrap: anywhere;
-  }
-
-  .grid-stack > .grid-stack-item.ui-draggable-dragging > .grid-stack-item-content,
-  .grid-stack > .grid-stack-item.ui-resizable-resizing > .grid-stack-item-content {
+  .widget-cell.is-dragging > .widget-card-content {
     border-color: var(--accent);
     box-shadow: 0 18px 40px color-mix(in oklch, var(--accent) 18%, transparent);
     opacity: 0.94;
   }
 
-  .grid-stack > .grid-stack-item > .ui-resizable-se {
-    opacity: 0;
-    transition: opacity var(--duration-base) var(--ease);
+  @media (min-width: 640px) {
+    .widget-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    /* col-span 2/3/4 collapse to the full 2-col width at this breakpoint */
+    .widget-cell {
+      grid-column: span 2;
+    }
+    .widget-cell[data-col-span="1"] {
+      grid-column: span 1;
+    }
   }
 
-  .grid-stack > .grid-stack-item:hover > .ui-resizable-se,
-  .grid-stack > .grid-stack-item:focus-within > .ui-resizable-se {
-    opacity: 0.75;
+  @media (min-width: 1024px) {
+    .widget-grid {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+    .widget-cell[data-col-span="1"] {
+      grid-column: span 1;
+    }
+    .widget-cell[data-col-span="2"] {
+      grid-column: span 2;
+    }
+    .widget-cell[data-col-span="3"] {
+      grid-column: span 3;
+    }
+    .widget-cell[data-col-span="4"] {
+      grid-column: span 4;
+    }
+    .widget-cell[data-row-span="2"] {
+      grid-row: span 2;
+    }
+    .widget-cell[data-row-span="3"] {
+      grid-row: span 3;
+    }
+  }
+
+  .widget-cell[data-col-span="1"] .widget-card-content h2,
+  .widget-cell[data-col-span="1"] .widget-card-content h3 {
+    overflow-wrap: anywhere;
   }
 }

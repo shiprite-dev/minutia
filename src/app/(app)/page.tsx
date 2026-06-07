@@ -1073,22 +1073,6 @@ export default function Dashboard() {
     calendarEvents: calendarEvents ?? undefined,
   };
 
-  const widgetLayoutKey = React.useMemo(
-    () =>
-      widgets
-        .map((w) =>
-          [
-            w.id,
-            w.type,
-            w.layout?.x ?? "",
-            w.layout?.y ?? "",
-            w.layout?.w ?? "",
-            w.layout?.h ?? "",
-          ].join(":")
-        )
-        .join("|"),
-    [widgets]
-  );
   const widgetIds = React.useMemo(() => widgets.map((w) => w.id), [widgets]);
 
   return (
@@ -1100,7 +1084,7 @@ export default function Dashboard() {
         {isLoading ? (
           <DashboardSkeleton />
         ) : (
-          <WidgetCanvas layoutKey={widgetLayoutKey} widgetIds={widgetIds}>
+          <WidgetCanvas widgetIds={widgetIds}>
             {widgets.map((w, i) => (
               <WidgetRenderer
                 key={w.id}
