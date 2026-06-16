@@ -60,6 +60,12 @@ jobs:
     name: E2E Tests ${{ matrix.shard }}/16
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    env:
+      # Pin the Supabase CLI: bare `npx supabase` floats to the latest stable,
+      # whose bundled images can change behavior (e.g. seeded-auth visibility)
+      # and break the suite without any code change. 2.105.0 is the last
+      # known-good stable. Bump deliberately, not implicitly.
+      SUPABASE_VERSION: "2.105.0"
     strategy:
       fail-fast: false
       matrix:
@@ -131,7 +137,7 @@ jobs:
           PY
 
       - name: Stop stale Supabase containers
-        run: npx supabase stop --no-backup || true
+        run: npx --yes "supabase@${SUPABASE_VERSION}" stop --no-backup || true
 
       - name: Enable seeded email auth for E2E
         run: |
@@ -148,22 +154,35 @@ jobs:
           grep -A 12 '^\[auth\.email\]' supabase/config.toml
 
       - name: Start Supabase
-        run: npx supabase start
+        # Retry with backoff: Docker Hub anonymous-pull throttling
+        # (`toomanyrequests`) intermittently fails the image pull. Tear down and
+        # retry rather than failing the whole shard on a transient 429.
+        run: |
+          for attempt in 1 2 3; do
+            if npx --yes "supabase@${SUPABASE_VERSION}" start; then
+              exit 0
+            fi
+            echo "supabase start failed (attempt ${attempt}/3); tearing down and backing off..."
+            npx --yes "supabase@${SUPABASE_VERSION}" stop --no-backup || true
+            sleep $((attempt * 30))
+          done
+          echo "supabase start failed after 3 attempts" >&2
+          exit 1
 
       - name: Set Supabase env vars
         run: |
-          eval "$(npx supabase status -o env)"
+          eval "$(npx --yes "supabase@${SUPABASE_VERSION}" status -o env)"
           echo "NEXT_PUBLIC_SUPABASE_URL=$API_URL" >> "$GITHUB_ENV"
           echo "SUPABASE_URL=$API_URL" >> "$GITHUB_ENV"
           echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$ANON_KEY" >> "$GITHUB_ENV"
           echo "SUPABASE_SERVICE_ROLE_KEY=$SERVICE_ROLE_KEY" >> "$GITHUB_ENV"
 
       - name: Apply migrations
-        run: npx supabase db push --local
+        run: npx --yes "supabase@${SUPABASE_VERSION}" db push --local
 
       - name: Mark setup completed for E2E
         run: |
-          eval "$(npx supabase status -o env)"
+          eval "$(npx --yes "supabase@${SUPABASE_VERSION}" status -o env)"
           curl -s -X PATCH \
             "$API_URL/rest/v1/instance_config?key=eq.setup_completed" \
             -H "apikey: $SERVICE_ROLE_KEY" \
