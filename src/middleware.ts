@@ -93,11 +93,15 @@ function applySecurityHeaders(response: NextResponse): NextResponse {
   }
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+  // Realtime connects over ws/wss to the Supabase host. http:// -> ws://,
+  // https:// -> wss://. Without this, realtime is blocked on local dev and on
+  // self-hosted instances with a custom Supabase URL (Cloud uses *.supabase.co).
+  const supabaseWsUrl = supabaseUrl.replace(/^http/, "ws");
   const csp = [
     "default-src 'self'",
     "script-src 'self' 'unsafe-eval' 'unsafe-inline'",
     "style-src 'self' 'unsafe-inline'",
-    `connect-src 'self' ${supabaseUrl} wss://*.supabase.co`,
+    `connect-src 'self' ${supabaseUrl} ${supabaseWsUrl} wss://*.supabase.co`,
     "img-src 'self' data: blob:",
     "font-src 'self'",
     "frame-ancestors 'none'",
@@ -142,7 +146,7 @@ export async function middleware(request: NextRequest) {
   }
 
   // Setup guard: redirect to /setup if instance hasn't been configured
-  const setupExemptPaths = ["/setup", "/api/setup", "/api/admin", "/api/calendar/webhook"];
+  const setupExemptPaths = ["/setup", "/api/setup", "/api/admin", "/api/calendar/webhook", "/retro", "/api/retro"];
   const isSetupExempt = setupExemptPaths.some((p) => pathname.startsWith(p));
 
   if (!isSetupExempt) {
@@ -196,6 +200,8 @@ export async function middleware(request: NextRequest) {
     "/api/invite-requests",
     "/api/password-reset-requests",
     "/api/calendar/webhook",
+    "/retro",
+    "/api/retro",
   ];
   const isPublicPath = publicPaths.some((p) => pathname.startsWith(p));
 

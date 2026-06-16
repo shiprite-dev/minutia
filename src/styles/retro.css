@@ -1,0 +1,100 @@
+/* ============================================================
+   Minutia Retro — "The Studio After Dark", scoped to the retro
+   route only. Every custom property lives under [data-retro] so
+   it never leaks into the app's :root (where --paper/--accent
+   have different, neutral values). Fonts map to the app's
+   already-loaded families.
+   ============================================================ */
+[data-retro] {
+  --font-serif: var(--font-fraunces, Georgia, serif);
+  --font-sans:  var(--font-satoshi, system-ui, sans-serif);
+  --font-mono:  var(--font-jetbrains, ui-monospace, monospace);
+
+  /* space (4px base) */
+  --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-5: 20px;
+  --space-6: 24px; --space-8: 32px; --space-10: 40px; --space-12: 48px; --space-16: 64px; --space-20: 80px;
+
+  /* radius */
+  --r-chip: 8px; --r-control: 10px; --r-card: 14px; --r-panel: 18px; --r-pill: 9999px;
+
+  /* motion */
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --dur-instant: 90ms; --dur-fast: 140ms; --dur-base: 200ms; --dur-slow: 360ms;
+  --dur-ritual: 600ms; --dur-grand: 900ms; --stagger-card: 40ms;
+}
+
+[data-retro="studio"] {
+  --studio-void:    oklch(0.16 0.008 70);
+  --studio-surface: oklch(0.20 0.010 70);
+  --studio-raised:  oklch(0.245 0.010 70);
+  --studio-line:    oklch(0.30 0.008 70);
+  --studio-line-2:  oklch(0.38 0.008 70);
+  --studio-ink:     oklch(0.95 0.004 70);
+  --studio-ink-2:   oklch(0.78 0.006 70);
+  --studio-ink-3:   oklch(0.62 0.006 70);
+
+  --paper:    oklch(0.94 0.012 85);
+  --card-ink: oklch(0.22 0.010 70);
+
+  --c-amber: oklch(0.90 0.060 75);
+  --c-rose:  oklch(0.88 0.055 25);
+  --c-sage:  oklch(0.89 0.048 150);
+  --c-sky:   oklch(0.89 0.045 235);
+  --c-lilac: oklch(0.88 0.050 300);
+  --c-sand:  oklch(0.92 0.028 90);
+
+  --accent:        oklch(0.68 0.205 35);
+  --accent-bright: oklch(0.745 0.210 35);
+  --accent-deep:   oklch(0.58 0.200 35);
+  --accent-soft:   oklch(0.30 0.060 35);
+  --accent-rgb: 233 98 60;
+
+  --success: oklch(0.62 0.130 155);
+  --warn:    oklch(0.62 0.140 85);
+  --danger:  oklch(0.60 0.165 25);
+
+  --lift-1:     0 1px 2px rgb(0 0 0 / 0.30);
+  --lift-card:  inset 0 1px 0 rgb(255 255 255 / 0.10), 0 2px 4px rgb(0 0 0 / 0.30), 0 12px 28px rgb(0 0 0 / 0.45);
+  --lift-drag:  inset 0 1px 0 rgb(255 255 255 / 0.14), 0 18px 48px rgb(0 0 0 / 0.55), 0 0 0 1px rgb(var(--accent-rgb) / 0.40);
+  --lift-panel: 0 24px 64px rgb(0 0 0 / 0.50);
+  --glow-accent: 0 0 0 1px rgb(var(--accent-rgb) / 0.50), 0 0 24px rgb(var(--accent-rgb) / 0.35);
+  --glow-reveal: 0 0 40px rgb(248 122 78 / 0.45);
+
+  color-scheme: dark;
+}
+
+[data-retro="daylight"] {
+  --studio-void:    oklch(0.985 0 0);
+  --studio-surface: oklch(0.955 0 0);
+  --studio-raised:  oklch(1 0 0);
+  --studio-line:    oklch(0.91 0 0);
+  --studio-line-2:  oklch(0.84 0 0);
+  --studio-ink:     oklch(0.18 0 0);
+  --studio-ink-2:   oklch(0.42 0.004 70);
+  --studio-ink-3:   oklch(0.58 0.004 70);
+
+  --paper:    oklch(0.98 0.010 85);
+  --card-ink: oklch(0.20 0.010 70);
+
+  --accent:        oklch(0.490 0.220 35);
+  --accent-bright: oklch(0.58 0.220 35);
+  --accent-deep:   oklch(0.430 0.200 35);
+  --accent-soft:   oklch(0.92 0.040 35);
+  --accent-rgb: 187 64 29;
+
+  --lift-1:     0 1px 2px rgb(0 0 0 / 0.08);
+  --lift-card:  0 1px 2px rgb(0 0 0 / 0.06), 0 8px 24px rgb(0 0 0 / 0.10);
+  --lift-drag:  0 18px 48px rgb(0 0 0 / 0.18), 0 0 0 1px rgb(var(--accent-rgb) / 0.40);
+  --lift-panel: 0 24px 64px rgb(0 0 0 / 0.16);
+
+  color-scheme: light;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-retro] {
+    --dur-instant: 0ms; --dur-fast: 0ms; --dur-base: 0ms; --dur-slow: 0ms;
+    --dur-ritual: 0ms; --dur-grand: 0ms; --stagger-card: 0ms;
+  }
+}
