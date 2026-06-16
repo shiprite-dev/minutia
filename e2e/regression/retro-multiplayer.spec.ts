@@ -14,7 +14,7 @@
  * Assumption: `retro_enabled = 'true'` in instance_config. SERVICE_KEY required.
  */
 
-import { test, expect, type Browser, type APIRequestContext } from "@playwright/test";
+import { test, expect, type Browser, type Page, type APIRequestContext } from "@playwright/test";
 
 const SUPABASE_URL =
   process.env.SUPABASE_URL ?? "http://127.0.0.1:54321";
@@ -71,6 +71,22 @@ async function newAnonContext(browser: Browser) {
     storageState: { cookies: [], origins: [] },
   });
   return { ctx, page: await ctx.newPage() };
+}
+
+/**
+ * Robustly enter the Lobby: fill name + click Join, retrying until the board
+ * (no "Your name" input) shows. In dev, React StrictMode remounts the Lobby
+ * once on mount, which can reset the input mid-fill; the retry absorbs that.
+ * Production single-mounts, so this is purely test-environment hardening.
+ */
+async function lobbyJoin(page: Page, name: string) {
+  await expect(async () => {
+    const input = page.getByPlaceholder("Your name").first();
+    await input.fill(name);
+    await expect(input).toHaveValue(name);
+    await page.getByRole("button", { name: "Join" }).first().click();
+    await expect(page.getByPlaceholder("Your name")).toHaveCount(0, { timeout: 3000 });
+  }).toPass({ timeout: 25_000 });
 }
 
 // Anonymous at the project level; individual tests open their own contexts.
@@ -210,8 +226,7 @@ test.describe("Retro multiplayer", () => {
         const boardUrl = creatorPage.url();
 
         // Creator (facilitator) enters Lobby and advances to Reflect.
-        await creatorPage.getByPlaceholder("Your name").first().fill("Facilitator");
-        await creatorPage.getByRole("button", { name: "Join" }).first().click();
+        await lobbyJoin(creatorPage, "Facilitator");
 
         // After facilitator joins + advances, Reflect should be active.
         await expect(creatorPage.getByText("Reflect").first()).toBeVisible({ timeout: 10_000 });
@@ -223,11 +238,7 @@ test.describe("Retro multiplayer", () => {
           await joinerPage.waitForLoadState("domcontentloaded");
 
           // Joiner enters lobby (phase may still be reflect/lobby for joiner).
-          const joinerNameInput = joinerPage.getByPlaceholder("Your name").first();
-          if (await joinerNameInput.isVisible({ timeout: 5_000 }).catch(() => false)) {
-            await joinerNameInput.fill("Joiner");
-            await joinerPage.getByRole("button", { name: "Join" }).first().click();
-          }
+          await lobbyJoin(joinerPage, "Joiner");
 
           // Wait for joiner to be in Reflect.
           await expect(joinerPage.getByText("Reflect").first()).toBeVisible({ timeout: 10_000 });
@@ -245,11 +256,12 @@ test.describe("Retro multiplayer", () => {
           // However the snapshot reconcile syncs board state; the joiner's board will show
           // the card count increment in the column header (e.g. "1" in the mono span).
           // We wait for the column card count to update on the joiner side.
-          // Allow up to 8s for the ~3s reconcile cycle with buffer.
+          // The snapshot reconcile is 3s; allow several cycles for cross-context
+          // realtime + reconcile under dev-environment load.
           await expect(
             // Column header shows card count as a monospace number.
             joinerPage.locator("header").filter({ has: joinerPage.getByText(/^1$/) }).first()
-          ).toBeVisible({ timeout: 8_000 });
+          ).toBeVisible({ timeout: 20_000 });
         } finally {
           await joinerCtx.close();
         }
@@ -283,8 +295,7 @@ test.describe("Retro multiplayer", () => {
         const boardUrl = creatorPage.url();
 
         // Creator enters and advances to Reflect.
-        await creatorPage.getByPlaceholder("Your name").first().fill("Creator");
-        await creatorPage.getByRole("button", { name: "Join" }).first().click();
+        await lobbyJoin(creatorPage, "Creator");
         await expect(creatorPage.getByText("Reflect").first()).toBeVisible({ timeout: 10_000 });
 
         // Joiner joins.
@@ -293,11 +304,7 @@ test.describe("Retro multiplayer", () => {
           await joinerPage.goto(boardUrl);
           await joinerPage.waitForLoadState("domcontentloaded");
 
-          const joinerNameInput = joinerPage.getByPlaceholder("Your name").first();
-          if (await joinerNameInput.isVisible({ timeout: 5_000 }).catch(() => false)) {
-            await joinerNameInput.fill("Joiner");
-            await joinerPage.getByRole("button", { name: "Join" }).first().click();
-          }
+          await lobbyJoin(joinerPage, "Joiner");
 
           await expect(joinerPage.getByText("Reflect").first()).toBeVisible({ timeout: 10_000 });
 
@@ -313,8 +320,9 @@ test.describe("Retro multiplayer", () => {
           await expect(creatorPage.getByText("Reveal").first()).toBeVisible({ timeout: 10_000 });
 
           // Joiner sees Reveal phase and the card text (cascade completes ~90ms * n + 250ms).
-          await expect(joinerPage.getByText("Reveal").first()).toBeVisible({ timeout: 8_000 });
-          await expect(joinerPage.getByText(cardText).first()).toBeVisible({ timeout: 10_000 });
+          // Allow several reconcile cycles for cross-context realtime under dev load.
+          await expect(joinerPage.getByText("Reveal").first()).toBeVisible({ timeout: 10_000 });
+          await expect(joinerPage.getByText(cardText).first()).toBeVisible({ timeout: 20_000 });
         } finally {
           await joinerCtx.close();
         }

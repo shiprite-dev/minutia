@@ -23,9 +23,19 @@ const moods = [
   { k: "fired", label: "Fired up", c: "var(--c-amber)" },
 ] as const;
 
+const NAME_KEY = "retro:lobby-name";
+
 export function Lobby({ boardName, template, people, facilitatorName, onEnter }: LobbyProps) {
-  const [name, setName] = React.useState("");
+  // Persist the typed name across remounts (e.g. React dev StrictMode double-mount)
+  // so a half-typed name is never silently lost.
+  const [name, setName] = React.useState(() =>
+    typeof window === "undefined" ? "" : sessionStorage.getItem(NAME_KEY) ?? ""
+  );
   const [mood, setMood] = React.useState<string | null>(null);
+  const updateName = (v: string) => {
+    setName(v);
+    if (typeof window !== "undefined") sessionStorage.setItem(NAME_KEY, v);
+  };
 
   return (
     <div style={{ minHeight: "100%", display: "flex", alignItems: "center", justifyContent: "center", padding: "var(--space-12) var(--space-6)" }}>
@@ -43,7 +53,7 @@ export function Lobby({ boardName, template, people, facilitatorName, onEnter }:
         </p>
 
         <div style={{ display: "flex", gap: 10, maxWidth: 420, margin: "0 auto 28px" }}>
-          <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Your name" size="lg" style={{ flex: 1 }} onKeyDown={(e) => { if (e.key === "Enter" && name.trim()) onEnter(name.trim(), mood); }} />
+          <Input value={name} onChange={(e) => updateName(e.target.value)} placeholder="Your name" size="lg" style={{ flex: 1 }} onKeyDown={(e) => { if (e.key === "Enter" && name.trim()) onEnter(name.trim(), mood); }} />
           <Button variant="primary" size="lg" disabled={!name.trim()} onClick={() => onEnter(name.trim(), mood)} iconRight={<Icons.ArrowRight size={18} />}>Join</Button>
         </div>
 
