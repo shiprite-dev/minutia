@@ -60,9 +60,10 @@ export interface BoardProps {
   onAddCardClick: (colId: string) => void;
   onEditCard: (cardId: string) => void;
   me: string;
+  suggestion?: { label: string; count: number } | null;
 }
 
-export function Board({ columns, phase, revealedSet, votes, onVote, carry, onToggleCarry, cards = [], onAddCardClick, onEditCard, me }: BoardProps) {
+export function Board({ columns, phase, revealedSet, votes, onVote, carry, onToggleCarry, cards = [], onAddCardClick, onEditCard, me, suggestion = null }: BoardProps) {
   const isReflect = phase === "Reflect";
   const isReveal = phase === "Reveal";
   const isVote = phase === "Vote";
@@ -122,10 +123,10 @@ export function Board({ columns, phase, revealedSet, votes, onVote, carry, onTog
             <span style={{ marginLeft: 6, fontFamily: "var(--font-mono)", fontSize: 12, fontVariantNumeric: "tabular-nums", color: "var(--accent-bright)" }}>{revealedSet.size}/{cards.length}</span>
           </div>
         )}
-        {phase === "Theme" && (
+        {phase === "Theme" && suggestion && (
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 18, padding: "8px 12px", borderRadius: "var(--r-pill)", background: "var(--studio-raised)", border: "1px solid var(--studio-line-2)", maxWidth: "fit-content" }}>
             <Icons.Sparkles size={15} style={{ color: "var(--accent-bright)" }} />
-            <span style={{ fontFamily: "var(--font-sans)", fontSize: 13, color: "var(--studio-ink-2)" }}>3 cards look related — <b style={{ color: "var(--studio-ink)" }}>&quot;deploys &amp; staging&quot;</b>. Cluster them?</span>
+            <span style={{ fontFamily: "var(--font-sans)", fontSize: 13, color: "var(--studio-ink-2)" }}>{suggestion.count} cards look related — <b style={{ color: "var(--studio-ink)" }}>&quot;{suggestion.label}&quot;</b></span>
           </div>
         )}
 

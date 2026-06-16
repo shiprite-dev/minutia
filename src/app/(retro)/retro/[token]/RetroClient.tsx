@@ -26,7 +26,9 @@ import { Lobby } from "@/components/retro/Lobby";
 import { CommitPanel } from "@/components/retro/CommitPanel";
 import { Spotlight } from "@/components/retro/Spotlight";
 import { CardEditor } from "@/components/retro/CardEditor";
+import { CommitNudge } from "@/components/retro/CommitNudge";
 import { ShareInvite } from "@/components/retro/ShareInvite";
+import { boardToMarkdown } from "@/lib/retro/markdown";
 import { PhaseBar } from "@/components/retro/PhaseBar";
 import { PresenceStack } from "@/components/retro/PresenceStack";
 import { Switch } from "@/components/retro/Switch";
@@ -62,9 +64,13 @@ export function RetroClient({
   const [editor, setEditor] = React.useState<{ open: boolean; mode: "add" | "edit"; colId: string | null; cardId: string | null }>({ open: false, mode: "add", colId: null, cardId: null });
   const [showShare, setShowShare] = React.useState(false);
   const [spotIndex, setSpotIndex] = React.useState(0);
+  const [suggestion, setSuggestion] = React.useState<{ label: string; count: number } | null>(null);
   const [sealed, setSealed] = React.useState(false);
   const [bloom, setBloom] = React.useState(false);
   const [now, setNow] = React.useState(0);
+  const [saving, setSaving] = React.useState(false);
+  const [savedSeriesId, setSavedSeriesId] = React.useState<string | null>(board.saved_to_series_id);
+  const [saveError, setSaveError] = React.useState<string | null>(null);
 
   // Anonymous identity (localStorage, client-only).
   React.useEffect(() => {
@@ -143,6 +149,27 @@ export function RetroClient({
     );
   }, [phase, isFacilitator, ftoken, snapshot.actions.length, snapshot.cards, snapshot.votes, rpc]);
 
+  // Quiet AI theme suggestion during the Theme phase (suggests only; hidden if
+  // unconfigured or nothing relevant). Fetched once on entering the phase.
+  React.useEffect(() => {
+    if (phase !== "theme") {
+      setSuggestion(null);
+      return;
+    }
+    let cancelled = false;
+    void fetch(`/api/retro/${token}/suggest-themes`, { method: "POST" })
+      .then((r) => (r.ok ? r.json() : { groups: [] }))
+      .then((j: { groups?: Array<{ label: string; card_ids: string[] }> }) => {
+        if (cancelled) return;
+        const top = (j.groups ?? []).slice().sort((a, b) => b.card_ids.length - a.card_ids.length)[0];
+        setSuggestion(top ? { label: top.label, count: top.card_ids.length } : null);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [phase, token]);
+
   function advance() {
     const next = PHASES[phaseIdx + 1];
     if (next && ftoken) void rpc("retro_set_phase", { p_ftoken: ftoken, p_phase: next }, { t: "phase.changed", phase: next });
@@ -187,6 +214,55 @@ export function RetroClient({
     setBloom(true);
     window.setTimeout(() => setBloom(false), 1100);
   }
+
+  function exportMarkdown() {
+    const md = boardToMarkdown({ name: board.name, columns, cards: snapshot.cards, actions: snapshot.actions });
+    void navigator.clipboard?.writeText(md).catch(() => {});
+    const blob = new Blob([md], { type: "text/markdown" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${board.name.replace(/[^a-z0-9]+/gi, "-").toLowerCase() || "retro"}.md`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  const saveToMinutia = React.useCallback(async () => {
+    setSaving(true);
+    setSaveError(null);
+    try {
+      const res = await fetch(`/api/retro/${token}/graduate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ target: "new", name: board.name }),
+      });
+      if (res.status === 401) {
+        window.location.href = `/login?next=${encodeURIComponent(`/retro/${token}?graduate=1`)}`;
+        return;
+      }
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setSaveError(json.error || "Could not save to Minutia.");
+        setSaving(false);
+        return;
+      }
+      setSavedSeriesId(json.series_id);
+      setSaving(false);
+    } catch {
+      setSaveError("Could not reach the server.");
+      setSaving(false);
+    }
+  }, [token, board.name]);
+
+  // Returning from the auth redirect (?graduate=1): finish the save automatically.
+  const graduatedRef = React.useRef(false);
+  React.useEffect(() => {
+    if (graduatedRef.current || savedSeriesId) return;
+    if (typeof window === "undefined") return;
+    if (new URLSearchParams(window.location.search).get("graduate") !== "1") return;
+    graduatedRef.current = true;
+    void saveToMinutia();
+  }, [savedSeriesId, saveToMinutia]);
 
   const carry: RetroCarry[] = snapshot.carryover.map((c) => ({ ...c, done: carryDone[c.id] ?? c.done }));
   const editing = editor.cardId ? snapshot.cards.find((c) => c.id === editor.cardId) : null;
@@ -250,7 +326,18 @@ export function RetroClient({
             }}
           />
         )}
-        {isCommit && <CommitPanel actions={snapshot.actions} sealed={sealed} onSeal={seal} bloom={bloom} />}
+        {isCommit && (
+          <div style={{ height: "100%", display: "flex", flexDirection: "column", minHeight: 0 }}>
+            <div style={{ flex: 1, minHeight: 0 }}>
+              <CommitPanel actions={snapshot.actions} sealed={sealed} onSeal={seal} bloom={bloom} />
+            </div>
+            {(sealed || savedSeriesId) && (
+              <div style={{ padding: "var(--space-6)", borderTop: "1px solid var(--studio-line)", background: "var(--studio-surface)" }}>
+                <CommitNudge onExport={exportMarkdown} onSave={saveToMinutia} saving={saving} savedSeriesId={savedSeriesId} error={saveError} />
+              </div>
+            )}
+          </div>
+        )}
         {isBoard && (
           <Board
             columns={columns}
@@ -267,6 +354,7 @@ export function RetroClient({
               if (c) setEditor({ open: true, mode: "edit", colId: c.column_id, cardId });
             }}
             me={me.key}
+            suggestion={suggestion}
           />
         )}
         {phase === "discuss" && <Spotlight themes={topThemes} index={spotIndex} setIndex={setSpotIndex} />}
