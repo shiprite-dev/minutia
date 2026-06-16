@@ -1,0 +1,94 @@
+{
+  "$schema": "https://design-tokens.org/schema.json",
+  "name": "Minutia Retro: The Studio After Dark",
+  "description": "Design tokens for the free collaborative retro board. OKLCH is canonical (matches Minutia codebase). Hex values are approximate fallbacks. Dark 'Studio' is the hero; 'Daylight' is the light variant.",
+  "color": {
+    "studio": {
+      "void":    { "oklch": "0.16 0.008 70",  "hex": "#1a1815", "use": "room background, warm charcoal" },
+      "surface": { "oklch": "0.20 0.010 70",  "hex": "#221f1c", "use": "rails, columns, panels" },
+      "raised":  { "oklch": "0.245 0.010 70", "hex": "#2a2723", "use": "toolbar, popovers, menus" },
+      "line":    { "oklch": "0.30 0.008 70",  "hex": "#34302c", "use": "hairlines" },
+      "line2":   { "oklch": "0.38 0.008 70",  "hex": "#443f3a", "use": "stronger dividers, inputs" },
+      "ink":     { "oklch": "0.95 0.004 70",  "hex": "#f3f1ee", "use": "primary text on dark" },
+      "ink2":    { "oklch": "0.78 0.006 70",  "hex": "#c2bdb7", "use": "secondary text" },
+      "ink3":    { "oklch": "0.62 0.006 70",  "hex": "#918c86", "use": "tertiary / placeholder" }
+    },
+    "paper": {
+      "base":    { "oklch": "0.94 0.012 85",  "hex": "#f0ece1", "use": "default card" },
+      "ink":     { "oklch": "0.22 0.010 70",  "hex": "#262320", "use": "text on paper cards" }
+    },
+    "cardPalette": {
+      "amber": { "oklch": "0.90 0.060 75",  "hex": "#f2dcae" },
+      "rose":  { "oklch": "0.88 0.055 25",  "hex": "#f4cdc2" },
+      "sage":  { "oklch": "0.89 0.048 150", "hex": "#cfe5cd" },
+      "sky":   { "oklch": "0.89 0.045 235", "hex": "#cde2ef" },
+      "lilac": { "oklch": "0.88 0.050 300", "hex": "#e3d4ee" },
+      "sand":  { "oklch": "0.92 0.028 90",  "hex": "#ebe3d1" },
+      "note": "one pastel per participant = card tint, cursor, avatar ring"
+    },
+    "accent": {
+      "base":   { "oklch": "0.68 0.205 35",  "hex": "#e9623c", "use": "timer, votes, commit, active phase" },
+      "bright": { "oklch": "0.745 0.210 35", "hex": "#f87a4e", "use": "hover, reveal flash" },
+      "deep":   { "oklch": "0.58 0.200 35",  "hex": "#cd4e2c", "use": "pressed" },
+      "soft":   { "oklch": "0.30 0.060 35",  "hex": "#482b22", "use": "tinted fills on dark" }
+    },
+    "semantic": {
+      "success": { "oklch": "0.62 0.130 155", "hex": "#429f6f" },
+      "warn":    { "oklch": "0.62 0.140 85",  "hex": "#ad8528" },
+      "danger":  { "oklch": "0.60 0.165 25",  "hex": "#cd4f3e" }
+    },
+    "daylight": {
+      "void":    { "hex": "#f9f9f9" },
+      "surface": { "hex": "#efefef" },
+      "raised":  { "hex": "#ffffff" },
+      "line":    { "hex": "#e3e3e3" },
+      "ink":     { "hex": "#0d0d0d" },
+      "paper":   { "hex": "#fcfaf4" },
+      "cardInk": { "hex": "#1c1a17" },
+      "accent":  { "oklch": "0.490 0.220 35", "hex": "#bb401d" }
+    }
+  },
+  "typography": {
+    "fonts": {
+      "display": "Fraunces, Georgia, serif",
+      "sans": "Satoshi, system-ui, sans-serif",
+      "mono": "JetBrains Mono, ui-monospace, monospace"
+    },
+    "scale": {
+      "phase":   { "size": "clamp(2.5rem, 5vw, 4rem)", "font": "display", "leading": 1.1, "use": "ritual headlines, phase names" },
+      "display": { "size": "clamp(1.5rem, 2.5vw, 2rem)", "font": "display", "use": "section / column header" },
+      "title":   { "size": "1.125rem", "font": "sans", "weight": 600 },
+      "body":    { "size": "1rem", "font": "sans", "weight": 400, "leading": 1.5 },
+      "card":    { "size": "0.9375rem", "font": "sans", "weight": 400 },
+      "label":   { "size": "0.75rem", "font": "sans", "weight": 500, "transform": "uppercase", "tracking": "0.08em" },
+      "mono":    { "size": "0.875rem", "font": "mono", "feature": "tabular-nums" }
+    }
+  },
+  "space": { "1": "4px", "2": "8px", "3": "12px", "4": "16px", "5": "20px", "6": "24px", "8": "32px", "10": "40px", "12": "48px", "16": "64px", "20": "80px" },
+  "radius": { "chip": "8px", "control": "10px", "card": "14px", "panel": "18px", "pill": "9999px" },
+  "elevation": {
+    "lift1":      "0 1px 2px rgb(0 0 0 / 0.30)",
+    "liftCard":   "inset 0 1px 0 rgb(255 255 255 / 0.10), 0 2px 4px rgb(0 0 0 / 0.30), 0 12px 28px rgb(0 0 0 / 0.45)",
+    "liftDrag":   "inset 0 1px 0 rgb(255 255 255 / 0.14), 0 18px 48px rgb(0 0 0 / 0.55), 0 0 0 1px rgb(233 98 60 / 0.40)",
+    "liftPanel":  "0 24px 64px rgb(0 0 0 / 0.50)",
+    "glowAccent": "0 0 0 1px rgb(233 98 60 / 0.50), 0 0 24px rgb(233 98 60 / 0.35)",
+    "glowReveal": "0 0 40px rgb(248 122 78 / 0.45)"
+  },
+  "motion": {
+    "ease": {
+      "out": "cubic-bezier(0.2, 0.8, 0.2, 1)",
+      "spring": "cubic-bezier(0.34, 1.56, 0.64, 1)",
+      "inOut": "cubic-bezier(0.4, 0, 0.2, 1)"
+    },
+    "duration": { "instant": "90ms", "fast": "140ms", "base": "200ms", "slow": "360ms", "ritual": "600ms", "grand": "900ms" },
+    "staggerCard": "40ms",
+    "beats": {
+      "cardDrop": "ease-spring, base; tiny overshoot + liftCard",
+      "theReveal": "per-card rotateY(180->0) over ritual, cascade by staggerCard, glowReveal flash on land; reduced-motion -> staggered crossfade",
+      "voteFill": "bar fills with accent, ease-out, mono count ticks",
+      "presencePop": "avatar springs in with pastel identity ring",
+      "closureBloom": "action seals with glowAccent, then single grand glowReveal bloom across board"
+    },
+    "reducedMotion": "zero all durations (as Minutia globals.css already does)"
+  }
+}

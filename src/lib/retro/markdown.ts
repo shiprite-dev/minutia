@@ -15,7 +15,7 @@ export function boardToMarkdown({ name, columns, cards, actions }: MdInput): str
   for (const col of columns) {
     lines.push(`## ${col.title}`);
     for (const c of cards.filter((x) => x.column_id === col.id)) {
-      lines.push(`- ${esc(c.text)}${c.author_name ? ` — ${esc(c.author_name)}` : ""}`);
+      lines.push(`- ${esc(c.text)}${c.author_name ? `, ${esc(c.author_name)}` : ""}`);
     }
     lines.push("");
   }
@@ -23,7 +23,7 @@ export function boardToMarkdown({ name, columns, cards, actions }: MdInput): str
     lines.push("## Action items", "");
     for (const a of actions) {
       lines.push(
-        `- [ ] ${esc(a.text)}${a.owner_name ? ` (@${esc(a.owner_name)})` : ""}${a.due ? ` — due ${esc(a.due)}` : ""}`
+        `- [ ] ${esc(a.text)}${a.owner_name ? ` (@${esc(a.owner_name)})` : ""}${a.due ? `, due ${esc(a.due)}` : ""}`
       );
     }
   }

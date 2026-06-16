@@ -51,7 +51,7 @@ test("boardToMarkdown renders columns, actions, escapes pipes", () => {
   });
   assert.match(md, /# Sprint 24/);
   assert.match(md, /## Start/);
-  assert.match(md, /Pair on a\\\|uth — Ada/);
+  assert.match(md, /Pair on a\\\|uth, Ada/);
   assert.match(md, /## Action items/);
-  assert.match(md, /- \[ \] Add smoke test \(@Mara\) — due Fri/);
+  assert.match(md, /- \[ \] Add smoke test \(@Mara\), due Fri/);
 });

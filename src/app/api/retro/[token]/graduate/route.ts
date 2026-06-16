@@ -171,11 +171,16 @@ export async function POST(
     await svc.from("retro_actions").update({ graduated_issue_id: issue.id }).eq("id", a.id);
   }
 
-  // Persist the board (clear TTL) and record the conversion.
-  await svc
+  // Persist the board (clear TTL) and record the conversion. If this final write
+  // fails, release the claim so the board does not get stuck unsavable.
+  const { error: finalErr } = await svc
     .from("retro_boards")
     .update({ saved_to_series_id: seriesId, claimed_by: user.id, expires_at: null })
     .eq("id", board.id);
+  if (finalErr) {
+    await release();
+    return NextResponse.json({ error: "Could not finalize save" }, { status: 500 });
+  }
 
   return NextResponse.json({ series_id: seriesId, issue_count: issueCount });
 }

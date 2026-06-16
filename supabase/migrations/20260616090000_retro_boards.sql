@@ -76,6 +76,10 @@ create index retro_participants_board_idx on public.retro_participants (board_id
 create index retro_cards_board_idx on public.retro_cards (board_id);
 create index retro_votes_board_idx on public.retro_votes (board_id);
 create index retro_actions_board_idx on public.retro_actions (board_id);
+-- One graduated action per source card: makes the Commit auto-seed idempotent
+-- (a facilitator refresh mid-seed cannot create duplicate actions).
+create unique index retro_actions_board_source_uniq on public.retro_actions (board_id, source_card_id)
+  where source_card_id is not null;
 
 -- DEFAULT-DENY: enable RLS, add NO permissive policies. Only SECURITY DEFINER RPCs touch these.
 alter table public.retro_boards       enable row level security;

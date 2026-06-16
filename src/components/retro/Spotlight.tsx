@@ -35,7 +35,7 @@ export function Spotlight({ themes, index, setIndex }: SpotlightProps) {
         <div style={{ textAlign: "center", maxWidth: 360 }}>
           <div style={{ display: "inline-flex", color: "var(--studio-ink-3)", marginBottom: 14 }}><Icons.Sparkles size={30} /></div>
           <div style={{ fontFamily: "var(--font-serif)", fontSize: "1.6rem", color: "var(--studio-ink)", marginBottom: 6 }}>Nothing voted up yet</div>
-          <div style={{ fontFamily: "var(--font-sans)", fontSize: 14.5, color: "var(--studio-ink-2)", lineHeight: 1.5 }}>Head back to Vote and give the themes a few dots — the top ones spotlight here, one at a time.</div>
+          <div style={{ fontFamily: "var(--font-sans)", fontSize: 14.5, color: "var(--studio-ink-2)", lineHeight: 1.5 }}>Head back to Vote and give the themes a few dots, the top ones spotlight here, one at a time.</div>
         </div>
       </div>
     );

@@ -39,7 +39,7 @@ export function Lobby({ boardName, template, people, facilitatorName, onEnter }:
           {boardName}
         </h1>
         <p style={{ fontFamily: "var(--font-sans)", fontSize: 16, lineHeight: 1.5, color: "var(--studio-ink-2)", margin: "0 auto 28px", maxWidth: 380 }}>
-          A {template} retro. Join with a name — nobody sees your cards until everyone reveals.
+          A {template} retro. Join with a name, nobody sees your cards until everyone reveals.
         </p>
 
         <div style={{ display: "flex", gap: 10, maxWidth: 420, margin: "0 auto 28px" }}>

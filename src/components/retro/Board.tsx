@@ -89,7 +89,7 @@ export function Board({ columns, phase, revealedSet, votes, onVote, carry, onTog
           <Badge tone={openCarry.length ? "warn" : "success"} style={{ marginLeft: "auto" }}>{openCarry.length}</Badge>
         </div>
         {carry.length === 0 ? (
-          <EmptyNote icon={<Icons.CheckCircle size={22} />} title="Nothing carried over" body="A clean slate — first retro for this series, or last time you closed it all out." />
+          <EmptyNote icon={<Icons.CheckCircle size={22} />} title="Nothing carried over" body="A clean slate, first retro for this series, or last time you closed it all out." />
         ) : openCarry.length === 0 ? (
           <EmptyNote icon={<Icons.CheckCircle size={22} />} title="Nothing's open" body="That's a good sign. Everything from last time got closed." tone="success" />
         ) : (
@@ -118,7 +118,7 @@ export function Board({ columns, phase, revealedSet, votes, onVote, carry, onTog
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 18, padding: "10px 14px", borderRadius: "var(--r-control)", background: "var(--accent-soft)", border: "1px solid color-mix(in oklab, var(--accent) 45%, transparent)", boxShadow: "var(--glow-accent)", maxWidth: "fit-content" }}>
             <Icons.Sparkles size={16} style={{ color: "var(--accent-bright)" }} />
             <span style={{ fontFamily: "var(--font-sans)", fontSize: 13.5, color: "var(--studio-ink)" }}>
-              <b style={{ fontFamily: "var(--font-serif)", fontWeight: 600 }}>The reveal.</b> Every card, all at once — nobody edits from here.
+              <b style={{ fontFamily: "var(--font-serif)", fontWeight: 600 }}>The reveal.</b> Every card, all at once, nobody edits from here.
             </span>
             <span style={{ marginLeft: 6, fontFamily: "var(--font-mono)", fontSize: 12, fontVariantNumeric: "tabular-nums", color: "var(--accent-bright)" }}>{revealedSet.size}/{cards.length}</span>
           </div>
@@ -126,7 +126,7 @@ export function Board({ columns, phase, revealedSet, votes, onVote, carry, onTog
         {phase === "Theme" && suggestion && (
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 18, padding: "8px 12px", borderRadius: "var(--r-pill)", background: "var(--studio-raised)", border: "1px solid var(--studio-line-2)", maxWidth: "fit-content" }}>
             <Icons.Sparkles size={15} style={{ color: "var(--accent-bright)" }} />
-            <span style={{ fontFamily: "var(--font-sans)", fontSize: 13, color: "var(--studio-ink-2)" }}>{suggestion.count} cards look related — <b style={{ color: "var(--studio-ink)" }}>&quot;{suggestion.label}&quot;</b></span>
+            <span style={{ fontFamily: "var(--font-sans)", fontSize: 13, color: "var(--studio-ink-2)" }}>{suggestion.count} cards look related, <b style={{ color: "var(--studio-ink)" }}>&quot;{suggestion.label}&quot;</b></span>
           </div>
         )}
 

@@ -79,8 +79,14 @@ export function RetroClient({
   }, [token]);
 
   // Reconcile my dot votes from the authoritative snapshot (survives reload).
+  // Compare by content, not array identity, so the 3s poll does not re-render
+  // or clobber an optimistic vote that the server has not yet echoed back.
   React.useEffect(() => {
-    setMyVotes(new Set(snapshot.my_votes));
+    setMyVotes((prev) => {
+      const next = snapshot.my_votes;
+      if (prev.size === next.length && next.every((id) => prev.has(id))) return prev;
+      return new Set(next);
+    });
   }, [snapshot.my_votes]);
 
   const presenceMe = React.useMemo(
@@ -147,11 +153,12 @@ export function RetroClient({
       .filter((x) => x.count > 0)
       .sort((a, b) => b.count - a.count)
       .slice(0, 5);
+    // Unique(board_id, source_card_id) makes a re-seed a no-op; swallow conflicts.
     void Promise.all(
       seed.map((x) =>
         rpc("retro_add_action", { p_ftoken: ftoken, p_text: x.c.text, p_owner: "", p_due: "", p_color: x.c.color, p_source: x.c.id }, { t: "action.changed" })
       )
-    );
+    ).catch(() => {});
   }, [phase, isFacilitator, ftoken, snapshot.actions.length, snapshot.cards, snapshot.votes, rpc]);
 
   // Quiet AI theme suggestion during the Theme phase (suggests only; hidden if

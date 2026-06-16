@@ -77,7 +77,7 @@ export function RetroCard({
       style={{ perspective: 1000, ...style }}
       {...rest}
     >
-      {/* tilt + lift — fast spring */}
+      {/* tilt + lift, fast spring */}
       <div
         style={{
           transform: liftTransform,
@@ -85,7 +85,7 @@ export function RetroCard({
           willChange: "transform",
         }}
       >
-        {/* flip — weighty spring */}
+        {/* flip, weighty spring */}
         <div
           style={{
             position: "relative",
@@ -156,7 +156,7 @@ export function RetroCard({
               </div>
             )}
 
-            {/* reveal bloom — one-shot accent ring + glow that fades */}
+            {/* reveal bloom, one-shot accent ring + glow that fades */}
             {bloom > 0 && (
               <span
                 key={bloom}
