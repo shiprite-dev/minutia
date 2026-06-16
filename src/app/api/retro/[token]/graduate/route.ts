@@ -61,8 +61,8 @@ export async function POST(
     return NextResponse.json({ error: "No action items to save" }, { status: 422 });
   }
 
-  // Resolve the target series.
-  let seriesId: string;
+  // Validate access to an existing target up front (read-only, before claiming).
+  let existingSeriesId: string | null = null;
   if (body.target === "existing") {
     if (!body.series_id) {
       return NextResponse.json({ error: "series_id required" }, { status: 400 });
@@ -75,7 +75,37 @@ export async function POST(
     if (!series) {
       return NextResponse.json({ error: "Series not accessible" }, { status: 403 });
     }
-    seriesId = series.id;
+    existingSeriesId = series.id;
+  }
+
+  // Atomic claim: prevents concurrent double-graduation (double-click, auto +
+  // manual save). Only one request flips claimed_by from null; losers bail.
+  const { data: claimed } = await svc
+    .from("retro_boards")
+    .update({ claimed_by: user.id })
+    .eq("id", board.id)
+    .is("claimed_by", null)
+    .select("id")
+    .maybeSingle();
+  if (!claimed) {
+    const { data: b2 } = await svc
+      .from("retro_boards")
+      .select("saved_to_series_id")
+      .eq("id", board.id)
+      .single();
+    return NextResponse.json(
+      { series_id: b2?.saved_to_series_id ?? null, issue_count: 0, already_saved: true },
+      { status: b2?.saved_to_series_id ? 200 : 409 }
+    );
+  }
+  // Release the claim if a later step fails, so the user can retry.
+  const release = () =>
+    svc.from("retro_boards").update({ claimed_by: null }).eq("id", board.id).is("saved_to_series_id", null);
+
+  // Resolve the target series (create new only after claiming).
+  let seriesId: string;
+  if (existingSeriesId) {
+    seriesId = existingSeriesId;
   } else {
     const { data: profile } = await supabase
       .from("profiles")
@@ -93,6 +123,7 @@ export async function POST(
       .select("id")
       .single();
     if (error || !series) {
+      await release();
       return NextResponse.json({ error: "Could not create series" }, { status: 400 });
     }
     seriesId = series.id;
@@ -114,6 +145,7 @@ export async function POST(
     .select("id")
     .single();
   if (meetingErr || !meeting) {
+    await release();
     return NextResponse.json({ error: "Could not create meeting" }, { status: 400 });
   }
 

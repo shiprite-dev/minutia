@@ -47,13 +47,13 @@ export function RetroClient({
   token: string;
   initialSnapshot: RetroSnapshot;
 }) {
-  const { data } = useRetroSnapshot(token, initialSnapshot);
+  const [me, setMe] = React.useState<Me | null>(null);
+  const { data } = useRetroSnapshot(token, me?.key, initialSnapshot);
   const snapshot = data ?? initialSnapshot;
   const board = snapshot.board;
   const phase = board.phase;
   const phaseIdx = PHASES.indexOf(phase === "closed" ? "commit" : phase);
 
-  const [me, setMe] = React.useState<Me | null>(null);
   const [ftoken, setFtoken] = React.useState<string | null>(null);
   const [theme, setTheme] = React.useState<"studio" | "daylight">("studio");
   const [sound, setSound] = React.useState(false);
@@ -77,6 +77,11 @@ export function RetroClient({
     setMe({ key: participantKey(token), name: savedName(), color: (savedColor() || "sky") as PastelColor });
     setFtoken(facilitatorToken(token));
   }, [token]);
+
+  // Reconcile my dot votes from the authoritative snapshot (survives reload).
+  React.useEffect(() => {
+    setMyVotes(new Set(snapshot.my_votes));
+  }, [snapshot.my_votes]);
 
   const presenceMe = React.useMemo(
     () => ({ participant_key: me?.key ?? "", name: me?.name || "Guest", color: me?.color ?? "sky", is_facilitator: !!ftoken }),

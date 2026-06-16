@@ -71,6 +71,7 @@ create table public.retro_actions (
 );
 
 create index retro_boards_expires_idx on public.retro_boards (expires_at) where saved_to_series_id is null;
+create index retro_boards_created_at_idx on public.retro_boards (created_at);
 create index retro_participants_board_idx on public.retro_participants (board_id);
 create index retro_cards_board_idx on public.retro_cards (board_id);
 create index retro_votes_board_idx on public.retro_votes (board_id);

@@ -15,15 +15,19 @@ export const retroKeys = {
 };
 
 /** Authoritative board state via the snapshot RPC. Polls every 3s to reconcile
- * any broadcast event a peer missed (broadcast is best-effort, DB is truth). */
-export function useRetroSnapshot(token: string, initialData?: RetroSnapshot) {
+ * any broadcast event a peer missed (broadcast is best-effort, DB is truth).
+ * Passing the caller's participant key resolves `my_votes` and unredacts the
+ * caller's own cards during the Reflect phase. The key is part of the query key
+ * so the query refetches once identity resolves client-side; invalidations use
+ * the token-only prefix (`retroKeys.snapshot`) which matches by prefix. */
+export function useRetroSnapshot(token: string, meKey?: string, initialData?: RetroSnapshot) {
   const supabase = React.useMemo(() => createClient(), []);
   return useQuery<RetroSnapshot>({
-    queryKey: retroKeys.snapshot(token),
+    queryKey: [...retroKeys.snapshot(token), meKey ?? null],
     initialData,
     refetchInterval: 3000,
     queryFn: async () => {
-      const { data, error } = await supabase.rpc("retro_snapshot", { p_token: token });
+      const { data, error } = await supabase.rpc("retro_snapshot", { p_token: token, p_key: meKey ?? null });
       if (error) throw error;
       return data as RetroSnapshot;
     },

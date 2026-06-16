@@ -27,6 +27,9 @@ declare b public.retro_boards;
 begin
   select * into b from public.retro_boards where facilitator_token = p_token;
   if b.id is null then raise exception 'retro: bad facilitator token' using errcode = '42501'; end if;
+  if b.saved_to_series_id is null and b.expires_at <= now() then
+    raise exception 'retro: board expired' using errcode = 'P0001';
+  end if;
   return b;
 end $$;
 
@@ -54,12 +57,16 @@ begin
     'facilitator_token', b.facilitator_token, 'participant_key', p_participant_key);
 end $$;
 
--- SNAPSHOT: full board state. Carryover = open actions from previous board chain.
-create or replace function public.retro_snapshot(p_token text)
+-- SNAPSHOT: full board state. During Reflect, other participants' cards are
+-- redacted SERVER-SIDE (text/author stripped) so private content never leaves
+-- the server before the Reveal. Carryover = still-open actions from the
+-- previous board (graduated items excluded).
+create or replace function public.retro_snapshot(p_token text, p_key text default null)
 returns jsonb language plpgsql security definer set search_path = public as $$
-declare b public.retro_boards;
+declare b public.retro_boards; hide boolean;
 begin
   b := public._retro_live_board(p_token);
+  hide := (b.phase = 'reflect');
   return jsonb_build_object(
     'board', jsonb_build_object('id', b.id, 'name', b.name, 'template', b.template,
       'columns', b.columns, 'phase', b.phase, 'phase_started_at', b.phase_started_at,
@@ -68,17 +75,21 @@ begin
       'name', name, 'color', color, 'is_facilitator', is_facilitator) order by created_at)
       from public.retro_participants where board_id = b.id), '[]'::jsonb),
     'cards', coalesce((select jsonb_agg(jsonb_build_object('id', id, 'column_id', column_id,
-      'author_key', author_key, 'author_name', author_name, 'color', color, 'text', text,
+      'author_key', case when hide and author_key is distinct from p_key then null else author_key end,
+      'author_name', case when hide and author_key is distinct from p_key then '' else author_name end,
+      'color', color,
+      'text', case when hide and author_key is distinct from p_key then '' else text end,
       'group_id', group_id, 'sort_order', sort_order) order by sort_order, created_at)
       from public.retro_cards where board_id = b.id), '[]'::jsonb),
     'votes', coalesce((select jsonb_object_agg(card_id, n) from (
       select card_id, count(*) n from public.retro_votes where board_id = b.id group by card_id) t), '{}'::jsonb),
-    'my_votes', '[]'::jsonb,
+    'my_votes', coalesce((select jsonb_agg(card_id) from public.retro_votes
+      where board_id = b.id and voter_key = p_key), '[]'::jsonb),
     'actions', coalesce((select jsonb_agg(jsonb_build_object('id', id, 'text', text, 'owner_name', owner_name,
       'due', due, 'color', color, 'graduated_issue_id', graduated_issue_id) order by sort_order, created_at)
       from public.retro_actions where board_id = b.id), '[]'::jsonb),
     'carryover', coalesce((select jsonb_agg(jsonb_build_object('id', a.id, 'text', a.text, 'done', false))
-      from public.retro_actions a where a.board_id = b.previous_board_id), '[]'::jsonb)
+      from public.retro_actions a where a.board_id = b.previous_board_id and a.graduated_issue_id is null), '[]'::jsonb)
   );
 end $$;
 
@@ -147,6 +158,7 @@ returns jsonb language plpgsql security definer set search_path = public as $$
 declare b public.retro_boards;
 begin
   b := public._retro_live_board(p_token); perform public._retro_assert_member(b.id, p_key);
+  if p_delta not in (1, -1) then raise exception 'retro: invalid delta' using errcode = '22000'; end if;
   if p_delta > 0 then
     if (select count(*) from public.retro_votes where board_id = b.id and voter_key = p_key) >= 6 then
       raise exception 'retro: out of votes' using errcode = '53400'; end if;
@@ -164,6 +176,8 @@ returns jsonb language plpgsql security definer set search_path = public as $$
 declare b public.retro_boards;
 begin
   b := public._retro_assert_facilitator(p_ftoken);
+  if coalesce(array_length(p_card_ids, 1), 0) > 200 then
+    raise exception 'retro: too many cards' using errcode = '22000'; end if;
   update public.retro_cards set group_id = p_group, updated_at = now()
     where board_id = b.id and id = any(p_card_ids);
   return jsonb_build_object('ok', true);
@@ -215,7 +229,7 @@ end $$;
 -- grants: only EXECUTE on the public RPCs (helpers stay internal).
 grant execute on function
   public.retro_create(text,text,jsonb,text,text,text,text),
-  public.retro_snapshot(text),
+  public.retro_snapshot(text,text),
   public.retro_join(text,text,text,text),
   public.retro_add_card(text,text,text,text,text),
   public.retro_update_card(text,text,uuid,text,text),
