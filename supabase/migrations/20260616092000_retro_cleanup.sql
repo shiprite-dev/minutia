@@ -9,7 +9,7 @@ begin
   select count(*) into n from del;
   return n;
 end $$;
-revoke all on function public.retro_cleanup_expired() from anon, authenticated;
+revoke all on function public.retro_cleanup_expired() from public, anon, authenticated;
 
 -- Schedule daily if pg_cron is available; ignore if not (self-host without the extension).
 do $$

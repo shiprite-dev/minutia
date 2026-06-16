@@ -226,6 +226,16 @@ begin
   return jsonb_build_object('ok', true);
 end $$;
 
+-- Supabase grants EXECUTE on public functions to anon/authenticated by default,
+-- so the internal helpers must be revoked from those roles explicitly (a bare
+-- REVOKE FROM PUBLIC is not enough). Otherwise anon could call _retro_live_board
+-- directly and read the row, leaking facilitator_token.
+revoke all on function
+  public._retro_live_board(text),
+  public._retro_assert_member(uuid, text),
+  public._retro_assert_facilitator(text)
+  from public, anon, authenticated;
+
 -- grants: only EXECUTE on the public RPCs (helpers stay internal).
 grant execute on function
   public.retro_create(text,text,jsonb,text,text,text,text),
