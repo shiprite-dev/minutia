@@ -104,6 +104,10 @@ export default function SettingsPage() {
   const [memberMessage, setMemberMessage] = useState("");
   const [memberMessageState, setMemberMessageState] = useState<"success" | "error">("success");
   const [invitationActionId, setInvitationActionId] = useState<string | null>(null);
+  const [retroEnabled, setRetroEnabled] = useState(false);
+  const [retroSaving, setRetroSaving] = useState(false);
+  const [retroMessage, setRetroMessage] = useState("");
+  const [retroMessageState, setRetroMessageState] = useState<"success" | "error">("success");
 
   // Sync profile name once loaded
   if (profile?.name && !nameInitialized) {
@@ -131,8 +135,16 @@ export default function SettingsPage() {
         if (!res.ok) return null;
         return res.json();
       })
-      .then((data) => {
-        if (!cancelled) setOrgAdmin(data);
+      .then(async (data) => {
+        if (cancelled) return;
+        setOrgAdmin(data);
+        if (data) {
+          const cfgRes = await fetch("/api/admin/config").catch(() => null);
+          if (!cancelled && cfgRes?.ok) {
+            const cfg = await cfgRes.json().catch(() => ({}));
+            setRetroEnabled(cfg.retro_enabled === "true");
+          }
+        }
       })
       .catch(() => {
         if (!cancelled) setOrgAdmin(null);
@@ -247,6 +259,30 @@ export default function SettingsPage() {
     await refreshOrgAdmin();
   }
 
+  async function handleRetroToggle() {
+    const next = !retroEnabled;
+    setRetroEnabled(next);
+    setRetroSaving(true);
+    setRetroMessage("");
+
+    const res = await fetch("/api/admin/config", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ retro_enabled: next ? "true" : "false" }),
+    });
+    const data = await res.json().catch(() => ({}));
+
+    setRetroSaving(false);
+    if (!res.ok) {
+      setRetroEnabled(!next);
+      setRetroMessageState("error");
+      setRetroMessage(data.error || "Failed to update setting.");
+    } else {
+      setRetroMessageState("success");
+      setRetroMessage(next ? "Retro boards enabled." : "Retro boards disabled.");
+    }
+  }
+
   if (isLoading) {
     return (
       <div className="flex flex-1 flex-col items-center justify-center p-4">
@@ -303,6 +339,7 @@ export default function SettingsPage() {
         </Card>
 
         {orgAdmin && (
+          <>
           <Card role="region" aria-labelledby="workspace-access-title">
             <CardHeader className="gap-3">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -463,6 +500,40 @@ export default function SettingsPage() {
               </section>
             </CardContent>
           </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Free retro boards</CardTitle>
+              <CardDescription>
+                Opens a public, no-login retrospective board surface at /retro on this instance.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-3">
+              <div className="flex items-center justify-between">
+                <p className="text-sm text-ink">
+                  {retroEnabled ? "Retro boards are enabled." : "Retro boards are disabled."}
+                </p>
+                <Button
+                  type="button"
+                  variant={retroEnabled ? "outline" : "ghost"}
+                  size="sm"
+                  disabled={retroSaving}
+                  onClick={handleRetroToggle}
+                  className={cn(
+                    retroEnabled && "border-rule-strong bg-paper-2 text-ink"
+                  )}
+                >
+                  {retroSaving ? "Saving..." : retroEnabled ? "Disable" : "Enable"}
+                </Button>
+              </div>
+              {retroMessage && (
+                <p className={cn("text-xs", retroMessageState === "error" ? "text-danger" : "text-success")}>
+                  {retroMessage}
+                </p>
+              )}
+            </CardContent>
+          </Card>
+          </>
         )}
 
         {/* Appearance */}

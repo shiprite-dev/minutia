@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Minutia Retro: a free, anonymous, multiplayer retrospective board at `/retro`. Guided 7-phase ritual (Lobby, Reflect, Reveal, Theme, Vote, Discuss, Commit) with realtime presence, a synchronized card-flip Reveal, and a closure bloom. Boards are ephemeral (30-day auto-expiry) and rate-limited.
+- Anonymous board operations run through `SECURITY DEFINER` Postgres RPCs (default-deny `retro_*` tables); liveness uses Supabase Realtime broadcast and presence with a snapshot reconcile.
+- AI theme-clustering suggestions during the Theme phase (OpenRouter; degrades silently when unconfigured).
+- Graduation: account-gated "Save to Minutia" turns retro action items into tracked issues in a new or existing series; free Markdown export needs no account.
+- `retro_enabled` instance flag (default off; admin toggle in workspace settings) gates the public board surface for self-host instances.
+
 ## [0.1.0] - 2026-04-30
 
 ### Added

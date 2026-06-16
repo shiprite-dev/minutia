@@ -46,6 +46,7 @@
     "test:ai-contracts": "node scripts/verify-ai-notes-contract.mjs",
     "test:ai-client": "node --test scripts/verify-openrouter-client.test.mjs",
     "test:ai-carryover": "node --test scripts/verify-carryover.test.mjs",
+    "test:retro": "node --test scripts/verify-retro-contracts.test.mjs",
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed",
     "test:e2e:ui": "playwright test --ui",
