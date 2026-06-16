@@ -12,21 +12,21 @@ export interface ShareInviteProps {
   boardName: string;
   template?: RetroTemplate | null;
   people: RetroParticipant[];
+  link: string;
   onClose: () => void;
   onStart: () => void;
 }
 
-export function ShareInvite({ open, boardName, template, people, onClose, onStart }: ShareInviteProps) {
+export function ShareInvite({ open, boardName, template, people, link, onClose, onStart }: ShareInviteProps) {
   const [copied, setCopied] = React.useState(false);
-  const slug = React.useMemo(() => Math.random().toString(36).slice(2, 8), [open]);
-  const link = "retro.getminutia.com/r/" + slug;
+  const display = link.replace(/^https?:\/\//, "");
 
   React.useEffect(() => { if (open) setCopied(false); }, [open]);
   if (!open) return null;
 
   function copy() {
     setCopied(true);
-    if (navigator.clipboard) navigator.clipboard.writeText("https://" + link).catch(() => {});
+    if (navigator.clipboard) navigator.clipboard.writeText(link).catch(() => {});
     setTimeout(() => setCopied(false), 1800);
   }
 
@@ -46,7 +46,7 @@ export function ShareInvite({ open, boardName, template, people, onClose, onStar
         {/* Link field */}
         <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 6px 6px 14px", borderRadius: "var(--r-control)", background: "var(--studio-surface)", border: "1px solid var(--studio-line-2)", marginBottom: 12 }}>
           <Icons.Link size={16} style={{ color: "var(--studio-ink-3)", flex: "0 0 auto" }} />
-          <span style={{ flex: 1, minWidth: 0, fontFamily: "var(--font-mono)", fontSize: 13.5, color: "var(--studio-ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{link}</span>
+          <span style={{ flex: 1, minWidth: 0, fontFamily: "var(--font-mono)", fontSize: 13.5, color: "var(--studio-ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{display}</span>
           <Button variant={copied ? "secondary" : "primary"} size="sm" onClick={copy} iconLeft={copied ? <Icons.Check size={15} /> : null}>
             {copied ? "Copied" : "Copy link"}
           </Button>

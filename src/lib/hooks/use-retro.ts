@@ -54,11 +54,13 @@ export function useRetroChannel(
   // Keep the latest callbacks without re-subscribing the channel.
   const presenceCb = React.useRef(onPresence);
   const eventCb = React.useRef(onEvent);
-  presenceCb.current = onPresence;
-  eventCb.current = onEvent;
+  React.useEffect(() => {
+    presenceCb.current = onPresence;
+    eventCb.current = onEvent;
+  });
 
   React.useEffect(() => {
-    if (!boardId) return;
+    if (!boardId || !me.participant_key) return;
     const supabase = createClient();
     const channel = supabase.channel(`retro:${boardId}`, {
       config: { presence: { key: me.participant_key } },

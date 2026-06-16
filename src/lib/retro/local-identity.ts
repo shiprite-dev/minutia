@@ -16,6 +16,16 @@ export function participantKey(boardToken: string): string {
   return v;
 }
 
+/** Pre-mint a key before a board exists (the create flow generates the key,
+ * passes it to retro_create, then binds it to the returned token). */
+export function newKey(): string {
+  return rand();
+}
+
+export function setParticipantKey(boardToken: string, key: string): void {
+  localStorage.setItem(`retro:pk:${boardToken}`, key);
+}
+
 export function saveFacilitatorToken(boardToken: string, ft: string): void {
   localStorage.setItem(`retro:ft:${boardToken}`, ft);
 }
