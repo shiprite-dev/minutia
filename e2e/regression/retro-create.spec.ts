@@ -153,7 +153,7 @@ test.describe("Retro create page", () => {
       // Submit.
       await page.getByRole("button", { name: /Create & get link/i }).click();
 
-      // Should navigate to /retro/<token> — wait for URL change.
+      // Should navigate to /retro/<token>, wait for URL change.
       await page.waitForURL(/\/retro\/[a-f0-9]{36,}/i, { timeout: 20_000 });
 
       // Board header in RetroClient.tsx shows the board name.

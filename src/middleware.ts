@@ -93,11 +93,15 @@ function applySecurityHeaders(response: NextResponse): NextResponse {
   }
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+  // Realtime connects over ws/wss to the Supabase host. http:// -> ws://,
+  // https:// -> wss://. Without this, realtime is blocked on local dev and on
+  // self-hosted instances with a custom Supabase URL (Cloud uses *.supabase.co).
+  const supabaseWsUrl = supabaseUrl.replace(/^http/, "ws");
   const csp = [
     "default-src 'self'",
     "script-src 'self' 'unsafe-eval' 'unsafe-inline'",
     "style-src 'self' 'unsafe-inline'",
-    `connect-src 'self' ${supabaseUrl} wss://*.supabase.co`,
+    `connect-src 'self' ${supabaseUrl} ${supabaseWsUrl} wss://*.supabase.co`,
     "img-src 'self' data: blob:",
     "font-src 'self'",
     "frame-ancestors 'none'",

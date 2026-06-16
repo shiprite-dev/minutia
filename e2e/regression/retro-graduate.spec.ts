@@ -140,14 +140,14 @@ async function runThroughToCommitSealed(
   // Seal.
   await page.getByRole("button", { name: "Seal these decisions" }).first().click();
   await expect(
-    page.getByRole("heading", { name: "Sealed — nice work." })
+    page.getByRole("heading", { name: "Sealed, nice work." })
   ).toBeVisible({ timeout: 5_000 });
 
   return boardUrl;
 }
 
 // Unauthenticated tests to verify the gate behavior.
-test.describe("Retro graduation — unauthenticated gate", () => {
+test.describe("Retro graduation, unauthenticated gate", () => {
   test.use({ storageState: { cookies: [], origins: [] } });
 
   test("clicking Save to Minutia without auth redirects to login", async ({
@@ -166,7 +166,8 @@ test.describe("Retro graduation — unauthenticated gate", () => {
 
       // Should redirect to login with ?next= containing the board URL + ?graduate=1.
       await page.waitForURL(/\/login/i, { timeout: 15_000 });
-      expect(page.url()).toContain("graduate=1");
+      // The board URL + ?graduate=1 is carried in the (URL-encoded) next param.
+      expect(decodeURIComponent(page.url())).toContain("graduate=1");
     });
   });
 
@@ -193,7 +194,7 @@ test.describe("Retro graduation — unauthenticated gate", () => {
 });
 
 // Authenticated tests: use the shared session from the setup project.
-test.describe("Retro graduation — authenticated", () => {
+test.describe("Retro graduation, authenticated", () => {
   // The suite's auth session (e2e/.auth/user.json from auth.setup.ts).
   test.use({ storageState: "e2e/.auth/user.json" });
 
@@ -211,7 +212,7 @@ test.describe("Retro graduation — authenticated", () => {
     await withRetroEnabled(request, async () => {
       await runThroughToCommitSealed(page, boardName);
 
-      // Click "Save to Minutia" — the authenticated user should not be redirected.
+      // Click "Save to Minutia", the authenticated user should not be redirected.
       const saveBtn = page.getByRole("button", { name: "Save to Minutia" }).first();
       await expect(saveBtn).toBeVisible();
       await saveBtn.click();

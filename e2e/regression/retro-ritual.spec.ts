@@ -94,20 +94,20 @@ async function enterLobby(
   page: import("@playwright/test").Page,
   facilitatorName: string
 ) {
-  // Wait for Lobby to appear — it shows the board name in an h1.
+  // Wait for Lobby to appear, it shows the board name in an h1.
   // The Lobby name input has placeholder "Your name".
   const nameInput = page.getByPlaceholder("Your name").first();
   await expect(nameInput).toBeVisible();
   await nameInput.fill(facilitatorName);
 
-  // The Join button in Lobby.tsx — disabled until name has content.
+  // The Join button in Lobby.tsx, disabled until name has content.
   await page.getByRole("button", { name: "Join" }).first().click();
 }
 
 // Anonymous: no auth required for the ritual.
 test.use({ storageState: { cookies: [], origins: [] } });
 
-test.describe("Retro ritual — facilitator flow", () => {
+test.describe("Retro ritual, facilitator flow", () => {
   test("Lobby shows the board name and a name input", async ({
     page,
     request,
@@ -162,7 +162,7 @@ test.describe("Retro ritual — facilitator flow", () => {
       // Click "Add a card" in the first column.
       await page.getByRole("button", { name: "Add a card" }).first().click();
 
-      // CardEditor modal — placeholder from CardEditor.tsx.
+      // CardEditor modal, placeholder from CardEditor.tsx.
       await expect(
         page.getByPlaceholder("What's on your mind?").first()
       ).toBeVisible();
@@ -311,14 +311,14 @@ test.describe("Retro ritual — facilitator flow", () => {
       await expect(sealBtn).toBeVisible();
       await sealBtn.click();
 
-      // After sealing, CommitPanel switches to "Sealed — nice work."
+      // After sealing, CommitPanel switches to "Sealed, nice work."
       await expect(
-        page.getByRole("heading", { name: "Sealed — nice work." })
+        page.getByRole("heading", { name: "Sealed, nice work." })
       ).toBeVisible({ timeout: 5_000 });
 
-      // CommitNudge appears in the bottom bar (CommitNudge.tsx).
+      // The Minutia nudge appears in the sealed CommitPanel.
       await expect(
-        page.getByText("Keep these alive in Minutia").first()
+        page.getByText("The only retro where the action items don't die.").first()
       ).toBeVisible();
 
       // "Just export markdown" is always free (no auth required).
@@ -326,7 +326,7 @@ test.describe("Retro ritual — facilitator flow", () => {
         page.getByRole("button", { name: "Just export markdown" }).first()
       ).toBeVisible();
 
-      // "Save to Minutia" requires auth — button present but triggers auth flow.
+      // "Save to Minutia" requires auth, button present but triggers auth flow.
       await expect(
         page.getByRole("button", { name: "Save to Minutia" }).first()
       ).toBeVisible();

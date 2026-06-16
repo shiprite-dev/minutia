@@ -63,7 +63,7 @@ async function withRetroDisabled(
   }
 }
 
-// Anonymous — retro pages must be accessible without a session.
+// Anonymous, retro pages must be accessible without a session.
 test.use({ storageState: { cookies: [], origins: [] } });
 
 test.describe("Retro disabled page", () => {
@@ -110,7 +110,7 @@ test.describe("Retro disabled page", () => {
       await page.goto("/retro");
       await page.waitForLoadState("domcontentloaded");
 
-      // No template picker, no name input — the disabled shell replaces all children.
+      // No template picker, no name input, the disabled shell replaces all children.
       await expect(page.getByText("Template")).not.toBeVisible();
       await expect(page.getByPlaceholder(/Sprint/i)).not.toBeVisible();
     });

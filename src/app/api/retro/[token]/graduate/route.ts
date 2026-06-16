@@ -52,11 +52,32 @@ export async function POST(
     );
   }
 
-  const { data: actions } = await svc
+  // Graduation source: prefer the committed action items; if the client-side
+  // Commit seed has not landed yet (or none were created), fall back to the
+  // board's cards (top-voted first) so the funnel is never an empty no-op.
+  let { data: actions } = await svc
     .from("retro_actions")
-    .select("id, text, owner_name, due, color")
+    .select("id, text, owner_name, due")
     .eq("board_id", board.id)
     .order("sort_order", { ascending: true });
+  if (!actions || actions.length === 0) {
+    const { data: cards } = await svc
+      .from("retro_cards")
+      .select("id, text")
+      .eq("board_id", board.id);
+    if (cards && cards.length > 0) {
+      const { data: voteRows } = await svc
+        .from("retro_votes")
+        .select("card_id")
+        .eq("board_id", board.id);
+      const tally = new Map<string, number>();
+      for (const v of voteRows ?? []) tally.set(v.card_id, (tally.get(v.card_id) ?? 0) + 1);
+      actions = [...cards]
+        .sort((a, b) => (tally.get(b.id) ?? 0) - (tally.get(a.id) ?? 0))
+        .slice(0, 5)
+        .map((c) => ({ id: null as string | null, text: c.text, owner_name: "", due: "" }));
+    }
+  }
   if (!actions || actions.length === 0) {
     return NextResponse.json({ error: "No action items to save" }, { status: 422 });
   }
@@ -168,14 +189,16 @@ export async function POST(
       .single();
     if (issueErr || !issue) continue;
     issueCount += 1;
-    await svc.from("retro_actions").update({ graduated_issue_id: issue.id }).eq("id", a.id);
+    if (a.id) await svc.from("retro_actions").update({ graduated_issue_id: issue.id }).eq("id", a.id);
   }
 
-  // Persist the board (clear TTL) and record the conversion. If this final write
-  // fails, release the claim so the board does not get stuck unsavable.
+  // Persist the conversion. Setting saved_to_series_id is what exempts the board
+  // from expiry (_retro_live_board) and cleanup, so the TTL never fires; we do
+  // not null expires_at (the column is NOT NULL). If this write fails, release
+  // the claim so the board does not get stuck unsavable.
   const { error: finalErr } = await svc
     .from("retro_boards")
-    .update({ saved_to_series_id: seriesId, claimed_by: user.id, expires_at: null })
+    .update({ saved_to_series_id: seriesId, claimed_by: user.id })
     .eq("id", board.id);
   if (finalErr) {
     await release();

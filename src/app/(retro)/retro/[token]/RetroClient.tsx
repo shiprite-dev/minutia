@@ -26,7 +26,6 @@ import { Lobby } from "@/components/retro/Lobby";
 import { CommitPanel } from "@/components/retro/CommitPanel";
 import { Spotlight } from "@/components/retro/Spotlight";
 import { CardEditor } from "@/components/retro/CardEditor";
-import { CommitNudge } from "@/components/retro/CommitNudge";
 import { ShareInvite } from "@/components/retro/ShareInvite";
 import { boardToMarkdown } from "@/lib/retro/markdown";
 import { PhaseBar } from "@/components/retro/PhaseBar";
@@ -146,13 +145,15 @@ export function RetroClient({
   const seededRef = React.useRef(false);
   React.useEffect(() => {
     if (phase !== "commit" || !isFacilitator || !ftoken) return;
-    if (seededRef.current || snapshot.actions.length > 0) return;
+    if (seededRef.current || snapshot.actions.length > 0 || snapshot.cards.length === 0) return;
     seededRef.current = true;
-    const seed = [...snapshot.cards]
+    const ranked = [...snapshot.cards]
       .map((c) => ({ c, count: snapshot.votes[c.id] ?? 0 }))
-      .filter((x) => x.count > 0)
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 5);
+      .sort((a, b) => b.count - a.count);
+    // Prefer voted cards; if nothing was voted, still seed the top cards so the
+    // retro never dead-ends with zero actions to commit or graduate.
+    const voted = ranked.filter((x) => x.count > 0);
+    const seed = (voted.length ? voted : ranked).slice(0, 5);
     // Unique(board_id, source_card_id) makes a re-seed a no-op; swallow conflicts.
     void Promise.all(
       seed.map((x) =>
@@ -339,16 +340,17 @@ export function RetroClient({
           />
         )}
         {isCommit && (
-          <div style={{ height: "100%", display: "flex", flexDirection: "column", minHeight: 0 }}>
-            <div style={{ flex: 1, minHeight: 0 }}>
-              <CommitPanel actions={snapshot.actions} sealed={sealed} onSeal={seal} bloom={bloom} />
-            </div>
-            {(sealed || savedSeriesId) && (
-              <div style={{ padding: "var(--space-6)", borderTop: "1px solid var(--studio-line)", background: "var(--studio-surface)" }}>
-                <CommitNudge onExport={exportMarkdown} onSave={saveToMinutia} saving={saving} savedSeriesId={savedSeriesId} error={saveError} />
-              </div>
-            )}
-          </div>
+          <CommitPanel
+            actions={snapshot.actions}
+            sealed={sealed}
+            onSeal={seal}
+            bloom={bloom}
+            onSave={saveToMinutia}
+            onExport={exportMarkdown}
+            saving={saving}
+            savedSeriesId={savedSeriesId}
+            saveError={saveError}
+          />
         )}
         {isBoard && (
           <Board
