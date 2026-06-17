@@ -29,8 +29,11 @@ export function applyRetroEvent(
       if (snap.board.phase === e.phase) return snap;
       return { ...snap, board: { ...snap.board, phase: e.phase } };
 
-    case "vote.changed":
-      return { ...snap, votes: { ...snap.votes, [e.card_id]: Math.max(0, e.count) } };
+    case "vote.changed": {
+      const count = Math.max(0, e.count);
+      if ((snap.votes[e.card_id] ?? 0) === count) return snap;
+      return { ...snap, votes: { ...snap.votes, [e.card_id]: count } };
+    }
 
     case "card.deleted":
       if (!snap.cards.some((c) => c.id === e.card_id)) return snap;

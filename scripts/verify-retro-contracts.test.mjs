@@ -96,10 +96,12 @@ test("applyRetroEvent: phase.changed updates board phase (new ref)", () => {
   assert.equal(applyRetroEvent(n, { t: "phase.changed", phase: "discuss" }, null), n);
 });
 
-test("applyRetroEvent: vote.changed applies authoritative count, clamps >= 0", () => {
-  const s = baseSnap();
+test("applyRetroEvent: vote.changed applies authoritative count, clamps >= 0, no-ops when unchanged", () => {
+  const s = baseSnap({ votes: { c1: 2 } });
   assert.equal(applyRetroEvent(s, { t: "vote.changed", card_id: "c1", count: 3 }, null).votes.c1, 3);
   assert.equal(applyRetroEvent(s, { t: "vote.changed", card_id: "c1", count: -5 }, null).votes.c1, 0);
+  // Same count -> same reference (caller refetches instead of re-rendering).
+  assert.equal(applyRetroEvent(s, { t: "vote.changed", card_id: "c1", count: 2 }, null), s);
 });
 
 test("applyRetroEvent: card.deleted removes the card", () => {

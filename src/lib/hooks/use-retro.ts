@@ -72,6 +72,8 @@ export function useRetroChannel(
     });
 
     channel.on("broadcast", { event: "retro" }, (m) => {
+      // broadcast.self defaults to false, so this only fires for OTHER clients;
+      // the sender already applied its own change optimistically in useRetroRpc.
       const payload = m.payload as RetroBroadcast;
       eventCb.current?.(payload);
       // Apply the event straight to the cache (no DB round-trip) when it carries

@@ -252,6 +252,9 @@ export function RetroClient({
     void rpc("retro_vote", { p_token: token, p_key: me.key, p_card: cardId, p_delta: 1 }, {
       optimistic: (s) => ({ ...s, votes: { ...s.votes, [cardId]: (s.votes[cardId] ?? 0) + 1 } }),
       event: (data) => ({ t: "vote.changed", card_id: cardId, count: (data as { count: number }).count }),
+    }).catch(() => {
+      // Vote rejected (e.g. budget race): return the dot so the budget is honest.
+      setMyVotes((prev) => { const n = new Set(prev); n.delete(cardId); return n; });
     });
   }
 
