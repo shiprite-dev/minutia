@@ -18,6 +18,18 @@ const { remainingVotes, VOTE_BUDGET } = await load("src/lib/retro/vote-budget.ts
 const { parseDue } = await load("src/lib/retro/parse-due.ts");
 const { boardToMarkdown } = await load("src/lib/retro/markdown.ts");
 const { TEMPLATES, templateById } = await load("src/lib/retro/templates.ts");
+const { RETRO_PHASES, RETRO_PHASE_LABELS, ALL_RETRO_PHASES, RETRO_PHASE_LABEL_LIST } = await load(
+  "src/lib/retro/phases.ts"
+);
+
+// Pull every `[phase] in ('a','b',...)` list out of the merge migration so the
+// DB CHECK constraint and the retro_set_phase RPC can never drift from phases.ts.
+function migrationPhaseSets() {
+  const sql = fs.readFileSync("supabase/migrations/20260617090000_retro_merge_phases.sql", "utf8");
+  return [...sql.matchAll(/phase\s+(?:not\s+)?in\s*\(([^)]*)\)/gi)].map((m) =>
+    [...m[1].matchAll(/'([^']+)'/g)].map((q) => q[1])
+  );
+}
 
 test("vote budget caps at 6 and never negative", () => {
   assert.equal(VOTE_BUDGET, 6);
@@ -40,6 +52,24 @@ test("templates expose 4 named boards each with >= 3 columns", () => {
   assert.ok(TEMPLATES.every((t) => Array.isArray(t.columns) && t.columns.length >= 3));
   assert.equal(templateById("ssc")?.name, "Start · Stop · Continue");
   assert.equal(templateById("nope"), undefined);
+});
+
+test("retro phases: reveal/theme/vote merged into one ordered ritual", () => {
+  assert.deepEqual(RETRO_PHASES, ["lobby", "reflect", "reveal", "discuss", "commit"]);
+  assert.ok(!RETRO_PHASES.includes("theme") && !RETRO_PHASES.includes("vote"));
+  assert.deepEqual(ALL_RETRO_PHASES, [...RETRO_PHASES, "closed"]);
+  // Every persistable phase carries a label; reveal owns the merged step.
+  for (const p of ALL_RETRO_PHASES) assert.equal(typeof RETRO_PHASE_LABELS[p], "string");
+  assert.equal(RETRO_PHASE_LABELS.reveal, "Reveal & Vote");
+  assert.deepEqual(RETRO_PHASE_LABEL_LIST, RETRO_PHASES.map((p) => RETRO_PHASE_LABELS[p]));
+});
+
+test("retro phases: DB constraint and RPC mirror phases.ts (no drift)", () => {
+  // Skip the legacy-fold subset (`where phase in ('theme','vote')`); the
+  // canonical CHECK + RPC lists are the ones spanning the full ritual.
+  const sets = migrationPhaseSets().filter((s) => s.includes("lobby"));
+  assert.ok(sets.length >= 2, "expected both the CHECK and the RPC phase lists");
+  for (const list of sets) assert.deepEqual([...list].sort(), [...ALL_RETRO_PHASES].sort());
 });
 
 test("boardToMarkdown renders columns, actions, escapes pipes", () => {

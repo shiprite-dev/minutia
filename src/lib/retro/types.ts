@@ -2,8 +2,6 @@ export type RetroPhase =
   | "lobby"
   | "reflect"
   | "reveal"
-  | "theme"
-  | "vote"
   | "discuss"
   | "commit"
   | "closed";
