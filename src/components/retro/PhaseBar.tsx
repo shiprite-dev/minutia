@@ -84,7 +84,7 @@ export function PhaseBar({
         </div>
       )}
 
-      {isFacilitator && (
+      {isFacilitator && current < phases.length - 1 && (
         <button
           type="button"
           onClick={onAdvance}

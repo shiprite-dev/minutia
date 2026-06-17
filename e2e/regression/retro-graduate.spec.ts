@@ -125,23 +125,22 @@ async function runThroughToCommitSealed(
     await page.getByRole("button", { name: "Advance" }).first().click();
   };
 
-  // Reflect -> Reveal -> Theme -> Vote -> Discuss -> Commit.
+  // Reflect -> Reveal & Vote -> Discuss -> Commit (5-phase merged ritual).
   await advance();
-  await expect(page.getByText("Reveal").first()).toBeVisible({ timeout: 10_000 });
-  await advance();
-  await expect(page.getByText("Theme").first()).toBeVisible({ timeout: 10_000 });
-  await advance();
-  await expect(page.getByText("Vote").first()).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByText("Reveal & Vote").first()).toBeVisible({ timeout: 10_000 });
   await advance();
   await expect(page.getByText("Discuss").first()).toBeVisible({ timeout: 10_000 });
   await advance();
-  await expect(page.getByText("Commit").first()).toBeVisible({ timeout: 10_000 });
+  await expect(
+    page.getByRole("heading", { name: "Commit the actions" })
+  ).toBeVisible({ timeout: 10_000 });
 
-  // Seal.
+  // Seal (the creator is the facilitator). Sealing persists phase=closed and
+  // broadcasts, then the panel flips to the sealed nudge after the refetch.
   await page.getByRole("button", { name: "Seal these decisions" }).first().click();
   await expect(
     page.getByRole("heading", { name: "Sealed, nice work." })
-  ).toBeVisible({ timeout: 5_000 });
+  ).toBeVisible({ timeout: 10_000 });
 
   return boardUrl;
 }

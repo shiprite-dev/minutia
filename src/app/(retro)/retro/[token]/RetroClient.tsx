@@ -62,8 +62,10 @@ export function RetroClient({
   const [showShare, setShowShare] = React.useState(false);
   const [spotIndex, setSpotIndex] = React.useState(0);
   const [suggestion, setSuggestion] = React.useState<{ label: string; count: number } | null>(null);
-  const [sealed, setSealed] = React.useState(false);
   const [bloom, setBloom] = React.useState(false);
+  // Sealed is shared truth, not local UI: the board's terminal "closed" phase
+  // means the facilitator ended the retro, and every participant sees it.
+  const sealed = phase === "closed";
   const [now, setNow] = React.useState(0);
   const [saving, setSaving] = React.useState(false);
   const [savedSeriesId, setSavedSeriesId] = React.useState<string | null>(board.saved_to_series_id);
@@ -233,9 +235,12 @@ export function RetroClient({
   }
 
   function seal() {
-    setSealed(true);
+    // Only the facilitator can end the retro. Persist the terminal phase and
+    // broadcast it so every participant's board flips to "Sealed" at once.
+    if (!isFacilitator || !ftoken) return;
     setBloom(true);
     window.setTimeout(() => setBloom(false), 1100);
+    void rpc("retro_set_phase", { p_ftoken: ftoken, p_phase: "closed" }, { t: "phase.changed", phase: "closed" });
   }
 
   function exportMarkdown() {
@@ -353,6 +358,7 @@ export function RetroClient({
           <CommitPanel
             actions={snapshot.actions}
             sealed={sealed}
+            isFacilitator={isFacilitator}
             onSeal={seal}
             bloom={bloom}
             onSave={saveToMinutia}

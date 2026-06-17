@@ -11,6 +11,7 @@ import { Icons } from "./icons";
 export interface CommitPanelProps {
   actions: RetroAction[];
   sealed: boolean;
+  isFacilitator: boolean;
   onSeal: () => void;
   bloom: boolean;
   onSave: () => void;
@@ -20,7 +21,7 @@ export interface CommitPanelProps {
   saveError: string | null;
 }
 
-export function CommitPanel({ actions, sealed, onSeal, bloom, onSave, onExport, saving, savedSeriesId, saveError }: CommitPanelProps) {
+export function CommitPanel({ actions, sealed, isFacilitator, onSeal, bloom, onSave, onExport, saving, savedSeriesId, saveError }: CommitPanelProps) {
   return (
     <div style={{ height: "100%", overflowY: "auto", display: "flex", justifyContent: "center", padding: "var(--space-12) var(--space-6)", position: "relative" }}>
       {/* closure bloom flash across the board */}
@@ -60,7 +61,13 @@ export function CommitPanel({ actions, sealed, onSeal, bloom, onSave, onExport, 
 
         {!sealed ? (
           <div style={{ textAlign: "center" }}>
-            <Button variant="primary" size="lg" onClick={onSeal} iconLeft={<Icons.CheckCircle size={20} />}>Seal these decisions</Button>
+            {isFacilitator ? (
+              <Button variant="primary" size="lg" onClick={onSeal} iconLeft={<Icons.CheckCircle size={20} />}>Seal these decisions</Button>
+            ) : (
+              <p style={{ fontFamily: "var(--font-sans)", fontSize: 14.5, color: "var(--studio-ink-3)", margin: 0 }}>
+                Waiting for the facilitator to seal the retro&hellip;
+              </p>
+            )}
           </div>
         ) : (
           // The nudge, a calm card, not a modal wall. Wired to real save/export.
