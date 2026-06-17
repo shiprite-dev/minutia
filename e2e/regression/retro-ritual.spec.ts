@@ -301,9 +301,10 @@ test.describe("Retro ritual, facilitator flow", () => {
       await sealBtn.click();
 
       // After sealing, CommitPanel switches to "Sealed, nice work."
+      // Sealing now persists phase=closed via RPC + refetch, so allow for the round-trip.
       await expect(
         page.getByRole("heading", { name: "Sealed, nice work." })
-      ).toBeVisible({ timeout: 5_000 });
+      ).toBeVisible({ timeout: 10_000 });
 
       // The Minutia nudge appears in the sealed CommitPanel.
       await expect(
@@ -319,6 +320,64 @@ test.describe("Retro ritual, facilitator flow", () => {
       await expect(
         page.getByRole("button", { name: "Save to Minutia" }).first()
       ).toBeVisible();
+    });
+  });
+
+  test("facilitator sealing closes the board for participants too", async ({
+    page,
+    browser,
+    request,
+  }) => {
+    await withRetroEnabled(request, async () => {
+      await createBoardAndNavigate(page, "Ritual Multiplayer Seal");
+      const boardUrl = page.url();
+      await enterLobby(page, "Heidi"); // creator is the facilitator
+      await expect(page.getByText("Reflect").first()).toBeVisible({ timeout: 10_000 });
+
+      // A participant joins in a fresh context (no facilitator token in storage).
+      const guestCtx = await browser.newContext({ storageState: { cookies: [], origins: [] } });
+      const guest = await guestCtx.newPage();
+      try {
+        await guest.goto(boardUrl);
+        await guest.waitForLoadState("domcontentloaded");
+        await enterLobby(guest, "Ivan");
+
+        // Facilitator drives the ritual to Commit.
+        const advance = () => page.getByRole("button", { name: "Advance" }).first().click();
+        await advance(); // -> Reveal & Vote
+        await expect(page.getByText("Reveal & Vote").first()).toBeVisible({ timeout: 10_000 });
+        await advance(); // -> Discuss
+        await expect(page.getByText("Discuss").first()).toBeVisible({ timeout: 10_000 });
+        await advance(); // -> Commit
+        await expect(
+          page.getByRole("heading", { name: "Commit the actions" })
+        ).toBeVisible({ timeout: 10_000 });
+
+        // The participant follows to Commit via realtime, sees the waiting hint,
+        // and is NOT offered the facilitator-only Seal button.
+        await expect(
+          guest.getByRole("heading", { name: "Commit the actions" })
+        ).toBeVisible({ timeout: 12_000 });
+        await expect(
+          guest.getByText(/Waiting for the facilitator to seal/i).first()
+        ).toBeVisible();
+        await expect(
+          guest.getByRole("button", { name: "Seal these decisions" })
+        ).toHaveCount(0);
+
+        // Facilitator seals: this persists phase=closed and broadcasts.
+        await page.getByRole("button", { name: "Seal these decisions" }).first().click();
+        await expect(
+          page.getByRole("heading", { name: "Sealed, nice work." })
+        ).toBeVisible({ timeout: 10_000 });
+
+        // The bug under test: the participant's screen must update to sealed too.
+        await expect(
+          guest.getByRole("heading", { name: "Sealed, nice work." })
+        ).toBeVisible({ timeout: 12_000 });
+      } finally {
+        await guestCtx.close();
+      }
     });
   });
 });
