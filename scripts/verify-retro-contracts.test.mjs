@@ -21,6 +21,21 @@ const { TEMPLATES, templateById } = await load("src/lib/retro/templates.ts");
 const { RETRO_PHASES, RETRO_PHASE_LABELS, ALL_RETRO_PHASES, RETRO_PHASE_LABEL_LIST } = await load(
   "src/lib/retro/phases.ts"
 );
+const { applyRetroEvent } = await load("src/lib/retro/apply-event.ts");
+
+// Minimal snapshot fixture for the realtime reducer tests.
+function baseSnap(overrides = {}) {
+  return {
+    board: { id: "b", name: "", template: "", columns: [], phase: "reveal", phase_started_at: null, settings: {}, saved_to_series_id: null, expires_at: "" },
+    participants: [],
+    cards: [{ id: "c1", column_id: "col", author_key: "a", author_name: "A", color: "sky", text: "hi", group_id: null, sort_order: 0 }],
+    votes: {},
+    my_votes: [],
+    actions: [],
+    carryover: [],
+    ...overrides,
+  };
+}
 
 // Pull every `[phase] in ('a','b',...)` list out of the merge migration so the
 // DB CHECK constraint and the retro_set_phase RPC can never drift from phases.ts.
@@ -70,6 +85,66 @@ test("retro phases: DB constraint and RPC mirror phases.ts (no drift)", () => {
   const sets = migrationPhaseSets().filter((s) => s.includes("lobby"));
   assert.ok(sets.length >= 2, "expected both the CHECK and the RPC phase lists");
   for (const list of sets) assert.deepEqual([...list].sort(), [...ALL_RETRO_PHASES].sort());
+});
+
+test("applyRetroEvent: phase.changed updates board phase (new ref)", () => {
+  const s = baseSnap();
+  const n = applyRetroEvent(s, { t: "phase.changed", phase: "discuss" }, null);
+  assert.equal(n.board.phase, "discuss");
+  assert.notEqual(n, s);
+  // No-op when already in that phase (same ref -> caller skips refetch).
+  assert.equal(applyRetroEvent(n, { t: "phase.changed", phase: "discuss" }, null), n);
+});
+
+test("applyRetroEvent: vote.changed applies authoritative count, clamps >= 0, no-ops when unchanged", () => {
+  const s = baseSnap({ votes: { c1: 2 } });
+  assert.equal(applyRetroEvent(s, { t: "vote.changed", card_id: "c1", count: 3 }, null).votes.c1, 3);
+  assert.equal(applyRetroEvent(s, { t: "vote.changed", card_id: "c1", count: -5 }, null).votes.c1, 0);
+  // Same count -> same reference (caller refetches instead of re-rendering).
+  assert.equal(applyRetroEvent(s, { t: "vote.changed", card_id: "c1", count: 2 }, null), s);
+});
+
+test("applyRetroEvent: card.deleted removes the card", () => {
+  const s = baseSnap();
+  assert.equal(applyRetroEvent(s, { t: "card.deleted", key: "a", card_id: "c1" }, null).cards.length, 0);
+  // Deleting an unknown card is a no-op (same ref).
+  assert.equal(applyRetroEvent(s, { t: "card.deleted", key: "a", card_id: "nope" }, null), s);
+});
+
+test("applyRetroEvent: card.added appends and dedupes by id", () => {
+  const s = baseSnap();
+  const card = { id: "c2", column_id: "col", author_key: "a", author_name: "A", color: "rose", text: "new", group_id: null, sort_order: 1 };
+  const n = applyRetroEvent(s, { t: "card.added", key: "a", card }, "a");
+  assert.equal(n.cards.length, 2);
+  assert.equal(applyRetroEvent(n, { t: "card.added", key: "a", card }, "a").cards.length, 2);
+});
+
+test("applyRetroEvent: card.updated patches text and color", () => {
+  const s = baseSnap();
+  const card = { id: "c1", column_id: "col", author_key: "a", author_name: "A", color: "amber", text: "edited", group_id: null, sort_order: 0 };
+  const n = applyRetroEvent(s, { t: "card.updated", key: "a", card }, "a");
+  assert.equal(n.cards[0].text, "edited");
+  assert.equal(n.cards[0].color, "amber");
+});
+
+test("applyRetroEvent: payload-less and unresolvable events no-op (signal refetch)", () => {
+  const s = baseSnap();
+  assert.equal(applyRetroEvent(s, { t: "card.added", key: "a" }, "a"), s);
+  assert.equal(applyRetroEvent(s, { t: "card.updated", key: "a" }, "a"), s);
+  assert.equal(applyRetroEvent(s, { t: "action.changed" }, "a"), s);
+  assert.equal(applyRetroEvent(s, { t: "carry.toggled", id: "x" }, "a"), s);
+});
+
+test("applyRetroEvent: redacts another author's card text during Reflect", () => {
+  const reflect = baseSnap({ board: { ...baseSnap().board, phase: "reflect" } });
+  const card = { id: "c3", column_id: "col", author_key: "someone-else", author_name: "Z", color: "sage", text: "secret", group_id: null, sort_order: 2 };
+  const asPeer = applyRetroEvent(reflect, { t: "card.added", key: "x", card }, "me-not-author");
+  const seen = asPeer.cards.find((c) => c.id === "c3");
+  assert.equal(seen.text, "");
+  assert.equal(seen.author_name, "");
+  // The author still sees their own card unredacted.
+  const asAuthor = applyRetroEvent(reflect, { t: "card.added", key: "x", card }, "someone-else");
+  assert.equal(asAuthor.cards.find((c) => c.id === "c3").text, "secret");
 });
 
 test("boardToMarkdown renders columns, actions, escapes pipes", () => {
