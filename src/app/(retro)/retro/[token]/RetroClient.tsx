@@ -3,7 +3,6 @@
 import * as React from "react";
 import type {
   RetroSnapshot,
-  RetroPhase,
   RetroCarry,
   PastelColor,
 } from "@/lib/retro/types";
@@ -29,13 +28,11 @@ import { CardEditor } from "@/components/retro/CardEditor";
 import { ShareInvite } from "@/components/retro/ShareInvite";
 import { boardToMarkdown } from "@/lib/retro/markdown";
 import { PhaseBar } from "@/components/retro/PhaseBar";
+import { RETRO_PHASES, RETRO_PHASE_LABEL_LIST } from "@/lib/retro/phases";
 import { PresenceStack } from "@/components/retro/PresenceStack";
 import { Switch } from "@/components/retro/Switch";
 import { Button } from "@/components/retro/Button";
 import { Icons } from "@/components/retro/icons";
-
-const PHASES: RetroPhase[] = ["lobby", "reflect", "reveal", "theme", "vote", "discuss", "commit"];
-const PHASE_LABELS = ["Lobby", "Reflect", "Reveal", "Theme", "Vote", "Discuss", "Commit"];
 
 type Me = { key: string; name: string; color: PastelColor };
 
@@ -51,13 +48,14 @@ export function RetroClient({
   const snapshot = data ?? initialSnapshot;
   const board = snapshot.board;
   const phase = board.phase;
-  const phaseIdx = PHASES.indexOf(phase === "closed" ? "commit" : phase);
+  const phaseIdx = RETRO_PHASES.indexOf(phase === "closed" ? "commit" : phase);
 
   const [ftoken, setFtoken] = React.useState<string | null>(null);
   const [theme, setTheme] = React.useState<"studio" | "daylight">("studio");
   const [sound, setSound] = React.useState(false);
   const [people, setPeople] = React.useState(snapshot.participants);
   const [revealed, setRevealed] = React.useState<Set<string>>(() => new Set());
+  const [revealComplete, setRevealComplete] = React.useState(false);
   const [myVotes, setMyVotes] = React.useState<Set<string>>(() => new Set());
   const [carryDone, setCarryDone] = React.useState<Record<string, boolean>>({});
   const [editor, setEditor] = React.useState<{ open: boolean; mode: "add" | "edit"; colId: string | null; cardId: string | null }>({ open: false, mode: "add", colId: null, cardId: null });
@@ -95,18 +93,30 @@ export function RetroClient({
   const { broadcast } = useRetroChannel(token, board.id, presenceMe, setPeople);
   const rpc = useRetroRpc(token, broadcast);
 
-  // The Reveal cascade: flip every card, staggered, when the room enters reveal.
+  // The Reveal cascade: flip every card, staggered, once when the room enters
+  // the merged Reveal & Vote phase. Deliberately keyed on phase only so adding
+  // or editing a card mid-phase (it stays editable) does not re-flip the board;
+  // cards added after the cascade settle appear face-up via revealComplete.
   React.useEffect(() => {
-    if (phase !== "reveal") return;
+    if (phase !== "reveal") {
+      setRevealComplete(false);
+      return;
+    }
     setRevealed(new Set());
+    setRevealComplete(false);
     const reduce = typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const step = reduce ? 0 : 90;
     const ids = snapshot.cards.map((c) => c.id);
     const timers = ids.map((id, i) =>
       window.setTimeout(() => setRevealed((prev) => new Set(prev).add(id)), 250 + i * step)
     );
-    return () => timers.forEach(clearTimeout);
-  }, [phase, snapshot.cards]);
+    const done = window.setTimeout(() => setRevealComplete(true), 250 + ids.length * step + 200);
+    return () => {
+      timers.forEach(clearTimeout);
+      clearTimeout(done);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase]);
 
   // Live phase timer (count-up from phase_started_at).
   React.useEffect(() => {
@@ -162,10 +172,10 @@ export function RetroClient({
     ).catch(() => {});
   }, [phase, isFacilitator, ftoken, snapshot.actions.length, snapshot.cards, snapshot.votes, rpc]);
 
-  // Quiet AI theme suggestion during the Theme phase (suggests only; hidden if
-  // unconfigured or nothing relevant). Fetched once on entering the phase.
+  // Quiet AI theme suggestion during the Reveal & Vote phase (suggests only;
+  // hidden if unconfigured or nothing relevant). Fetched once on entering it.
   React.useEffect(() => {
-    if (phase !== "theme") {
+    if (phase !== "reveal") {
       setSuggestion(null);
       return;
     }
@@ -184,7 +194,7 @@ export function RetroClient({
   }, [phase, token]);
 
   function advance() {
-    const next = PHASES[phaseIdx + 1];
+    const next = RETRO_PHASES[phaseIdx + 1];
     if (next && ftoken) void rpc("retro_set_phase", { p_ftoken: ftoken, p_phase: next }, { t: "phase.changed", phase: next });
   }
 
@@ -321,7 +331,7 @@ export function RetroClient({
 
       {/* Phase bar */}
       <div style={{ position: "relative", zIndex: 2 }}>
-        <PhaseBar phases={PHASE_LABELS} current={phaseIdx} timer={timer} isFacilitator={isFacilitator} onAdvance={advance} />
+        <PhaseBar phases={RETRO_PHASE_LABEL_LIST} current={phaseIdx} timer={timer} isFacilitator={isFacilitator} onAdvance={advance} />
       </div>
 
       {/* Content */}
@@ -355,8 +365,9 @@ export function RetroClient({
         {isBoard && (
           <Board
             columns={columns}
-            phase={PHASE_LABELS[phaseIdx]}
+            phase={phase}
             revealedSet={revealed}
+            revealComplete={revealComplete}
             votes={snapshot.votes}
             onVote={vote}
             carry={carry}
