@@ -3,6 +3,7 @@
 import * as React from "react";
 import type {
   RetroSnapshot,
+  RetroCard,
   RetroCarry,
   PastelColor,
 } from "@/lib/retro/types";
@@ -169,7 +170,7 @@ export function RetroClient({
     // Unique(board_id, source_card_id) makes a re-seed a no-op; swallow conflicts.
     void Promise.all(
       seed.map((x) =>
-        rpc("retro_add_action", { p_ftoken: ftoken, p_text: x.c.text, p_owner: "", p_due: "", p_color: x.c.color, p_source: x.c.id }, { t: "action.changed" })
+        rpc("retro_add_action", { p_ftoken: ftoken, p_text: x.c.text, p_owner: "", p_due: "", p_color: x.c.color, p_source: x.c.id }, { event: () => ({ t: "action.changed" }) })
       )
     ).catch(() => {});
   }, [phase, isFacilitator, ftoken, snapshot.actions.length, snapshot.cards, snapshot.votes, rpc]);
@@ -197,7 +198,10 @@ export function RetroClient({
 
   function advance() {
     const next = RETRO_PHASES[phaseIdx + 1];
-    if (next && ftoken) void rpc("retro_set_phase", { p_ftoken: ftoken, p_phase: next }, { t: "phase.changed", phase: next });
+    if (next && ftoken) void rpc("retro_set_phase", { p_ftoken: ftoken, p_phase: next }, {
+      optimistic: (s) => ({ ...s, board: { ...s.board, phase: next } }),
+      event: () => ({ t: "phase.changed", phase: next }),
+    });
   }
 
   function join(name: string) {
@@ -210,24 +214,45 @@ export function RetroClient({
 
   function saveCard(text: string, color: PastelColor) {
     if (!me) return;
+    const isReflect = phase === "reflect";
     if (editor.mode === "add" && editor.colId) {
-      void rpc("retro_add_card", { p_token: token, p_key: me.key, p_column: editor.colId, p_text: text, p_color: color }, { t: "card.added", key: me.key });
+      const colId = editor.colId;
+      // Optimistic temp card for instant local feedback; the refetch swaps in
+      // the real row. Peers get the real card (post-Reflect) or just a refetch
+      // signal (during Reflect, so hidden text never crosses the wire).
+      const temp: RetroCard = { id: `temp-${me.key}-${Date.now()}`, column_id: colId, author_key: me.key, author_name: me.name, color, text, group_id: null, sort_order: Number.MAX_SAFE_INTEGER };
+      void rpc("retro_add_card", { p_token: token, p_key: me.key, p_column: colId, p_text: text, p_color: color }, {
+        optimistic: (s) => ({ ...s, cards: [...s.cards, temp] }),
+        event: (data) => (isReflect ? { t: "card.added", key: me.key } : { t: "card.added", key: me.key, card: data as RetroCard }),
+      });
     } else if (editor.mode === "edit" && editor.cardId) {
-      void rpc("retro_update_card", { p_token: token, p_key: me.key, p_card: editor.cardId, p_text: text, p_color: color }, { t: "card.updated", key: me.key });
+      const cardId = editor.cardId;
+      const existing = snapshot.cards.find((c) => c.id === cardId);
+      void rpc("retro_update_card", { p_token: token, p_key: me.key, p_card: cardId, p_text: text, p_color: color }, {
+        optimistic: (s) => ({ ...s, cards: s.cards.map((c) => (c.id === cardId ? { ...c, text, color } : c)) }),
+        event: () => (isReflect || !existing ? { t: "card.updated", key: me.key } : { t: "card.updated", key: me.key, card: { ...existing, text, color } }),
+      });
     }
     setEditor({ open: false, mode: "add", colId: null, cardId: null });
   }
 
   function deleteCard() {
     if (!me || !editor.cardId) return;
-    void rpc("retro_delete_card", { p_token: token, p_key: me.key, p_card: editor.cardId }, { t: "card.deleted", key: me.key });
+    const cardId = editor.cardId;
+    void rpc("retro_delete_card", { p_token: token, p_key: me.key, p_card: cardId }, {
+      optimistic: (s) => ({ ...s, cards: s.cards.filter((c) => c.id !== cardId) }),
+      event: () => ({ t: "card.deleted", key: me.key, card_id: cardId }),
+    });
     setEditor({ open: false, mode: "add", colId: null, cardId: null });
   }
 
   function vote(cardId: string) {
     if (!me || remainingVotes(myVotes.size) <= 0) return;
     setMyVotes((prev) => new Set(prev).add(cardId));
-    void rpc("retro_vote", { p_token: token, p_key: me.key, p_card: cardId, p_delta: 1 }, { t: "vote.changed", card_id: cardId });
+    void rpc("retro_vote", { p_token: token, p_key: me.key, p_card: cardId, p_delta: 1 }, {
+      optimistic: (s) => ({ ...s, votes: { ...s.votes, [cardId]: (s.votes[cardId] ?? 0) + 1 } }),
+      event: (data) => ({ t: "vote.changed", card_id: cardId, count: (data as { count: number }).count }),
+    });
   }
 
   function toggleCarry(id: string) {
@@ -240,7 +265,10 @@ export function RetroClient({
     if (!isFacilitator || !ftoken) return;
     setBloom(true);
     window.setTimeout(() => setBloom(false), 1100);
-    void rpc("retro_set_phase", { p_ftoken: ftoken, p_phase: "closed" }, { t: "phase.changed", phase: "closed" });
+    void rpc("retro_set_phase", { p_ftoken: ftoken, p_phase: "closed" }, {
+      optimistic: (s) => ({ ...s, board: { ...s.board, phase: "closed" } }),
+      event: () => ({ t: "phase.changed", phase: "closed" }),
+    });
   }
 
   function exportMarkdown() {
