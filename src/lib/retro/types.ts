@@ -66,9 +66,15 @@ export interface RetroSnapshot {
   carryover: RetroCarry[];
 }
 
+// Liveness events. card.added/updated carry the full card so peers apply it
+// without a snapshot round-trip; the payload is omitted during Reflect (peers
+// must not receive hidden card text and refetch the redacted snapshot instead).
+// vote.changed carries the authoritative count returned by retro_vote.
 export type RetroBroadcast =
-  | { t: "card.added" | "card.updated" | "card.deleted"; key: string }
-  | { t: "vote.changed"; card_id: string }
+  | { t: "card.added"; key: string; card?: RetroCard }
+  | { t: "card.updated"; key: string; card?: RetroCard }
+  | { t: "card.deleted"; key: string; card_id: string }
+  | { t: "vote.changed"; card_id: string; count: number }
   | { t: "phase.changed"; phase: RetroPhase }
   | { t: "action.changed" }
   | { t: "carry.toggled"; id: string };
