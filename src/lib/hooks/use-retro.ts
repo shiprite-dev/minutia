@@ -4,6 +4,7 @@ import * as React from "react";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
+import { applyRetroEvent } from "@/lib/retro/apply-event";
 import type {
   RetroSnapshot,
   RetroBroadcast,
@@ -71,9 +72,21 @@ export function useRetroChannel(
     });
 
     channel.on("broadcast", { event: "retro" }, (m) => {
+      // broadcast.self defaults to false, so this only fires for OTHER clients;
+      // the sender already applied its own change optimistically in useRetroRpc.
       const payload = m.payload as RetroBroadcast;
       eventCb.current?.(payload);
-      void qc.invalidateQueries({ queryKey: retroKeys.snapshot(token) });
+      // Apply the event straight to the cache (no DB round-trip) when it carries
+      // enough data; otherwise fall back to a refetch. applyRetroEvent returns
+      // the same reference when it cannot resolve the event locally.
+      let applied = false;
+      qc.setQueriesData<RetroSnapshot>({ queryKey: retroKeys.snapshot(token) }, (prev) => {
+        if (!prev) return prev;
+        const next = applyRetroEvent(prev, payload, me.participant_key);
+        if (next !== prev) applied = true;
+        return next;
+      });
+      if (!applied) void qc.invalidateQueries({ queryKey: retroKeys.snapshot(token) });
     });
 
     channel.on("presence", { event: "sync" }, () => {
@@ -110,8 +123,18 @@ export function useRetroChannel(
   return { broadcast };
 }
 
-/** Thin RPC caller: runs the function, broadcasts the matching event so peers
- * update instantly, and refreshes our own snapshot. Throws on RPC error. */
+export type RetroRpcOptions = {
+  /** Patch the local snapshot immediately for instant feedback, before the RPC
+   *  resolves. The trailing refetch reconciles (and rolls back on error). */
+  optimistic?: (snap: RetroSnapshot) => RetroSnapshot;
+  /** Build the broadcast event from the RPC result (e.g. the inserted card or
+   *  authoritative vote count) so peers apply it without a round-trip. */
+  event?: (data: unknown) => RetroBroadcast | null;
+};
+
+/** Thin RPC caller: optimistically patches our own cache, runs the function,
+ * broadcasts the matching event so peers update instantly, and refreshes the
+ * snapshot to reconcile. Throws on RPC error (and refetches to roll back). */
 export function useRetroRpc(
   token: string,
   broadcast: (e: RetroBroadcast) => void
@@ -122,10 +145,21 @@ export function useRetroRpc(
     async (
       fn: string,
       args: Record<string, unknown>,
-      event?: RetroBroadcast
+      opts?: RetroRpcOptions
     ): Promise<unknown> => {
+      const optimistic = opts?.optimistic;
+      if (optimistic) {
+        qc.setQueriesData<RetroSnapshot>({ queryKey: retroKeys.snapshot(token) }, (prev) =>
+          prev ? optimistic(prev) : prev
+        );
+      }
       const { data, error } = await supabase.rpc(fn, args);
-      if (error) throw error;
+      if (error) {
+        // Discard the optimistic patch by pulling authoritative truth.
+        void qc.invalidateQueries({ queryKey: retroKeys.snapshot(token) });
+        throw error;
+      }
+      const event = opts?.event?.(data);
       if (event) broadcast(event);
       void qc.invalidateQueries({ queryKey: retroKeys.snapshot(token) });
       return data;
