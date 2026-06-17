@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import type { RetroCard as RetroCardData, RetroColumn, RetroCarry } from "@/lib/retro/types";
+import type { RetroCard as RetroCardData, RetroColumn, RetroCarry, RetroPhase } from "@/lib/retro/types";
 import { RetroCard } from "./RetroCard";
 import { VoteTally } from "./VoteTally";
 import { CarryoverItem } from "./CarryoverItem";
@@ -50,8 +50,9 @@ function EmptyNote({ icon, title, body, tone }: { icon: React.ReactNode; title: 
 
 export interface BoardProps {
   columns: RetroColumn[];
-  phase: string;
+  phase: RetroPhase;
   revealedSet: Set<string>;
+  revealComplete: boolean;
   votes: Record<string, number>;
   onVote: (cardId: string) => void;
   carry: RetroCarry[];
@@ -63,17 +64,17 @@ export interface BoardProps {
   suggestion?: { label: string; count: number } | null;
 }
 
-export function Board({ columns, phase, revealedSet, votes, onVote, carry, onToggleCarry, cards = [], onAddCardClick, onEditCard, me, suggestion = null }: BoardProps) {
-  const isReflect = phase === "Reflect";
-  const isReveal = phase === "Reveal";
-  const isVote = phase === "Vote";
-  const isDiscuss = phase === "Discuss";
-  const canEdit = isReflect || phase === "Theme";
+export function Board({ columns, phase, revealedSet, revealComplete, votes, onVote, carry, onToggleCarry, cards = [], onAddCardClick, onEditCard, me, suggestion = null }: BoardProps) {
+  const isReflect = phase === "reflect";
+  // Reveal & Vote: cards flip in, anyone can tidy/group them, and dot-voting is live.
+  const isReveal = phase === "reveal";
+  const isDiscuss = phase === "discuss";
+  const canEdit = isReflect || isReveal;
 
   function mine(card: RetroCardData) { return card.author_key === me; }
   function cardFaceDown(card: RetroCardData) {
     if (isReflect) return !mine(card);
-    if (isReveal) return !revealedSet.has(card.id);
+    if (isReveal) return !revealComplete && !revealedSet.has(card.id);
     return false;
   }
 
@@ -118,12 +119,12 @@ export function Board({ columns, phase, revealedSet, votes, onVote, carry, onTog
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 18, padding: "10px 14px", borderRadius: "var(--r-control)", background: "var(--accent-soft)", border: "1px solid color-mix(in oklab, var(--accent) 45%, transparent)", boxShadow: "var(--glow-accent)", maxWidth: "fit-content" }}>
             <Icons.Sparkles size={16} style={{ color: "var(--accent-bright)" }} />
             <span style={{ fontFamily: "var(--font-sans)", fontSize: 13.5, color: "var(--studio-ink)" }}>
-              <b style={{ fontFamily: "var(--font-serif)", fontWeight: 600 }}>The reveal.</b> Every card, all at once, nobody edits from here.
+              <b style={{ fontFamily: "var(--font-serif)", fontWeight: 600 }}>The reveal.</b> Every card, all at once. Group what belongs together, then dot-vote what matters most.
             </span>
             <span style={{ marginLeft: 6, fontFamily: "var(--font-mono)", fontSize: 12, fontVariantNumeric: "tabular-nums", color: "var(--accent-bright)" }}>{revealedSet.size}/{cards.length}</span>
           </div>
         )}
-        {phase === "Theme" && suggestion && (
+        {isReveal && suggestion && (
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 18, padding: "8px 12px", borderRadius: "var(--r-pill)", background: "var(--studio-raised)", border: "1px solid var(--studio-line-2)", maxWidth: "fit-content" }}>
             <Icons.Sparkles size={15} style={{ color: "var(--accent-bright)" }} />
             <span style={{ fontFamily: "var(--font-sans)", fontSize: 13, color: "var(--studio-ink-2)" }}>{suggestion.count} cards look related, <b style={{ color: "var(--studio-ink)" }}>&quot;{suggestion.label}&quot;</b></span>
@@ -140,17 +141,17 @@ export function Board({ columns, phase, revealedSet, votes, onVote, carry, onTog
                   <span style={{ fontFamily: "var(--font-mono)", fontSize: 13, color: "var(--studio-ink-3)" }}>{items.length}</span>
                 </header>
                 <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
-                  {(isReflect || phase === "Theme") && (
+                  {canEdit && (
                     <AddCard onClick={() => onAddCardClick(col.id)} />
                   )}
 
-                  {items.length === 0 && !(isReflect || phase === "Theme") && (
+                  {items.length === 0 && !canEdit && (
                     <EmptyColumn />
                   )}
 
                   {items.map((card) => {
                     const v = votes[card.id] ?? 0;
-                    const editable = canEdit && (phase === "Theme" || mine(card));
+                    const editable = canEdit && (isReveal || mine(card));
                     return (
                       <div key={card.id}>
                         <div
@@ -160,7 +161,7 @@ export function Board({ columns, phase, revealedSet, votes, onVote, carry, onTog
                           <RetroCard
                             color={card.color}
                             author={isReflect ? "" : card.author_name}
-                            votes={isVote || isDiscuss ? v : null}
+                            votes={isReveal || isDiscuss ? v : null}
                             faceDown={cardFaceDown(card)}
                             tilt={tiltFor(card.id)}
                           >
@@ -172,7 +173,7 @@ export function Board({ columns, phase, revealedSet, votes, onVote, carry, onTog
                             <Icons.EyeOff size={12} /> only you can see this
                           </div>
                         )}
-                        {isVote && (
+                        {isReveal && (
                           <div style={{ marginTop: 8 }}>
                             <VoteTally count={v} max={10} onVote={() => onVote(card.id)} voted={(votes[card.id] ?? 0) > 0} />
                           </div>

@@ -1,8 +1,9 @@
 /**
  * retro-ritual.spec.ts
  *
- * Single-context tests for the facilitator-led 7-phase ritual:
- * Lobby -> Reflect -> Reveal -> Theme -> Vote -> Discuss -> Commit.
+ * Single-context tests for the facilitator-led 5-phase ritual:
+ * Lobby -> Reflect -> Reveal & Vote -> Discuss -> Commit.
+ * (Reveal, theme, and dot-voting are merged into one "Reveal & Vote" phase.)
  *
  * Assumption: `retro_enabled = 'true'` in instance_config. Each test uses
  * `withRetroEnabled` to set the flag and restore it, requiring SERVICE_KEY.
@@ -248,7 +249,7 @@ test.describe("Retro ritual, facilitator flow", () => {
     });
   });
 
-  test("Vote phase shows vote tallies on cards", async ({ page, request }) => {
+  test("Reveal & Vote phase reveals cards and shows live dot-voting", async ({ page, request }) => {
     await withRetroEnabled(request, async () => {
       await createBoardAndNavigate(page, "Ritual Vote Test");
       await enterLobby(page, "Frank");
@@ -260,19 +261,13 @@ test.describe("Retro ritual, facilitator flow", () => {
       await page.getByPlaceholder("What's on your mind?").first().fill("Vote on this");
       await page.getByRole("button", { name: "Add card" }).first().click();
 
-      // Advance through Reflect -> Reveal -> Theme -> Vote.
-      const advance = () => page.getByRole("button", { name: "Advance" }).first().click();
-      await advance(); // -> Reveal
-      await expect(page.getByText("Reveal").first()).toBeVisible({ timeout: 10_000 });
-      await advance(); // -> Theme
-      await expect(page.getByText("Theme").first()).toBeVisible({ timeout: 10_000 });
-      await advance(); // -> Vote
-      await expect(page.getByText("Vote").first()).toBeVisible({ timeout: 10_000 });
+      // Advance Reflect -> Reveal & Vote (the merged phase).
+      await page.getByRole("button", { name: "Advance" }).first().click();
+      await expect(page.getByText("Reveal & Vote").first()).toBeVisible({ timeout: 10_000 });
 
-      // VoteTally is rendered for each card in Vote phase (Board.tsx).
-      // The tally count defaults to 0; the button is identifiable by role.
-      // VoteTally renders a button structure with vote count.
-      await expect(page.getByText("Vote on this").first()).toBeVisible();
+      // The card reveals, and a VoteTally (aria-label "Vote") renders for it.
+      await expect(page.getByText("Vote on this").first()).toBeVisible({ timeout: 10_000 });
+      await expect(page.getByRole("button", { name: "Vote" }).first()).toBeVisible({ timeout: 10_000 });
     });
   });
 
@@ -290,21 +285,15 @@ test.describe("Retro ritual, facilitator flow", () => {
       const advance = () =>
         page.getByRole("button", { name: "Advance" }).first().click();
 
-      await advance(); // -> Reveal
-      await expect(page.getByText("Reveal").first()).toBeVisible({ timeout: 10_000 });
-      await advance(); // -> Theme
-      await expect(page.getByText("Theme").first()).toBeVisible({ timeout: 10_000 });
-      await advance(); // -> Vote
-      await expect(page.getByText("Vote").first()).toBeVisible({ timeout: 10_000 });
+      await advance(); // -> Reveal & Vote
+      await expect(page.getByText("Reveal & Vote").first()).toBeVisible({ timeout: 10_000 });
       await advance(); // -> Discuss
       await expect(page.getByText("Discuss").first()).toBeVisible({ timeout: 10_000 });
       await advance(); // -> Commit
-      await expect(page.getByText("Commit").first()).toBeVisible({ timeout: 10_000 });
-
       // CommitPanel heading from CommitPanel.tsx.
       await expect(
         page.getByRole("heading", { name: "Commit the actions" })
-      ).toBeVisible();
+      ).toBeVisible({ timeout: 10_000 });
 
       // Seal button.
       const sealBtn = page.getByRole("button", { name: "Seal these decisions" }).first();
