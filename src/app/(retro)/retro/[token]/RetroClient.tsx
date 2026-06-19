@@ -24,6 +24,7 @@ import { templateById } from "@/lib/retro/templates";
 import { Board } from "@/components/retro/Board";
 import { Lobby } from "@/components/retro/Lobby";
 import { CommitPanel } from "@/components/retro/CommitPanel";
+import { RetroSummary } from "@/components/retro/RetroSummary";
 import { Spotlight } from "@/components/retro/Spotlight";
 import { CardEditor } from "@/components/retro/CardEditor";
 import { ShareInvite } from "@/components/retro/ShareInvite";
@@ -67,10 +68,14 @@ export function RetroClient({
   // Sealed is shared truth, not local UI: the board's terminal "closed" phase
   // means the facilitator ended the retro, and every participant sees it.
   const sealed = phase === "closed";
+  // Ended is the terminal fact (orthogonal to sealed): the board is frozen, the
+  // link resolves to a static summary, and live mutation is rejected for everyone.
+  const ended = !!board.ended_at;
   const [now, setNow] = React.useState(0);
   const [saving, setSaving] = React.useState(false);
   const [savedSeriesId, setSavedSeriesId] = React.useState<string | null>(board.saved_to_series_id);
   const [saveError, setSaveError] = React.useState<string | null>(null);
+  const [exported, setExported] = React.useState(false);
 
   // Anonymous identity (localStorage, client-only).
   React.useEffect(() => {
@@ -93,7 +98,7 @@ export function RetroClient({
     () => ({ participant_key: me?.key ?? "", name: me?.name || "Guest", color: me?.color ?? "sky", is_facilitator: !!ftoken }),
     [me?.key, me?.name, me?.color, ftoken]
   );
-  const { broadcast } = useRetroChannel(token, board.id, presenceMe, setPeople);
+  const { broadcast } = useRetroChannel(token, board.id, presenceMe, setPeople, undefined, !ended);
   const rpc = useRetroRpc(token, broadcast);
 
   // The Reveal cascade: flip every card, staggered, once when the room enters
@@ -121,11 +126,15 @@ export function RetroClient({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase]);
 
-  // Live phase timer (count-up from phase_started_at).
+  // Live phase timer (count-up from phase_started_at). Frozen once the retro is
+  // sealed or ended: a closed board has no active phase to time, and leaving the
+  // interval running is what produced the runaway 2325:37. Not starting it when
+  // sealed also retroactively fixes every already-closed board (no backfill).
   React.useEffect(() => {
+    if (sealed || ended) return;
     const t = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(t);
-  }, []);
+  }, [sealed, ended]);
 
   const isFacilitator = !!ftoken;
   const myParticipant = me ? snapshot.participants.find((p) => p.participant_key === me.key) : undefined;
@@ -284,6 +293,22 @@ export function RetroClient({
     a.download = `${board.name.replace(/[^a-z0-9]+/gi, "-").toLowerCase() || "retro"}.md`;
     a.click();
     URL.revokeObjectURL(url);
+    setExported(true);
+  }
+
+  function endRetro() {
+    // Facilitator-only and irreversible. retro_end requires phase='closed' (sealed)
+    // and is idempotent server-side. No optimistic patch: we must broadcast on the
+    // still-live channel before our own ended state tears it down. useRetroRpc
+    // broadcasts the event() before touching the cache, so peers flip instantly;
+    // the sender flips when the trailing refetch returns ended_at.
+    if (!isFacilitator || !ftoken) return;
+    void rpc("retro_end", { p_ftoken: ftoken }, {
+      event: (data) => {
+        const ts = (data as { ended_at?: string }).ended_at;
+        return ts ? { t: "retro.ended", ended_at: ts } : null;
+      },
+    });
   }
 
   const saveToMinutia = React.useCallback(async () => {
@@ -327,6 +352,38 @@ export function RetroClient({
   const editing = editor.cardId ? snapshot.cards.find((c) => c.id === editor.cardId) : null;
   const editorCol = columns.find((c) => c.id === editor.colId);
 
+  // Ended: a frozen, read-only summary. No phase bar, share, presence, or lobby
+  // (an already-ended link lands straight here from the SSR snapshot, no join).
+  if (ended) {
+    return (
+      <div data-retro={theme} style={{ position: "relative", minHeight: "100vh", display: "flex", flexDirection: "column", background: "var(--studio-void)" }}>
+        <div style={{ position: "absolute", inset: 0, pointerEvents: "none", background: "radial-gradient(120% 80% at 50% -10%, color-mix(in oklab, var(--accent) 7%, transparent), transparent 55%)" }} />
+        <header style={{ position: "relative", zIndex: 2, display: "flex", alignItems: "center", gap: 16, padding: "0 var(--space-6)", height: 56, borderBottom: "1px solid var(--studio-line)", background: "var(--studio-raised)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
+            <span style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--accent)", boxShadow: "var(--glow-accent)" }} />
+            <span style={{ fontFamily: "var(--font-serif)", fontSize: 17, fontWeight: 600, color: "var(--studio-ink)" }}>{board.name || "Minutia Retro"}</span>
+          </div>
+          <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 9 }}>
+            <Icons.Sun size={15} style={{ color: theme === "daylight" ? "var(--accent)" : "var(--studio-ink-3)" }} />
+            <Switch checked={theme === "daylight"} onChange={(v) => setTheme(v ? "daylight" : "studio")} size="sm" />
+            <Icons.Moon size={14} style={{ color: theme === "studio" ? "var(--studio-ink-2)" : "var(--studio-ink-3)" }} />
+          </div>
+        </header>
+        <main style={{ position: "relative", zIndex: 1, flex: 1, minHeight: 0 }}>
+          <RetroSummary
+            boardName={board.name}
+            columns={columns}
+            cards={snapshot.cards}
+            votes={snapshot.votes}
+            actions={snapshot.actions}
+            savedSeriesId={savedSeriesId}
+            onExport={exportMarkdown}
+          />
+        </main>
+      </div>
+    );
+  }
+
   if (!me) {
     return <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--studio-ink-3)", fontFamily: "var(--font-sans)" }}>Loading…</div>;
   }
@@ -367,7 +424,7 @@ export function RetroClient({
 
       {/* Phase bar */}
       <div style={{ position: "relative", zIndex: 2 }}>
-        <PhaseBar phases={RETRO_PHASE_LABEL_LIST} current={phaseIdx} timer={timer} isFacilitator={isFacilitator} onAdvance={advance} />
+        <PhaseBar phases={RETRO_PHASE_LABEL_LIST} current={phaseIdx} timer={sealed || ended ? null : timer} isFacilitator={isFacilitator} onAdvance={advance} />
       </div>
 
       {/* Content */}
@@ -397,6 +454,8 @@ export function RetroClient({
             saving={saving}
             savedSeriesId={savedSeriesId}
             saveError={saveError}
+            canEnd={sealed && isFacilitator && (!!savedSeriesId || exported)}
+            onEnd={endRetro}
           />
         )}
         {isBoard && (
