@@ -118,6 +118,16 @@ test("applyRetroEvent: phase.changed updates board phase (new ref)", () => {
   assert.equal(applyRetroEvent(n, { t: "phase.changed", phase: "discuss" }, null), n);
 });
 
+test("applyRetroEvent: retro.ended sets board.ended_at (new ref), no-ops when unchanged", () => {
+  const s = baseSnap();
+  const ts = "2026-06-19T10:00:00.000Z";
+  const n = applyRetroEvent(s, { t: "retro.ended", ended_at: ts }, null);
+  assert.equal(n.board.ended_at, ts);
+  assert.notEqual(n, s);
+  // Re-applying the same ended_at is a no-op (same ref -> caller skips refetch).
+  assert.equal(applyRetroEvent(n, { t: "retro.ended", ended_at: ts }, null), n);
+});
+
 test("applyRetroEvent: vote.changed applies authoritative count, clamps >= 0, no-ops when unchanged", () => {
   const s = baseSnap({ votes: { c1: 2 } });
   assert.equal(applyRetroEvent(s, { t: "vote.changed", card_id: "c1", count: 3 }, null).votes.c1, 3);
