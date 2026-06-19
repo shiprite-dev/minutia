@@ -21,12 +21,15 @@ export const retroKeys = {
  * caller's own cards during the Reflect phase. The key is part of the query key
  * so the query refetches once identity resolves client-side; invalidations use
  * the token-only prefix (`retroKeys.snapshot`) which matches by prefix. */
-export function useRetroSnapshot(token: string, meKey?: string, initialData?: RetroSnapshot, live = true) {
+export function useRetroSnapshot(token: string, meKey?: string, initialData?: RetroSnapshot) {
   const supabase = React.useMemo(() => createClient(), []);
   return useQuery<RetroSnapshot>({
     queryKey: [...retroKeys.snapshot(token), meKey ?? null],
     initialData,
-    refetchInterval: live ? 3000 : false,
+    // Poll every 3s while live; stop once the board is ended (frozen). Reading the
+    // query's own data avoids a chicken-and-egg with a derived `ended` flag, and
+    // also halts the poll for peers whose board ends mid-session.
+    refetchInterval: (query) => (query.state.data?.board?.ended_at ? false : 3000),
     queryFn: async () => {
       const { data, error } = await supabase.rpc("retro_snapshot", { p_token: token, p_key: meKey ?? null });
       if (error) throw error;
