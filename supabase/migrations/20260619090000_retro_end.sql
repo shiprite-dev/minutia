@@ -159,11 +159,26 @@ end $$;
 
 create or replace function public.retro_set_phase(p_ftoken text, p_phase text)
 returns jsonb language plpgsql security definer set search_path = public as $$
-declare b public.retro_boards;
+declare
+  b public.retro_boards;
+  -- Ordered ritual (mirror of src/lib/retro/phases.ts ALL_RETRO_PHASES). The
+  -- retro only ever moves forward: lobby -> reflect -> reveal -> discuss ->
+  -- commit -> closed. verify-retro-contracts guards this array against drift.
+  ord text[] := array['lobby', 'reflect', 'reveal', 'discuss', 'commit', 'closed'];
+  new_idx int; cur_idx int;
 begin
   b := public._retro_assert_facilitator(p_ftoken); perform public._retro_assert_live(b);
-  if p_phase not in ('lobby', 'reflect', 'reveal', 'discuss', 'commit', 'closed') then
-    raise exception 'retro: bad phase' using errcode = '22000'; end if;
+  new_idx := array_position(ord, p_phase);
+  if new_idx is null then raise exception 'retro: bad phase' using errcode = '22000'; end if;
+  cur_idx := array_position(ord, b.phase);
+  -- Monotonic forward only. Rapid or double "Advance" clicks fire concurrent
+  -- set_phase RPCs that can commit out of order; without this guard a late
+  -- "set discuss" could overwrite an earlier "set commit" and strand the board a
+  -- phase behind (the symptom). Ignoring any earlier-or-equal target makes the
+  -- board converge on the highest requested phase regardless of commit order.
+  if new_idx <= cur_idx then
+    return jsonb_build_object('ok', true, 'phase', b.phase, 'noop', true);
+  end if;
   update public.retro_boards set phase = p_phase, phase_started_at = now(), updated_at = now() where id = b.id;
   return jsonb_build_object('ok', true, 'phase', p_phase);
 end $$;

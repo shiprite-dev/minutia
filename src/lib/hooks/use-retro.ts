@@ -5,6 +5,7 @@ import type { RealtimeChannel } from "@supabase/supabase-js";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
 import { applyRetroEvent } from "@/lib/retro/apply-event";
+import { ALL_RETRO_PHASES } from "@/lib/retro/phases";
 import type {
   RetroSnapshot,
   RetroBroadcast,
@@ -15,6 +16,13 @@ export const retroKeys = {
   snapshot: (token: string) => ["retro", token] as const,
 };
 
+// Ordinal of a phase in the forward-only ritual. The retro never moves backward,
+// so a higher ordinal is always the more advanced (and more recent) truth.
+function phaseRank(phase: string): number {
+  const i = ALL_RETRO_PHASES.indexOf(phase as RetroSnapshot["board"]["phase"]);
+  return i === -1 ? 0 : i;
+}
+
 /** Authoritative board state via the snapshot RPC. Polls every 3s to reconcile
  * any broadcast event a peer missed (broadcast is best-effort, DB is truth).
  * Passing the caller's participant key resolves `my_votes` and unredacts the
@@ -23,8 +31,10 @@ export const retroKeys = {
  * the token-only prefix (`retroKeys.snapshot`) which matches by prefix. */
 export function useRetroSnapshot(token: string, meKey?: string, initialData?: RetroSnapshot) {
   const supabase = React.useMemo(() => createClient(), []);
+  const qc = useQueryClient();
+  const key = [...retroKeys.snapshot(token), meKey ?? null];
   return useQuery<RetroSnapshot>({
-    queryKey: [...retroKeys.snapshot(token), meKey ?? null],
+    queryKey: key,
     initialData,
     // Poll every 3s while live; stop once the board is ended (frozen). Reading the
     // query's own data avoids a chicken-and-egg with a derived `ended` flag, and
@@ -33,7 +43,18 @@ export function useRetroSnapshot(token: string, meKey?: string, initialData?: Re
     queryFn: async () => {
       const { data, error } = await supabase.rpc("retro_snapshot", { p_token: token, p_key: meKey ?? null });
       if (error) throw error;
-      return data as RetroSnapshot;
+      const next = data as RetroSnapshot;
+      // The server phase is monotonic forward, so a poll that returns an EARLIER
+      // phase than we already hold raced an optimistic advance and is stale. Keep
+      // the higher phase: otherwise a slow poll reverts the board and advance()
+      // would read that stale phase and request the wrong next phase (the ritual
+      // would stick a step behind). Pairs with the SQL monotonic guard in
+      // retro_set_phase. Other fields (cards, votes) still take the fresh values.
+      const prev = qc.getQueryData<RetroSnapshot>(key);
+      if (prev && phaseRank(next.board.phase) < phaseRank(prev.board.phase)) {
+        return { ...next, board: { ...next.board, phase: prev.board.phase, phase_started_at: prev.board.phase_started_at } };
+      }
+      return next;
     },
   });
 }

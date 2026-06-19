@@ -227,3 +227,14 @@ test("retro_end migration: helper revoked from anon, RPC granted to anon", () =>
   assert.match(sql, /revoke[\s\S]*_retro_assert_live[\s\S]*from[\s\S]*anon/i);
   assert.match(sql, /grant execute on function[\s\S]*public\.retro_end\(text\)[\s\S]*to anon/i);
 });
+
+test("retro_set_phase: monotonic ordinal array mirrors ALL_RETRO_PHASES (no drift)", () => {
+  const body = fnBody(endMigration(), "retro_set_phase");
+  assert.ok(body, "retro_set_phase redefined in the end migration");
+  // Forward-only guard so concurrent/out-of-order set_phase cannot strand a board.
+  assert.match(body, /new_idx\s*<=\s*cur_idx/);
+  const m = body.match(/array\[([^\]]*)\]/i);
+  assert.ok(m, "retro_set_phase declares an ordered phase array");
+  const arr = [...m[1].matchAll(/'([^']+)'/g)].map((x) => x[1]);
+  assert.deepEqual(arr, ALL_RETRO_PHASES);
+});

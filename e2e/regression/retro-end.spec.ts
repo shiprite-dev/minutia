@@ -114,4 +114,24 @@ test.describe("retro_end contract", () => {
     const data = await snap.json();
     expect(data.board.ended_at).toBeTruthy();
   });
+
+  // set_phase is monotonic forward: rapid/double "Advance" clicks fire concurrent
+  // set_phase RPCs that can commit out of order; a late earlier-phase write must
+  // not strand the board behind. This is the root-cause guard for the ritual flake.
+  test("set_phase is monotonic: an earlier phase is a no-op, board stays ahead", async ({ request }) => {
+    const b = await createBoard(request, `Monotonic ${Date.now()}`);
+    for (const p of ["reflect", "reveal", "discuss", "commit"]) {
+      const r = await rpc(request, "retro_set_phase", { p_ftoken: b.facilitator_token, p_phase: p });
+      expect(r.ok(), `advance to ${p}`).toBeTruthy();
+    }
+    // A late/out-of-order request to an earlier phase is ignored (no-op).
+    const back = await rpc(request, "retro_set_phase", { p_ftoken: b.facilitator_token, p_phase: "discuss" });
+    expect(back.ok()).toBeTruthy();
+    const backJson = await back.json();
+    expect(backJson.noop).toBe(true);
+    expect(backJson.phase).toBe("commit");
+    // The board stayed at the highest requested phase.
+    const snap = await rpc(request, "retro_snapshot", { p_token: b.token, p_key: b.participant_key });
+    expect((await snap.json()).board.phase).toBe("commit");
+  });
 });
