@@ -7,6 +7,7 @@ import { Button } from "./Button";
 import { Avatar } from "./Avatar";
 import { Badge } from "./Badge";
 import { Icons } from "./icons";
+import { ConfirmDialog } from "./ConfirmDialog";
 
 export interface CommitPanelProps {
   actions: RetroAction[];
@@ -19,9 +20,12 @@ export interface CommitPanelProps {
   saving: boolean;
   savedSeriesId: string | null;
   saveError: string | null;
+  canEnd: boolean;
+  onEnd: () => void;
 }
 
-export function CommitPanel({ actions, sealed, isFacilitator, onSeal, bloom, onSave, onExport, saving, savedSeriesId, saveError }: CommitPanelProps) {
+export function CommitPanel({ actions, sealed, isFacilitator, onSeal, bloom, onSave, onExport, saving, savedSeriesId, saveError, canEnd, onEnd }: CommitPanelProps) {
+  const [confirmEnd, setConfirmEnd] = React.useState(false);
   return (
     <div style={{ height: "100%", overflowY: "auto", display: "flex", justifyContent: "center", padding: "var(--space-12) var(--space-6)", position: "relative" }}>
       {/* closure bloom flash across the board */}
@@ -113,6 +117,28 @@ export function CommitPanel({ actions, sealed, isFacilitator, onSeal, bloom, onS
             )}
           </div>
         )}
+
+        {canEnd && (
+          <div style={{ marginTop: 22, textAlign: "center" }}>
+            <p style={{ fontFamily: "var(--font-sans)", fontSize: 13.5, color: "var(--studio-ink-3)", margin: "0 0 12px" }}>
+              Everyone done? End the retro to lock the board for everyone.
+            </p>
+            <Button variant="secondary" onClick={() => setConfirmEnd(true)} iconLeft={<Icons.CheckCircle size={17} />}>
+              End retro
+            </Button>
+          </div>
+        )}
+
+        <ConfirmDialog
+          open={confirmEnd}
+          tone="danger"
+          title="End this retro?"
+          body="This ends the retro for everyone. The board becomes read-only and live editing stops. This can't be undone."
+          warning={savedSeriesId ? undefined : "You exported markdown but didn't save to Minutia, so this board still expires in 30 days."}
+          confirmLabel="End retro"
+          onConfirm={() => { setConfirmEnd(false); onEnd(); }}
+          onCancel={() => setConfirmEnd(false)}
+        />
       </div>
     </div>
   );

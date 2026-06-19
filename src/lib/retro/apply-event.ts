@@ -58,6 +58,10 @@ export function applyRetroEvent(
       return { ...snap, cards: snap.cards.map((c) => (c.id === card.id ? { ...c, ...card } : c)) };
     }
 
+    case "retro.ended":
+      if (snap.board.ended_at === e.ended_at) return snap;
+      return { ...snap, board: { ...snap.board, ended_at: e.ended_at } };
+
     default:
       // action.changed, carry.toggled: server-derived; caller refetches.
       return snap;

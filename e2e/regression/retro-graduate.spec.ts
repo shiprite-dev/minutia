@@ -114,7 +114,7 @@ async function runThroughToCommitSealed(
   // Enter lobby.
   await page.getByPlaceholder("Your name").first().fill("Author");
   await page.getByRole("button", { name: "Join" }).first().click();
-  await expect(page.getByText("Reflect").first()).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByText("Reflect").first()).toBeVisible({ timeout: 15_000 });
 
   // Add a card (to seed an action for graduation).
   await page.getByRole("button", { name: "Add a card" }).first().click();
@@ -125,22 +125,24 @@ async function runThroughToCommitSealed(
     await page.getByRole("button", { name: "Advance" }).first().click();
   };
 
-  // Reflect -> Reveal & Vote -> Discuss -> Commit (5-phase merged ritual).
+  // Reflect -> Reveal & Vote -> Discuss -> Commit (5-phase merged ritual). Phase
+  // advances are optimistic but reconcile against the 3s poll; wide budgets absorb
+  // a poll-cycle race over this long chain under dev-mode load.
   await advance();
-  await expect(page.getByText("Reveal & Vote").first()).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByText("Reveal & Vote").first()).toBeVisible({ timeout: 15_000 });
   await advance();
-  await expect(page.getByText("Discuss").first()).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByText("Discuss").first()).toBeVisible({ timeout: 15_000 });
   await advance();
   await expect(
     page.getByRole("heading", { name: "Commit the actions" })
-  ).toBeVisible({ timeout: 10_000 });
+  ).toBeVisible({ timeout: 15_000 });
 
   // Seal (the creator is the facilitator). Sealing persists phase=closed and
   // broadcasts, then the panel flips to the sealed nudge after the refetch.
   await page.getByRole("button", { name: "Seal these decisions" }).first().click();
   await expect(
     page.getByRole("heading", { name: "Sealed, nice work." })
-  ).toBeVisible({ timeout: 10_000 });
+  ).toBeVisible({ timeout: 15_000 });
 
   return boardUrl;
 }
@@ -318,6 +320,48 @@ test.describe("Retro graduation, authenticated", () => {
         // The series page should show the board name as the series name.
         await expect(page.getByText(boardName).first()).toBeVisible({ timeout: 10_000 });
       }
+    });
+
+    if (createdSeriesId && SERVICE_KEY) {
+      await deleteSeries(request, createdSeriesId);
+    }
+  });
+
+  test("save to Minutia then End retro freezes the board to a summary with Open the series", async ({
+    page,
+    request,
+  }) => {
+    test.setTimeout(120_000);
+
+    test.skip(!SERVICE_KEY, "Requires SUPABASE_SERVICE_ROLE_KEY for setup + cleanup");
+
+    const boardName = `Graduate End Test ${Date.now()}`;
+    let createdSeriesId: string | null = null;
+
+    await withRetroEnabled(request, async () => {
+      await runThroughToCommitSealed(page, boardName);
+
+      // Save first (the saved path of canEnd: sealed && facilitator && savedSeriesId).
+      await page.getByRole("button", { name: "Save to Minutia" }).first().click();
+      await expect(
+        page.getByText("Your action items are now tracked in Minutia.").first()
+      ).toBeVisible({ timeout: 20_000 });
+      const savedLink = page.getByRole("link", { name: /Open the series/i }).first();
+      createdSeriesId = (await savedLink.getAttribute("href"))?.split("/series/")[1]?.split("?")[0] ?? null;
+
+      // End retro now appears; the saved path shows no 30-day expiry warning.
+      const endBtn = page.getByRole("button", { name: "End retro" }).first();
+      await expect(endBtn).toBeVisible();
+      await endBtn.click();
+      const dialog = page.getByRole("dialog");
+      await expect(dialog.getByText("End this retro?")).toBeVisible();
+      await expect(dialog.getByText(/expires in 30 days/i)).toHaveCount(0);
+      await dialog.getByRole("button", { name: "End retro" }).click();
+
+      // Frozen summary with the persisted "Open the series" link.
+      await expect(page.getByText("Retro complete").first()).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByRole("link", { name: /Open the series/i }).first()).toBeVisible();
+      await expect(page.getByRole("button", { name: "Add a card" })).toHaveCount(0);
     });
 
     if (createdSeriesId && SERVICE_KEY) {
