@@ -21,12 +21,12 @@ export const retroKeys = {
  * caller's own cards during the Reflect phase. The key is part of the query key
  * so the query refetches once identity resolves client-side; invalidations use
  * the token-only prefix (`retroKeys.snapshot`) which matches by prefix. */
-export function useRetroSnapshot(token: string, meKey?: string, initialData?: RetroSnapshot) {
+export function useRetroSnapshot(token: string, meKey?: string, initialData?: RetroSnapshot, live = true) {
   const supabase = React.useMemo(() => createClient(), []);
   return useQuery<RetroSnapshot>({
     queryKey: [...retroKeys.snapshot(token), meKey ?? null],
     initialData,
-    refetchInterval: 3000,
+    refetchInterval: live ? 3000 : false,
     queryFn: async () => {
       const { data, error } = await supabase.rpc("retro_snapshot", { p_token: token, p_key: meKey ?? null });
       if (error) throw error;
@@ -52,7 +52,8 @@ export function useRetroChannel(
   boardId: string,
   me: PresenceMeta,
   onPresence: (people: RetroParticipant[]) => void,
-  onEvent?: (e: RetroBroadcast) => void
+  onEvent?: (e: RetroBroadcast) => void,
+  enabled = true
 ) {
   const qc = useQueryClient();
   const channelRef = React.useRef<RealtimeChannel | null>(null);
@@ -65,7 +66,7 @@ export function useRetroChannel(
   });
 
   React.useEffect(() => {
-    if (!boardId || !me.participant_key) return;
+    if (!enabled || !boardId || !me.participant_key) return;
     const supabase = createClient();
     const channel = supabase.channel(`retro:${boardId}`, {
       config: { presence: { key: me.participant_key } },
@@ -112,9 +113,10 @@ export function useRetroChannel(
       channelRef.current = null;
       void supabase.removeChannel(channel);
     };
-    // Re-subscribe only when the board or our identity changes.
+    // Re-subscribe only when the board or our identity changes. Flipping `enabled`
+    // false (board ended) runs the cleanup above, tearing down presence/broadcast.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [boardId, me.participant_key, me.name, me.color, me.is_facilitator, token]);
+  }, [boardId, me.participant_key, me.name, me.color, me.is_facilitator, token, enabled]);
 
   const broadcast = React.useCallback((payload: RetroBroadcast) => {
     void channelRef.current?.send({ type: "broadcast", event: "retro", payload });
