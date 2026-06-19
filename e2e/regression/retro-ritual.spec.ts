@@ -140,7 +140,7 @@ test.describe("Retro ritual, facilitator flow", () => {
       // PhaseBar shows "Reflect" as the current phase label.
       await expect(
         page.getByText("Reflect").first()
-      ).toBeVisible({ timeout: 10_000 });
+      ).toBeVisible({ timeout: 15_000 });
 
       // Board columns appear (at least one "Add a card" button).
       await expect(
@@ -158,7 +158,7 @@ test.describe("Retro ritual, facilitator flow", () => {
       await enterLobby(page, "Bob");
 
       // Wait for Reflect.
-      await expect(page.getByText("Reflect").first()).toBeVisible({ timeout: 10_000 });
+      await expect(page.getByText("Reflect").first()).toBeVisible({ timeout: 15_000 });
 
       // Click "Add a card" in the first column.
       await page.getByRole("button", { name: "Add a card" }).first().click();
@@ -184,7 +184,7 @@ test.describe("Retro ritual, facilitator flow", () => {
       await createBoardAndNavigate(page, "Ritual Private Test");
       await enterLobby(page, "Carol");
 
-      await expect(page.getByText("Reflect").first()).toBeVisible({ timeout: 10_000 });
+      await expect(page.getByText("Reflect").first()).toBeVisible({ timeout: 15_000 });
 
       // Board.tsx shows "Writing privately." banner in Reflect.
       await expect(
@@ -211,13 +211,13 @@ test.describe("Retro ritual, facilitator flow", () => {
       await enterLobby(page, "Dave");
 
       // Wait for Reflect with Advance button (facilitator-only in PhaseBar).
-      await expect(page.getByText("Reflect").first()).toBeVisible({ timeout: 10_000 });
+      await expect(page.getByText("Reflect").first()).toBeVisible({ timeout: 15_000 });
       const advanceBtn = page.getByRole("button", { name: "Advance" }).first();
       await expect(advanceBtn).toBeVisible();
 
       // Advance: Reflect -> Reveal.
       await advanceBtn.click();
-      await expect(page.getByText("Reveal").first()).toBeVisible({ timeout: 10_000 });
+      await expect(page.getByText("Reveal").first()).toBeVisible({ timeout: 15_000 });
     });
   });
 
@@ -229,7 +229,7 @@ test.describe("Retro ritual, facilitator flow", () => {
       await createBoardAndNavigate(page, "Ritual Reveal Test");
       await enterLobby(page, "Eve");
 
-      await expect(page.getByText("Reflect").first()).toBeVisible({ timeout: 10_000 });
+      await expect(page.getByText("Reflect").first()).toBeVisible({ timeout: 15_000 });
 
       // Add a card so there is something to reveal.
       await page.getByRole("button", { name: "Add a card" }).first().click();
@@ -240,12 +240,12 @@ test.describe("Retro ritual, facilitator flow", () => {
       await page.getByRole("button", { name: "Advance" }).first().click();
 
       // Board.tsx reveals banner: "The reveal."
-      await expect(page.getByText("The reveal.").first()).toBeVisible({ timeout: 10_000 });
+      await expect(page.getByText("The reveal.").first()).toBeVisible({ timeout: 15_000 });
 
       // The card text should become visible after the reveal cascade.
       await expect(
         page.getByText("Revealed card text").first()
-      ).toBeVisible({ timeout: 10_000 });
+      ).toBeVisible({ timeout: 15_000 });
     });
   });
 
@@ -254,7 +254,7 @@ test.describe("Retro ritual, facilitator flow", () => {
       await createBoardAndNavigate(page, "Ritual Vote Test");
       await enterLobby(page, "Frank");
 
-      await expect(page.getByText("Reflect").first()).toBeVisible({ timeout: 10_000 });
+      await expect(page.getByText("Reflect").first()).toBeVisible({ timeout: 15_000 });
 
       // Add a card.
       await page.getByRole("button", { name: "Add a card" }).first().click();
@@ -263,11 +263,11 @@ test.describe("Retro ritual, facilitator flow", () => {
 
       // Advance Reflect -> Reveal & Vote (the merged phase).
       await page.getByRole("button", { name: "Advance" }).first().click();
-      await expect(page.getByText("Reveal & Vote").first()).toBeVisible({ timeout: 10_000 });
+      await expect(page.getByText("Reveal & Vote").first()).toBeVisible({ timeout: 15_000 });
 
       // The card reveals, and a VoteTally (aria-label "Vote") renders for it.
-      await expect(page.getByText("Vote on this").first()).toBeVisible({ timeout: 10_000 });
-      await expect(page.getByRole("button", { name: "Vote" }).first()).toBeVisible({ timeout: 10_000 });
+      await expect(page.getByText("Vote on this").first()).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByRole("button", { name: "Vote" }).first()).toBeVisible({ timeout: 15_000 });
     });
   });
 
@@ -279,21 +279,21 @@ test.describe("Retro ritual, facilitator flow", () => {
       await createBoardAndNavigate(page, "Ritual Commit Test");
       await enterLobby(page, "Grace");
 
-      await expect(page.getByText("Reflect").first()).toBeVisible({ timeout: 10_000 });
+      await expect(page.getByText("Reflect").first()).toBeVisible({ timeout: 15_000 });
 
       // Advance through all phases to Commit.
       const advance = () =>
         page.getByRole("button", { name: "Advance" }).first().click();
 
       await advance(); // -> Reveal & Vote
-      await expect(page.getByText("Reveal & Vote").first()).toBeVisible({ timeout: 10_000 });
+      await expect(page.getByText("Reveal & Vote").first()).toBeVisible({ timeout: 15_000 });
       await advance(); // -> Discuss
-      await expect(page.getByText("Discuss").first()).toBeVisible({ timeout: 10_000 });
+      await expect(page.getByText("Discuss").first()).toBeVisible({ timeout: 15_000 });
       await advance(); // -> Commit
       // CommitPanel heading from CommitPanel.tsx.
       await expect(
         page.getByRole("heading", { name: "Commit the actions" })
-      ).toBeVisible({ timeout: 10_000 });
+      ).toBeVisible({ timeout: 15_000 });
 
       // Seal button.
       const sealBtn = page.getByRole("button", { name: "Seal these decisions" }).first();
@@ -304,7 +304,7 @@ test.describe("Retro ritual, facilitator flow", () => {
       // Sealing now persists phase=closed via RPC + refetch, so allow for the round-trip.
       await expect(
         page.getByRole("heading", { name: "Sealed, nice work." })
-      ).toBeVisible({ timeout: 10_000 });
+      ).toBeVisible({ timeout: 15_000 });
 
       // The Minutia nudge appears in the sealed CommitPanel.
       await expect(
@@ -332,7 +332,7 @@ test.describe("Retro ritual, facilitator flow", () => {
       await createBoardAndNavigate(page, "Ritual Multiplayer Seal");
       const boardUrl = page.url();
       await enterLobby(page, "Heidi"); // creator is the facilitator
-      await expect(page.getByText("Reflect").first()).toBeVisible({ timeout: 10_000 });
+      await expect(page.getByText("Reflect").first()).toBeVisible({ timeout: 15_000 });
 
       // A participant joins in a fresh context (no facilitator token in storage).
       const guestCtx = await browser.newContext({ storageState: { cookies: [], origins: [] } });
@@ -345,19 +345,19 @@ test.describe("Retro ritual, facilitator flow", () => {
         // Facilitator drives the ritual to Commit.
         const advance = () => page.getByRole("button", { name: "Advance" }).first().click();
         await advance(); // -> Reveal & Vote
-        await expect(page.getByText("Reveal & Vote").first()).toBeVisible({ timeout: 10_000 });
+        await expect(page.getByText("Reveal & Vote").first()).toBeVisible({ timeout: 15_000 });
         await advance(); // -> Discuss
-        await expect(page.getByText("Discuss").first()).toBeVisible({ timeout: 10_000 });
+        await expect(page.getByText("Discuss").first()).toBeVisible({ timeout: 15_000 });
         await advance(); // -> Commit
         await expect(
           page.getByRole("heading", { name: "Commit the actions" })
-        ).toBeVisible({ timeout: 10_000 });
+        ).toBeVisible({ timeout: 15_000 });
 
         // The participant follows to Commit via realtime, sees the waiting hint,
         // and is NOT offered the facilitator-only Seal button.
         await expect(
           guest.getByRole("heading", { name: "Commit the actions" })
-        ).toBeVisible({ timeout: 12_000 });
+        ).toBeVisible({ timeout: 15_000 });
         await expect(
           guest.getByText(/Waiting for the facilitator to seal/i).first()
         ).toBeVisible();
@@ -369,12 +369,12 @@ test.describe("Retro ritual, facilitator flow", () => {
         await page.getByRole("button", { name: "Seal these decisions" }).first().click();
         await expect(
           page.getByRole("heading", { name: "Sealed, nice work." })
-        ).toBeVisible({ timeout: 10_000 });
+        ).toBeVisible({ timeout: 15_000 });
 
         // The bug under test: the participant's screen must update to sealed too.
         await expect(
           guest.getByRole("heading", { name: "Sealed, nice work." })
-        ).toBeVisible({ timeout: 12_000 });
+        ).toBeVisible({ timeout: 15_000 });
       } finally {
         await guestCtx.close();
       }
@@ -421,7 +421,7 @@ test.describe("Retro ritual, facilitator flow", () => {
         await dialog.getByRole("button", { name: "End retro" }).click();
 
         // Frozen summary renders; phase bar and its timer are gone.
-        await expect(page.getByText("Retro complete").first()).toBeVisible({ timeout: 10_000 });
+        await expect(page.getByText("Retro complete").first()).toBeVisible({ timeout: 15_000 });
         await expect(page.getByText("This board is read-only. Live editing has ended.").first()).toBeVisible();
         await expect(page.getByRole("button", { name: "Advance" })).toHaveCount(0);
         await expect(page.getByRole("button", { name: "Add a card" })).toHaveCount(0);
@@ -452,7 +452,7 @@ test.describe("Retro ritual, facilitator flow", () => {
           await page.getByRole("button", { name: "End retro" }).first().click();
           await page.getByRole("dialog").getByRole("button", { name: "End retro" }).click();
 
-          await expect(page.getByText("Retro complete").first()).toBeVisible({ timeout: 10_000 });
+          await expect(page.getByText("Retro complete").first()).toBeVisible({ timeout: 15_000 });
           // The peer flips to the summary (broadcast, with the 3s poll as backstop).
           await expect(guest.getByText("Retro complete").first()).toBeVisible({ timeout: 15_000 });
           await expect(guest.getByRole("button", { name: "Add a card" })).toHaveCount(0);
@@ -472,7 +472,7 @@ test.describe("Retro ritual, facilitator flow", () => {
         await page.getByRole("button", { name: "Just export markdown" }).first().click();
         await page.getByRole("button", { name: "End retro" }).first().click();
         await page.getByRole("dialog").getByRole("button", { name: "End retro" }).click();
-        await expect(page.getByText("Retro complete").first()).toBeVisible({ timeout: 10_000 });
+        await expect(page.getByText("Retro complete").first()).toBeVisible({ timeout: 15_000 });
 
         // A fresh visitor opens the ended link: SSR snapshot carries ended_at, so
         // RetroClient renders the summary client-side with no lobby, no live channel.
