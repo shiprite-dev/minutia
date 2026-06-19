@@ -76,25 +76,34 @@ test.describe("retro_end contract", () => {
     expect(s.ended_at).toBe(f.ended_at);
   });
 
-  test("after ending, live mutations are rejected for everyone", async ({ request }) => {
+  test("after ending, every live-mutation RPC is rejected for everyone", async ({ request }) => {
     const b = await createSealed(request, `Frozen ${Date.now()}`);
     await rpc(request, "retro_end", { p_ftoken: b.facilitator_token });
+    const FAKE = "00000000-0000-0000-0000-000000000000";
 
-    const add = await rpc(request, "retro_add_card", { p_token: b.token, p_key: b.participant_key, p_column: "start", p_text: "nope", p_color: "sky" });
-    expect(add.ok()).toBeFalsy();
-    expect(JSON.stringify(await add.json())).toContain("board ended");
-
-    const vote = await rpc(request, "retro_vote", { p_token: b.token, p_key: b.participant_key, p_card: "00000000-0000-0000-0000-000000000000", p_delta: 1 });
-    expect(vote.ok()).toBeFalsy();
-    expect(JSON.stringify(await vote.json())).toContain("board ended");
-
-    const join = await rpc(request, "retro_join", { p_token: b.token, p_key: `late-${Date.now()}`, p_name: "Late", p_color: "rose" });
-    expect(join.ok()).toBeFalsy();
-    expect(JSON.stringify(await join.json())).toContain("board ended");
-
-    const phase = await rpc(request, "retro_set_phase", { p_ftoken: b.facilitator_token, p_phase: "commit" });
-    expect(phase.ok()).toBeFalsy();
-    expect(JSON.stringify(await phase.json())).toContain("board ended");
+    // The guard fires on the loaded board before any per-row check, so a fake id
+    // still raises "board ended" (it never reaches the ownership/existence check).
+    // Member-path RPCs (token + participant key).
+    const member: Array<[string, Record<string, unknown>]> = [
+      ["retro_add_card", { p_token: b.token, p_key: b.participant_key, p_column: "start", p_text: "nope", p_color: "sky" }],
+      ["retro_update_card", { p_token: b.token, p_key: b.participant_key, p_card: FAKE, p_text: "nope", p_color: "sky" }],
+      ["retro_delete_card", { p_token: b.token, p_key: b.participant_key, p_card: FAKE }],
+      ["retro_vote", { p_token: b.token, p_key: b.participant_key, p_card: FAKE, p_delta: 1 }],
+      ["retro_join", { p_token: b.token, p_key: `late-${Date.now()}`, p_name: "Late", p_color: "rose" }],
+    ];
+    // Facilitator-path RPCs (facilitator token).
+    const facilitator: Array<[string, Record<string, unknown>]> = [
+      ["retro_set_phase", { p_ftoken: b.facilitator_token, p_phase: "commit" }],
+      ["retro_set_card_group", { p_ftoken: b.facilitator_token, p_card_ids: [FAKE], p_group: FAKE }],
+      ["retro_add_action", { p_ftoken: b.facilitator_token, p_text: "nope", p_owner: "", p_due: "", p_color: "sand" }],
+      ["retro_update_action", { p_ftoken: b.facilitator_token, p_action: FAKE, p_text: "nope", p_owner: "", p_due: "" }],
+      ["retro_delete_action", { p_ftoken: b.facilitator_token, p_action: FAKE }],
+    ];
+    for (const [fn, body] of [...member, ...facilitator]) {
+      const res = await rpc(request, fn, body);
+      expect(res.ok(), `${fn} should be rejected`).toBeFalsy();
+      expect(JSON.stringify(await res.json()), `${fn} should report board ended`).toContain("board ended");
+    }
   });
 
   test("snapshot still returns an ended board, with ended_at populated", async ({ request }) => {

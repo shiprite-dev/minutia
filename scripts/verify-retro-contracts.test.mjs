@@ -26,7 +26,7 @@ const { applyRetroEvent } = await load("src/lib/retro/apply-event.ts");
 // Minimal snapshot fixture for the realtime reducer tests.
 function baseSnap(overrides = {}) {
   return {
-    board: { id: "b", name: "", template: "", columns: [], phase: "reveal", phase_started_at: null, settings: {}, saved_to_series_id: null, expires_at: "" },
+    board: { id: "b", name: "", template: "", columns: [], phase: "reveal", phase_started_at: null, settings: {}, saved_to_series_id: null, expires_at: "", ended_at: null },
     participants: [],
     cards: [{ id: "c1", column_id: "col", author_key: "a", author_name: "A", color: "sky", text: "hi", group_id: null, sort_order: 0 }],
     votes: {},
