@@ -57,6 +57,7 @@ export interface RetroSnapshot {
     settings: Record<string, unknown>;
     saved_to_series_id: string | null;
     expires_at: string;
+    ended_at: string | null;
   };
   participants: RetroParticipant[];
   cards: RetroCard[];
@@ -77,4 +78,5 @@ export type RetroBroadcast =
   | { t: "vote.changed"; card_id: string; count: number }
   | { t: "phase.changed"; phase: RetroPhase }
   | { t: "action.changed" }
-  | { t: "carry.toggled"; id: string };
+  | { t: "carry.toggled"; id: string }
+  | { t: "retro.ended"; ended_at: string };

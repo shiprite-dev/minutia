@@ -26,7 +26,7 @@ const { applyRetroEvent } = await load("src/lib/retro/apply-event.ts");
 // Minimal snapshot fixture for the realtime reducer tests.
 function baseSnap(overrides = {}) {
   return {
-    board: { id: "b", name: "", template: "", columns: [], phase: "reveal", phase_started_at: null, settings: {}, saved_to_series_id: null, expires_at: "" },
+    board: { id: "b", name: "", template: "", columns: [], phase: "reveal", phase_started_at: null, settings: {}, saved_to_series_id: null, expires_at: "", ended_at: null },
     participants: [],
     cards: [{ id: "c1", column_id: "col", author_key: "a", author_name: "A", color: "sky", text: "hi", group_id: null, sort_order: 0 }],
     votes: {},
@@ -44,6 +44,28 @@ function migrationPhaseSets() {
   return [...sql.matchAll(/phase\s+(?:not\s+)?in\s*\(([^)]*)\)/gi)].map((m) =>
     [...m[1].matchAll(/'([^']+)'/g)].map((q) => q[1])
   );
+}
+
+function endMigration() {
+  return fs.readFileSync("supabase/migrations/20260619090000_retro_end.sql", "utf8");
+}
+
+// Every RPC that mutates a live board must call _retro_assert_live(b) so an
+// ended board is frozen for everyone. retro_snapshot is deliberately excluded
+// (the summary still loads from it). Guards against a future RPC skipping it.
+const LIVE_GUARDED_RPCS = [
+  "retro_join", "retro_add_card", "retro_update_card", "retro_delete_card",
+  "retro_vote", "retro_set_card_group", "retro_set_phase",
+  "retro_add_action", "retro_update_action", "retro_delete_action",
+];
+
+// Slice exactly one function definition: from its CREATE to its closing $$;
+// delimiter, so inter-function comments never leak into the body assertions.
+function fnBody(sql, name) {
+  const start = sql.indexOf(`create or replace function public.${name}(`);
+  if (start === -1) return null;
+  const end = sql.indexOf("$$;", start);
+  return end === -1 ? sql.slice(start) : sql.slice(start, end + 3);
 }
 
 test("vote budget caps at 6 and never negative", () => {
@@ -94,6 +116,16 @@ test("applyRetroEvent: phase.changed updates board phase (new ref)", () => {
   assert.notEqual(n, s);
   // No-op when already in that phase (same ref -> caller skips refetch).
   assert.equal(applyRetroEvent(n, { t: "phase.changed", phase: "discuss" }, null), n);
+});
+
+test("applyRetroEvent: retro.ended sets board.ended_at (new ref), no-ops when unchanged", () => {
+  const s = baseSnap();
+  const ts = "2026-06-19T10:00:00.000Z";
+  const n = applyRetroEvent(s, { t: "retro.ended", ended_at: ts }, null);
+  assert.equal(n.board.ended_at, ts);
+  assert.notEqual(n, s);
+  // Re-applying the same ended_at is a no-op (same ref -> caller skips refetch).
+  assert.equal(applyRetroEvent(n, { t: "retro.ended", ended_at: ts }, null), n);
 });
 
 test("applyRetroEvent: vote.changed applies authoritative count, clamps >= 0, no-ops when unchanged", () => {
@@ -159,4 +191,50 @@ test("boardToMarkdown renders columns, actions, escapes pipes", () => {
   assert.match(md, /Pair on a\\\|uth, Ada/);
   assert.match(md, /## Action items/);
   assert.match(md, /- \[ \] Add smoke test \(@Mara\), due Fri/);
+});
+
+test("retro_end migration: adds ended_at column, helper, and idempotent RPC", () => {
+  const sql = endMigration();
+  assert.match(sql, /alter table public\.retro_boards\s+add column[\s\S]*ended_at\s+timestamptz/i);
+  assert.match(sql, /create or replace function public\._retro_assert_live\s*\(/i);
+  assert.match(sql, /create or replace function public\.retro_end\s*\(\s*p_ftoken text\s*\)/i);
+  // retro_end must be idempotent and gate on the sealed phase.
+  const end = fnBody(sql, "retro_end");
+  assert.ok(end, "retro_end function present");
+  assert.match(end, /already_ended/);
+  assert.match(end, /'closed'/);
+});
+
+test("retro_end migration: snapshot returns ended_at and never asserts live", () => {
+  const sql = endMigration();
+  const snap = fnBody(sql, "retro_snapshot");
+  assert.ok(snap, "retro_snapshot redefined");
+  assert.match(snap, /'ended_at',\s*b\.ended_at/i);
+  assert.doesNotMatch(snap, /_retro_assert_live/);
+});
+
+test("retro_end migration: every live-mutation RPC asserts the board is live", () => {
+  const sql = endMigration();
+  for (const name of LIVE_GUARDED_RPCS) {
+    const body = fnBody(sql, name);
+    assert.ok(body, `${name} redefined in the end migration`);
+    assert.match(body, /_retro_assert_live\s*\(\s*b\s*\)/, `${name} must call _retro_assert_live(b)`);
+  }
+});
+
+test("retro_end migration: helper revoked from anon, RPC granted to anon", () => {
+  const sql = endMigration();
+  assert.match(sql, /revoke[\s\S]*_retro_assert_live[\s\S]*from[\s\S]*anon/i);
+  assert.match(sql, /grant execute on function[\s\S]*public\.retro_end\(text\)[\s\S]*to anon/i);
+});
+
+test("retro_set_phase: monotonic ordinal array mirrors ALL_RETRO_PHASES (no drift)", () => {
+  const body = fnBody(endMigration(), "retro_set_phase");
+  assert.ok(body, "retro_set_phase redefined in the end migration");
+  // Forward-only guard so concurrent/out-of-order set_phase cannot strand a board.
+  assert.match(body, /new_idx\s*<=\s*cur_idx/);
+  const m = body.match(/array\[([^\]]*)\]/i);
+  assert.ok(m, "retro_set_phase declares an ordered phase array");
+  const arr = [...m[1].matchAll(/'([^']+)'/g)].map((x) => x[1]);
+  assert.deepEqual(arr, ALL_RETRO_PHASES);
 });
