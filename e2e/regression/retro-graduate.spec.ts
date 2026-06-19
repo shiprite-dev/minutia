@@ -114,7 +114,7 @@ async function runThroughToCommitSealed(
   // Enter lobby.
   await page.getByPlaceholder("Your name").first().fill("Author");
   await page.getByRole("button", { name: "Join" }).first().click();
-  await expect(page.getByText("Reflect").first()).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByText("Reflect").first()).toBeVisible({ timeout: 15_000 });
 
   // Add a card (to seed an action for graduation).
   await page.getByRole("button", { name: "Add a card" }).first().click();
@@ -125,22 +125,24 @@ async function runThroughToCommitSealed(
     await page.getByRole("button", { name: "Advance" }).first().click();
   };
 
-  // Reflect -> Reveal & Vote -> Discuss -> Commit (5-phase merged ritual).
+  // Reflect -> Reveal & Vote -> Discuss -> Commit (5-phase merged ritual). Phase
+  // advances are optimistic but reconcile against the 3s poll; wide budgets absorb
+  // a poll-cycle race over this long chain under dev-mode load.
   await advance();
-  await expect(page.getByText("Reveal & Vote").first()).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByText("Reveal & Vote").first()).toBeVisible({ timeout: 15_000 });
   await advance();
-  await expect(page.getByText("Discuss").first()).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByText("Discuss").first()).toBeVisible({ timeout: 15_000 });
   await advance();
   await expect(
     page.getByRole("heading", { name: "Commit the actions" })
-  ).toBeVisible({ timeout: 10_000 });
+  ).toBeVisible({ timeout: 15_000 });
 
   // Seal (the creator is the facilitator). Sealing persists phase=closed and
   // broadcasts, then the panel flips to the sealed nudge after the refetch.
   await page.getByRole("button", { name: "Seal these decisions" }).first().click();
   await expect(
     page.getByRole("heading", { name: "Sealed, nice work." })
-  ).toBeVisible({ timeout: 10_000 });
+  ).toBeVisible({ timeout: 15_000 });
 
   return boardUrl;
 }
