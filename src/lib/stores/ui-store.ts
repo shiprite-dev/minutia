@@ -12,6 +12,11 @@ interface UIState {
   closeCommandPalette: () => void;
   toggleCommandPalette: () => void;
 
+  // Quick add dialog (global "N" shortcut + board FAB)
+  quickAddDialogOpen: boolean;
+  openQuickAddDialog: () => void;
+  closeQuickAddDialog: () => void;
+
   // OIL Board filters
   statusFilter: string | null;
   groupBy: GroupBy;
@@ -43,6 +48,11 @@ export const useUIStore = create<UIState>((set) => ({
   closeCommandPalette: () => set({ commandPaletteOpen: false }),
   toggleCommandPalette: () =>
     set((state) => ({ commandPaletteOpen: !state.commandPaletteOpen })),
+
+  // Quick add dialog
+  quickAddDialogOpen: false,
+  openQuickAddDialog: () => set({ quickAddDialogOpen: true }),
+  closeQuickAddDialog: () => set({ quickAddDialogOpen: false }),
 
   // OIL Board filters
   statusFilter: null,

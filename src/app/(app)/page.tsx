@@ -2,18 +2,16 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { motion, AnimatePresence } from "motion/react";
+import { motion } from "motion/react";
 import Link from "next/link";
 import {
   ArrowRight,
   Calendar,
   Plus,
-  X,
 } from "lucide-react";
 import {
   useIssues,
   useUpdateIssueStatus,
-  useCreateIssue,
 } from "@/lib/hooks/use-issues";
 import { useSeries } from "@/lib/hooks/use-series";
 import { useAllMeetings } from "@/lib/hooks/use-meetings";
@@ -31,6 +29,7 @@ import { cn } from "@/lib/utils";
 import { formatShortDate, daysBetween } from "@/lib/date-utils";
 import { isOpen, isOverdue } from "@/lib/issue-utils";
 import { useWidgetStore } from "@/lib/stores/widget-store";
+import { useUIStore } from "@/lib/stores/ui-store";
 import { WidgetShell } from "@/components/minutia/widgets/widget-shell";
 import { WidgetCanvas } from "@/components/minutia/widgets/widget-canvas";
 import { AddWidgetButton } from "@/components/minutia/widgets/add-widget";
@@ -731,140 +730,22 @@ function SeriesWidget({
 // Quick-add floating button
 // ---------------------------------------------------------------------------
 
-function QuickAddButton({
-  seriesList,
-  allMeetings,
-}: {
-  seriesList: (MeetingSeries & { open_issues_count: number })[];
-  allMeetings: { id: string; series_id: string; date: Date | string }[];
-}) {
-  const [open, setOpen] = React.useState(false);
-  const [title, setTitle] = React.useState("");
-  const [selectedSeriesId, setSelectedSeriesId] = React.useState("");
-  const inputRef = React.useRef<HTMLInputElement>(null);
-  const createIssue = useCreateIssue();
-
-  const latestMeetingId = React.useMemo(() => {
-    const seriesMeetings = allMeetings.filter(m => m.series_id === selectedSeriesId);
-    if (!seriesMeetings.length) return null;
-    const sorted = [...seriesMeetings].sort(
-      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
-    );
-    return sorted[0].id;
-  }, [allMeetings, selectedSeriesId]);
-
-  React.useEffect(() => {
-    if (open && inputRef.current) inputRef.current.focus();
-  }, [open]);
-
-  React.useEffect(() => {
-    if (seriesList.length > 0 && !selectedSeriesId) {
-      setSelectedSeriesId(seriesList[0].id);
-    }
-  }, [seriesList, selectedSeriesId]);
-
-  React.useEffect(() => {
-    function handleKey(e: KeyboardEvent) {
-      const tag = (e.target as HTMLElement).tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
-      if (e.key === "n" && !e.metaKey && !e.ctrlKey) {
-        e.preventDefault();
-        setOpen(true);
-      }
-    }
-    window.addEventListener("keydown", handleKey);
-    return () => window.removeEventListener("keydown", handleKey);
-  }, []);
-
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!title.trim() || !selectedSeriesId || !latestMeetingId) return;
-
-    createIssue.mutate(
-      {
-        title: title.trim(),
-        category: "action",
-        priority: "medium",
-        meeting_id: latestMeetingId,
-        series_id: selectedSeriesId,
-      },
-      {
-        onSuccess: () => {
-          setTitle("");
-          setOpen(false);
-        },
-      }
-    );
-  }
+function QuickAddButton() {
+  const openQuickAddDialog = useUIStore((s) => s.openQuickAddDialog);
 
   return (
-    <>
-      <HintTooltip label="Quick add an issue from anywhere on the board. Shortcut: N.">
-        <motion.button
-          type="button"
-          data-tour="quick-add"
-          aria-label="Quick add issue"
-          onClick={() => setOpen((prev) => !prev)}
-          className={cn(
-            "fixed bottom-6 right-6 z-50 flex items-center justify-center size-12 rounded-full shadow-lg transition-colors",
-            open
-              ? "bg-ink text-paper"
-              : "bg-accent text-white hover:bg-accent-hover"
-          )}
-          whileTap={{ scale: 0.9 }}
-        >
-          {open ? <X className="size-5" /> : <Plus className="size-5" />}
-        </motion.button>
-      </HintTooltip>
-
-      <AnimatePresence>
-        {open && (
-          <motion.div
-            initial={{ opacity: 0, y: 20, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 20, scale: 0.95 }}
-            transition={{ duration: 0.15 }}
-            className="fixed bottom-20 right-6 z-50 w-80 rounded-xl border border-rule bg-card p-4 shadow-xl"
-          >
-            <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-              <select
-                value={selectedSeriesId}
-                onChange={(e) => setSelectedSeriesId(e.target.value)}
-                aria-label="Select series"
-                className="w-full rounded-md border border-rule bg-paper px-3 py-1.5 text-sm text-ink"
-              >
-                {seriesList.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
-                  </option>
-                ))}
-              </select>
-              <input
-                ref={inputRef}
-                type="text"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="New issue title..."
-                className="w-full rounded-md border border-rule bg-paper px-3 py-2 text-sm text-ink placeholder:text-ink-4 focus:outline-none focus:ring-1 focus:ring-accent"
-                onKeyDown={(e) => {
-                  if (e.key === "Escape") {
-                    setOpen(false);
-                  }
-                }}
-              />
-              <Button
-                type="submit"
-                size="sm"
-                disabled={!title.trim() || !latestMeetingId || createIssue.isPending}
-                className="bg-accent text-white hover:bg-accent-hover self-end"
-              >
-                {createIssue.isPending ? "Adding..." : "Add issue"}
-              </Button>
-            </form>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </>
+    <HintTooltip label="Quick add an issue from anywhere on the board. Shortcut: N.">
+      <motion.button
+        type="button"
+        data-tour="quick-add"
+        aria-label="Quick add issue"
+        onClick={() => openQuickAddDialog()}
+        className="fixed bottom-6 right-6 z-50 flex items-center justify-center size-12 rounded-full shadow-lg transition-colors bg-accent text-white hover:bg-accent-hover"
+        whileTap={{ scale: 0.9 }}
+      >
+        <Plus className="size-5" />
+      </motion.button>
+    </HintTooltip>
   );
 }
 
@@ -1096,7 +977,7 @@ export default function Dashboard() {
             ))}
           </WidgetCanvas>
         )}
-        <QuickAddButton seriesList={seriesList ?? []} allMeetings={meetings ?? []} />
+        <QuickAddButton />
       </div>
     </div>
   );

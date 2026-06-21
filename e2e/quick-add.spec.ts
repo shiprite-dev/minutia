@@ -1,70 +1,33 @@
 import { test, expect } from "@playwright/test";
 import { waitForApp } from "./regression/seed-data";
 
+// The FAB delegates to the global QuickAddDialog. The N shortcut and the
+// dialog's submit/validation behavior are covered by quick-add-shortcut.spec.ts;
+// this file owns the FAB click path specifically.
 test.describe("Quick Add FAB", () => {
   test("FAB is visible on the OIL Board", async ({ page }) => {
     await page.goto("/");
     await waitForApp(page);
     await expect(page.getByText("Outstanding items")).toBeVisible();
 
-    const fab = page.getByLabel("Quick add issue");
-    await expect(fab).toBeVisible();
+    await expect(page.getByLabel("Quick add issue")).toBeVisible();
   });
 
-  test("N key opens the quick-add form", async ({ page }) => {
+  test("clicking the FAB opens the global quick-add dialog", async ({ page }) => {
     await page.goto("/");
     await waitForApp(page);
     await expect(page.getByText("Outstanding items")).toBeVisible();
 
-    await page.keyboard.press("n");
+    await page.getByLabel("Quick add issue").click();
 
-    await expect(page.getByPlaceholder("New issue title...")).toBeVisible();
-    await expect(page.getByRole("button", { name: "Add issue", exact: true })).toBeVisible();
-  });
-
-  test("clicking FAB toggles the form", async ({ page }) => {
-    await page.goto("/");
-    await waitForApp(page);
-    await expect(page.getByText("Outstanding items")).toBeVisible();
-
-    const fab = page.getByLabel("Quick add issue");
-    await fab.dispatchEvent("click");
-
-    await expect(page.getByPlaceholder("New issue title...")).toBeVisible();
-
-    // Click again to close
-    await fab.dispatchEvent("click");
-    await expect(page.getByPlaceholder("New issue title...")).not.toBeVisible();
-  });
-
-  test("submitting the form creates a new issue", async ({ page }) => {
-    await page.goto("/");
-    await waitForApp(page);
-    await expect(page.getByText("Outstanding items")).toBeVisible();
-
-    await page.keyboard.press("n");
-
-    const titleInput = page.getByPlaceholder("New issue title...");
-    await expect(titleInput).toBeVisible();
-
-    const testTitle = `Quick add test ${Date.now()}`;
-    await page
-      .getByLabel("Select series")
-      .selectOption({ label: "Platform Team Standup" });
-    await titleInput.fill(testTitle);
-
-    const addIssue = page.getByRole("button", {
-      name: "Add issue",
-      exact: true,
-    });
-    await expect(addIssue).toBeEnabled();
-    await addIssue.click();
-
-    // Form should close after submission
-    await expect(titleInput).not.toBeVisible({ timeout: 5000 });
-
-    // Issue may be behind "+N more" due to priority sorting; verify via series page
-    await page.getByRole("link", { name: /Platform Team Standup/ }).first().click();
-    await expect(page.getByText(testTitle).first()).toBeVisible({ timeout: 10000 });
+    await expect(
+      page.getByRole("textbox", { name: "Issue title" })
+    ).toBeVisible();
+    await expect(
+      page.getByRole("combobox", { name: "Series", exact: true })
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Add issue", exact: true })
+    ).toBeVisible();
   });
 });

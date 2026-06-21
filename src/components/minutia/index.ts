@@ -17,4 +17,5 @@ export { AppHeader } from "./app-header";
 export { CommandPalette } from "./command-palette";
 export { ShareButton } from "./share-button";
 export { KeyboardShortcutsDialog } from "./keyboard-shortcuts-dialog";
+export { QuickAddDialog } from "./quick-add-dialog";
 export { GotoShortcuts } from "./goto-shortcuts";

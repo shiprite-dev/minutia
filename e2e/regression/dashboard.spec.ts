@@ -242,21 +242,6 @@ test.describe("OIL Board Dashboard", () => {
     await expect(page.getByLabel("Quick add issue")).toBeVisible();
   });
 
-  test("N key opens quick-add form", async ({ page }) => {
-    await gotoDashboard(page);
-
-    await page.keyboard.press("n");
-    await expect(
-      page.getByPlaceholder("New issue title...")
-    ).toBeVisible();
-    await expect(
-      page.getByRole("button", { name: "Add issue", exact: true })
-    ).toBeVisible();
-
-    const select = page.locator("select");
-    await expect(select).toBeVisible();
-  });
-
   test("keyboard nav J/K moves focus on outstanding items", async ({
     page,
   }) => {
@@ -303,40 +288,6 @@ test.describe("Overdue Issue Highlighting", () => {
     await gotoDashboard(page);
 
     await expect(page.getByText(/overdue/).first()).toBeVisible();
-  });
-});
-
-test.describe("Quick-Add Submit Flow", () => {
-  test("submitting quick-add creates a new issue", async ({ page }) => {
-    await gotoDashboard(page);
-
-    await page.keyboard.press("n");
-    const titleInput = page.getByPlaceholder("New issue title...");
-    await expect(titleInput).toBeVisible();
-
-    // Wait for series select to populate so meetings can load
-    const select = page.locator("select");
-    await expect(select).not.toHaveValue("", { timeout: 10000 });
-    await page
-      .getByLabel("Select series")
-      .selectOption({ label: "Platform Team Standup" });
-
-    await titleInput.fill("Regression test quick-add");
-
-    const addBtn = page.getByRole("button", {
-      name: "Add issue",
-      exact: true,
-    });
-    await expect(addBtn).toBeEnabled({ timeout: 15000 });
-    await addBtn.click();
-
-    await expect(titleInput).not.toBeVisible({ timeout: 5000 });
-
-    // Issue may be behind "+N more" due to priority sorting; verify via series page
-    await page.getByRole("link", { name: /Platform Team Standup/ }).first().click();
-    await expect(
-      page.getByText("Regression test quick-add").first()
-    ).toBeVisible({ timeout: 10000 });
   });
 });
 
