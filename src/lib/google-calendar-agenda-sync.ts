@@ -1,5 +1,6 @@
 import type { NormalizedGoogleCalendarEvent } from "./google-calendar-sync";
 import { createServiceRoleClient } from "./supabase/service-role";
+import { parseAgendaDrafts } from "./calendar/agenda-draft";
 import type { GoogleCalendarAgendaItem, MeetingStatus } from "./types";
 
 type ServiceClient = ReturnType<typeof createServiceRoleClient>;
@@ -202,6 +203,36 @@ async function ensureSeries({
   return data;
 }
 
+// Auto-drafts agenda items parsed from the calendar event description. Only runs
+// once, when the meeting is first created, so re-syncing never duplicates drafts.
+async function draftAgendaIssues({
+  supabase,
+  seriesId,
+  meetingId,
+  description,
+}: {
+  supabase: ServiceClient;
+  seriesId: string;
+  meetingId: string;
+  description: string | null;
+}) {
+  const drafts = parseAgendaDrafts(description);
+  if (drafts.length === 0) return;
+
+  const { error } = await supabase.from("issues").insert(
+    drafts.map((draft) => ({
+      series_id: seriesId,
+      raised_in_meeting_id: meetingId,
+      title: draft.title,
+      category: draft.category,
+      status: "open",
+      source: "calendar_auto_draft",
+    }))
+  );
+
+  if (error) throw error;
+}
+
 async function ensureMeeting({
   supabase,
   seriesId,
@@ -269,6 +300,21 @@ async function ensureMeeting({
     .single<MeetingRow>();
 
   if (error) throw error;
+
+  // Auto-drafting is enrichment, not the critical path. Drafts only once on first
+  // creation (so reviewed/deleted drafts are never resurrected on re-sync); a
+  // failure here is logged and isolated so it never aborts the calendar sync.
+  try {
+    await draftAgendaIssues({
+      supabase,
+      seriesId,
+      meetingId: data.id,
+      description: event.description,
+    });
+  } catch (draftError) {
+    console.error("Failed to auto-draft agenda issues for meeting", data.id, draftError);
+  }
+
   return data;
 }
 
