@@ -730,13 +730,7 @@ function SeriesWidget({
 // Quick-add floating button
 // ---------------------------------------------------------------------------
 
-function QuickAddButton({
-  seriesList,
-  allMeetings,
-}: {
-  seriesList: (MeetingSeries & { open_issues_count: number })[];
-  allMeetings: { id: string; series_id: string; date: Date | string }[];
-}) {
+function QuickAddButton() {
   const openQuickAddDialog = useUIStore((s) => s.openQuickAddDialog);
 
   return (
@@ -983,7 +977,7 @@ export default function Dashboard() {
             ))}
           </WidgetCanvas>
         )}
-        <QuickAddButton seriesList={seriesList ?? []} allMeetings={meetings ?? []} />
+        <QuickAddButton />
       </div>
     </div>
   );
