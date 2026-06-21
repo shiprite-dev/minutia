@@ -8,7 +8,9 @@ import { AppSidebar } from "@/components/minutia/app-sidebar";
 import { AppHeader } from "@/components/minutia/app-header";
 import { CommandPalette } from "@/components/minutia/command-palette";
 import { KeyboardShortcutsDialog } from "@/components/minutia/keyboard-shortcuts-dialog";
+import { QuickAddDialog } from "@/components/minutia/quick-add-dialog";
 import { GotoShortcuts } from "@/components/minutia/goto-shortcuts";
+import { useUIStore } from "@/lib/stores/ui-store";
 import { CalendarSidebar } from "@/components/minutia/calendar-sidebar";
 import { OnboardingWizard } from "@/components/minutia/onboarding-wizard";
 import { FirstRunTour } from "@/components/minutia/first-run-tour";
@@ -23,10 +25,27 @@ interface AppShellProps {
 export function AppShell({ profile, organizations, children }: AppShellProps) {
   const shellRef = React.useRef<HTMLDivElement>(null);
   const pathname = usePathname();
+  const openQuickAddDialog = useUIStore((s) => s.openQuickAddDialog);
 
   React.useEffect(() => {
     shellRef.current?.setAttribute("data-hydrated", "true");
   }, [pathname]);
+
+  // Global "N" shortcut to open quick add from any screen.
+  React.useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key !== "n" || e.metaKey || e.ctrlKey || e.altKey) return;
+      const tag = (e.target as HTMLElement).tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      // Skip if inside a contenteditable element.
+      const el = e.target as HTMLElement;
+      if (el.isContentEditable) return;
+      e.preventDefault();
+      openQuickAddDialog();
+    }
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [openQuickAddDialog]);
 
   if (profile && !profile.has_completed_onboarding) {
     return (
@@ -67,6 +86,7 @@ export function AppShell({ profile, organizations, children }: AppShellProps) {
       </SidebarInset>
       <CommandPalette />
       <KeyboardShortcutsDialog />
+      <QuickAddDialog />
       <GotoShortcuts />
       {profile && <FirstRunTour userId={profile.id} />}
       </SidebarProvider>
