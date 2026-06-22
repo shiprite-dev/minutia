@@ -8,6 +8,35 @@ const schema = z.object({
   email: z.string().email(),
 });
 
+// ---------------------------------------------------------------------------
+// Per-email rate limiting for password reset requests.
+// Max 3 requests per email per 10 minutes. In-memory Map keyed by email.
+// Entries are lazily evicted when the window expires.
+// ---------------------------------------------------------------------------
+const RESET_RATE_LIMIT_MAX = 3;
+const RESET_RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000; // 10 minutes
+const resetRateLimitMap = new Map<string, { count: number; resetAt: number }>();
+
+function isResetRateLimited(email: string): boolean {
+  // Only enforce per-email rate limiting in production to avoid breaking
+  // parallel e2e/integration tests that reuse the same email.
+  if (process.env.NODE_ENV !== "production") return false;
+
+  const now = Date.now();
+  const entry = resetRateLimitMap.get(email);
+
+  if (!entry || now > entry.resetAt) {
+    resetRateLimitMap.set(email, {
+      count: 1,
+      resetAt: now + RESET_RATE_LIMIT_WINDOW_MS,
+    });
+    return false;
+  }
+
+  entry.count++;
+  return entry.count > RESET_RATE_LIMIT_MAX;
+}
+
 function emailNotConfiguredMessage(error: unknown) {
   const message = error instanceof Error ? error.message : "";
   return message.includes("Email is not configured")
@@ -32,6 +61,17 @@ export async function POST(request: NextRequest) {
   }
 
   const email = parsed.data.email.toLowerCase();
+
+  if (isResetRateLimited(email)) {
+    return NextResponse.json(
+      {
+        error:
+          "Too many password reset requests. Please wait a few minutes before trying again.",
+      },
+      { status: 429 }
+    );
+  }
+
   const supabase = createServiceRoleClient();
   const redirectTo = absoluteAppUrl(request.url, "/reset-password");
   const { data, error } = await supabase.auth.admin.generateLink({

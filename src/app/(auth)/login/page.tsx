@@ -51,6 +51,7 @@ function LoginForm() {
   const [sentMessage, setSentMessage] = useState(
     "We sent a magic link to"
   );
+  const [resetCooldown, setResetCooldown] = useState(0); // seconds remaining
   const footerPhraseRef = useRef<HTMLSpanElement>(null);
   const supabase = createClient();
 
@@ -62,6 +63,15 @@ function LoginForm() {
       footerPhraseRef.current.textContent = phrase;
     }
   }, []);
+
+  // Countdown timer for the password reset cooldown.
+  useEffect(() => {
+    if (resetCooldown <= 0) return;
+    const timer = setTimeout(() => {
+      setResetCooldown((prev) => Math.max(0, prev - 1));
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [resetCooldown]);
 
   const publicSignupEnabled =
     process.env.NEXT_PUBLIC_ENABLE_PUBLIC_SIGNUP === "true";
@@ -149,6 +159,7 @@ function LoginForm() {
 
   async function handleForgotPassword() {
     if (!email.trim()) return;
+    if (resetCooldown > 0 || formState === "loading") return;
 
     setFormState("loading");
     setErrorMessage("");
@@ -162,11 +173,21 @@ function LoginForm() {
 
     if (!res.ok) {
       setFormState("error");
-      setErrorMessage(data.error || "Failed to send password reset email");
+      if (res.status === 429) {
+        setErrorMessage(
+          data.error ||
+            "You've requested too many password resets. Please wait a few minutes before trying again."
+        );
+      } else {
+        setErrorMessage(data.error || "Failed to send password reset email");
+      }
     } else {
       setSentMessage("We sent a password reset link to");
       setFormState("sent");
     }
+
+    // 60-second cooldown regardless of outcome to prevent spamming.
+    setResetCooldown(60);
   }
 
   async function handleGoogleLogin() {
@@ -305,10 +326,16 @@ function LoginForm() {
                   <button
                     type="button"
                     onClick={handleForgotPassword}
-                    disabled={formState === "loading" || !email.trim()}
+                    disabled={
+                      formState === "loading" ||
+                      !email.trim() ||
+                      resetCooldown > 0
+                    }
                     className="font-sans text-xs text-ink-3 underline underline-offset-4 transition-colors hover:text-ink-2 disabled:pointer-events-none disabled:opacity-40"
                   >
-                    Forgot password?
+                    {resetCooldown > 0
+                      ? `Forgot password? (${resetCooldown}s)`
+                      : "Forgot password?"}
                   </button>
                 </div>
                 <Input
