@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { waitForApp } from "./seed-data";
 
-test.describe("Error boundaries (MIN-002)", () => {
+test.describe("Error boundaries", () => {
   test("invalid issue ID shows not-found message with back link", async ({
     page,
   }) => {

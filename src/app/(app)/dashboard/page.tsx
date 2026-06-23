@@ -38,6 +38,8 @@ import { SeriesHealthWidget } from "@/components/minutia/widgets/series-health-w
 import { MeetingTriageWidget } from "@/components/minutia/widgets/meeting-triage-widget";
 import { WorkloadWidget } from "@/components/minutia/widgets/workload-widget";
 import { useCalendarEvents } from "@/lib/hooks/use-google-calendar";
+import { useIssueLimit } from "@/lib/hooks/use-issue-limit";
+import { ITEM_LIMIT } from "@/lib/hooks/use-issues";
 import type {
   Issue,
   IssueStatus,
@@ -730,17 +732,48 @@ function SeriesWidget({
 // Quick-add floating button
 // ---------------------------------------------------------------------------
 
+function ItemUsageCounter() {
+  const { data, isLoading } = useIssueLimit();
+  if (isLoading || !data) return null;
+  const { activeCount, atLimit } = data;
+  return (
+    <span
+      className={cn(
+        "text-xs font-mono tabular-nums",
+        atLimit ? "text-accent font-medium" : "text-ink-4"
+      )}
+      aria-label={`${activeCount} of ${ITEM_LIMIT} items used`}
+    >
+      {activeCount} / {ITEM_LIMIT}
+    </span>
+  );
+}
+
 function QuickAddButton() {
   const openQuickAddDialog = useUIStore((s) => s.openQuickAddDialog);
+  const { data: issueLimit } = useIssueLimit();
+  const atLimit = issueLimit?.atLimit ?? false;
 
   return (
-    <HintTooltip label="Quick add an issue from anywhere on the board. Shortcut: N.">
+    <HintTooltip
+      label={
+        atLimit
+          ? "Item limit reached for this account."
+          : "Quick add an issue from anywhere on the board. Shortcut: N."
+      }
+    >
       <motion.button
         type="button"
         data-tour="quick-add"
         aria-label="Quick add issue"
+        disabled={atLimit}
         onClick={() => openQuickAddDialog()}
-        className="fixed bottom-6 right-6 z-50 flex items-center justify-center size-12 rounded-full shadow-lg transition-colors bg-accent text-white hover:bg-accent-hover"
+        className={cn(
+          "fixed bottom-6 right-6 z-50 flex items-center justify-center size-12 rounded-full shadow-lg transition-colors",
+          atLimit
+            ? "bg-ink-3 text-paper cursor-not-allowed"
+            : "bg-accent text-white hover:bg-accent-hover"
+        )}
         whileTap={{ scale: 0.9 }}
       >
         <Plus className="size-5" />

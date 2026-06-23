@@ -189,6 +189,7 @@ export async function middleware(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const publicPaths = [
+    "/",
     "/login",
     "/accept-invite",
     "/auth/callback",
@@ -203,7 +204,9 @@ export async function middleware(request: NextRequest) {
     "/retro",
     "/api/retro",
   ];
-  const isPublicPath = publicPaths.some((p) => pathname.startsWith(p));
+  const isPublicPath =
+    publicPaths.some((p) => pathname === p) ||
+    publicPaths.some((p) => p !== "/" && pathname.startsWith(p));
 
   if (!user && !isPublicPath) {
     if (pathname.startsWith("/api/")) {
@@ -219,22 +222,24 @@ export async function middleware(request: NextRequest) {
     return applySecurityHeaders(redirect);
   }
 
+  // Authenticated users hitting the landing page go to the dashboard.
+  if (user && pathname === "/") {
+    const url = request.nextUrl.clone();
+    url.pathname = "/dashboard";
+    const redirect = NextResponse.redirect(url);
+    return applySecurityHeaders(redirect);
+  }
+
   if (user && pathname === "/login") {
     const url = request.nextUrl.clone();
     const next = request.nextUrl.searchParams.get("next");
     const target = next && next.startsWith("/") && !next.startsWith("//")
       ? new URL(next, request.url)
-      : new URL("/", request.url);
+      : new URL("/dashboard", request.url);
     url.pathname = target.pathname;
     url.search = target.search;
     const redirect = NextResponse.redirect(url);
     return applySecurityHeaders(redirect);
-  }
-
-  if (user && pathname === "/dashboard") {
-    const url = request.nextUrl.clone();
-    url.pathname = "/";
-    return applySecurityHeaders(NextResponse.rewrite(url));
   }
 
   return applySecurityHeaders(supabaseResponse);
