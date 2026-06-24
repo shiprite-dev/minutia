@@ -1,6 +1,8 @@
 import nodemailer from "nodemailer";
 import { getInstanceConfigMap } from "@/lib/instance-config";
 
+export { escapeHtml } from "@/lib/escape-html";
+
 export type SmtpConfig = {
   host: string;
   port: number;
@@ -116,15 +118,6 @@ export async function sendMail(message: MailMessage) {
     text: message.text,
     html: message.html,
   });
-}
-
-export function escapeHtml(value: string | null | undefined): string {
-  return (value ?? "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
 }
 
 export function absoluteAppUrl(requestUrl: string, path = "/"): string {

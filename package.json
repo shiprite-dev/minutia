@@ -49,6 +49,7 @@
     "test:audio": "node --test scripts/verify-audio-capture.test.mjs",
     "test:transcription": "node --test scripts/verify-transcription-client.test.mjs",
     "test:feature-access": "node --test scripts/verify-feature-access.test.mjs",
+    "test:reminders": "node --test scripts/verify-reminders.test.mjs",
     "test:retro": "node --test scripts/verify-retro-contracts.test.mjs",
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed",
