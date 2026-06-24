@@ -3,6 +3,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { getTextFromOpenRouter } from "@/lib/ai/ask-series-answer";
 import { callOpenRouter, getOpenRouterApiKey } from "@/lib/ai/openrouter";
+import { requireAiAccess } from "@/lib/ai/access";
 
 const PROMPT_VERSION = "ai-suggestions-v1";
 const SYSTEM_PROMPT = "You extract accountable meeting follow-ups. Return valid JSON only.";
@@ -115,6 +116,14 @@ export async function POST(
     requestSchema.parse(await request.json());
   } catch {
     return NextResponse.json({ error: "Invalid request body", request_id: requestId }, { status: 400 });
+  }
+
+  const aiDenied = await requireAiAccess();
+  if (aiDenied) {
+    return NextResponse.json(
+      { error: (await aiDenied.json()).error, request_id: requestId },
+      { status: aiDenied.status }
+    );
   }
 
   const supabase = await createClient();

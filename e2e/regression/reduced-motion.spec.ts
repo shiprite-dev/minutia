@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { waitForApp } from "./seed-data";
 
-test.describe("Reduced motion support (MIN-003)", () => {
+test.describe("Reduced motion support", () => {
   test("animations are disabled when prefers-reduced-motion is set", async ({
     page,
   }) => {

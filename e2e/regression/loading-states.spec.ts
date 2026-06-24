@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 
-test.describe("Loading skeleton screens (MIN-001)", () => {
+test.describe("Loading skeleton screens", () => {
   test("dashboard shows skeleton while loading", async ({ page }) => {
     await page.route("**/rest/v1/**", async (route) => {
       await new Promise((r) => setTimeout(r, 500));

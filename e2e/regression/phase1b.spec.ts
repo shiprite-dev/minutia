@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { SERIES, MEETINGS, ISSUES, waitForApp } from "./seed-data";
 
-test.describe("Post-meeting summary (MIN-042)", () => {
+test.describe("Post-meeting summary", () => {
   test("completed meeting shows summary card with metrics", async ({
     page,
   }) => {
@@ -35,7 +35,7 @@ test.describe("Post-meeting summary (MIN-042)", () => {
   });
 });
 
-test.describe("Issue metadata on OIL board (MIN-043)", () => {
+test.describe("Issue metadata on OIL board", () => {
   test("issue with updates shows update count on OIL board", async ({
     page,
   }) => {
@@ -67,7 +67,7 @@ test.describe("Issue metadata on OIL board (MIN-043)", () => {
   });
 });
 
-test.describe("Decisions integration (MIN-041)", () => {
+test.describe("Decisions integration", () => {
   test("OIL board sidebar shows recent decisions card", async ({ page }) => {
     await page.goto("/");
     await waitForApp(page);

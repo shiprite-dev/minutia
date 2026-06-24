@@ -20,7 +20,11 @@ import { useIssues, useCreateIssue, useUpdateIssueStatus, useUpdateIssue, issueK
 import { useCreateDecision, decisionKeys } from "@/lib/hooks/use-decisions";
 import { SyncIndicator } from "@/components/minutia/sync-indicator";
 import { useOfflineSync } from "@/lib/hooks/use-offline-sync";
-import { addPendingItem } from "@/lib/offline-buffer";
+import { addPendingItem, clearAudioChunks } from "@/lib/offline-buffer";
+import { RecordingIndicator } from "@/components/minutia/recording-indicator";
+import { useMeetingRecorder } from "@/lib/hooks/use-meeting-recorder";
+import { uploadMeetingAudio } from "@/lib/audio";
+import { createClient } from "@/lib/supabase/client";
 import { CaptureInput } from "@/components/minutia/capture-input";
 import { InlineTaskList } from "@/components/minutia/inline-task-list";
 import { IssueCard } from "@/components/minutia/issue-card";
@@ -34,6 +38,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { ShareButton } from "@/components/minutia/share-button";
 import { SendMeetingNotesButton } from "@/components/minutia/send-meeting-notes-button";
 import { CarryoverBriefingPanel } from "@/components/minutia/carryover-briefing-panel";
+import { AiUnavailableNotice } from "@/components/minutia/ai-unavailable-notice";
+import { useAiAccess } from "@/lib/hooks/use-ai-access";
 import { ArrowLeft, Square, Play, Check, X, Copy, CheckCheck, Sparkles, Loader2, ListChecks, FileText, CheckSquare, Gavel, AlertTriangle, Ban, RotateCcw, HelpCircle, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatShortDate } from "@/lib/date-utils";
@@ -747,6 +753,8 @@ export function MeetingDetailContent({
   const updateIssue = useUpdateIssue();
 
   const { isOnline, pendingCount, syncStatus, refreshCount } = useOfflineSync();
+  const { data: aiAccess } = useAiAccess();
+  const hasAccess = aiAccess?.hasAccess === true;
 
   const [notes, setNotes] = React.useState(meeting?.notes_markdown ?? "");
   const [transcript, setTranscript] = React.useState(meeting?.transcript_raw ?? "");
@@ -763,6 +771,8 @@ export function MeetingDetailContent({
   const updateTranscript = useUpdateMeetingTranscript();
   const applyAiNotes = useApplyAiMeetingNotes();
   const timer = useLiveTimer(meeting?.status === "live" ? meeting.created_at : null);
+  const recorder = useMeetingRecorder(meetingId);
+  const [savingRecording, setSavingRecording] = React.useState(false);
 
   React.useEffect(() => {
     if (meeting?.notes_markdown) setNotes(meeting.notes_markdown);
@@ -930,7 +940,32 @@ export function MeetingDetailContent({
     });
   }
 
+  // Stop the active recording and upload it to private storage. Shared by the
+  // recorder's Stop control and by ending the meeting, so a recording is never
+  // left un-uploaded. A failed upload keeps the audio buffered in IndexedDB.
+  async function handleStopRecording() {
+    if (recorder.state !== "recording" && recorder.state !== "paused") return;
+    setSavingRecording(true);
+    try {
+      const result = await recorder.stop();
+      if (result) {
+        await uploadMeetingAudio(createClient(), {
+          meetingId,
+          blob: result.blob,
+          durationSeconds: result.durationSeconds,
+          mimeType: result.mimeType,
+        });
+        await clearAudioChunks(meetingId);
+      }
+    } catch {
+      // Upload failed; the recording stays buffered in IndexedDB for recovery.
+    } finally {
+      setSavingRecording(false);
+    }
+  }
+
   async function handleEndMeeting() {
+    await handleStopRecording();
     await endMeeting.mutateAsync(meetingId);
   }
 
@@ -1110,6 +1145,21 @@ export function MeetingDetailContent({
               <span className="text-sm font-mono text-ink-2 tabular-nums tracking-wider">
                 {timer}
               </span>
+
+              {/* Audio capture (meeting managers only) */}
+              {canManageMeeting && hasAccess && (
+                <RecordingIndicator
+                  state={recorder.state}
+                  durationSeconds={recorder.durationSeconds}
+                  isSupported={recorder.isSupported}
+                  error={recorder.error}
+                  uploading={savingRecording}
+                  onStart={recorder.start}
+                  onStop={handleStopRecording}
+                  onPause={recorder.pause}
+                  onResume={recorder.resume}
+                />
+              )}
 
               {/* Attendee avatars */}
               {meeting.attendees && meeting.attendees.length > 0 && (
@@ -1349,7 +1399,11 @@ export function MeetingDetailContent({
           </div>
 
           <div className="mb-8">
-            <CarryoverBriefingPanel meetingId={meetingId} issueCount={openIssues.length} />
+            {hasAccess ? (
+              <CarryoverBriefingPanel meetingId={meetingId} issueCount={openIssues.length} />
+            ) : openIssues.length > 0 ? (
+              <AiUnavailableNotice />
+            ) : null}
           </div>
 
           {meeting.attendees && meeting.attendees.length > 0 && (
@@ -1463,6 +1517,10 @@ export function MeetingDetailContent({
               Review AI suggestions
             </Button>
           </div>
+
+          {!hasAccess && (
+            <AiUnavailableNotice className="mt-3" />
+          )}
 
           {suggestionsOpen && (
             <div
@@ -1676,7 +1734,7 @@ export function MeetingDetailContent({
               variant="outline"
               size="sm"
               onClick={handleEnhanceNotes}
-              disabled={enhancingNotes || (!notes.trim() && !transcript.trim())}
+              disabled={!hasAccess || enhancingNotes || (!notes.trim() && !transcript.trim())}
               className="border-rule bg-card text-ink hover:bg-paper-2"
             >
               {enhancingNotes ? (
@@ -1687,6 +1745,9 @@ export function MeetingDetailContent({
               Enhance notes
             </Button>
           </div>
+          {!hasAccess && (
+            <AiUnavailableNotice className="mb-3" />
+          )}
           {aiError && (
             <div className="mb-3 rounded-md border border-warn/30 bg-warn/10 px-3 py-2 text-sm text-ink">
               {aiError}

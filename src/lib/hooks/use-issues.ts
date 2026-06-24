@@ -6,6 +6,7 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
+import { isFeatureGatingEnabled } from "@/lib/feature-access";
 import type {
   Issue,
   IssueWithUpdates,
@@ -114,6 +115,38 @@ export function useIssue(id: string) {
   });
 }
 
+export const ITEM_LIMIT = 25;
+export const ITEM_LIMIT_MESSAGE =
+  "Item limit reached for this account.";
+
+/**
+ * Returns the count of active issues (status NOT IN resolved, dropped) for the
+ * given organization, or null if the count could not be determined.
+ */
+export async function countActiveIssuesForOrg(
+  supabase: ReturnType<typeof createClient>,
+  organizationId: string
+): Promise<number | null> {
+  // Fetch series IDs belonging to the org.
+  const { data: seriesRows, error: seriesError } = await supabase
+    .from("meeting_series")
+    .select("id")
+    .eq("organization_id", organizationId);
+
+  if (seriesError) return null;
+  const seriesIds = (seriesRows ?? []).map((s) => s.id as string);
+  if (seriesIds.length === 0) return 0;
+
+  const { count, error: countError } = await supabase
+    .from("issues")
+    .select("id", { count: "exact", head: true })
+    .in("series_id", seriesIds)
+    .in("status", ["open", "in_progress", "pending"]);
+
+  if (countError) return null;
+  return count ?? 0;
+}
+
 // ---------------------------------------------------------------------------
 // useCreateIssue
 // ---------------------------------------------------------------------------
@@ -122,13 +155,29 @@ export function useCreateIssue() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (
-      input: CreateIssueInput & { meeting_id: string; series_id: string }
-    ) => {
+    mutationFn: async (input: CreateIssueInput & { meeting_id: string; series_id: string }) => {
       const {
         data: { user },
       } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
+
+      const { data: profile } = isFeatureGatingEnabled()
+        ? await supabase
+            .from("profiles")
+            .select("has_full_access, current_organization_id")
+            .eq("id", user.id)
+            .single()
+        : { data: null };
+
+      if (profile && !profile.has_full_access && profile.current_organization_id) {
+        const activeCount = await countActiveIssuesForOrg(
+          supabase,
+          profile.current_organization_id
+        );
+        if (activeCount !== null && activeCount >= ITEM_LIMIT) {
+          throw new Error(ITEM_LIMIT_MESSAGE);
+        }
+      }
 
       const { data, error } = await supabase
         .from("issues")

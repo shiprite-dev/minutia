@@ -36,6 +36,19 @@ async function setGlobalRole(request: APIRequestContext, role: "admin" | "user")
   expect(res.ok()).toBeTruthy();
 }
 
+// Flip the tenancy seam via the hosted_mode deploy flag: false = single-
+// workspace self-host, true = multi-workspace hosted.
+async function setMultiWorkspace(request: APIRequestContext, enabled: boolean) {
+  const res = await request.post(
+    `${SUPABASE_URL}/rest/v1/instance_config?on_conflict=key`,
+    {
+      headers: serviceHeaders("resolution=merge-duplicates,return=minimal"),
+      data: { key: "hosted_mode", value: enabled ? "true" : "false" },
+    }
+  );
+  expect(res.ok()).toBeTruthy();
+}
+
 async function upsertMembership(
   request: APIRequestContext,
   orgId: string,
@@ -225,7 +238,7 @@ test.describe("Organization RBAC and workspace routes", () => {
         await invitePage.getByLabel("Password", { exact: true }).fill("invite-password123");
         await invitePage.getByLabel("Confirm password").fill("invite-password123");
         await invitePage.getByRole("button", { name: "Set password" }).click();
-        await expect(invitePage).toHaveURL(`${APP_URL}/`);
+        await expect(invitePage).toHaveURL(`${APP_URL}/dashboard`);
       });
     } finally {
       await inviteContext.close();
@@ -265,6 +278,55 @@ test.describe("Organization RBAC and workspace routes", () => {
     }
 
     expect(res.ok()).toBeFalsy();
+  });
+
+  test("multi-workspace mode allows additional workspaces and self-serve signup", async ({
+    request,
+  }) => {
+    // The hosted control plane flips this flag; self-host leaves it off. With it
+    // on, the single-workspace guard lifts and uninvited signups self-provision.
+    const secondOrgId = crypto.randomUUID();
+    const selfEmail = `self-signup-${Date.now()}@example.com`;
+    let selfUserId: string | null = null;
+
+    await setMultiWorkspace(request, true);
+    try {
+      // 1. A second workspace is now accepted.
+      const res = await request.post(`${SUPABASE_URL}/rest/v1/organizations`, {
+        headers: serviceHeaders(),
+        data: {
+          id: secondOrgId,
+          name: "Second Workspace",
+          slug: `second-${Date.now()}`,
+          created_by: TEST_USER_ID,
+        },
+      });
+      expect(res.ok()).toBeTruthy();
+
+      // 2. An uninvited signup provisions its own personal workspace.
+      selfUserId = await createAuthUser(request, selfEmail);
+      const profileRes = await request.get(
+        `${SUPABASE_URL}/rest/v1/profiles?id=eq.${selfUserId}&select=current_organization_id`,
+        { headers: serviceHeaders("return=representation") }
+      );
+      const [profile] = await profileRes.json();
+      expect(profile?.current_organization_id).toBeTruthy();
+    } finally {
+      // Reset the seam first so a failure mid-test cannot leak multi-workspace
+      // mode into the rest of the serial suite.
+      await setMultiWorkspace(request, false);
+      await request.delete(
+        `${SUPABASE_URL}/rest/v1/organizations?id=eq.${secondOrgId}`,
+        { headers: serviceHeaders() }
+      );
+      if (selfUserId) {
+        await request.delete(
+          `${SUPABASE_URL}/rest/v1/organizations?created_by=eq.${selfUserId}`,
+          { headers: serviceHeaders() }
+        );
+        await deleteAuthUser(request, selfUserId);
+      }
+    }
   });
 
   test("pending invitation is accepted when user signs up outside invite link", async ({
