@@ -9,6 +9,12 @@ export type SharePermission = "view" | "comment";
 export type ShareResourceType = "meeting" | "series" | "issue";
 export type Theme = "light" | "dark" | "system";
 export type UserRole = "user" | "admin";
+export type TranscriptionStatus =
+  | "pending"
+  | "processing"
+  | "completed"
+  | "failed";
+export type RecordingState = "idle" | "recording" | "paused" | "stopped";
 export type OrganizationRole = "admin" | "member";
 export type SeriesParticipantRole = "owner" | "facilitator" | "participant";
 
@@ -20,6 +26,7 @@ export interface Profile {
   role: UserRole;
   has_completed_onboarding: boolean;
   current_organization_id: string | null;
+  has_full_access: boolean;
   created_at: Date;
   updated_at: Date;
 }
@@ -161,6 +168,14 @@ export interface Meeting {
   ai_notes_model: string | null;
   ai_notes_prompt_version: string | null;
   transcript_raw: string | null;
+  audio_file_path: string | null;
+  audio_duration_seconds: number | null;
+  audio_file_size_bytes: number | null;
+  transcription_status: TranscriptionStatus | null;
+  transcription_model: string | null;
+  transcription_provider: string | null;
+  transcription_started_at: Date | null;
+  transcription_completed_at: Date | null;
   gcal_meeting_key: string | null;
   gcal_calendar_id: string | null;
   gcal_event_id: string | null;

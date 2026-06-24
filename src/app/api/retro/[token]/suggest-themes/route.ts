@@ -4,6 +4,7 @@ import { callOpenRouter, getOpenRouterApiKey } from "@/lib/ai/openrouter";
 import { getTextFromOpenRouter } from "@/lib/ai/ask-series-answer";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { getInstanceConfigMap } from "@/lib/instance-config";
+import { isFeatureGatingEnabled } from "@/lib/feature-access";
 
 export const dynamic = "force-dynamic";
 
@@ -46,11 +47,32 @@ export async function POST(
   const svc = createServiceRoleClient();
   const { data: board } = await svc
     .from("retro_boards")
-    .select("id")
+    .select("id, claimed_by")
     .eq("token", token)
     .single();
   if (!board) {
     return NextResponse.json({ error: "Board not found" }, { status: 404 });
+  }
+
+  if (isFeatureGatingEnabled()) {
+    if (board.claimed_by) {
+      const { data: ownerProfile } = await svc
+        .from("profiles")
+        .select("has_full_access")
+        .eq("id", board.claimed_by)
+        .single();
+      if (!ownerProfile?.has_full_access) {
+        return NextResponse.json(
+          { error: "AI features aren.t enabled for this account.", code: "FEATURE_UNAVAILABLE" },
+          { status: 403 }
+        );
+      }
+    } else {
+      return NextResponse.json(
+        { error: "AI features aren.t enabled for this account.", code: "FEATURE_UNAVAILABLE" },
+        { status: 403 }
+      );
+    }
   }
 
   const { data: cards } = await svc

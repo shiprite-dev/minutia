@@ -50,6 +50,15 @@ jobs:
       - name: Verify carry-over logic
         run: pnpm test:ai-carryover
 
+      - name: Verify audio capture contracts
+        run: pnpm test:audio
+
+      - name: Verify transcription client
+        run: pnpm test:transcription
+
+      - name: Verify feature-access gate
+        run: pnpm test:feature-access
+
       - name: Build (includes typecheck)
         run: pnpm build
         env:

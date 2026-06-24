@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { SERIES, ISSUES, waitForApp } from "./seed-data";
 
-test.describe("Semantic HTML landmarks and page titles (MIN-046)", () => {
+test.describe("Semantic HTML landmarks and page titles", () => {
   test("dashboard has correct page title", async ({ page }) => {
     await page.goto("/");
     await waitForApp(page);

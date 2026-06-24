@@ -2,7 +2,6 @@ import { test, expect, type Page } from "@playwright/test";
 import { waitForApp } from "./seed-data";
 
 // Contract for the dnd-kit + CSS Grid bento dashboard that replaces GridStack.
-// See docs/superpowers/specs/2026-06-07-widget-dashboard-bento-design.md
 //
 // The decisive gate is "no widget clips its content" (the GridStack bug), plus
 // a full-page screenshot for human/visual review.

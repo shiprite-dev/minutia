@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { SERIES, MEETINGS, ISSUES, waitForApp } from "./seed-data";
 
-test.describe("OIL Board card stagger (MIN-004)", () => {
+test.describe("OIL Board card stagger", () => {
   test("issue rows are visible after stagger animation completes", async ({
     page,
   }) => {
@@ -19,7 +19,7 @@ test.describe("OIL Board card stagger (MIN-004)", () => {
   });
 });
 
-test.describe("Issue status change animation (MIN-005)", () => {
+test.describe("Issue status change animation", () => {
   test("resolved issue on detail page has strikethrough title", async ({
     page,
   }) => {
@@ -38,7 +38,7 @@ test.describe("Issue status change animation (MIN-005)", () => {
   });
 });
 
-test.describe("Issue lifecycle timeline animation (MIN-006)", () => {
+test.describe("Issue lifecycle timeline animation", () => {
   test("timeline section is visible on issue detail page", async ({
     page,
   }) => {
@@ -50,7 +50,7 @@ test.describe("Issue lifecycle timeline animation (MIN-006)", () => {
   });
 });
 
-test.describe("Button micro-interactions (MIN-023)", () => {
+test.describe("Button micro-interactions", () => {
   test("button has active scale transform class", async ({ page }) => {
     await page.goto("/dashboard");
     await waitForApp(page);
@@ -74,7 +74,7 @@ test.describe("Button micro-interactions (MIN-023)", () => {
   });
 });
 
-test.describe("Copy button morph confirmation (MIN-024)", () => {
+test.describe("Copy button morph confirmation", () => {
   test("brief card copy button shows 'Copied' on click", async ({
     page,
     context,
@@ -108,7 +108,7 @@ test.describe("Copy button morph confirmation (MIN-024)", () => {
   });
 });
 
-test.describe("OIL card inline expand vertical rule (MIN-025)", () => {
+test.describe("OIL card inline expand vertical rule", () => {
   test("issue card on detail page shows expanded content with vertical rule", async ({
     page,
   }) => {
@@ -120,7 +120,7 @@ test.describe("OIL card inline expand vertical rule (MIN-025)", () => {
   });
 });
 
-test.describe("Dialog spring-in animation (MIN-038)", () => {
+test.describe("Dialog spring-in animation", () => {
   test("dialog opens with 160ms animation duration", async ({ page }) => {
     await page.goto(`/series/${SERIES.platformStandup}`);
     await waitForApp(page);
@@ -138,7 +138,7 @@ test.describe("Dialog spring-in animation (MIN-038)", () => {
   });
 });
 
-test.describe("Brief card slide-down animation (MIN-020)", () => {
+test.describe("Brief card slide-down animation", () => {
   test("brief card is visible on series detail page", async ({ page }) => {
     await page.goto(`/series/${SERIES.platformStandup}`);
     await waitForApp(page);
