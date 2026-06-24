@@ -1463,7 +1463,7 @@ export function MeetingDetailContent({
               meetingId={meetingId}
               attendees={meeting.attendees ?? series?.default_attendees ?? []}
             />
-            <RemindOwnersButton seriesId={seriesId} />
+            {canManageMeeting && <RemindOwnersButton seriesId={seriesId} />}
             <ShareButton resource_type="meeting" resource_id={meetingId} />
           </div>
         </div>

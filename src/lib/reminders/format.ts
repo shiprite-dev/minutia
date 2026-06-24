@@ -16,8 +16,20 @@ function digestSubject(ctx: ReminderContext): string {
   return `Open items in ${ctx.seriesName}`;
 }
 
+function totalIssues(owners: OwnerReminder[]): number {
+  return owners.reduce((n, owner) => n + owner.issues.length, 0);
+}
+
+// A short, count-aware nudge so the reminder reads as a prompt to act, not just
+// a flat list. Reads naturally for both the per-owner email and the full digest.
+function leadLine(owners: OwnerReminder[], ctx: ReminderContext): string {
+  const n = totalIssues(owners);
+  const noun = n === 1 ? "item" : "items";
+  return `${n} open ${noun} waiting in ${ctx.seriesName}. A quick nudge keeps them moving:`;
+}
+
 function renderMarkdown(owners: OwnerReminder[], ctx: ReminderContext): string {
-  const lines = [`# Open items in ${ctx.seriesName}`, ""];
+  const lines = [`# Open items in ${ctx.seriesName}`, "", leadLine(owners, ctx), ""];
   for (const owner of owners) {
     lines.push(`## ${ownerLabel(owner)}`);
     for (const issue of owner.issues) lines.push(`- ${issueLine(issue)}`);
@@ -28,7 +40,7 @@ function renderMarkdown(owners: OwnerReminder[], ctx: ReminderContext): string {
 }
 
 function renderText(owners: OwnerReminder[], ctx: ReminderContext): string {
-  const lines = [`Open items in ${ctx.seriesName}`, ""];
+  const lines = [`Open items in ${ctx.seriesName}`, "", leadLine(owners, ctx), ""];
   for (const owner of owners) {
     lines.push(`${ownerLabel(owner)}:`);
     for (const issue of owner.issues) lines.push(`  - ${issueLine(issue)}`);
@@ -39,7 +51,10 @@ function renderText(owners: OwnerReminder[], ctx: ReminderContext): string {
 }
 
 function renderHtml(owners: OwnerReminder[], ctx: ReminderContext): string {
-  const parts = [`<h1>Open items in ${escapeHtml(ctx.seriesName)}</h1>`];
+  const parts = [
+    `<h1>Open items in ${escapeHtml(ctx.seriesName)}</h1>`,
+    `<p>${escapeHtml(leadLine(owners, ctx))}</p>`,
+  ];
   for (const owner of owners) {
     parts.push(`<h2>${escapeHtml(ownerLabel(owner))}</h2>`);
     parts.push("<ul>");

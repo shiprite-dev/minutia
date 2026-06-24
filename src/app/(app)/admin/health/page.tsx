@@ -31,10 +31,18 @@ const OVERALL: Record<HealthReport["overall"], { dot: string; label: string }> =
 };
 
 export default function AdminHealthPage() {
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError } = useQuery({
     queryKey: ["admin", "health"],
     queryFn: fetchHealth,
   });
+
+  if (isError) {
+    return (
+      <p role="alert" className="text-sm text-danger">
+        Couldn&apos;t load service health. Refresh to retry.
+      </p>
+    );
+  }
 
   if (isLoading || !data) {
     return (

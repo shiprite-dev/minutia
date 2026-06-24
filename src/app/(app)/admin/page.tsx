@@ -28,10 +28,18 @@ const KPIS = [
 ] as const;
 
 export default function AdminOverviewPage() {
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError } = useQuery({
     queryKey: ["admin", "overview"],
     queryFn: fetchOverview,
   });
+
+  if (isError) {
+    return (
+      <p role="alert" className="text-sm text-danger">
+        Couldn&apos;t load instance overview. Refresh to retry.
+      </p>
+    );
+  }
 
   return (
     <div className="space-y-5">
