@@ -49,12 +49,19 @@ BEGIN
   ELSE
     EXECUTE format('ALTER ROLE authenticator PASSWORD %L', ${DB_PASSWORD_SQL});
   END IF;
+
+  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'supabase_storage_admin') THEN
+    EXECUTE format('CREATE ROLE supabase_storage_admin LOGIN NOINHERIT CREATEROLE PASSWORD %L', ${DB_PASSWORD_SQL});
+  ELSE
+    EXECUTE format('ALTER ROLE supabase_storage_admin PASSWORD %L', ${DB_PASSWORD_SQL});
+  END IF;
 END \$\$;
 
 ALTER ROLE postgres SET search_path = public, extensions;
 ALTER ROLE supabase_admin SET search_path = public, extensions;
 ALTER ROLE supabase_auth_admin SET search_path = auth, public, extensions;
 ALTER ROLE authenticator SET search_path = public, extensions;
+ALTER ROLE supabase_storage_admin SET search_path = storage, public, extensions;
 
 GRANT anon TO authenticator;
 GRANT authenticated TO authenticator;
@@ -64,6 +71,10 @@ GRANT supabase_auth_admin TO authenticator;
 CREATE SCHEMA IF NOT EXISTS auth;
 GRANT ALL ON SCHEMA auth TO supabase_auth_admin;
 GRANT USAGE ON SCHEMA auth TO authenticated, anon, service_role;
+
+CREATE SCHEMA IF NOT EXISTS storage AUTHORIZATION supabase_storage_admin;
+GRANT ALL ON SCHEMA storage TO supabase_storage_admin;
+GRANT USAGE ON SCHEMA storage TO authenticated, anon, service_role;
 
 CREATE SCHEMA IF NOT EXISTS _realtime;
 

@@ -108,3 +108,15 @@ services:
           allow:
             - admin
             - anon
+
+  # ─── Storage ────────────────────────────────────────────────────
+  - name: storage-v1
+    _comment: "Storage: /storage/v1/* -> :5000/*"
+    url: http://supabase-storage:5000/
+    routes:
+      - name: storage-v1-all
+        strip_path: true
+        paths:
+          - /storage/v1/
+    plugins:
+      - name: cors
