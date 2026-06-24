@@ -225,7 +225,7 @@ test.describe("Organization RBAC and workspace routes", () => {
         await invitePage.getByLabel("Password", { exact: true }).fill("invite-password123");
         await invitePage.getByLabel("Confirm password").fill("invite-password123");
         await invitePage.getByRole("button", { name: "Set password" }).click();
-        await expect(invitePage).toHaveURL(`${APP_URL}/`);
+        await expect(invitePage).toHaveURL(`${APP_URL}/dashboard`);
       });
     } finally {
       await inviteContext.close();

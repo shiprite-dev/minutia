@@ -25,6 +25,7 @@ const {
   pickAudioMimeType,
   isRecordingSupported,
   audioExtensionForMime,
+  audioContentType,
   audioStoragePath,
   formatRecordingDuration,
   uploadMeetingAudio,
@@ -90,6 +91,15 @@ test("audioExtensionForMime maps container to a sensible file extension", () => 
   assert.equal(audioExtensionForMime("audio/webm"), "webm");
   assert.equal(audioExtensionForMime("audio/mp4"), "m4a");
   assert.equal(audioExtensionForMime("audio/ogg;codecs=opus"), "ogg");
+});
+
+test("audioContentType strips codec params so the bucket allow-list accepts it", () => {
+  // Supabase Storage rejects "audio/webm;codecs=opus" (415) against an
+  // allowed_mime_types list of bare containers; upload with the essence.
+  assert.equal(audioContentType("audio/webm;codecs=opus"), "audio/webm");
+  assert.equal(audioContentType("audio/ogg;codecs=opus"), "audio/ogg");
+  assert.equal(audioContentType("audio/webm"), "audio/webm");
+  assert.equal(audioContentType("audio/mp4"), "audio/mp4");
 });
 
 test("audioStoragePath keys objects under the meeting id folder", () => {
@@ -160,7 +170,9 @@ test("uploadMeetingAudio uploads to the bucket and stamps the meeting row", asyn
 
   assert.equal(supabase.calls.bucket, "meeting-audio");
   assert.equal(supabase.calls.upload.path, "meeting-1/recording.webm");
-  assert.equal(supabase.calls.upload.options.contentType, "audio/webm;codecs=opus");
+  // Bare essence, not "audio/webm;codecs=opus": the bucket allow-list rejects
+  // codec parameters with a 415.
+  assert.equal(supabase.calls.upload.options.contentType, "audio/webm");
   assert.equal(supabase.calls.upload.options.upsert, true);
   assert.equal(result.path, "meeting-1/recording.webm");
 
@@ -233,6 +245,18 @@ test("migration creates a private meeting-audio storage bucket", () => {
   assert.ok(/'meeting-audio'[\s\S]{0,80}false/.test(migrations), "bucket must be private");
 });
 
+test("every recorder mime candidate's bare type is in the bucket allow-list", () => {
+  // The upload content type is audioContentType(candidate); if any candidate's
+  // essence is missing from allowed_mime_types, Storage rejects it with a 415.
+  for (const candidate of AUDIO_MIME_CANDIDATES) {
+    const bare = audioContentType(candidate);
+    assert.ok(
+      migrations.includes(`'${bare}'`),
+      `bucket allow-list missing ${bare} for recorder candidate ${candidate}`
+    );
+  }
+});
+
 test("migration scopes storage.objects RLS to the meeting series owner", () => {
   assert.ok(migrations.includes("storage.objects"), "must define storage.objects policies");
   assert.ok(migrations.includes("storage.foldername"), "policy must key off the meeting-id folder");
@@ -240,6 +264,25 @@ test("migration scopes storage.objects RLS to the meeting series owner", () => {
   for (const verb of ["FOR SELECT", "FOR INSERT", "FOR UPDATE", "FOR DELETE"]) {
     assert.ok(migrations.includes(verb), `storage policy missing ${verb}`);
   }
+});
+
+test("storage policies check ownership via a SECURITY DEFINER helper, not an inline subquery", () => {
+  // The storage-api role cannot satisfy public.meetings RLS from inside a
+  // storage.objects policy, so an inline EXISTS subquery 403s every owner
+  // upload. The ownership check must run through a SECURITY DEFINER function
+  // that bypasses the nested RLS and depends only on auth.uid().
+  assert.ok(
+    migrations.includes("owns_meeting_audio_object"),
+    "must define the owns_meeting_audio_object ownership helper"
+  );
+  assert.ok(
+    /CREATE OR REPLACE FUNCTION public\.owns_meeting_audio_object[\s\S]{0,200}SECURITY DEFINER/.test(migrations),
+    "ownership helper must be SECURITY DEFINER"
+  );
+  assert.ok(
+    migrations.includes("public.owns_meeting_audio_object(name)"),
+    "storage policies must call the ownership helper"
+  );
 });
 
 // ---------------------------------------------------------------------------

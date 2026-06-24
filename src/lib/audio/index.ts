@@ -65,6 +65,16 @@ export function audioExtensionForMime(mime: string): string {
 }
 
 /**
+ * Storage content type for a recording: the bare MIME essence with any codec
+ * parameter stripped. MediaRecorder reports e.g. "audio/webm;codecs=opus", but
+ * the bucket's allowed_mime_types list bare containers, so Supabase Storage
+ * rejects the parameterized form with a 415. Always upload with the essence.
+ */
+export function audioContentType(mime: string): string {
+  return mime.split(";")[0].trim();
+}
+
+/**
  * Object key within MEETING_AUDIO_BUCKET. The meeting id is the first path
  * segment so storage RLS can authorize by joining meetings -> meeting_series.
  */
@@ -106,7 +116,7 @@ export async function uploadMeetingAudio(
 
   const { error: uploadError } = await supabase.storage
     .from(MEETING_AUDIO_BUCKET)
-    .upload(path, blob, { contentType: mimeType, upsert: true });
+    .upload(path, blob, { contentType: audioContentType(mimeType), upsert: true });
   if (uploadError) throw uploadError;
 
   const { error: updateError } = await supabase

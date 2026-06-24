@@ -1,5 +1,6 @@
 import { test, expect, type Locator, type Page } from "@playwright/test";
 import { waitForApp } from "./seed-data";
+import { formatShortDate } from "../../src/lib/date-utils";
 import {
   addWidget,
   createDashboardIssue,
@@ -299,19 +300,26 @@ test.describe("Widget system", () => {
     const ownerTitle = `Lane assigned ${Date.now()}`;
     const unassignedTitle = `Lane unassigned ${Date.now()}`;
 
+    // Seed a due date well beyond the 7-day relative-format window so the lane
+    // always renders the absolute date ("Due Jul 15") rather than "Due in Nd".
+    const dueDate = new Date();
+    dueDate.setUTCDate(dueDate.getUTCDate() + 21);
+    const dueDateIso = dueDate.toISOString().slice(0, 10);
+    const dueLabel = `Due ${formatShortDate(dueDateIso)}`;
+
     try {
       created.push(
         await createDashboardIssue(request, ownerTitle, {
           owner_name: "Jordan Rivera",
           priority: "critical",
-          due_date: "2026-06-30",
+          due_date: dueDateIso,
         })
       );
       created.push(
         await createDashboardIssue(request, unassignedTitle, {
           owner_name: "",
           priority: "critical",
-          due_date: "2026-06-30",
+          due_date: dueDateIso,
         })
       );
       await createDashboardIssueUpdate(request, created[0].id);
@@ -368,8 +376,8 @@ test.describe("Widget system", () => {
           expect(Math.abs(centerY(laneBox) - centerY(rowBox))).toBeLessThan(3);
         }
       }
-      await expect(assignedRow.getByTestId("issue-due-lane")).toContainText("Due Jun 30");
-      await expect(unassignedRow.getByTestId("issue-due-lane")).toContainText("Due Jun 30");
+      await expect(assignedRow.getByTestId("issue-due-lane")).toContainText(dueLabel);
+      await expect(unassignedRow.getByTestId("issue-due-lane")).toContainText(dueLabel);
       await expect(assignedRow.getByTestId("issue-update-lane")).toContainText("1 update");
       await expect(unassignedRow.getByTestId("issue-update-lane")).toContainText("1 update");
 
