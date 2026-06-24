@@ -17,6 +17,8 @@ export type TranscriptionStatus =
 export type RecordingState = "idle" | "recording" | "paused" | "stopped";
 export type OrganizationRole = "admin" | "member";
 export type SeriesParticipantRole = "owner" | "facilitator" | "participant";
+// MIN-121: how an AI suggestion relates to the existing OIL.
+export type SuggestionType = "new_item" | "status_update" | "duplicate_warning";
 
 export interface Profile {
   id: string;
@@ -211,6 +213,7 @@ export interface MeetingAiSuggestion {
   id: string;
   meeting_id: string;
   series_id: string;
+  type: SuggestionType;
   category: IssueCategory;
   title: string;
   details: string | null;
@@ -218,6 +221,10 @@ export interface MeetingAiSuggestion {
   due_date: Date | string | null;
   confidence: number;
   source_excerpt: string | null;
+  // Cross-meeting context: the OIL item this suggestion references, and the
+  // status a status_update would move it to. Null for a plain new_item.
+  related_issue_number: number | null;
+  suggested_status: IssueStatus | null;
   status: "pending" | "accepted" | "rejected";
   ai_model: string | null;
   ai_prompt_version: string | null;
