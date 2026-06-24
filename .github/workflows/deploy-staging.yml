@@ -1,0 +1,36 @@
+name: Deploy Staging
+
+# Fires only after the CI workflow finishes successfully on main. This repo is
+# OSS and provider-neutral: it does NOT contain hostnames, SSH, or deploy
+# topology. The actual staging deploy lives in the private ops repo. We just
+# emit a repository_dispatch event it listens for.
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
+
+jobs:
+  trigger-staging:
+    name: Trigger staging deploy
+    runs-on: ubuntu-latest
+    # Only when CI (lint + all 16 E2E shards) passed.
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    steps:
+      - name: Dispatch deploy-staging to ops repo
+        env:
+          OPS_REPO: ${{ secrets.OPS_REPO }}
+          OPS_DISPATCH_TOKEN: ${{ secrets.OPS_DISPATCH_TOKEN }}
+          COMMIT_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          if [ -z "$OPS_REPO" ] || [ -z "$OPS_DISPATCH_TOKEN" ]; then
+            echo "OPS_REPO / OPS_DISPATCH_TOKEN not configured; skipping staging dispatch."
+            echo "Add these repo secrets to enable automatic staging deploys."
+            exit 0
+          fi
+          curl -sf -X POST \
+            "https://api.github.com/repos/${OPS_REPO}/dispatches" \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${OPS_DISPATCH_TOKEN}" \
+            -d "{\"event_type\":\"deploy-staging\",\"client_payload\":{\"sha\":\"${COMMIT_SHA}\",\"source\":\"minutia-ci\"}}"
+          echo "Dispatched deploy-staging for ${COMMIT_SHA} to ${OPS_REPO}."
