@@ -10,8 +10,11 @@
 --     absent / 'false' (default) -> single-workspace self-host
 --     'true'                     -> multi-workspace, public self-serve signup
 --
--- The hosted control plane (minutia-cloud) sets the flag to 'true'; this repo
--- ships the neutral default. Mirrors the retro_enabled / feature-gating seams.
+-- The hosted deploy (minutia-ops "Deploy Minutia VPS", hosted_mode=true) sets
+-- instance_config.hosted_mode='true'; this repo ships the neutral default
+-- (absent = single-workspace). Mirrors the retro_enabled / feature-gating seams.
+-- NOTE: 'hosted_mode' is the existing deploy contract key; this seam is its
+-- first consumer (it was previously written but unread).
 -- =============================================================================
 
 -- 1. Flag reader. SECURITY DEFINER so triggers can read instance_config under
@@ -25,7 +28,7 @@ CREATE OR REPLACE FUNCTION public.multi_workspace_enabled()
 AS $$
   SELECT COALESCE(
     (SELECT value = 'true' FROM public.instance_config
-      WHERE key = 'multi_workspace_enabled'),
+      WHERE key = 'hosted_mode'),
     false
   );
 $$;

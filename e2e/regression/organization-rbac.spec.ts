@@ -36,13 +36,14 @@ async function setGlobalRole(request: APIRequestContext, role: "admin" | "user")
   expect(res.ok()).toBeTruthy();
 }
 
-// Flip the tenancy seam: false = single-workspace self-host, true = multi.
+// Flip the tenancy seam via the hosted_mode deploy flag: false = single-
+// workspace self-host, true = multi-workspace hosted.
 async function setMultiWorkspace(request: APIRequestContext, enabled: boolean) {
   const res = await request.post(
     `${SUPABASE_URL}/rest/v1/instance_config?on_conflict=key`,
     {
       headers: serviceHeaders("resolution=merge-duplicates,return=minimal"),
-      data: { key: "multi_workspace_enabled", value: enabled ? "true" : "false" },
+      data: { key: "hosted_mode", value: enabled ? "true" : "false" },
     }
   );
   expect(res.ok()).toBeTruthy();
