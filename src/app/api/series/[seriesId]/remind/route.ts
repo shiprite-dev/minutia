@@ -31,7 +31,7 @@ export async function POST(
 
   const { data: series } = await supabase
     .from("meeting_series")
-    .select("id, name")
+    .select("id, name, owner_id")
     .eq("id", seriesId)
     .single();
 
@@ -40,6 +40,30 @@ export async function POST(
   }
 
   const admin = createServiceRoleClient();
+
+  // Reminders gather every owner's email across the series, so the trigger is
+  // restricted to those who manage it (owner/facilitator), mirroring the UI
+  // gate. Keyed on the requesting user's own id via service-role to avoid RLS
+  // false-negatives on the membership lookup.
+  const { data: membership } = await admin
+    .from("series_participants")
+    .select("role")
+    .eq("series_id", seriesId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  const canRemind =
+    series.owner_id === user.id ||
+    membership?.role === "owner" ||
+    membership?.role === "facilitator";
+
+  if (!canRemind) {
+    return NextResponse.json(
+      { error: "Only series owners and facilitators can send reminders." },
+      { status: 403 }
+    );
+  }
+
   const { data: seriesIssues } = await admin
     .from("issues")
     .select("*")

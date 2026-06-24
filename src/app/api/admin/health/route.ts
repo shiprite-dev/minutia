@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
     .select("id", { head: true, count: "exact" });
   probes.push(
     dbRes.error
-      ? { service: "database", status: "down", detail: dbRes.error.message }
+      ? { service: "database", status: "down", detail: "Database query failed" }
       : { service: "database", status: "ok" }
   );
 
@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
       : {
           service: "storage",
           status: "degraded",
-          detail: bucketsRes.error?.message ?? "Storage unavailable",
+          detail: "Storage unavailable",
         }
   );
 

@@ -35,6 +35,17 @@ async function getSeedOrganizationId(request: APIRequestContext) {
   return organizationId as string;
 }
 
+async function setSeedProfileRole(
+  request: APIRequestContext,
+  role: "admin" | "user"
+) {
+  const res = await request.patch(
+    `${SUPABASE_URL}/rest/v1/profiles?id=eq.${TEST_USER_ID}`,
+    { headers: serviceHeaders(), data: { role } }
+  );
+  expect(res.ok()).toBeTruthy();
+}
+
 async function setSeedOrgRole(
   request: APIRequestContext,
   organizationId: string,
@@ -147,6 +158,7 @@ test.describe("Admin user management", () => {
 
     organizationId = await getSeedOrganizationId(request);
     await setSeedOrgRole(request, organizationId, "admin");
+    await setSeedProfileRole(request, "admin");
 
     const suffix = `${Date.now()}-${Math.round(Math.random() * 10000)}`;
     memberEmail = `demo-member-${suffix}@example.com`;
@@ -165,10 +177,11 @@ test.describe("Admin user management", () => {
     if (organizationId) {
       await setSeedOrgRole(request, organizationId, "member");
     }
+    await setSeedProfileRole(request, "user");
   });
 
   test("workspace admins can scan members and pending invitations", async ({ page }) => {
-    await page.goto("/settings");
+    await page.goto("/admin/users");
     await waitForApp(page);
 
     const workspace = page.getByRole("region", { name: "Workspace access" });
@@ -198,7 +211,7 @@ test.describe("Admin user management", () => {
     page,
     request,
   }) => {
-    await page.goto("/settings");
+    await page.goto("/admin/users");
     await waitForApp(page);
 
     const workspace = page.getByRole("region", { name: "Workspace access" });
