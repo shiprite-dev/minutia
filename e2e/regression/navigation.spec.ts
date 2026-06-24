@@ -63,7 +63,7 @@ test.describe("Sidebar & Navigation", () => {
     await expect(page).toHaveURL("/settings");
 
     await page.getByRole("link", { name: "Outstanding" }).click();
-    await expect(page).toHaveURL("/");
+    await expect(page).toHaveURL("/dashboard");
   });
 
   test("sidebar series links navigate to series detail", async ({ page }) => {
@@ -131,6 +131,6 @@ test.describe("Full Navigation Flow", () => {
     ).toBeVisible();
 
     await page.getByRole("link", { name: "Outstanding" }).click();
-    await expect(page).toHaveURL("/");
+    await expect(page).toHaveURL("/dashboard");
   });
 });

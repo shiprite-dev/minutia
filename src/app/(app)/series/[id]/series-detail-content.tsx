@@ -41,6 +41,8 @@ import { CsvImportDialog } from "@/components/minutia/csv-import-dialog";
 import { ArrowLeft, Play, Settings, Loader2, Upload, Calendar, X, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Cadence, Issue, GoogleCalendarEntry } from "@/lib/types";
+import { AiUnavailableNotice } from "@/components/minutia/ai-unavailable-notice";
+import { useAiAccess } from "@/lib/hooks/use-ai-access";
 import {
   useGoogleCalendarStatus,
   useCalendarList,
@@ -101,6 +103,8 @@ export function SeriesDetailContent({ seriesId }: SeriesDetailContentProps) {
   const [askAnswer, setAskAnswer] = React.useState<AskSeriesAnswer | null>(null);
   const [askError, setAskError] = React.useState<string | null>(null);
   const [askingSeries, setAskingSeries] = React.useState(false);
+  const { data: aiAccess } = useAiAccess();
+  const hasAccess = aiAccess?.hasAccess === true;
 
   // Filter open issues (not resolved/dropped)
   const openIssues = React.useMemo(
@@ -310,7 +314,7 @@ export function SeriesDetailContent({ seriesId }: SeriesDetailContentProps) {
             <Button
               type="button"
               onClick={handleAskSeries}
-              disabled={askingSeries || !askQuestion.trim()}
+              disabled={!hasAccess || askingSeries || !askQuestion.trim()}
               className="bg-accent text-white hover:bg-accent-hover sm:self-start"
             >
               {askingSeries ? (
@@ -321,6 +325,10 @@ export function SeriesDetailContent({ seriesId }: SeriesDetailContentProps) {
               Ask series
             </Button>
           </div>
+
+          {!hasAccess && (
+            <AiUnavailableNotice className="mt-3" />
+          )}
 
           {askError && (
             <div className="mt-3 rounded-md border border-warn/30 bg-warn/10 px-3 py-2 text-sm text-ink">

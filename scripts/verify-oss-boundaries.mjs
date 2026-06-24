@@ -46,4 +46,23 @@ assert.match(dockerCompose, /GOOGLE_CALENDAR_WEBHOOK_URL=\$\{GOOGLE_CALENDAR_WEB
 assert.match(dockerCompose, /\.\/supabase\/migrations:\/migrations:ro/, "docker compose must mount Supabase migrations");
 assert.match(calendarWatchMigration, /CREATE TABLE IF NOT EXISTS public\.google_calendar_watch_channels/, "calendar watch channel table migration must remain");
 
+// The OSS landing page must not disclose the hosted pricing model. Prices,
+// tiers, and freemium framing belong on the separate minutia-landing site, not
+// in the self-host repo where they are shown to operators who pay nothing.
+const landingPage = readFileSync("src/app/page.tsx", "utf8");
+const forbiddenLandingDisclosures = [
+  [/\$\d/, "a price amount (e.g. $5)"],
+  [/\/\s*month\b/i, "a per-month subscription cadence"],
+  [/per\s+(?:seat|month|year)/i, "a per-seat/month/year price"],
+  [/free forever/i, "'free forever' freemium framing"],
+  [/pricing/i, "a pricing section"],
+  [/\(Pro\)/, "a '(Pro)' tier label"],
+];
+for (const [pattern, label] of forbiddenLandingDisclosures) {
+  assert.ok(
+    !pattern.test(landingPage),
+    `OSS landing page (src/app/page.tsx) must not disclose ${label}; move it to minutia-landing`
+  );
+}
+
 console.log("OSS self-host integrity verified");

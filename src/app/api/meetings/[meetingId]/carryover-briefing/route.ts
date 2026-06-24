@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { callOpenRouter, getOpenRouterApiKey } from "@/lib/ai/openrouter";
+import { requireAiAccess } from "@/lib/ai/access";
 import {
   summarizeCarryover,
   parseCarryoverBriefing,
@@ -58,6 +59,14 @@ export async function POST(
 ) {
   const requestId = crypto.randomUUID();
   const { meetingId } = await params;
+
+  const aiDenied = await requireAiAccess();
+  if (aiDenied) {
+    return NextResponse.json(
+      { error: (await aiDenied.json()).error, request_id: requestId },
+      { status: aiDenied.status }
+    );
+  }
 
   const supabase = await createClient();
   const {
