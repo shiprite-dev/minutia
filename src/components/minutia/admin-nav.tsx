@@ -6,6 +6,8 @@ import { cn } from "@/lib/utils";
 
 const ADMIN_TABS = [
   { label: "Overview", href: "/admin" },
+  { label: "Settings", href: "/admin/settings" },
+  { label: "Users", href: "/admin/users" },
   { label: "Health", href: "/admin/health" },
 ] as const;
 
