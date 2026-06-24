@@ -20,7 +20,7 @@ const features = [
       "A single board of outstanding issues across all your recurring meeting series.",
   },
   {
-    title: "AI summaries (Pro)",
+    title: "AI summaries",
     description:
       "Auto-generated meeting summaries and smart triage so nothing falls through the cracks.",
   },
@@ -28,33 +28,6 @@ const features = [
     title: "Decisions log",
     description:
       "A durable, searchable log of every decision your team makes in recurring meetings.",
-  },
-];
-
-const plans = [
-  {
-    name: "Free",
-    price: "$0",
-    cadence: "forever",
-    features: ["Manual capture", "Up to 25 items", "OIL board", "Decisions log"],
-    cta: "Get started free",
-    href: "/login?mode=signup",
-    highlighted: false,
-  },
-  {
-    name: "Pro",
-    price: "$5",
-    cadence: "/ month",
-    features: [
-      "Everything in Free",
-      "AI summaries",
-      "Smart triage",
-      "Unlimited items",
-      "Priority support",
-    ],
-    cta: "Start with Pro",
-    href: "/login?mode=signup",
-    highlighted: true,
   },
 ];
 
@@ -110,56 +83,6 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ─── Pricing ─── */}
-      <section className="mx-auto max-w-4xl px-6 py-16 border-t border-rule">
-        <h2 className="font-display text-2xl font-semibold text-ink sm:text-3xl text-center mb-12">
-          Simple, honest pricing
-        </h2>
-        <div className="grid gap-6 sm:grid-cols-2">
-          {plans.map((plan) => (
-            <div
-              key={plan.name}
-              className={
-                "flex flex-col rounded-md border p-6 " +
-                (plan.highlighted
-                  ? "border-accent bg-accent-soft"
-                  : "border-rule bg-paper-2")
-              }
-            >
-              <h3 className="font-display text-lg font-semibold text-ink">
-                {plan.name}
-              </h3>
-              <div className="mt-3 flex items-baseline gap-1">
-                <span className="font-display text-4xl font-bold text-ink">
-                  {plan.price}
-                </span>
-                <span className="text-sm text-ink-3">{plan.cadence}</span>
-              </div>
-              <ul className="mt-6 flex-1 space-y-3">
-                {plan.features.map((f) => (
-                  <li key={f} className="flex items-center gap-2.5 text-sm text-ink-2">
-                    <Check className="size-4 shrink-0 text-accent" />
-                    {f}
-                  </li>
-                ))}
-              </ul>
-              <Link
-                href={plan.href}
-                className={
-                  "mt-8 inline-flex items-center justify-center gap-2 rounded-md px-5 py-2.5 text-sm font-medium transition-colors " +
-                  (plan.highlighted
-                    ? "bg-ink text-paper hover:bg-ink-2"
-                    : "border border-ink text-ink hover:bg-ink hover:text-paper")
-                }
-              >
-                {plan.cta}
-                <ArrowRight className="size-4" />
-              </Link>
-            </div>
-          ))}
-        </div>
-      </section>
-
       {/* ─── Final CTA ─── */}
       <section className="border-t border-rule">
         <div className="mx-auto max-w-3xl px-6 py-20 text-center">
@@ -167,7 +90,7 @@ export default function LandingPage() {
             Ready to own your meeting memory?
           </h2>
           <p className="mt-4 text-ink-2">
-            Set up in minutes. Free forever for small teams.
+            Free and open source. Self-host in minutes and own your data.
           </p>
           <div className="mt-8">
             <Link
