@@ -74,6 +74,7 @@ export function RetroClient({
   const [now, setNow] = React.useState(0);
   const [saving, setSaving] = React.useState(false);
   const [savedSeriesId, setSavedSeriesId] = React.useState<string | null>(board.saved_to_series_id);
+  const [redirecting, setRedirecting] = React.useState(false);
   const [saveError, setSaveError] = React.useState<string | null>(null);
   const [exported, setExported] = React.useState(false);
 
@@ -311,7 +312,7 @@ export function RetroClient({
     });
   }
 
-  const saveToMinutia = React.useCallback(async () => {
+  const saveToMinutia = React.useCallback(async (): Promise<string | null> => {
     setSaving(true);
     setSaveError(null);
     try {
@@ -322,35 +323,75 @@ export function RetroClient({
       });
       if (res.status === 401) {
         window.location.href = `/login?next=${encodeURIComponent(`/retro/${token}?graduate=1`)}`;
-        return;
+        return null;
       }
       const json = await res.json().catch(() => ({}));
       if (!res.ok) {
         setSaveError(json.error || "Could not save to Minutia.");
         setSaving(false);
-        return;
+        return null;
       }
       setSavedSeriesId(json.series_id);
       setSaving(false);
+      return json.series_id ?? null;
     } catch {
       setSaveError("Could not reach the server.");
       setSaving(false);
+      return null;
     }
   }, [token, board.name]);
 
-  // Returning from the auth redirect (?graduate=1): finish the save automatically.
+  // Returning from the auth redirect (?graduate=1): finish the save automatically,
+  // then hand the user into the app so a first-time account hits the welcome tour
+  // (AppShell renders it on has_completed_onboarding). Only this funnel redirects;
+  // a facilitator saving mid-retro stays put so they can still End the retro.
   const graduatedRef = React.useRef(false);
   React.useEffect(() => {
-    if (graduatedRef.current || savedSeriesId) return;
+    if (graduatedRef.current) return;
     if (typeof window === "undefined") return;
     if (new URLSearchParams(window.location.search).get("graduate") !== "1") return;
     graduatedRef.current = true;
-    void saveToMinutia();
+    const handOff = (seriesId: string) => {
+      setRedirecting(true);
+      window.setTimeout(() => {
+        window.location.href = `/series/${seriesId}`;
+      }, 1500);
+    };
+    // Already graduated in a prior or concurrent session: hand the user straight
+    // into the existing series rather than stranding them on the retro page.
+    if (savedSeriesId) {
+      handOff(savedSeriesId);
+      return;
+    }
+    void (async () => {
+      const seriesId = await saveToMinutia();
+      if (seriesId) handOff(seriesId);
+    })();
   }, [savedSeriesId, saveToMinutia]);
 
   const carry: RetroCarry[] = snapshot.carryover.map((c) => ({ ...c, done: carryDone[c.id] ?? c.done }));
   const editing = editor.cardId ? snapshot.cards.find((c) => c.id === editor.cardId) : null;
   const editorCol = columns.find((c) => c.id === editor.colId);
+
+  // Graduation funnel: a brief "saved" confirmation while we hand the user into
+  // the app (the welcome tour then renders for first-time accounts).
+  if (redirecting) {
+    return (
+      <div
+        data-retro={theme}
+        data-testid="retro-graduated"
+        style={{ position: "fixed", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 14, background: "var(--studio-void)", color: "var(--studio-ink)", textAlign: "center", padding: "var(--space-6)" }}
+      >
+        <Icons.CheckCircle size={40} style={{ color: "var(--accent)" }} />
+        <h2 style={{ fontFamily: "var(--font-serif)", fontSize: "1.6rem", fontWeight: 600, margin: 0 }}>
+          Saved to Minutia
+        </h2>
+        <p style={{ fontFamily: "var(--font-sans)", fontSize: 15, color: "var(--studio-ink-3)", margin: 0 }}>
+          Opening your board&hellip;
+        </p>
+      </div>
+    );
+  }
 
   // Ended: a frozen, read-only summary. No phase bar, share, presence, or lobby
   // (an already-ended link lands straight here from the SSR snapshot, no join).
