@@ -105,19 +105,11 @@ export async function POST(
     );
   }
 
-  // Atomically claim the meeting: flip to 'processing' only if it is not already
-  // being processed, or if a prior run is stale (crashed without resetting).
-  // This makes concurrent POSTs idempotent without a read-then-write race.
-  const staleBefore = new Date(Date.now() - STALE_PROCESSING_MS).toISOString();
-  const { data: claimed, error: claimError } = await supabase
-    .from("meetings")
-    .update({ transcription_status: "processing", transcription_started_at: new Date().toISOString() })
-    .eq("id", meetingId)
-    .or(
-      `transcription_status.neq.processing,transcription_status.is.null,transcription_started_at.lt.${staleBefore}`
-    )
-    .select("id")
-    .maybeSingle();
+  // Atomic claim via RPC: self-host PostgREST ignores or=() on UPDATE.
+  const { data: claimed, error: claimError } = await supabase.rpc("claim_meeting_transcription", {
+    p_meeting_id: meetingId,
+    p_stale_seconds: Math.floor(STALE_PROCESSING_MS / 1000),
+  });
 
   if (claimError) {
     return NextResponse.json(
