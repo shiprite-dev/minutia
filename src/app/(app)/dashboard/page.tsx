@@ -654,7 +654,6 @@ function DecisionsWidget({
   seriesMap: Map<string, MeetingSeries & { open_issues_count: number }>;
 }) {
   const recent = decisions.slice(0, 5);
-  const hiddenDecisions = decisions.length - recent.length;
 
   return (
     <WidgetShell id={id} index={widgetIndex}>
@@ -682,9 +681,6 @@ function DecisionsWidget({
               </div>
             );
           })}
-          {hiddenDecisions > 0 && (
-            <p className="px-3 pt-1 text-xs text-ink-4">+{hiddenDecisions} more</p>
-          )}
         </div>
       )}
     </WidgetShell>

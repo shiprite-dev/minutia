@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { SERIES, waitForApp } from "./seed-data";
+import { createDashboardIssue, deleteIssue, HAS_SERVICE_ROLE } from "./dashboard-helpers";
 
 // Elevation: card surfaces are differentiated by shadow, not ring/border.
 // (Retry the read: Tailwind's dev JIT compiles the arbitrary shadow utility on
@@ -32,25 +33,39 @@ test.describe("Elevation: shadows replace card borders", () => {
   });
 });
 
-// Canvas bounds: a busy meeting group shows at most 2 issues until expanded, so
-// the timeline never stretches unbounded.
+// Canvas bounds: a meeting that raises more than 2 issues shows only 2 until
+// expanded, so the timeline never stretches unbounded. Seed exactly 3 issues
+// raised in one meeting (deterministic) and assert the cap.
 test.describe("Canvas bounds: issues per meeting", () => {
-  test("issues are capped at 2 with a Show all control that expands in place", async ({
+  test("a meeting's issues are capped at 2 with a Show all control that expands in place", async ({
     page,
+    request,
   }) => {
-    await page.goto(`/series/${SERIES.platformStandup}`);
-    await waitForApp(page);
+    test.skip(!HAS_SERVICE_ROLE, "SUPABASE_SERVICE_ROLE_KEY is required to seed issues");
 
-    const showAll = page.getByRole("button", { name: /Show all \d+ items/ }).first();
-    await expect(showAll).toBeVisible();
+    const created: { id: string }[] = [];
+    try {
+      const stamp = Date.now();
+      for (let i = 0; i < 3; i++) {
+        created.push(await createDashboardIssue(request, `Bounds cap ${i} ${stamp}`));
+      }
 
-    // The group is collapsed to exactly the 2-item preview.
-    const group = showAll.locator("xpath=..");
-    const rows = group.locator("a[href*='/issues/']");
-    await expect(rows).toHaveCount(2);
+      await page.goto(`/series/${SERIES.platformStandup}`);
+      await waitForApp(page);
 
-    // Expanding reveals the rest in place (no navigation to a separate page).
-    await showAll.click();
-    await expect(rows).not.toHaveCount(2);
+      // The most recent meeting auto-expands; it now raises exactly 3 issues, so
+      // its "Issues (3)" group is the stable anchor (it survives expansion, unlike
+      // the Show-all button which disappears once clicked).
+      const group = page.getByText("Issues (3)", { exact: true }).locator("..");
+      const rows = group.locator("a[href*='/issues/']");
+      await expect(group.getByRole("button", { name: /Show all 3 items/ })).toBeVisible();
+      await expect(rows).toHaveCount(2);
+
+      // Expanding reveals the rest in place (no navigation to a separate page).
+      await group.getByRole("button", { name: /Show all 3 items/ }).click();
+      await expect(rows).toHaveCount(3);
+    } finally {
+      for (const issue of created) await deleteIssue(request, issue.id);
+    }
   });
 });

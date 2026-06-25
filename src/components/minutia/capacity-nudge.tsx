@@ -2,10 +2,24 @@
 
 import * as React from "react";
 import { motion } from "motion/react";
-import { Plus, ArrowRight } from "lucide-react";
+import { Sparkles, ArrowRight } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useUpsellNoticeUrl } from "@/lib/hooks/use-ai-access";
 import { resolveUpsellCta, shouldShowNudge, nudgeStorageKey } from "@/lib/upsell";
+
+// True until the first-run tour is finished, so the nudge never auto-opens over
+// the onboarding prompt (both anchor bottom-right). Read decoupled from the tour
+// component to avoid prop drilling.
+function firstRunTourPending(): boolean {
+  for (let i = 0; i < window.localStorage.length; i++) {
+    const key = window.localStorage.key(i);
+    if (key?.startsWith("minutia:first-run-tour:")) {
+      const value = window.localStorage.getItem(key);
+      if (value === "dismissed" || value === "completed") return false;
+    }
+  }
+  return true;
+}
 
 // Capacity nudge: the board-full FAB. Replaces the old dead-end (disabled FAB +
 // "limit reached" tooltip) with a calm, dismissible explanation and, when the
@@ -20,6 +34,7 @@ export function CapacityNudge({ limit }: { limit: number }) {
   const [open, setOpen] = React.useState(false);
 
   React.useEffect(() => {
+    if (firstRunTourPending()) return;
     const raw = window.localStorage.getItem(nudgeStorageKey(SLOT));
     const dismissedAt = raw ? Number(raw) : null;
     if (shouldShowNudge(dismissedAt, Date.now())) setOpen(true);
@@ -42,7 +57,7 @@ export function CapacityNudge({ limit }: { limit: number }) {
           className="fixed bottom-6 right-6 z-50 flex size-12 items-center justify-center rounded-full bg-accent text-white shadow-lg transition-colors hover:bg-accent-hover"
           whileTap={{ scale: 0.9 }}
         >
-          <Plus className="size-5" />
+          <Sparkles className="size-5" />
         </motion.button>
       </PopoverTrigger>
       <PopoverContent

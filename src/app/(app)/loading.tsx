@@ -6,7 +6,7 @@ export default function DashboardLoading() {
       <div className="mx-auto max-w-6xl px-6 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
           {/* Hero card */}
-          <div className="col-span-1 lg:col-span-2 rounded-xl border border-rule bg-card p-6">
+          <div className="col-span-1 lg:col-span-2 rounded-xl bg-card shadow-[var(--shadow-raised)] p-6">
             <Skeleton className="h-3 w-24 mb-3" />
             <div className="flex items-baseline gap-4 mb-2">
               <Skeleton className="h-12 w-16" />
@@ -28,7 +28,7 @@ export default function DashboardLoading() {
           </div>
 
           {/* Next meeting card */}
-          <div className="rounded-xl border border-rule bg-card p-6">
+          <div className="rounded-xl bg-card shadow-[var(--shadow-raised)] p-6">
             <Skeleton className="h-3 w-20 mb-4" />
             <Skeleton className="h-5 w-3/4 mb-1" />
             <Skeleton className="h-4 w-1/3 mb-4" />
@@ -37,7 +37,7 @@ export default function DashboardLoading() {
           </div>
 
           {/* Outstanding items */}
-          <div className="col-span-1 lg:col-span-2 rounded-xl border border-rule bg-card p-6">
+          <div className="col-span-1 lg:col-span-2 rounded-xl bg-card shadow-[var(--shadow-raised)] p-6">
             <div className="flex items-center justify-between mb-5">
               <Skeleton className="h-5 w-40" />
               <div className="flex gap-1">
@@ -72,7 +72,7 @@ export default function DashboardLoading() {
 
           {/* Sidebar cards */}
           <div className="space-y-5">
-            <div className="rounded-xl border border-rule bg-card p-6">
+            <div className="rounded-xl bg-card shadow-[var(--shadow-raised)] p-6">
               <Skeleton className="h-5 w-24 mb-4" />
               <div className="space-y-1">
                 {Array.from({ length: 3 }).map((_, i) => (
@@ -83,7 +83,7 @@ export default function DashboardLoading() {
                 ))}
               </div>
             </div>
-            <div className="rounded-xl border border-rule bg-card p-6">
+            <div className="rounded-xl bg-card shadow-[var(--shadow-raised)] p-6">
               <Skeleton className="h-5 w-36 mb-4" />
               <div className="space-y-2.5">
                 {Array.from({ length: 4 }).map((_, i) => (

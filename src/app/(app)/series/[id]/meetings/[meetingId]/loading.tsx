@@ -17,7 +17,7 @@ export default function MeetingDetailLoading() {
         </div>
 
         {/* Timeline */}
-        <div className="rounded-xl border border-rule bg-card p-6 mb-6">
+        <div className="rounded-xl bg-card shadow-[var(--shadow-raised)] p-6 mb-6">
           <Skeleton className="h-5 w-20 mb-4" />
           <div className="space-y-4">
             {Array.from({ length: 4 }).map((_, i) => (
@@ -34,13 +34,13 @@ export default function MeetingDetailLoading() {
 
         {/* Notes / Decisions */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="rounded-xl border border-rule bg-card p-6">
+          <div className="rounded-xl bg-card shadow-[var(--shadow-raised)] p-6">
             <Skeleton className="h-5 w-16 mb-4" />
             <Skeleton className="h-4 w-full mb-2" />
             <Skeleton className="h-4 w-3/4 mb-2" />
             <Skeleton className="h-4 w-1/2" />
           </div>
-          <div className="rounded-xl border border-rule bg-card p-6">
+          <div className="rounded-xl bg-card shadow-[var(--shadow-raised)] p-6">
             <Skeleton className="h-5 w-24 mb-4" />
             <Skeleton className="h-4 w-full mb-2" />
             <Skeleton className="h-4 w-2/3" />

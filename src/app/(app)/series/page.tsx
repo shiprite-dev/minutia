@@ -168,7 +168,7 @@ export default function SeriesListPage() {
                     {activeSeriesId === series.id && (
                       <motion.div
                         data-testid="series-card-detail-panel"
-                        className="pointer-events-none absolute left-3 right-3 top-[calc(100%-0.5rem)] z-20 rounded-md border border-rule-strong bg-card px-3 py-2.5 shadow-lg"
+                        className="pointer-events-none absolute left-3 right-3 top-[calc(100%-0.5rem)] z-20 rounded-md bg-card px-3 py-2.5 shadow-xl"
                         {...detailPanelMotion}
                       >
                         <p className="font-display text-sm font-medium leading-5 text-ink">

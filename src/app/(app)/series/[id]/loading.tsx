@@ -17,7 +17,7 @@ export default function SeriesDetailLoading() {
         </div>
 
         {/* Brief card */}
-        <div className="rounded-xl border border-rule bg-card p-6 mb-6">
+        <div className="rounded-xl bg-card shadow-[var(--shadow-raised)] p-6 mb-6">
           <Skeleton className="h-5 w-32 mb-3" />
           <Skeleton className="h-4 w-full mb-2" />
           <Skeleton className="h-4 w-3/4 mb-2" />
@@ -31,7 +31,7 @@ export default function SeriesDetailLoading() {
             {Array.from({ length: 4 }).map((_, i) => (
               <div
                 key={i}
-                className="rounded-lg border border-rule bg-card p-4"
+                className="rounded-lg bg-card shadow-[var(--shadow-raised)] p-4"
               >
                 <div className="flex items-center gap-3">
                   <Skeleton className="size-5 rounded" />
@@ -48,7 +48,7 @@ export default function SeriesDetailLoading() {
             {Array.from({ length: 3 }).map((_, i) => (
               <div
                 key={i}
-                className="rounded-lg border border-rule bg-card p-4"
+                className="rounded-lg bg-card shadow-[var(--shadow-raised)] p-4"
               >
                 <Skeleton className="h-4 w-20 mb-2" />
                 <Skeleton className="h-3 w-full mb-1" />
