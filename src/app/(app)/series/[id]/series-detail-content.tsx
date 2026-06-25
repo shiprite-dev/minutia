@@ -37,6 +37,7 @@ import {
 import { CADENCES } from "@/lib/constants";
 import { createSeriesSchema, type CreateSeriesInput } from "@/lib/schemas";
 import { ShareButton } from "@/components/minutia/share-button";
+import { RemindOwnersButton } from "@/components/minutia/remind-owners-button";
 import { CsvImportDialog } from "@/components/minutia/csv-import-dialog";
 import { ArrowLeft, Play, Settings, Loader2, Upload, Calendar, X, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -230,6 +231,7 @@ export function SeriesDetailContent({ seriesId }: SeriesDetailContentProps) {
               <ShareButton resource_type="series" resource_id={seriesId} />
               {canManageSeries && (
                 <>
+                  <RemindOwnersButton seriesId={seriesId} />
                   <Button
                     variant="ghost"
                     size="icon"
