@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { motion, AnimatePresence } from "motion/react";
+import { motion, AnimatePresence, useReducedMotion } from "motion/react";
 import { ArrowRight, ChevronRight, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -33,6 +33,8 @@ export function OnboardingWizard({ userName }: OnboardingWizardProps) {
   const router = useRouter();
   const [step, setStep] = React.useState(0);
   const [direction, setDirection] = React.useState(1);
+  const [confirming, setConfirming] = React.useState(false);
+  const reducedMotion = useReducedMotion();
   const nameInputRef = React.useRef<HTMLInputElement>(null);
 
   const [name, setName] = React.useState(userName ?? "");
@@ -44,6 +46,25 @@ export function OnboardingWizard({ userName }: OnboardingWizardProps) {
   const updateProfile = useUpdateProfile();
   const createSeries = useCreateSeries();
   const completeOnboarding = useCompleteOnboarding();
+
+  // A fresh post-signup arrival (auth callback appends ?confirmed=1 for new
+  // accounts) gets a brief confirmation beat that collapses into the name step.
+  // The param is stripped so a refresh never replays it.
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("confirmed") !== "1") return;
+    setConfirming(true);
+    params.delete("confirmed");
+    const qs = params.toString();
+    window.history.replaceState(
+      null,
+      "",
+      `${window.location.pathname}${qs ? `?${qs}` : ""}`,
+    );
+    const timer = window.setTimeout(() => setConfirming(false), 2500);
+    return () => window.clearTimeout(timer);
+  }, []);
 
   function goNext() {
     setDirection(1);
@@ -119,7 +140,19 @@ export function OnboardingWizard({ userName }: OnboardingWizardProps) {
         {/* Step content */}
         <div className="relative overflow-hidden rounded-2xl border border-rule bg-card p-8 min-h-[360px]">
           <AnimatePresence mode="wait" custom={direction}>
-            {step === 0 && (
+            {confirming && (
+              <motion.div
+                key="confirm"
+                initial={{ opacity: 1 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.22, ease: [0.2, 0.8, 0.2, 1] }}
+              >
+                <ConfirmationBeat reducedMotion={reducedMotion} />
+              </motion.div>
+            )}
+
+            {!confirming && step === 0 && (
               <motion.div
                 key="step-0"
                 custom={direction}
@@ -191,6 +224,49 @@ export function OnboardingWizard({ userName }: OnboardingWizardProps) {
             Skip setup
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Post-signup confirmation beat (precedes step 0 on a fresh ?confirmed=1 arrival)
+// ---------------------------------------------------------------------------
+
+function ConfirmationBeat({
+  reducedMotion,
+}: {
+  reducedMotion: boolean | null;
+}) {
+  return (
+    <div className="space-y-6 text-center" data-testid="onboarding-confirmation">
+      <motion.div
+        initial={false}
+        animate={reducedMotion === true ? {} : { scale: [1, 1.18, 1] }}
+        transition={{ duration: 0.5, ease: [0.2, 0.8, 0.2, 1] }}
+        className="inline-flex items-center justify-center size-12 rounded-full bg-accent/10"
+      >
+        <span className="font-display text-xl font-bold text-accent">m</span>
+      </motion.div>
+      <div>
+        <div className="overflow-hidden">
+          <motion.h2
+            initial={reducedMotion === true ? false : { clipPath: "inset(0 100% 0 0)" }}
+            animate={{ clipPath: "inset(0 0% 0 0)" }}
+            transition={{ delay: 0.08, duration: 0.38, ease: [0.2, 0.8, 0.2, 1] }}
+            className="font-display text-xl font-semibold text-ink"
+          >
+            Account confirmed.
+          </motion.h2>
+        </div>
+        <motion.p
+          initial={reducedMotion === true ? false : { opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.22, duration: 0.3, ease: [0.2, 0.8, 0.2, 1] }}
+          className="text-sm text-ink-3 mt-1"
+        >
+          Every issue your team raised just got a place to live.
+        </motion.p>
       </div>
     </div>
   );

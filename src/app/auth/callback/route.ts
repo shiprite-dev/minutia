@@ -39,10 +39,20 @@ export async function GET(request: Request) {
     const supabase = await createClient();
     const { data, error } = await supabase.auth.exchangeCodeForSession(code);
     if (!error) {
+      let target = next;
       if (data.session) {
         await storeGoogleProviderTokens(data.session);
+        // First-time accounts get a one-shot confirmation beat in onboarding.
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("has_completed_onboarding")
+          .eq("id", data.session.user.id)
+          .single();
+        if (profile && !profile.has_completed_onboarding) {
+          target = `${next}${next.includes("?") ? "&" : "?"}confirmed=1`;
+        }
       }
-      return NextResponse.redirect(`${origin}${next}`);
+      return NextResponse.redirect(`${origin}${target}`);
     }
   }
 
