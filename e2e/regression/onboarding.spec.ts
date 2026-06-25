@@ -296,3 +296,59 @@ test.describe("Onboarding wizard", () => {
     await expect(page.getByText("E2E Onboarding Series")).toBeVisible();
   });
 });
+
+test.describe("Onboarding wizard, post-signup confirmation beat", () => {
+  test.describe.configure({ mode: "serial" });
+  let state: OnboardingState | null = null;
+
+  test.beforeEach(async ({ page, baseURL }) => {
+    state = await createOnboardingAuthState();
+    const appOrigin = new URL(baseURL ?? "http://localhost:3000").origin;
+    await page.context().addCookies([
+      {
+        name: "sb-127-auth-token",
+        value: state.cookieValue,
+        url: appOrigin,
+        expires: Math.floor(Date.now() / 1000) + 60 * 60,
+        httpOnly: false,
+        secure: false,
+        sameSite: "Lax",
+      },
+    ]);
+  });
+
+  test.afterEach(async ({ request }) => {
+    if (!state) return;
+    await setOnboardingFlag(request, state, true);
+    await deleteOnboardingSeries(request, state);
+    await deleteOnboardingUser(state);
+    state = null;
+  });
+
+  test("a fresh ?confirmed=1 arrival shows the confirmation beat, then the name step", async ({
+    page,
+  }) => {
+    await page.goto("/dashboard?confirmed=1", { waitUntil: "domcontentloaded" });
+    // The confirmation beat appears first.
+    await expect(page.getByText("Account confirmed.")).toBeVisible({
+      timeout: 15000,
+    });
+    // It auto-collapses into the existing name-collection step.
+    await expect(page.getByText("Welcome to Minutia")).toBeVisible({
+      timeout: 15000,
+    });
+    await expect(page.getByLabel("What should we call you?")).toBeVisible();
+    // The param is stripped so a refresh does not replay the beat.
+    await expect(page).toHaveURL(/\/dashboard$/);
+  });
+
+  test("without the param, the wizard opens directly on the name step (no beat)", async ({
+    page,
+  }) => {
+    await page.goto("/dashboard", { waitUntil: "domcontentloaded" });
+    await expect(page.getByText("Welcome to Minutia")).toBeVisible({
+      timeout: 15000,
+    });
+    await expect(page.getByText("Account confirmed.")).not.toBeVisible();
+  });
+});
