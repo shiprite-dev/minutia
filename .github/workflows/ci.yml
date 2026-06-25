@@ -65,6 +65,9 @@ jobs:
       - name: Verify AI-notice upsell seam
         run: pnpm test:ai-notice
 
+      - name: Verify upsell core (CTA + nudge cooldown)
+        run: pnpm test:upsell
+
       - name: Verify reminders core
         run: pnpm test:reminders
 

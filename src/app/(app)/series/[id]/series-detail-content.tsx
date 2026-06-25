@@ -286,7 +286,7 @@ export function SeriesDetailContent({ seriesId }: SeriesDetailContentProps) {
           </div>
         )}
 
-        <section className="mb-8 rounded-lg border border-rule bg-card px-4 py-4">
+        <section className="mb-8 rounded-lg bg-card px-4 py-4 shadow-[var(--shadow-raised)]">
           <div className="mb-3 flex items-start justify-between gap-3">
             <div>
               <h2 className="font-display text-lg font-medium text-ink">

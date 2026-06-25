@@ -27,6 +27,8 @@ const TEXT_KEYS = [
   "smtp_from",
   "slack_webhook_url",
   "reminder_webhook_url",
+  "ai_notice_url",
+  "capacity_notice_url",
 ] as const;
 
 function field(config: ConfigMap, key: string) {
@@ -328,6 +330,31 @@ export default function AdminSettingsPage() {
                 placeholder="https://example.com/webhooks/minutia"
                 value={field(form, "reminder_webhook_url")}
                 onChange={(e) => setKey("reminder_webhook_url", e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="grid gap-4 border-t border-rule pt-5">
+            <p className="text-xs text-ink-3">
+              Optional links shown to accounts without AI access. Leave blank and the
+              prompt stays informational, with no button.
+            </p>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="ai_notice_url">AI prompt link</Label>
+              <Input
+                id="ai_notice_url"
+                placeholder="https://example.com/enable-ai"
+                value={field(form, "ai_notice_url")}
+                onChange={(e) => setKey("ai_notice_url", e.target.value)}
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="capacity_notice_url">Capacity prompt link</Label>
+              <Input
+                id="capacity_notice_url"
+                placeholder="https://example.com/more-space"
+                value={field(form, "capacity_notice_url")}
+                onChange={(e) => setKey("capacity_notice_url", e.target.value)}
               />
             </div>
           </div>

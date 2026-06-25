@@ -53,7 +53,7 @@ export function IssueCard({
         backgroundColor: isDone ? "var(--paper-3)" : "var(--card)",
       }}
       transition={{ duration: 0.2, ease: [0.2, 0.8, 0.2, 1] }}
-      className="border border-rule rounded-md p-5 focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-paper outline-none"
+      className="rounded-md p-5 shadow-[var(--shadow-raised)] transition-shadow duration-[var(--duration-base)] hover:shadow-[var(--shadow-raised-hover)] focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-paper outline-none"
       tabIndex={0}
       onKeyDown={handleKeyDown}
       role="article"

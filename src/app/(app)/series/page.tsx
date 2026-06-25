@@ -71,7 +71,7 @@ export default function SeriesListPage() {
             {Array.from({ length: 3 }).map((_, i) => (
               <div
                 key={i}
-                className="bg-card border border-rule rounded-md p-5"
+                className="bg-card rounded-md p-5 shadow-[var(--shadow-raised)]"
               >
                 <Skeleton className="h-5 w-3/4 mb-3" />
                 <Skeleton className="h-4 w-1/3 mb-4" />
@@ -118,7 +118,7 @@ export default function SeriesListPage() {
                       current === series.id ? null : current
                     )
                   }
-                  className="group relative flex h-44 flex-col overflow-visible bg-card border border-rule rounded-md p-5 hover:border-rule-strong focus-visible:border-rule-strong focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-paper outline-none transition-colors"
+                  className="group relative flex h-44 flex-col overflow-visible bg-card rounded-md p-5 shadow-[var(--shadow-raised)] hover:shadow-[var(--shadow-raised-hover)] focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-paper outline-none transition-shadow duration-[var(--duration-base)]"
                 >
                   <div className="flex h-full flex-col">
                     {/* Name + cadence */}
@@ -168,7 +168,7 @@ export default function SeriesListPage() {
                     {activeSeriesId === series.id && (
                       <motion.div
                         data-testid="series-card-detail-panel"
-                        className="pointer-events-none absolute left-3 right-3 top-[calc(100%-0.5rem)] z-20 rounded-md border border-rule-strong bg-card px-3 py-2.5 shadow-lg"
+                        className="pointer-events-none absolute left-3 right-3 top-[calc(100%-0.5rem)] z-20 rounded-md bg-card px-3 py-2.5 shadow-xl"
                         {...detailPanelMotion}
                       >
                         <p className="font-display text-sm font-medium leading-5 text-ink">
