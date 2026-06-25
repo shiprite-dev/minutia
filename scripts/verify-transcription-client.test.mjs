@@ -302,3 +302,52 @@ test("chunkAudioBlob returns the original blob untouched when under the cap", as
   assert.equal(chunks.length, 1);
   assert.equal(chunks[0].size, 100);
 });
+
+const claimMigration = fs
+  .readdirSync(path.join(root, "supabase", "migrations"))
+  .filter((f) => f.endsWith(".sql"))
+  .map((f) => fs.readFileSync(path.join(root, "supabase", "migrations", f), "utf8"))
+  .join("\n");
+
+const transcribeRoute = fs.readFileSync(
+  path.join(root, "src/app/api/meetings/[meetingId]/transcribe/route.ts"),
+  "utf8"
+);
+
+test("a migration defines the claim_meeting_transcription RPC", () => {
+  assert.match(
+    claimMigration,
+    /create or replace function public\.claim_meeting_transcription/i,
+    "claim RPC must exist in a migration"
+  );
+});
+
+test("the claim RPC is SECURITY DEFINER and re-checks series access", () => {
+  const fn = claimMigration.slice(
+    claimMigration.toLowerCase().indexOf("function public.claim_meeting_transcription")
+  );
+  assert.match(fn, /security definer/i, "RPC must be SECURITY DEFINER");
+  assert.match(fn, /user_can_access_series/i, "RPC must preserve authz");
+  assert.match(fn, /is distinct from 'processing'/i, "RPC claims non-processing rows");
+  assert.match(fn, /transcription_started_at\s*<\s*now\(\)/i, "RPC reclaims stale runs");
+});
+
+test("authenticated users can execute the claim RPC", () => {
+  assert.match(
+    claimMigration,
+    /grant execute on function public\.claim_meeting_transcription[\s\S]*?to[\s\S]*?authenticated/i,
+    "authenticated must be granted execute on the claim RPC"
+  );
+});
+
+test("the transcribe route claims via the RPC, not an or() on UPDATE", () => {
+  assert.match(
+    transcribeRoute,
+    /\.rpc\(\s*["']claim_meeting_transcription["']/,
+    "route must call the claim RPC"
+  );
+  assert.ok(
+    !/\.update\([\s\S]*?\.or\(/.test(transcribeRoute),
+    "route must not use .or() on an UPDATE (broken on self-host PostgREST)"
+  );
+});
