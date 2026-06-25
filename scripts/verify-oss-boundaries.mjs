@@ -107,7 +107,7 @@ function sourceFiles(dir) {
   }
   return out;
 }
-for (const file of sourceFiles("src")) {
+for (const file of [...sourceFiles("src"), ...sourceFiles("e2e")]) {
   for (const m of readFileSync(file, "utf8").matchAll(repoRef)) {
     assert.equal(
       `${m[1]}/minutia`,
