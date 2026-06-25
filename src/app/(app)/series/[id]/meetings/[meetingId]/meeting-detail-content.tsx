@@ -395,7 +395,7 @@ function AiNotesSection({
   }[tone];
 
   return (
-    <section className="rounded-lg border border-rule bg-card px-4 py-3">
+    <section className="rounded-lg bg-card px-4 py-3 shadow-[var(--shadow-raised)]">
       <div className="mb-3 flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <span className={cn("flex size-7 items-center justify-center rounded-md", toneClass)}>
@@ -1284,7 +1284,7 @@ export function MeetingDetailContent({
           {/* Main column */}
           <div className="flex-1 min-w-0">
             {/* Capture input */}
-            <div className="mb-8 rounded-xl border border-rule bg-card p-5">
+            <div className="mb-8 rounded-xl bg-card p-5 shadow-[var(--shadow-raised)]">
               <CaptureInput onSubmit={handleCapture} />
             </div>
 
@@ -1583,7 +1583,7 @@ export function MeetingDetailContent({
 
         {canManageMeeting && (
         <section className="mb-8" aria-label="AI accountability review">
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-rule bg-card px-4 py-3">
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-card px-4 py-3 shadow-[var(--shadow-raised)]">
             <div>
               <h2 className="font-display text-base font-medium text-ink">
                 Accountability review
@@ -1838,7 +1838,7 @@ export function MeetingDetailContent({
               {meetingDecisions.map((decision) => (
                 <div
                   key={decision.id}
-                  className="bg-card border border-rule rounded-md p-4"
+                  className="bg-card rounded-md p-4 shadow-[var(--shadow-raised)]"
                 >
                   <div className="flex items-start gap-2">
                     <span className="text-ink-3 shrink-0" aria-hidden="true">

@@ -135,7 +135,7 @@ export function BriefCard({
         duration: 0.3,
         ease: [0.34, 1.56, 0.64, 1],
       }}
-      className="bg-card border border-rule border-t-2 border-t-accent rounded-md overflow-hidden"
+      className="bg-card border-t-2 border-t-accent rounded-md overflow-hidden shadow-[var(--shadow-raised)]"
     >
       <div className="p-5">
         {/* Header */}

@@ -93,6 +93,33 @@
   --duration-fast:  120ms;
   --duration-base:  180ms;
   --duration-slow:  320ms;
+
+  /* Elevation: replaces card rings. Soft layered drop reads as raised; the
+     --card tonal step (paper-2 vs paper) stays the readability fallback when
+     shadows are imperceptible. --shadow-inset recesses wells/inputs. */
+  --shadow-raised:
+    0 1px 2px color-mix(in oklch, var(--ink) 8%, transparent),
+    0 4px 12px color-mix(in oklch, var(--ink) 6%, transparent);
+  --shadow-raised-hover:
+    0 2px 4px color-mix(in oklch, var(--ink) 10%, transparent),
+    0 10px 28px color-mix(in oklch, var(--ink) 9%, transparent);
+  --shadow-inset:
+    inset 0 1px 2px color-mix(in oklch, var(--ink) 9%, transparent);
+}
+
+/* Dark mode: drops read faint on dark paper, so a crisp top highlight conveys
+   "raised" without the muddy symmetric-neumorphism look. */
+.dark {
+  --shadow-raised:
+    0 1px 2px color-mix(in oklch, black 45%, transparent),
+    0 4px 14px color-mix(in oklch, black 38%, transparent),
+    inset 0 1px 0 color-mix(in oklch, white 6%, transparent);
+  --shadow-raised-hover:
+    0 2px 6px color-mix(in oklch, black 50%, transparent),
+    0 12px 32px color-mix(in oklch, black 45%, transparent),
+    inset 0 1px 0 color-mix(in oklch, white 8%, transparent);
+  --shadow-inset:
+    inset 0 1px 3px color-mix(in oklch, black 55%, transparent);
 }
 
 /* ─── Expose to Tailwind v4 ─── */
@@ -211,7 +238,8 @@
   }
 
   .widget-cell.is-dragging > .widget-card-content {
-    border-color: var(--accent);
+    outline: 1.5px solid color-mix(in oklch, var(--accent) 55%, transparent);
+    outline-offset: -1px;
     box-shadow: 0 18px 40px color-mix(in oklch, var(--accent) 18%, transparent);
     opacity: 0.94;
   }

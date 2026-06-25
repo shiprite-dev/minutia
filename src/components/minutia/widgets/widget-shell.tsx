@@ -58,7 +58,7 @@ export function WidgetShell({
       }}
       className={cn("widget-cell group", isDragging && "is-dragging", className)}
     >
-      <div className="widget-card-content relative h-full rounded-xl border border-rule bg-card p-6 min-w-0">
+      <div className="widget-card-content relative h-full rounded-xl bg-card p-6 min-w-0 shadow-[var(--shadow-raised)] transition-shadow duration-[var(--duration-base)]">
         <div
           className={cn(
             "absolute top-2.5 right-2.5 z-10 flex items-center gap-1 opacity-0 pointer-events-none transition-opacity",

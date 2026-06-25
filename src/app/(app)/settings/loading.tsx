@@ -7,7 +7,7 @@ export default function SettingsLoading() {
         <Skeleton className="h-7 w-24 mb-8" />
         <div className="space-y-6">
           {/* Profile card */}
-          <div className="rounded-xl border border-rule bg-card p-6">
+          <div className="rounded-xl bg-card shadow-[var(--shadow-raised)] p-6">
             <Skeleton className="h-5 w-16 mb-4" />
             <div className="space-y-4">
               <div>
@@ -22,7 +22,7 @@ export default function SettingsLoading() {
           </div>
 
           {/* Theme card */}
-          <div className="rounded-xl border border-rule bg-card p-6">
+          <div className="rounded-xl bg-card shadow-[var(--shadow-raised)] p-6">
             <Skeleton className="h-5 w-20 mb-4" />
             <div className="flex gap-3">
               {Array.from({ length: 3 }).map((_, i) => (
@@ -32,7 +32,7 @@ export default function SettingsLoading() {
           </div>
 
           {/* Export card */}
-          <div className="rounded-xl border border-rule bg-card p-6">
+          <div className="rounded-xl bg-card shadow-[var(--shadow-raised)] p-6">
             <Skeleton className="h-5 w-28 mb-4" />
             <div className="flex gap-3">
               <Skeleton className="h-9 w-28 rounded-md" />

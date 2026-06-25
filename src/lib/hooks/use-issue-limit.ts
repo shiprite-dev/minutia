@@ -7,6 +7,7 @@ import {
   countActiveIssuesForOrg,
 } from "@/lib/hooks/use-issues";
 import { useAiAccess } from "@/lib/hooks/use-ai-access";
+import { isFeatureGatingEnabled } from "@/lib/feature-access";
 
 export function useIssueLimit() {
   const supabase = createClient();
@@ -15,7 +16,10 @@ export function useIssueLimit() {
 
   return useQuery<{ activeCount: number; limit: number; atLimit: boolean }>({
     queryKey: ["issue-limit", hasAccess],
-    enabled: !hasAccess,
+    // Only gated instances limit items, and only once the access check has
+    // settled: self-host (gating off) is never limited, and a paid user never
+    // sees a flash of the limit before useAiAccess resolves.
+    enabled: isFeatureGatingEnabled() && aiAccess !== undefined && !hasAccess,
     queryFn: async () => {
       const {
         data: { user },

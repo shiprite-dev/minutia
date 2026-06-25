@@ -33,19 +33,23 @@ export function useAiAccess() {
 export const AI_UNAVAILABLE_MESSAGE =
   "AI features are not enabled for this account.";
 
-// The neutral upsell destination (instance_config.ai_notice_url), fetched lazily
-// so it only loads on the gated surfaces that actually render the notice. The OSS
-// build ships no destination; hosted instances configure one.
-export function useAiNoticeUrl() {
+// The neutral upsell destination for a nudge slot (instance_config.<slot>_notice_url),
+// fetched lazily so it only loads on the gated surfaces that actually render a
+// nudge. The OSS build ships no destination; hosted instances configure one.
+export function useUpsellNoticeUrl(slot: "ai" | "capacity") {
   return useQuery<{ ctaUrl: string | null }>({
-    queryKey: ["ai-notice-url"],
-    // Gating off (the OSS default) means the notice never renders, so never fetch.
+    queryKey: ["upsell-notice-url", slot],
+    // Gating off (the OSS default) means nudges never render, so never fetch.
     enabled: isFeatureGatingEnabled(),
     queryFn: async () => {
-      const res = await fetch("/api/ai-notice");
+      const res = await fetch(`/api/ai-notice?slot=${slot}`);
       if (!res.ok) return { ctaUrl: null };
       return res.json();
     },
     staleTime: 5 * 60_000,
   });
+}
+
+export function useAiNoticeUrl() {
+  return useUpsellNoticeUrl("ai");
 }

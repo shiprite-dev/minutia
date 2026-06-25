@@ -110,11 +110,13 @@ test.describe("Typography: no Inter anywhere", () => {
 });
 
 test.describe("Outstanding items collapse", () => {
+  // Scope to the Outstanding widget's inline toggle (a <button>); other widgets
+  // also use "+N more" but as navigational links, so match by role to disambiguate.
   test("series with >3 items shows expand button", async ({ page }) => {
     await page.goto("/dashboard");
     await waitForApp(page);
 
-    const moreButton = page.getByText(/\+\d+ more/);
+    const moreButton = page.getByRole("button", { name: /\+\d+ more/ });
     await expect(moreButton).toBeVisible({ timeout: 10000 });
   });
 
@@ -122,7 +124,7 @@ test.describe("Outstanding items collapse", () => {
     await page.goto("/dashboard");
     await waitForApp(page);
 
-    const moreButton = page.getByText(/\+\d+ more/).first();
+    const moreButton = page.getByRole("button", { name: /\+\d+ more/ }).first();
     await expect(moreButton).toBeVisible({ timeout: 10000 });
     await moreButton.click();
 
@@ -134,7 +136,7 @@ test.describe("Outstanding items collapse", () => {
     await page.goto("/dashboard");
     await waitForApp(page);
 
-    const moreButton = page.getByText(/\+\d+ more/).first();
+    const moreButton = page.getByRole("button", { name: /\+\d+ more/ }).first();
     await expect(moreButton).toBeVisible({ timeout: 10000 });
     await moreButton.click();
 
@@ -142,7 +144,7 @@ test.describe("Outstanding items collapse", () => {
     await expect(showLess).toBeVisible();
     await showLess.click();
 
-    await expect(page.getByText(/\+\d+ more/).first()).toBeVisible();
+    await expect(page.getByRole("button", { name: /\+\d+ more/ }).first()).toBeVisible();
   });
 
   test("view series link navigates to series detail", async ({ page }) => {

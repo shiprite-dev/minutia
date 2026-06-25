@@ -12,7 +12,7 @@ export default function SeriesLoading() {
           {Array.from({ length: 6 }).map((_, i) => (
             <div
               key={i}
-              className="bg-card border border-rule rounded-md p-5"
+              className="bg-card shadow-[var(--shadow-raised)] rounded-md p-5"
             >
               <div className="flex items-start justify-between gap-2 mb-2">
                 <Skeleton className="h-5 w-3/4" />
