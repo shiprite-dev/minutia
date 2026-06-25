@@ -32,6 +32,7 @@ import { BriefCard } from "@/components/minutia/brief-card";
 import { PrefetchIssueLink } from "@/components/minutia/prefetch-issue-link";
 import { StatusChip } from "@/components/minutia/status-chip";
 import { CategoryBadge } from "@/components/minutia/category-badge";
+import { SuggestionContextBadge } from "@/components/minutia/suggestion-context-badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
@@ -744,6 +745,16 @@ export function MeetingDetailContent({
   const { data: participantRole } = useSeriesParticipantRole(seriesId);
   const { data: seriesIssues } = useIssues(seriesId);
 
+  // MIN-121: resolve an OIL number to its issue link so a context badge
+  // ("Updates OIL-45", "Duplicate of OIL-67") can deep-link to the item.
+  const issueHrefByNumber = React.useMemo(() => {
+    const map = new Map<number, string>();
+    for (const issue of seriesIssues ?? []) {
+      map.set(issue.issue_number, `/issues/${issue.id}`);
+    }
+    return map;
+  }, [seriesIssues]);
+
   useMeetingRealtime(meetingId, seriesId);
   const presenceUsers = useMeetingPresence(meeting?.status === "live" ? meetingId : "");
   const endMeeting = useEndMeeting();
@@ -774,6 +785,66 @@ export function MeetingDetailContent({
   const timer = useLiveTimer(meeting?.status === "live" ? meeting.created_at : null);
   const recorder = useMeetingRecorder(meetingId);
   const [savingRecording, setSavingRecording] = React.useState(false);
+  const [transcribing, setTranscribing] = React.useState(false);
+
+  // Pending suggestions are the ones awaiting review; the count drives the
+  // "Review AI suggestions (N)" badge so the auto-extracted items are visible
+  // without the facilitator having to guess they exist.
+  const pendingSuggestionCount = aiSuggestions.filter((s) => s.status === "pending").length;
+
+  // Load already-extracted suggestions (e.g. the ones the transcription
+  // auto-generated) instead of re-running the model. This is what makes the
+  // auto-trigger pay off: its output is shown, not silently discarded.
+  const loadSuggestions = React.useCallback(async () => {
+    setLoadingSuggestions(true);
+    try {
+      const response = await fetch(`/api/meetings/${meetingId}/suggestions`, { method: "GET" });
+      const payload = await response.json().catch(() => ({}));
+      if (response.ok) setAiSuggestions(payload.suggestions ?? []);
+    } catch {
+      // Best-effort: the Review button can still trigger generation on demand.
+    } finally {
+      setLoadingSuggestions(false);
+    }
+  }, [meetingId]);
+
+  // The recording pipeline: transcribe the uploaded audio, which auto-extracts
+  // context-aware suggestions on completion, then surface them. Best-effort so a
+  // missing AI key or provider hiccup never blocks the recording itself.
+  const runTranscription = React.useCallback(async () => {
+    setTranscribing(true);
+    try {
+      const response = await fetch(`/api/meetings/${meetingId}/transcribe`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      });
+      if (response.ok) {
+        // The transcript text lands via the meeting realtime poll; pull the
+        // suggestions the transcription just generated and reveal them.
+        await loadSuggestions();
+        setSuggestionsOpen(true);
+      }
+    } catch {
+      // Network error; the recording is saved and transcription can be retried.
+    } finally {
+      setTranscribing(false);
+    }
+  }, [meetingId, loadSuggestions]);
+
+  // On open, surface suggestions already extracted for this meeting (typically
+  // auto-generated when its recording was transcribed) so the facilitator sees
+  // the action-item count without having to re-run anything. Once per mount.
+  // Must live above the loading early-return to keep hook order stable.
+  const suggestionsLoadedRef = React.useRef(false);
+  React.useEffect(() => {
+    if (suggestionsLoadedRef.current) return;
+    const manages = participantRole === "owner" || participantRole === "facilitator";
+    if (!manages || !hasAccess) return;
+    if (!meeting?.transcript_raw && !meeting?.notes_markdown) return;
+    suggestionsLoadedRef.current = true;
+    void loadSuggestions();
+  }, [participantRole, hasAccess, meeting?.transcript_raw, meeting?.notes_markdown, loadSuggestions]);
 
   React.useEffect(() => {
     if (meeting?.notes_markdown) setNotes(meeting.notes_markdown);
@@ -864,6 +935,7 @@ export function MeetingDetailContent({
   const liveMeetingInSeries = series?.meetings?.find((m) => m.status === "live");
   const canManageMeeting =
     participantRole === "owner" || participantRole === "facilitator";
+
   const activePresenceLabel =
     presenceUsers.length > 0
       ? presenceUsers
@@ -957,6 +1029,10 @@ export function MeetingDetailContent({
           mimeType: result.mimeType,
         });
         await clearAudioChunks(meetingId);
+        // Kick off transcription + context-aware extraction so the facilitator
+        // returns to a ready transcript and suggested action items. Fire-and-
+        // forget with its own progress state; it must not block stop/end.
+        void runTranscription();
       }
     } catch {
       // Upload failed; the recording stays buffered in IndexedDB for recovery.
@@ -1045,7 +1121,19 @@ export function MeetingDetailContent({
     ]);
   }
 
-  async function handleReviewAiSuggestions() {
+  // Open the panel and show what is already there. Only fetch if we have not
+  // loaded yet; never auto-regenerate (that would discard the auto-extracted
+  // suggestions and spend another AI call). Explicit (re)generation is a
+  // separate button inside the panel.
+  async function handleOpenSuggestions() {
+    setSuggestionsOpen(true);
+    setSuggestionsError(null);
+    if (aiSuggestions.length === 0 && !loadingSuggestions) {
+      await loadSuggestions();
+    }
+  }
+
+  async function generateSuggestions() {
     setSuggestionsOpen(true);
     setSuggestionsError(null);
     setLoadingSuggestions(true);
@@ -1493,6 +1581,7 @@ export function MeetingDetailContent({
           doneIssues={doneThisMeeting}
         />
 
+        {canManageMeeting && (
         <section className="mb-8" aria-label="AI accountability review">
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-rule bg-card px-4 py-3">
             <div>
@@ -1500,23 +1589,30 @@ export function MeetingDetailContent({
                 Accountability review
               </h2>
               <p className="mt-1 text-xs text-ink-3">
-                Extract suggested issues and decisions, then approve what should become durable work.
+                {transcribing
+                  ? "Transcribing the recording and extracting action items…"
+                  : "AI extracts suggested issues and decisions from the notes and transcript, deduped against this series. Approve what should become durable work."}
               </p>
             </div>
             <Button
               type="button"
               variant="outline"
               size="sm"
-              onClick={handleReviewAiSuggestions}
-              disabled={loadingSuggestions || (!notes.trim() && !transcript.trim())}
+              onClick={handleOpenSuggestions}
+              disabled={!hasAccess || transcribing || loadingSuggestions || (!notes.trim() && !transcript.trim())}
               className="border-rule bg-paper text-ink hover:bg-paper-2"
             >
-              {loadingSuggestions ? (
+              {transcribing || loadingSuggestions ? (
                 <Loader2 className="size-3.5 animate-spin" />
               ) : (
                 <ListChecks className="size-3.5" />
               )}
               Review AI suggestions
+              {pendingSuggestionCount > 0 && (
+                <span className="ml-1 rounded-full bg-accent px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                  {pendingSuggestionCount}
+                </span>
+              )}
             </Button>
           </div>
 
@@ -1537,8 +1633,21 @@ export function MeetingDetailContent({
                     Review each item before it enters the permanent record.
                   </p>
                 </div>
-                {loadingSuggestions && (
+                {loadingSuggestions ? (
                   <Loader2 className="size-4 animate-spin text-ink-3" />
+                ) : (
+                  aiSuggestions.length > 0 && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={generateSuggestions}
+                      className="text-ink-3 hover:text-ink"
+                    >
+                      <RotateCcw className="size-3.5" />
+                      Regenerate
+                    </Button>
+                  )
                 )}
               </div>
 
@@ -1549,8 +1658,18 @@ export function MeetingDetailContent({
               )}
 
               {!loadingSuggestions && aiSuggestions.length === 0 && (
-                <div className="px-4 py-5 text-sm text-ink-3">
-                  No AI suggestions yet.
+                <div className="flex flex-col items-start gap-3 px-4 py-5 text-sm text-ink-3">
+                  <p>No AI suggestions yet for this meeting.</p>
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={generateSuggestions}
+                    disabled={!notes.trim() && !transcript.trim()}
+                    className="bg-accent text-white hover:bg-accent-hover"
+                  >
+                    <Sparkles className="size-3.5" />
+                    Generate suggestions
+                  </Button>
                 </div>
               )}
 
@@ -1558,50 +1677,69 @@ export function MeetingDetailContent({
                 <div className="divide-y divide-rule">
                   {aiSuggestions.map((suggestion) => {
                     const isReviewed = suggestion.status !== "pending";
+                    const relatedHref =
+                      suggestion.related_issue_number != null
+                        ? issueHrefByNumber.get(suggestion.related_issue_number) ?? null
+                        : null;
+                    // status_update / duplicate_warning act on an existing OIL
+                    // item, so their fields are read-only; only a new_item is editable.
+                    const isContextual = suggestion.type !== "new_item";
                     return (
                       <article key={suggestion.id} className="px-4 py-4">
                         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                          <p className="text-xs font-semibold uppercase tracking-wide text-ink-3">
-                            {suggestionCategoryLabel(suggestion.category)}: {suggestion.title}
-                          </p>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <SuggestionContextBadge
+                              type={suggestion.type}
+                              relatedIssueNumber={suggestion.related_issue_number}
+                              suggestedStatus={suggestion.suggested_status}
+                              relatedHref={relatedHref}
+                            />
+                            <span className="text-xs font-semibold uppercase tracking-wide text-ink-3">
+                              {suggestionCategoryLabel(suggestion.category)}
+                            </span>
+                          </div>
                           <span className="rounded-full bg-paper-2 px-2 py-1 text-[11px] font-mono text-ink-3">
                             {Math.round(suggestion.confidence * 100)}%
                           </span>
                         </div>
 
-                        <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_10rem_9rem]">
-                          <input
-                            aria-label="Suggestion title"
-                            value={suggestion.title}
-                            disabled={isReviewed}
-                            onChange={(event) =>
-                              updateSuggestionDraft(suggestion.id, { title: event.target.value })
-                            }
-                            className="min-w-0 rounded-md border border-rule bg-card px-3 py-2 text-sm text-ink disabled:bg-paper-2 disabled:text-ink-3"
-                          />
-                          <input
-                            aria-label="Suggestion owner"
-                            value={suggestion.owner_name ?? ""}
-                            disabled={isReviewed}
-                            onChange={(event) =>
-                              updateSuggestionDraft(suggestion.id, { owner_name: event.target.value })
-                            }
-                            placeholder="Owner"
-                            className="min-w-0 rounded-md border border-rule bg-card px-3 py-2 text-sm text-ink disabled:bg-paper-2 disabled:text-ink-3"
-                          />
-                          <input
-                            aria-label="Suggestion due date"
-                            type="date"
-                            value={dateInputValue(suggestion.due_date)}
-                            disabled={isReviewed}
-                            onChange={(event) =>
-                              updateSuggestionDraft(suggestion.id, {
-                                due_date: event.target.value || null,
-                              })
-                            }
-                            className="min-w-0 rounded-md border border-rule bg-card px-3 py-2 text-sm text-ink disabled:bg-paper-2 disabled:text-ink-3"
-                          />
-                        </div>
+                        {isContextual ? (
+                          <p className="text-sm leading-6 text-ink">{suggestion.title}</p>
+                        ) : (
+                          <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_10rem_9rem]">
+                            <input
+                              aria-label="Suggestion title"
+                              value={suggestion.title}
+                              disabled={isReviewed}
+                              onChange={(event) =>
+                                updateSuggestionDraft(suggestion.id, { title: event.target.value })
+                              }
+                              className="min-w-0 rounded-md border border-rule bg-card px-3 py-2 text-sm text-ink disabled:bg-paper-2 disabled:text-ink-3"
+                            />
+                            <input
+                              aria-label="Suggestion owner"
+                              value={suggestion.owner_name ?? ""}
+                              disabled={isReviewed}
+                              onChange={(event) =>
+                                updateSuggestionDraft(suggestion.id, { owner_name: event.target.value })
+                              }
+                              placeholder="Owner"
+                              className="min-w-0 rounded-md border border-rule bg-card px-3 py-2 text-sm text-ink disabled:bg-paper-2 disabled:text-ink-3"
+                            />
+                            <input
+                              aria-label="Suggestion due date"
+                              type="date"
+                              value={dateInputValue(suggestion.due_date)}
+                              disabled={isReviewed}
+                              onChange={(event) =>
+                                updateSuggestionDraft(suggestion.id, {
+                                  due_date: event.target.value || null,
+                                })
+                              }
+                              className="min-w-0 rounded-md border border-rule bg-card px-3 py-2 text-sm text-ink disabled:bg-paper-2 disabled:text-ink-3"
+                            />
+                          </div>
+                        )}
 
                         {suggestion.source_excerpt && (
                           <p className="mt-3 rounded-md bg-paper-2 px-3 py-2 text-xs leading-5 text-ink-3">
@@ -1611,9 +1749,15 @@ export function MeetingDetailContent({
 
                         <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
                           <p className="text-xs text-ink-3">
-                            {suggestion.status === "accepted" && "Accepted into tracked work."}
-                            {suggestion.status === "rejected" && "Rejected."}
-                            {suggestion.status === "pending" && "Pending review."}
+                            {suggestion.status === "accepted" &&
+                              (suggestion.type === "status_update"
+                                ? "Applied to the linked item."
+                                : "Accepted into tracked work.")}
+                            {suggestion.status === "rejected" && "Dismissed."}
+                            {suggestion.status === "pending" &&
+                              (suggestion.type === "duplicate_warning"
+                                ? "Review to dismiss, or open the existing item."
+                                : "Pending review.")}
                           </p>
                           {suggestion.status === "pending" && (
                             <div className="flex items-center gap-2">
@@ -1627,20 +1771,22 @@ export function MeetingDetailContent({
                                 <X className="size-3.5" />
                                 Reject suggestion
                               </Button>
-                              <Button
-                                type="button"
-                                size="sm"
-                                onClick={() => handleSuggestionReview(suggestion, "accept")}
-                                disabled={reviewingSuggestionId === suggestion.id || !suggestion.title.trim()}
-                                className="bg-accent text-white hover:bg-accent-hover"
-                              >
-                                {reviewingSuggestionId === suggestion.id ? (
-                                  <Loader2 className="size-3.5 animate-spin" />
-                                ) : (
-                                  <Check className="size-3.5" />
-                                )}
-                                Accept suggestion
-                              </Button>
+                              {suggestion.type !== "duplicate_warning" && (
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  onClick={() => handleSuggestionReview(suggestion, "accept")}
+                                  disabled={reviewingSuggestionId === suggestion.id || !suggestion.title.trim()}
+                                  className="bg-accent text-white hover:bg-accent-hover"
+                                >
+                                  {reviewingSuggestionId === suggestion.id ? (
+                                    <Loader2 className="size-3.5 animate-spin" />
+                                  ) : (
+                                    <Check className="size-3.5" />
+                                  )}
+                                  Accept suggestion
+                                </Button>
+                              )}
                             </div>
                           )}
                         </div>
@@ -1652,6 +1798,7 @@ export function MeetingDetailContent({
             </div>
           )}
         </section>
+        )}
 
         <section className="mb-8">
           <h2 className="font-display text-lg font-medium text-ink mb-4">

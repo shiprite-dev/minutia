@@ -293,8 +293,11 @@ test.describe("AI notes", () => {
       await expect(page.getByRole("heading", { name: /AI notes session/ })).toBeVisible({ timeout: 20_000 });
 
       await page.getByRole("button", { name: "Review AI suggestions" }).click();
-      await expect(page.getByRole("region", { name: "AI suggestions" })).toBeVisible();
-      await expect(page.getByText("No AI suggestions yet.")).toBeVisible();
+      const region = page.getByRole("region", { name: "AI suggestions" });
+      await expect(region).toBeVisible();
+      await expect(region.getByText("No AI suggestions yet for this meeting.")).toBeVisible();
+      // The empty state offers an explicit generate action (notes are present).
+      await expect(region.getByRole("button", { name: "Generate suggestions" })).toBeVisible();
     } finally {
       await deleteSeries(request, fixture.seriesId);
     }

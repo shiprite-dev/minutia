@@ -1,6 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { requireAiAccess } from "@/lib/ai/access";
+import { getOpenRouterApiKey } from "@/lib/ai/openrouter";
+import { generateMeetingSuggestions } from "@/lib/ai/suggestions";
 import { MEETING_AUDIO_BUCKET } from "@/lib/audio";
 import {
   chunkAudioBlob,
@@ -202,6 +204,24 @@ export async function POST(
         { error: "Transcription completed but could not be saved.", request_id: requestId },
         { status: 500 }
       );
+    }
+
+    // MIN-121: now that a transcript exists, run context-aware extraction so the
+    // facilitator finds suggestions waiting (deduped against the OIL, with
+    // resolutions and duplicates flagged). Best-effort: the transcript is
+    // already saved, so a failure here must not fail the transcription.
+    const aiKey = getOpenRouterApiKey();
+    if (aiKey) {
+      try {
+        await generateMeetingSuggestions(supabase, meetingId, aiKey);
+      } catch (suggestionError) {
+        console.error("[transcribe] context-aware suggestion extraction failed", {
+          meetingId,
+          requestId,
+          error:
+            suggestionError instanceof Error ? suggestionError.message : String(suggestionError),
+        });
+      }
     }
 
     return NextResponse.json({

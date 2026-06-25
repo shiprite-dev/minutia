@@ -56,6 +56,9 @@ jobs:
       - name: Verify transcription client
         run: pnpm test:transcription
 
+      - name: Verify context-aware extraction
+        run: pnpm test:context-extraction
+
       - name: Verify feature-access gate
         run: pnpm test:feature-access
 
