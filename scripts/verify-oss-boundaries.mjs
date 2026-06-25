@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import assert from "node:assert/strict";
 
 // Self-host integrity check.
@@ -89,6 +89,30 @@ for (const file of aiNoticeSeamFiles) {
     assert.ok(
       !pattern.test(contents),
       `${file} must not disclose ${label}; the upsell CTA comes from instance_config, not OSS code`
+    );
+  }
+}
+
+// Every hardcoded GitHub repo link must point at the canonical org. A wrong
+// slug 404s on the login footer and the public guest-share footer, which are
+// the repo's primary star-conversion surfaces.
+const CANONICAL_REPO = "shiprite-dev/minutia";
+const repoRef = /github\.com\/([\w-]+)\/minutia\b/gi;
+function sourceFiles(dir) {
+  const out = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const full = `${dir}/${entry.name}`;
+    if (entry.isDirectory()) out.push(...sourceFiles(full));
+    else if (/\.(tsx?|mjs)$/.test(entry.name)) out.push(full);
+  }
+  return out;
+}
+for (const file of sourceFiles("src")) {
+  for (const m of readFileSync(file, "utf8").matchAll(repoRef)) {
+    assert.equal(
+      `${m[1]}/minutia`,
+      CANONICAL_REPO,
+      `${file} links github.com/${m[1]}/minutia; canonical repo is github.com/${CANONICAL_REPO}`
     );
   }
 }
