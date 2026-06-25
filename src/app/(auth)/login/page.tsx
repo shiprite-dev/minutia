@@ -489,7 +489,7 @@ function LoginForm() {
       >
         <span ref={footerPhraseRef}>{LOGIN_FOOTER_PHRASES[0]}</span>{" "}
         <a
-          href="https://github.com/minutia-dev/minutia"
+          href="https://github.com/shiprite-dev/minutia"
           target="_blank"
           rel="noopener noreferrer"
           className="inline-flex items-center gap-1 text-ink-3 underline underline-offset-4 transition-colors hover:text-ink-2"

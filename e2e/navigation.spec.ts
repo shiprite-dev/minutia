@@ -11,7 +11,7 @@ test.describe("Navigation", () => {
     // In a real scenario with test auth, we'd navigate to / and check sidebar
     await expect(page.getByRole("link", { name: /GitHub/i })).toHaveAttribute(
       "href",
-      "https://github.com/minutia-dev/minutia",
+      "https://github.com/shiprite-dev/minutia",
     );
   });
 
