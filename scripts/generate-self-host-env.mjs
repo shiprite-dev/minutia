@@ -80,8 +80,17 @@ EMAIL_FROM=noreply@localhost
 
 OPENROUTER_API_KEY=
 AI_API_KEY=
-AI_MODEL=claude-sonnet-4-6
+# Must be a valid OpenRouter model slug (vendor-prefixed), e.g.
+# anthropic/claude-sonnet-4.6 or google/gemini-3.1-flash-lite. Defaults to the
+# cheap, widely available model; override for higher quality.
+AI_MODEL=google/gemini-3.1-flash-lite
 AI_MODEL_FALLBACK=google/gemini-3.1-flash-lite
+
+# Speech-to-text for meeting recordings. Provider chain is groq -> openrouter:
+# set GROQ_API_KEY for the free/cheap Whisper primary, or leave it blank to fall
+# back to the OpenRouter key above. TRANSCRIPTION_PROVIDER selects the primary.
+TRANSCRIPTION_PROVIDER=groq
+GROQ_API_KEY=
 
 RESEND_API_KEY=
 ENABLE_GOOGLE_AUTH=false

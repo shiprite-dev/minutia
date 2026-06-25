@@ -117,22 +117,46 @@ assert(
   "Enhance route must reuse the shared fence-aware getTextFromOpenRouter so markdown-fenced provider JSON still parses"
 );
 
+// MIN-121: suggestion generation moved into the shared generator so the
+// transcribe pipeline can reuse it. The route resolves the key and delegates;
+// the provider call + prompt contract now live in src/lib/ai/suggestions.ts.
 const suggestionsRoute = read("src/app/api/meetings/[meetingId]/suggestions/route.ts");
-assertSharedClient(suggestionsRoute, "Suggestions");
 assert(
-  suggestionsRoute.includes('from "@/lib/ai/ask-series-answer"') && !/function getTextFromOpenRouter/.test(suggestionsRoute),
-  "Suggestions route must reuse the shared fence-aware getTextFromOpenRouter so markdown-fenced provider JSON still parses"
+  suggestionsRoute.includes('from "@/lib/ai/openrouter"') && suggestionsRoute.includes("getOpenRouterApiKey"),
+  "Suggestions route must resolve the key via the shared getOpenRouterApiKey"
 );
 assert(
-  suggestionsRoute.includes("Do not wrap it in markdown fences"),
+  suggestionsRoute.includes("generateMeetingSuggestions"),
+  "Suggestions route must delegate generation to the shared generateMeetingSuggestions"
+);
+
+// The generator lives in src/lib/ai/ so it imports its siblings by relative
+// path ("./openrouter", "./ask-series-answer"); assert on the shared function
+// usage rather than the import style.
+const suggestionsGenerator = read("src/lib/ai/suggestions.ts");
+assert(!suggestionsGenerator.includes('"minimax/minimax-m3"'), "Suggestions generator must not hardcode a model");
+assert(
+  suggestionsGenerator.includes("callOpenRouter"),
+  "Suggestions generator must call the provider through the shared callOpenRouter client"
+);
+assert(
+  !/async function getOpenRouterData/.test(suggestionsGenerator),
+  "Suggestions generator must not re-implement the OpenRouter fetch"
+);
+assert(
+  suggestionsGenerator.includes("getTextFromOpenRouter") && !/function getTextFromOpenRouter/.test(suggestionsGenerator),
+  "Suggestions generator must reuse the shared fence-aware getTextFromOpenRouter so markdown-fenced provider JSON still parses"
+);
+assert(
+  suggestionsGenerator.includes("Do not wrap it in markdown fences"),
   "Suggestions prompt must forbid markdown-fenced output"
 );
 assert(
-  suggestionsRoute.includes('return {"suggestions": []}') || suggestionsRoute.includes('{\\"suggestions\\": []}'),
+  suggestionsGenerator.includes('{"suggestions": []}') || suggestionsGenerator.includes('{\\"suggestions\\": []}'),
   "Suggestions prompt must instruct an empty array when nothing qualifies"
 );
 assert(
-  suggestionsRoute.includes("verbatim") && suggestionsRoute.includes("Never guess"),
+  suggestionsGenerator.includes("verbatim") && suggestionsGenerator.includes("Never guess"),
   "Suggestions prompt must forbid invented owners and require verbatim evidence"
 );
 
