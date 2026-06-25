@@ -303,15 +303,6 @@ test("chunkAudioBlob returns the original blob untouched when under the cap", as
   assert.equal(chunks[0].size, 100);
 });
 
-// ---------------------------------------------------------------------------
-// Atomic claim contract (MIN: transcription stuck on self-host PostgREST)
-//
-// The self-host PostgREST (v12.2.3) does NOT apply `or=()` logical filters to
-// UPDATE mutations (it matches 0 rows), so the route's prior optimistic
-// `.update(...).or(...)` claim never succeeded on self-host and returned 500
-// "Could not start transcription." The claim must run as a single SQL statement
-// via a SECURITY DEFINER RPC so it is identical across PostgREST versions.
-// ---------------------------------------------------------------------------
 const claimMigration = fs
   .readdirSync(path.join(root, "supabase", "migrations"))
   .filter((f) => f.endsWith(".sql"))
@@ -337,7 +328,6 @@ test("the claim RPC is SECURITY DEFINER and re-checks series access", () => {
   );
   assert.match(fn, /security definer/i, "RPC must be SECURITY DEFINER");
   assert.match(fn, /user_can_access_series/i, "RPC must preserve authz");
-  // Reclaims a crashed run, keeps a fresh run locked (matches the old or() semantics).
   assert.match(fn, /is distinct from 'processing'/i, "RPC claims non-processing rows");
   assert.match(fn, /transcription_started_at\s*<\s*now\(\)/i, "RPC reclaims stale runs");
 });

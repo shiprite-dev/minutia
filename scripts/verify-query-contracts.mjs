@@ -15,11 +15,7 @@ assert(
   "Series detail realtime must not poll every few seconds"
 );
 
-// The self-host PostgREST (v12.2.3, pinned in docker-compose.yml) does not apply
-// `.or()` / `.and()` logical filters to UPDATE/DELETE mutations: they silently
-// match 0 rows. Such a claim works in CI/Cloud (newer PostgREST) but breaks on
-// every self-host instance. Express conditional mutations as a SECURITY DEFINER
-// RPC instead. Guard against the pattern regressing.
+// Self-host PostgREST ignores .or()/.and() on UPDATE/DELETE (0 rows); use an RPC.
 function walk(dir) {
   return fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
     const full = `${dir}/${e.name}`;

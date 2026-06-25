@@ -105,15 +105,7 @@ export async function POST(
     );
   }
 
-  // Atomically claim the meeting: flip to 'processing' only if it is not already
-  // being processed, or if a prior run is stale (crashed without resetting).
-  // This makes concurrent POSTs idempotent without a read-then-write race.
-  //
-  // Done via a SECURITY DEFINER RPC rather than an optimistic UPDATE with an
-  // `.or()` filter: the self-host PostgREST (v12.2.3) does not apply `or=()` to
-  // UPDATE mutations (it matches 0 rows), so an optimistic claim never lands on
-  // self-host. The RPC runs the same conditional claim as one SQL statement,
-  // identical across PostgREST versions.
+  // Atomic claim via RPC: self-host PostgREST ignores or=() on UPDATE.
   const { data: claimed, error: claimError } = await supabase.rpc("claim_meeting_transcription", {
     p_meeting_id: meetingId,
     p_stale_seconds: Math.floor(STALE_PROCESSING_MS / 1000),
