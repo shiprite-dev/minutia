@@ -44,7 +44,9 @@ function formatTime(date: Date): string {
   });
 }
 
-const ISSUE_PREVIEW_LIMIT = 5;
+// Show at most 2 issues per meeting so a busy meeting never stretches the
+// timeline; the rest expand in place via the "Show all N items" control below.
+const ISSUE_PREVIEW_LIMIT = 2;
 
 function MeetingSection({
   meeting,

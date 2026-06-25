@@ -31,6 +31,7 @@ import { isOpen, isOverdue } from "@/lib/issue-utils";
 import { useWidgetStore } from "@/lib/stores/widget-store";
 import { useUIStore } from "@/lib/stores/ui-store";
 import { WidgetShell } from "@/components/minutia/widgets/widget-shell";
+import { CapacityNudge } from "@/components/minutia/capacity-nudge";
 import { WidgetCanvas } from "@/components/minutia/widgets/widget-canvas";
 import { AddWidgetButton } from "@/components/minutia/widgets/add-widget";
 import { StaleItemsWidget } from "@/components/minutia/widgets/stale-items-widget";
@@ -690,6 +691,11 @@ function DecisionsWidget({
 // Series quick list widget
 // ---------------------------------------------------------------------------
 
+// Cap the quick list so the widget stays inside its canvas slot; the overflow
+// is reachable via "+N more" -> the full /series page (never an inline expand,
+// which would re-grow the card).
+const SERIES_PREVIEW_LIMIT = 5;
+
 function SeriesWidget({
   id,
   widgetIndex,
@@ -708,7 +714,7 @@ function SeriesWidget({
         </Link>
       </div>
       <div className="space-y-1">
-        {seriesList.map((series) => (
+        {seriesList.slice(0, SERIES_PREVIEW_LIMIT).map((series) => (
           <Link
             key={series.id}
             href={`/series/${series.id}`}
@@ -723,6 +729,14 @@ function SeriesWidget({
             )}
           </Link>
         ))}
+        {seriesList.length > SERIES_PREVIEW_LIMIT && (
+          <Link
+            href="/series"
+            className="block rounded-lg px-3 py-2 text-xs text-ink-4 hover:text-accent transition-colors"
+          >
+            +{seriesList.length - SERIES_PREVIEW_LIMIT} more
+          </Link>
+        )}
       </div>
     </WidgetShell>
   );
@@ -736,11 +750,17 @@ function ItemUsageCounter() {
   const { data, isLoading } = useIssueLimit();
   if (isLoading || !data) return null;
   const { activeCount, atLimit } = data;
+  // Shift to warn before the wall so hitting the cap is never a surprise.
+  const near = !atLimit && activeCount / ITEM_LIMIT >= 0.8;
   return (
     <span
       className={cn(
-        "text-xs font-mono tabular-nums",
-        atLimit ? "text-accent font-medium" : "text-ink-4"
+        "text-xs font-mono tabular-nums transition-colors",
+        atLimit
+          ? "text-accent font-medium"
+          : near
+            ? "text-warn font-medium"
+            : "text-ink-4"
       )}
       aria-label={`${activeCount} of ${ITEM_LIMIT} items used`}
     >
@@ -754,26 +774,18 @@ function QuickAddButton() {
   const { data: issueLimit } = useIssueLimit();
   const atLimit = issueLimit?.atLimit ?? false;
 
+  // At capacity the FAB becomes the capacity nudge instead of a dead, greyed-out
+  // button: it explains the limit and offers a path forward.
+  if (atLimit) return <CapacityNudge limit={ITEM_LIMIT} />;
+
   return (
-    <HintTooltip
-      label={
-        atLimit
-          ? "Item limit reached for this account."
-          : "Quick add an issue from anywhere on the board. Shortcut: N."
-      }
-    >
+    <HintTooltip label="Quick add an issue from anywhere on the board. Shortcut: N.">
       <motion.button
         type="button"
         data-tour="quick-add"
         aria-label="Quick add issue"
-        disabled={atLimit}
         onClick={() => openQuickAddDialog()}
-        className={cn(
-          "fixed bottom-6 right-6 z-50 flex items-center justify-center size-12 rounded-full shadow-lg transition-colors",
-          atLimit
-            ? "bg-ink-3 text-paper cursor-not-allowed"
-            : "bg-accent text-white hover:bg-accent-hover"
-        )}
+        className="fixed bottom-6 right-6 z-50 flex items-center justify-center size-12 rounded-full bg-accent text-white shadow-lg transition-colors hover:bg-accent-hover"
         whileTap={{ scale: 0.9 }}
       >
         <Plus className="size-5" />
