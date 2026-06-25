@@ -832,6 +832,20 @@ export function MeetingDetailContent({
     }
   }, [meetingId, loadSuggestions]);
 
+  // On open, surface suggestions already extracted for this meeting (typically
+  // auto-generated when its recording was transcribed) so the facilitator sees
+  // the action-item count without having to re-run anything. Once per mount.
+  // Must live above the loading early-return to keep hook order stable.
+  const suggestionsLoadedRef = React.useRef(false);
+  React.useEffect(() => {
+    if (suggestionsLoadedRef.current) return;
+    const manages = participantRole === "owner" || participantRole === "facilitator";
+    if (!manages || !hasAccess) return;
+    if (!meeting?.transcript_raw && !meeting?.notes_markdown) return;
+    suggestionsLoadedRef.current = true;
+    void loadSuggestions();
+  }, [participantRole, hasAccess, meeting?.transcript_raw, meeting?.notes_markdown, loadSuggestions]);
+
   React.useEffect(() => {
     if (meeting?.notes_markdown) setNotes(meeting.notes_markdown);
   }, [meeting?.notes_markdown]);
@@ -921,18 +935,6 @@ export function MeetingDetailContent({
   const liveMeetingInSeries = series?.meetings?.find((m) => m.status === "live");
   const canManageMeeting =
     participantRole === "owner" || participantRole === "facilitator";
-
-  // On open, surface suggestions already extracted for this meeting (typically
-  // auto-generated when its recording was transcribed) so the facilitator sees
-  // the action-item count without having to re-run anything. Once per mount.
-  const suggestionsLoadedRef = React.useRef(false);
-  React.useEffect(() => {
-    if (suggestionsLoadedRef.current) return;
-    if (!canManageMeeting || !hasAccess) return;
-    if (!meeting?.transcript_raw && !meeting?.notes_markdown) return;
-    suggestionsLoadedRef.current = true;
-    void loadSuggestions();
-  }, [canManageMeeting, hasAccess, meeting?.transcript_raw, meeting?.notes_markdown, loadSuggestions]);
 
   const activePresenceLabel =
     presenceUsers.length > 0
