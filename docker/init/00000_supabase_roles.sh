@@ -68,6 +68,14 @@ GRANT authenticated TO authenticator;
 GRANT service_role TO authenticator;
 GRANT supabase_auth_admin TO authenticator;
 
+-- storage-api connects as supabase_storage_admin and SET ROLEs to the request's
+-- role per call (anon/authenticated/service_role). Without these memberships it
+-- cannot set the role and every storage op fails with 42501 "permission denied
+-- to set role" (a 400 on upload). Mirrors the authenticator grants above.
+GRANT anon TO supabase_storage_admin;
+GRANT authenticated TO supabase_storage_admin;
+GRANT service_role TO supabase_storage_admin;
+
 CREATE SCHEMA IF NOT EXISTS auth;
 GRANT ALL ON SCHEMA auth TO supabase_auth_admin;
 GRANT USAGE ON SCHEMA auth TO authenticated, anon, service_role;
