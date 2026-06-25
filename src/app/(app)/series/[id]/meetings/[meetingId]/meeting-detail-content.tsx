@@ -37,6 +37,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { ShareButton } from "@/components/minutia/share-button";
 import { SendMeetingNotesButton } from "@/components/minutia/send-meeting-notes-button";
+import { RemindOwnersButton } from "@/components/minutia/remind-owners-button";
 import { CarryoverBriefingPanel } from "@/components/minutia/carryover-briefing-panel";
 import { AiUnavailableNotice } from "@/components/minutia/ai-unavailable-notice";
 import { useAiAccess } from "@/lib/hooks/use-ai-access";
@@ -1462,6 +1463,7 @@ export function MeetingDetailContent({
               meetingId={meetingId}
               attendees={meeting.attendees ?? series?.default_attendees ?? []}
             />
+            {canManageMeeting && <RemindOwnersButton seriesId={seriesId} />}
             <ShareButton resource_type="meeting" resource_id={meetingId} />
           </div>
         </div>

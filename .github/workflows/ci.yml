@@ -59,6 +59,12 @@ jobs:
       - name: Verify feature-access gate
         run: pnpm test:feature-access
 
+      - name: Verify reminders core
+        run: pnpm test:reminders
+
+      - name: Verify admin health summarizer
+        run: pnpm test:admin-health
+
       - name: Build (includes typecheck)
         run: pnpm build
         env:

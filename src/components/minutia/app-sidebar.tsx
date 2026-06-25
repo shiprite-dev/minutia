@@ -8,6 +8,7 @@ import {
   CheckSquare,
   Bell,
   Settings,
+  ShieldCheck,
   LogOut,
   Building2,
 } from "lucide-react";
@@ -191,6 +192,24 @@ export function AppSidebar({ profile, organizations }: AppSidebarProps) {
           </div>
         )}
         <SidebarMenu className="mb-2">
+          {profile?.role === "admin" && (
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                asChild
+                isActive={isActive(pathname, "/admin")}
+                tooltip="Admin"
+                className={cn(
+                  "h-9 rounded-md px-3 gap-3 text-[14px] text-ink-2 transition-all",
+                  isActive(pathname, "/admin") && "text-ink font-medium"
+                )}
+              >
+                <Link href="/admin">
+                  <ShieldCheck className="size-4" />
+                  <span>Admin</span>
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          )}
           <SidebarMenuItem>
             <SidebarMenuButton
               asChild
