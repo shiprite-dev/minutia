@@ -43,6 +43,10 @@ After a meeting ends, see a summary of raised items, decisions, and carried-forw
 
 ![Meeting Complete](public/screenshots/meeting-detail.png)
 
+### AI Meeting Notes & Auto Action Items (opt-in)
+
+Record meeting audio in the browser; Minutia transcribes it and extracts accountable action items for you to review. Unlike a one-off summarizer, the extraction reasons over the **entire series history**: it deduplicates against open OIL items, flags when a meeting resolves or advances an existing item (a status update straight onto the board), and warns about duplicates, so your log stays clean. Nothing enters the permanent record until a facilitator approves it. Bring your own AI key; everything else works without it.
+
 ### Issue Lifecycle
 
 Every issue has a full timeline: when it was raised, every status change, every update, across every meeting it was discussed in.
@@ -68,6 +72,8 @@ Connect Google Calendar for read-only calendar sync, manage your profile, choose
 - **Google Sign-In** - One-click OAuth login alongside email/password and guest auth.
 - **Guest Sharing** - Share read-only links with external collaborators. No account required.
 - **Single-Workspace Team Access** - Self-hosted instances use one workspace with admin-managed invitations for teammates.
+- **One-Click Reminders** - Nudge issue owners about their open items between meetings, via email, Slack, webhook, or a copy-paste digest.
+- **Admin / Instance Panel** - Operator console for self-hosted instances: overview metrics, runtime config (SMTP, feature flags, AI keys), user management, and service-health checks.
 - **Command Palette** - Cmd+K to search across all issues and series instantly.
 - **CSV Import/Export** - Migrate from your spreadsheet in seconds. Export anytime.
 - **Draggable Widgets** - Drag-to-reorder and resize dashboard widgets. Layout persists via localStorage.
@@ -137,26 +143,21 @@ The current tour is a lightweight checklist inside onboarding, not a persistent 
 | Cross-meeting continuity | Core feature | Carry-forward | Manual linking | Manual copy-paste |
 | Price | Free (self-host) | $7-25/seat/mo | Free-$10/seat | Free |
 
-## AI Strategy
+## AI (opt-in)
 
-Minutia is AI-optional. The data model is AI-ready from day one, but AI features are opt-in per meeting series.
+Minutia works with zero AI, recording, or calendar; the data model is AI-ready and every AI feature is opt-in.
 
-- **Now**: Manual capture with AI-ready architecture
-- **Next**: Auto-classify items, smart pre-meeting briefs, transcript ingestion
-- **Later**: Native audio capture, local transcription, cross-meeting intelligence
+- **Meeting transcription** - browser audio capture, auto-transcribed with Whisper (via Groq or any OpenAI-compatible provider).
+- **Context-aware action items** - extraction that reasons over the full series history to deduplicate, detect resolutions, and flag duplicates, rather than summarizing one meeting in isolation.
+- **Note enhancement and carryover briefings** - clean up freeform notes and surface what carries into the next meeting.
 
-Self-hosters bring their own API key (Claude, OpenAI, Ollama). Managed deployments can provide AI through their own backend.
+Self-hosters bring their own key: set `OPENROUTER_API_KEY` (or an OpenAI-compatible key) in your environment to enable AI, or leave it unset to run fully AI-free.
 
 ## Roadmap
 
-### In Progress
-- Email digests and pre-meeting nudges (Resend + SMTP)
-
 ### Planned
+- Scheduled email digests and pre-meeting nudges (Resend + SMTP)
 - `/api/v1/ingest` REST endpoint for transcript ingestion
-- AI auto-classification and smart pre-meeting briefs
-- Real-time collaboration (Supabase Realtime subscriptions)
-- Advanced team management for self-hosted workspaces
 - Drag-to-reorder issue priority
 - PDF export
 - Enterprise SSO (SAML / OIDC)
