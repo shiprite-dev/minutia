@@ -433,16 +433,21 @@ test.describe("Organization RBAC and workspace routes", () => {
     expect(res.ok()).toBeFalsy();
   });
 
-  test("settings exposes workspace invite UI to organization admins", async ({
+  test("admin users page exposes workspace invite UI to organization admins", async ({
     page,
     request,
   }) => {
     const orgId = await getCurrentOrgId(request);
     await upsertMembership(request, orgId, TEST_USER_ID, "admin");
+    await setGlobalRole(request, "admin");
 
-    await page.goto("/settings");
-    await expect(page.getByText("Workspace access")).toBeVisible();
-    await expect(page.getByPlaceholder("teammate@company.com")).toBeVisible();
+    try {
+      await page.goto("/admin/users");
+      await expect(page.getByText("Workspace access")).toBeVisible();
+      await expect(page.getByPlaceholder("teammate@company.com")).toBeVisible();
+    } finally {
+      await setGlobalRole(request, "user");
+    }
   });
 
   test("sidebar shows the current workspace without a workspace switcher", async ({
