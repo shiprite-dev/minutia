@@ -62,6 +62,9 @@ jobs:
       - name: Verify feature-access gate
         run: pnpm test:feature-access
 
+      - name: Verify AI-notice upsell seam
+        run: pnpm test:ai-notice
+
       - name: Verify reminders core
         run: pnpm test:reminders
 

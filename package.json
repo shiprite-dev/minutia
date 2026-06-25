@@ -50,6 +50,7 @@
     "test:transcription": "node --test scripts/verify-transcription-client.test.mjs",
     "test:context-extraction": "node --test scripts/verify-context-extraction.test.mjs",
     "test:feature-access": "node --test scripts/verify-feature-access.test.mjs",
+    "test:ai-notice": "node --test scripts/verify-ai-notice.test.mjs",
     "test:reminders": "node --test scripts/verify-reminders.test.mjs",
     "test:admin-health": "node --test scripts/verify-admin-health.test.mjs",
     "test:retro": "node --test scripts/verify-retro-contracts.test.mjs",

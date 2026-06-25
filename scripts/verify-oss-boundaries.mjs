@@ -65,4 +65,32 @@ for (const [pattern, label] of forbiddenLandingDisclosures) {
   );
 }
 
+// The AI-unavailable upsell seam must stay provider-neutral: no pricing, tiers,
+// or freemium framing in the OSS source. Hosted builds drive the CTA purely from
+// instance_config.ai_notice_url. This keeps the open-core boundary intact.
+const aiNoticeSeamFiles = [
+  "src/components/minutia/ai-unavailable-notice.tsx",
+  "src/lib/ai/notice.ts",
+  "src/app/api/ai-notice/route.ts",
+  "src/lib/hooks/use-ai-access.ts",
+];
+const forbiddenSeamDisclosures = [
+  [/\$\d/, "a price amount"],
+  [/\bpricing\b/i, "pricing language"],
+  [/per\s+(?:seat|month|year)/i, "a per-seat/month/year price"],
+  [/\/\s*month\b/i, "a per-month cadence"],
+  [/free forever/i, "'free forever' framing"],
+  [/\bteams?\s+plan\b/i, "a teams plan label"],
+  [/\bpro\s+plan\b/i, "a pro plan label"],
+];
+for (const file of aiNoticeSeamFiles) {
+  const contents = readFileSync(file, "utf8");
+  for (const [pattern, label] of forbiddenSeamDisclosures) {
+    assert.ok(
+      !pattern.test(contents),
+      `${file} must not disclose ${label}; the upsell CTA comes from instance_config, not OSS code`
+    );
+  }
+}
+
 console.log("OSS self-host integrity verified");

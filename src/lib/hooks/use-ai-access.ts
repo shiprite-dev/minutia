@@ -32,3 +32,20 @@ export function useAiAccess() {
 
 export const AI_UNAVAILABLE_MESSAGE =
   "AI features are not enabled for this account.";
+
+// The neutral upsell destination (instance_config.ai_notice_url), fetched lazily
+// so it only loads on the gated surfaces that actually render the notice. The OSS
+// build ships no destination; hosted instances configure one.
+export function useAiNoticeUrl() {
+  return useQuery<{ ctaUrl: string | null }>({
+    queryKey: ["ai-notice-url"],
+    // Gating off (the OSS default) means the notice never renders, so never fetch.
+    enabled: isFeatureGatingEnabled(),
+    queryFn: async () => {
+      const res = await fetch("/api/ai-notice");
+      if (!res.ok) return { ctaUrl: null };
+      return res.json();
+    },
+    staleTime: 5 * 60_000,
+  });
+}
