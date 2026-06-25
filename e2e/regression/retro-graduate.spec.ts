@@ -255,6 +255,84 @@ test.describe("Retro graduation, authenticated", () => {
     }
   });
 
+  test("graduating via the ?graduate=1 funnel auto-redirects into the series", async ({
+    page,
+    request,
+  }) => {
+    test.setTimeout(120_000);
+    test.skip(!SERVICE_KEY, "Requires SUPABASE_SERVICE_ROLE_KEY for setup + cleanup");
+
+    const boardName = `Graduate Funnel Test ${Date.now()}`;
+    let createdSeriesId: string | null = null;
+
+    await withRetroEnabled(request, async () => {
+      const boardUrl = await runThroughToCommitSealed(page, boardName);
+
+      // Simulate returning from the auth redirect: a logged-out user clicked Save
+      // to Minutia, was sent to /login, signed in, and lands back here with
+      // ?graduate=1. The funnel must finish the save and hand the user into the
+      // app, so a first-time account hits the welcome tour (rendered by AppShell
+      // on has_completed_onboarding). The seeded user is already onboarded, so we
+      // assert the redirect into /series; the tour gate is covered separately.
+      await page.goto(`${boardUrl}?graduate=1`);
+
+      // A "Retro saved" confirmation precedes the redirect.
+      await expect(page.getByTestId("retro-graduated")).toBeVisible({
+        timeout: 20_000,
+      });
+
+      // The funnel auto-redirects into the created series, no manual click.
+      await page.waitForURL(/\/series\/[0-9a-f-]+/i, { timeout: 15_000 });
+      createdSeriesId = page.url().split("/series/")[1]?.split(/[?#]/)[0] ?? null;
+      expect(createdSeriesId).toBeTruthy();
+      await expect(page.getByText(boardName).first()).toBeVisible({
+        timeout: 10_000,
+      });
+    });
+
+    if (createdSeriesId && SERVICE_KEY) {
+      await deleteSeries(request, createdSeriesId);
+    }
+  });
+
+  test("returning with ?graduate=1 to an already-saved board redirects to the existing series", async ({
+    page,
+    request,
+  }) => {
+    test.setTimeout(120_000);
+    test.skip(!SERVICE_KEY, "Requires SUPABASE_SERVICE_ROLE_KEY for setup + cleanup");
+
+    const boardName = `Graduate Resume Test ${Date.now()}`;
+    let createdSeriesId: string | null = null;
+
+    await withRetroEnabled(request, async () => {
+      const boardUrl = await runThroughToCommitSealed(page, boardName);
+
+      // Graduate once via the manual Save path (persists board.saved_to_series_id).
+      await page.getByRole("button", { name: "Save to Minutia" }).first().click();
+      const seriesLink = page.getByRole("link", { name: /Open the series/i }).first();
+      await expect(seriesLink).toBeVisible({ timeout: 20_000 });
+      const href = await seriesLink.getAttribute("href");
+      createdSeriesId = href?.split("/series/")[1]?.split(/[?#]/)[0] ?? null;
+      expect(createdSeriesId).toBeTruthy();
+
+      // Arrive with ?graduate=1 on the already-saved board (e.g. a concurrent tab
+      // returning from auth). The funnel must hand off to the existing series, not
+      // strand the user on the retro page.
+      await page.goto(`${boardUrl}?graduate=1`);
+      await expect(page.getByTestId("retro-graduated")).toBeVisible({
+        timeout: 20_000,
+      });
+      await page.waitForURL(new RegExp(`/series/${createdSeriesId}`, "i"), {
+        timeout: 15_000,
+      });
+    });
+
+    if (createdSeriesId && SERVICE_KEY) {
+      await deleteSeries(request, createdSeriesId);
+    }
+  });
+
   test("after graduation, CommitNudge shows the saved state with an Open the series link", async ({
     page,
     request,
