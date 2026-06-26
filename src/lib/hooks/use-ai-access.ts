@@ -37,7 +37,7 @@ export const AI_UNAVAILABLE_MESSAGE =
 // fetched lazily so it only loads on the gated surfaces that actually render a
 // nudge. The OSS build ships no destination; hosted instances configure one.
 export function useUpsellNoticeUrl(slot: "ai" | "capacity") {
-  return useQuery<{ ctaUrl: string | null }>({
+  return useQuery<{ ctaUrl: string | null; upgradeEnabled?: boolean }>({
     queryKey: ["upsell-notice-url", slot],
     // Gating off (the OSS default) means nudges never render, so never fetch.
     enabled: isFeatureGatingEnabled(),

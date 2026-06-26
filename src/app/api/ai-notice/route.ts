@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getInstanceConfigMap } from "@/lib/instance-config";
+import { isUpgradeConfigured } from "@/lib/billing/upgrade-config";
 
 // Thin BFF adapter: returns the neutral upsell destination for a given nudge
 // slot. instance_config is admin-RLS-only, so the read uses the service-role
@@ -25,5 +26,8 @@ export async function GET(request: NextRequest) {
   const key = SLOT_CONFIG_KEYS[slot] ?? SLOT_CONFIG_KEYS.ai;
 
   const config = await getInstanceConfigMap([key]);
-  return NextResponse.json({ ctaUrl: config[key] ?? null });
+  return NextResponse.json({
+    ctaUrl: config[key] ?? null,
+    upgradeEnabled: isUpgradeConfigured(),
+  });
 }

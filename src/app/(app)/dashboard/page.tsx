@@ -34,6 +34,7 @@ import { WidgetShell } from "@/components/minutia/widgets/widget-shell";
 import { CapacityNudge } from "@/components/minutia/capacity-nudge";
 import { WidgetCanvas } from "@/components/minutia/widgets/widget-canvas";
 import { AddWidgetButton } from "@/components/minutia/widgets/add-widget";
+import { UpgradeConfirmation } from "@/components/minutia/upgrade-confirmation";
 import { StaleItemsWidget } from "@/components/minutia/widgets/stale-items-widget";
 import { SeriesHealthWidget } from "@/components/minutia/widgets/series-health-widget";
 import { MeetingTriageWidget } from "@/components/minutia/widgets/meeting-triage-widget";
@@ -1003,6 +1004,7 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-paper" data-tour="oil-board">
+      <UpgradeConfirmation />
       <div className="mx-auto max-w-6xl px-6 py-8">
         <div className="flex items-center justify-end mb-5">
           <AddWidgetButton />
