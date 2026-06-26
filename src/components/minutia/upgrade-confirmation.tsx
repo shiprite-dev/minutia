@@ -27,7 +27,10 @@ export function UpgradeConfirmation() {
 
   // Poll the real entitlement flag until it flips or the timeout elapses.
   useEffect(() => {
-    if (!activated) return;
+    if (!activated || dismissed) return;
+
+    // Reset attempt counter each time polling begins (handles re-activation).
+    attemptsRef.current = 0;
 
     const supabase = createClient();
 
@@ -35,7 +38,18 @@ export function UpgradeConfirmation() {
       const {
         data: { user },
       } = await supabase.auth.getUser();
-      if (!user) return;
+
+      // Count no-user reads toward the attempt cap so the loop terminates.
+      attemptsRef.current += 1;
+      if (!user) {
+        const next = nextPollState(attemptsRef.current, false, MAX_ATTEMPTS);
+        setPhase(next);
+        if (next !== "finalizing" && timerRef.current) {
+          clearInterval(timerRef.current);
+          timerRef.current = null;
+        }
+        return;
+      }
 
       const { data } = await supabase
         .from("profiles")
@@ -43,7 +57,6 @@ export function UpgradeConfirmation() {
         .eq("id", user.id)
         .single();
 
-      attemptsRef.current += 1;
       const next = nextPollState(
         attemptsRef.current,
         data?.has_full_access === true,
@@ -57,8 +70,10 @@ export function UpgradeConfirmation() {
       }
     }
 
-    checkAccess();
+    // Assign the interval BEFORE the first checkAccess call so an immediate
+    // done/timeout can clear it correctly.
     timerRef.current = setInterval(checkAccess, POLL_INTERVAL_MS);
+    checkAccess();
 
     return () => {
       if (timerRef.current) {
@@ -66,7 +81,7 @@ export function UpgradeConfirmation() {
         timerRef.current = null;
       }
     };
-  }, [activated]);
+  }, [activated, dismissed]);
 
   // Once confirmed, strip ?upgraded=1 so a page refresh does not re-trigger.
   useEffect(() => {

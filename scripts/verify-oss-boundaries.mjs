@@ -73,7 +73,11 @@ const aiNoticeSeamFiles = [
   "src/components/minutia/upgrade-confirmation.tsx",
   "src/lib/ai/notice.ts",
   "src/lib/billing/upgrade-poll-state.ts",
+  "src/lib/billing/upgrade-ticket.ts",
+  "src/lib/billing/upgrade-actions.ts",
+  "src/lib/billing/upgrade-config.ts",
   "src/app/api/ai-notice/route.ts",
+  "src/app/api/billing/upgrade-link/route.ts",
   "src/lib/hooks/use-ai-access.ts",
 ];
 const forbiddenSeamDisclosures = [

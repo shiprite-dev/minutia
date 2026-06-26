@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { mintUpgradeTicket } from "@/lib/billing/upgrade-ticket";
+import { extractCheckoutUrl } from "@/lib/billing/checkout-response";
 
 export const runtime = "nodejs";
 
@@ -50,12 +51,9 @@ export async function POST() {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ ticket }),
   });
-  if (!res.ok) {
+  const url = extractCheckoutUrl(res.ok, await res.json().catch(() => null));
+  if (!url) {
     return NextResponse.json({ error: "Checkout unavailable" }, { status: 502 });
   }
-  const body = (await res.json().catch(() => null)) as { url?: string } | null;
-  if (!body?.url) {
-    return NextResponse.json({ error: "Checkout unavailable" }, { status: 502 });
-  }
-  return NextResponse.json({ url: body.url });
+  return NextResponse.json({ url });
 }

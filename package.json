@@ -51,6 +51,7 @@
     "test:context-extraction": "node --test scripts/verify-context-extraction.test.mjs",
     "test:feature-access": "node --test scripts/verify-feature-access.test.mjs",
     "test:ai-notice": "node --test scripts/verify-ai-notice.test.mjs",
+    "test:checkout-response": "node --test scripts/verify-checkout-response.test.mjs",
     "test:upgrade-ticket": "node --test scripts/verify-upgrade-ticket.test.mjs",
     "test:upgrade-config": "node --test scripts/verify-upgrade-config.test.mjs",
     "test:upsell": "node --test scripts/verify-upsell.test.mjs",
