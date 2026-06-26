@@ -38,6 +38,7 @@ export function CapacityNudge({ limit }: { limit: number }) {
   const cta = resolveUpsellCta(data?.ctaUrl);
   const [open, setOpen] = React.useState(false);
   const [upgradeError, setUpgradeError] = React.useState(false);
+  const [isPending, setIsPending] = React.useState(false);
 
   React.useEffect(() => {
     if (firstRunTourPending()) return;
@@ -54,9 +55,15 @@ export function CapacityNudge({ limit }: { limit: number }) {
   }
 
   async function handleUpgrade() {
+    if (isPending) return;
+    setIsPending(true);
     setUpgradeError(false);
     const ok = await startUpgrade();
-    if (!ok) setUpgradeError(true);
+    // On success the browser navigates away; only reset on failure.
+    if (!ok) {
+      setIsPending(false);
+      setUpgradeError(true);
+    }
   }
 
   return (
@@ -90,10 +97,12 @@ export function CapacityNudge({ limit }: { limit: number }) {
             <button
               type="button"
               onClick={handleUpgrade}
-              className="mt-2.5 inline-flex items-center gap-1 text-xs font-medium text-accent transition-colors hover:text-accent-hover"
+              disabled={isPending}
+              aria-disabled={isPending}
+              className="mt-2.5 inline-flex items-center gap-1 text-xs font-medium text-accent transition-colors hover:text-accent-hover disabled:opacity-60 disabled:cursor-default"
             >
-              {cta?.label ?? UPSELL_DEFAULT_CTA_LABEL}
-              <ArrowRight className="size-3" />
+              {isPending ? "Starting…" : (cta?.label ?? UPSELL_DEFAULT_CTA_LABEL)}
+              {!isPending && <ArrowRight className="size-3" />}
             </button>
             {upgradeError && (
               <p className="mt-1 text-xs text-ink-3">

@@ -17,11 +17,18 @@ export function AiUnavailableNotice({ className }: { className?: string }) {
   const { data } = useAiNoticeUrl();
   const cta = resolveAiNoticeCta(data?.ctaUrl);
   const [upgradeError, setUpgradeError] = useState(false);
+  const [isPending, setIsPending] = useState(false);
 
   async function handleUpgrade() {
+    if (isPending) return;
+    setIsPending(true);
     setUpgradeError(false);
     const ok = await startUpgrade();
-    if (!ok) setUpgradeError(true);
+    // On success the browser navigates away; only reset on failure.
+    if (!ok) {
+      setIsPending(false);
+      setUpgradeError(true);
+    }
   }
 
   return (
@@ -37,9 +44,11 @@ export function AiUnavailableNotice({ className }: { className?: string }) {
           <button
             type="button"
             onClick={handleUpgrade}
-            className="ml-auto shrink-0 font-medium text-accent underline underline-offset-2 hover:text-accent-hover"
+            disabled={isPending}
+            aria-disabled={isPending}
+            className="ml-auto shrink-0 font-medium text-accent underline underline-offset-2 hover:text-accent-hover disabled:opacity-60 disabled:cursor-default"
           >
-            {cta?.label ?? AI_NOTICE_DEFAULT_CTA_LABEL}
+            {isPending ? "Starting…" : (cta?.label ?? AI_NOTICE_DEFAULT_CTA_LABEL)}
           </button>
         ) : cta ? (
           <a
