@@ -5,7 +5,8 @@ import { motion } from "motion/react";
 import { Sparkles, ArrowRight } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useUpsellNoticeUrl } from "@/lib/hooks/use-ai-access";
-import { resolveUpsellCta, shouldShowNudge, nudgeStorageKey } from "@/lib/upsell";
+import { resolveUpsellCta, shouldShowNudge, nudgeStorageKey, UPSELL_DEFAULT_CTA_LABEL } from "@/lib/upsell";
+import { startUpgrade } from "@/lib/billing/upgrade-actions";
 
 // True until the first-run tour is finished, so the nudge never auto-opens over
 // the onboarding prompt (both anchor bottom-right). Read decoupled from the tour
@@ -21,24 +22,22 @@ function firstRunTourPending(): boolean {
   return true;
 }
 
-async function startUpgrade() {
-  const res = await fetch("/api/billing/upgrade-link", { method: "POST" });
-  if (!res.ok) return;
-  const data = (await res.json()) as { url?: string };
-  if (data.url) window.location.assign(data.url);
-}
-
 // Capacity nudge: the board-full FAB. Replaces the old dead-end (disabled FAB +
 // "limit reached" tooltip) with a calm, dismissible explanation and, when the
 // instance configures a destination, a neutral CTA. It auto-opens once at the
 // moment the board fills (a success moment, not an interruption); dismissing it
 // starts a 14-day cooldown so it never nags. Clicking the FAB reopens it anytime.
+//
+// Finding 4 fix: when upgradeEnabled is true the button always renders, even if
+// the operator has not set capacity_notice_url, so a correctly-configured hosted
+// instance never silently loses the upgrade path.
 const SLOT = "capacity" as const;
 
 export function CapacityNudge({ limit }: { limit: number }) {
   const { data } = useUpsellNoticeUrl(SLOT);
   const cta = resolveUpsellCta(data?.ctaUrl);
   const [open, setOpen] = React.useState(false);
+  const [upgradeError, setUpgradeError] = React.useState(false);
 
   React.useEffect(() => {
     if (firstRunTourPending()) return;
@@ -52,6 +51,12 @@ export function CapacityNudge({ limit }: { limit: number }) {
     // Closing is a dismissal: record it so the nudge does not auto-open again
     // until the cooldown elapses (clicking the FAB still reopens it on demand).
     if (!next) window.localStorage.setItem(nudgeStorageKey(SLOT), String(Date.now()));
+  }
+
+  async function handleUpgrade() {
+    setUpgradeError(false);
+    const ok = await startUpgrade();
+    if (!ok) setUpgradeError(true);
   }
 
   return (
@@ -80,28 +85,33 @@ export function CapacityNudge({ limit }: { limit: number }) {
         <p className="mt-1 text-xs text-ink-3">
           Resolve or drop an item to free up space.
         </p>
-        {cta && (
-          data?.upgradeEnabled ? (
+        {data?.upgradeEnabled ? (
+          <>
             <button
               type="button"
-              onClick={startUpgrade}
+              onClick={handleUpgrade}
               className="mt-2.5 inline-flex items-center gap-1 text-xs font-medium text-accent transition-colors hover:text-accent-hover"
             >
-              {cta.label}
+              {cta?.label ?? UPSELL_DEFAULT_CTA_LABEL}
               <ArrowRight className="size-3" />
             </button>
-          ) : (
-            <a
-              href={cta.href}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="mt-2.5 inline-flex items-center gap-1 text-xs font-medium text-accent transition-colors hover:text-accent-hover"
-            >
-              {cta.label}
-              <ArrowRight className="size-3" />
-            </a>
-          )
-        )}
+            {upgradeError && (
+              <p className="mt-1 text-xs text-ink-3">
+                Could not start the upgrade. Please try again.
+              </p>
+            )}
+          </>
+        ) : cta ? (
+          <a
+            href={cta.href}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-2.5 inline-flex items-center gap-1 text-xs font-medium text-accent transition-colors hover:text-accent-hover"
+          >
+            {cta.label}
+            <ArrowRight className="size-3" />
+          </a>
+        ) : null}
       </PopoverContent>
     </Popover>
   );

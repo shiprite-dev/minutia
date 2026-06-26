@@ -2,14 +2,19 @@ import { test, expect } from "@playwright/test";
 
 const APP_URL = process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3000";
 
+// Strip the project storageState so every request in this file is truly
+// unauthenticated. The webServer env in playwright.config.ts activates the
+// route (UPGRADE_SIGNING_SECRET + UPGRADE_CHECKOUT_URL are set), so auth is
+// checked before any server-to-server call and an unauthenticated caller
+// must receive 401 -- not 404 (dormant) or 200.
+test.use({ storageState: { cookies: [], origins: [] } });
+
 test.describe("POST /api/billing/upgrade-link", () => {
-  test("unauthenticated call returns non-200", async ({ request }) => {
+  test("unauthenticated call returns 401", async ({ request }) => {
     const res = await request.post(`${APP_URL}/api/billing/upgrade-link`, {
       data: {},
     });
-    // Unconfigured env -> 404 (dormant). Configured env, no session -> 401.
-    // Either way, a browser with no auth session must never receive 200.
-    expect(res.status()).not.toBe(200);
+    expect(res.status()).toBe(401);
   });
 
   test("returns JSON with an error or url field", async ({ request }) => {
