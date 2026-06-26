@@ -21,6 +21,13 @@ function firstRunTourPending(): boolean {
   return true;
 }
 
+async function startUpgrade() {
+  const res = await fetch("/api/billing/upgrade-link", { method: "POST" });
+  if (!res.ok) return;
+  const data = (await res.json()) as { url?: string };
+  if (data.url) window.location.assign(data.url);
+}
+
 // Capacity nudge: the board-full FAB. Replaces the old dead-end (disabled FAB +
 // "limit reached" tooltip) with a calm, dismissible explanation and, when the
 // instance configures a destination, a neutral CTA. It auto-opens once at the
@@ -74,15 +81,26 @@ export function CapacityNudge({ limit }: { limit: number }) {
           Resolve or drop an item to free up space.
         </p>
         {cta && (
-          <a
-            href={cta.href}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="mt-2.5 inline-flex items-center gap-1 text-xs font-medium text-accent transition-colors hover:text-accent-hover"
-          >
-            {cta.label}
-            <ArrowRight className="size-3" />
-          </a>
+          data?.upgradeEnabled ? (
+            <button
+              type="button"
+              onClick={startUpgrade}
+              className="mt-2.5 inline-flex items-center gap-1 text-xs font-medium text-accent transition-colors hover:text-accent-hover"
+            >
+              {cta.label}
+              <ArrowRight className="size-3" />
+            </button>
+          ) : (
+            <a
+              href={cta.href}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-2.5 inline-flex items-center gap-1 text-xs font-medium text-accent transition-colors hover:text-accent-hover"
+            >
+              {cta.label}
+              <ArrowRight className="size-3" />
+            </a>
+          )
         )}
       </PopoverContent>
     </Popover>

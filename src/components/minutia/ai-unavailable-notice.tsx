@@ -4,6 +4,13 @@ import { Sparkles } from "lucide-react";
 import { AI_UNAVAILABLE_MESSAGE, useAiNoticeUrl } from "@/lib/hooks/use-ai-access";
 import { resolveAiNoticeCta } from "@/lib/ai/notice";
 
+async function startUpgrade() {
+  const res = await fetch("/api/billing/upgrade-link", { method: "POST" });
+  if (!res.ok) return;
+  const data = (await res.json()) as { url?: string };
+  if (data.url) window.location.assign(data.url);
+}
+
 // Neutral upsell seam: shows why AI is unavailable and, when the instance has
 // configured a destination (instance_config.ai_notice_url), a neutral CTA so the
 // surface never dead-ends. The OSS build carries no plan or price language.
@@ -19,14 +26,24 @@ export function AiUnavailableNotice({ className }: { className?: string }) {
       <Sparkles className="size-4 shrink-0 text-accent" />
       <span>{AI_UNAVAILABLE_MESSAGE}</span>
       {cta && (
-        <a
-          href={cta.href}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="ml-auto shrink-0 font-medium text-accent underline underline-offset-2 hover:text-accent-hover"
-        >
-          {cta.label}
-        </a>
+        data?.upgradeEnabled ? (
+          <button
+            type="button"
+            onClick={startUpgrade}
+            className="ml-auto shrink-0 font-medium text-accent underline underline-offset-2 hover:text-accent-hover"
+          >
+            {cta.label}
+          </button>
+        ) : (
+          <a
+            href={cta.href}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="ml-auto shrink-0 font-medium text-accent underline underline-offset-2 hover:text-accent-hover"
+          >
+            {cta.label}
+          </a>
+        )
       )}
     </div>
   );
