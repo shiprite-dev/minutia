@@ -35,7 +35,9 @@ test("returns done immediately when hasAccess is true, regardless of attempts", 
 });
 
 test("returns finalizing while attempts < maxAttempts and access not yet granted", () => {
-  assert.equal(nextPollState(0, false, 22), "finalizing");
+  // Component increments attemptsRef before calling nextPollState, so the
+  // real call sequence starts at 1, never 0.
+  assert.equal(nextPollState(1, false, 22), "finalizing");
   assert.equal(nextPollState(10, false, 22), "finalizing");
   assert.equal(nextPollState(21, false, 22), "finalizing");
 });
@@ -51,8 +53,9 @@ test("done takes priority over timeout when access arrives on the last poll", ()
   assert.equal(nextPollState(22, true, 22), "done");
 });
 
-test("maxAttempts of 1: first attempt is still finalizing, second times out", () => {
-  assert.equal(nextPollState(0, false, 1), "finalizing");
+test("maxAttempts of 1: first real attempt (attempt=1) immediately times out", () => {
+  // With maxAttempts=1 the component's first call is nextPollState(1, false, 1),
+  // which is already at the cap — no finalizing phase exists.
   assert.equal(nextPollState(1, false, 1), "timeout");
 });
 
@@ -61,12 +64,13 @@ test("maxAttempts of 0: any call with no access is immediately timeout", () => {
 });
 
 test("phase transitions are deterministic across a full 22-attempt sequence", () => {
+  // Real call sequence: attempts 1..25 (component increments before calling).
   const phases = Array.from({ length: 25 }, (_, i) =>
-    nextPollState(i, false, 22)
+    nextPollState(i + 1, false, 22)
   );
-  // First 22 (0..21) are finalizing, from 22 onward timeout
+  // attempts 1..21 are finalizing, from 22 onward timeout
   const finalizingCount = phases.filter((p) => p === "finalizing").length;
   const timeoutCount = phases.filter((p) => p === "timeout").length;
-  assert.equal(finalizingCount, 22); // attempts 0..21
-  assert.equal(timeoutCount, 3);     // attempts 22..24
+  assert.equal(finalizingCount, 21); // attempts 1..21
+  assert.equal(timeoutCount, 4);     // attempts 22..25
 });

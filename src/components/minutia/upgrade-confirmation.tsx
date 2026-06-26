@@ -94,10 +94,9 @@ export function UpgradeConfirmation() {
     return () => window.removeEventListener("keydown", handleKey);
   }, [activated, dismissed]);
 
-  if (!activated || dismissed) return null;
-
   return (
     <AnimatePresence>
+      {(!activated || dismissed) ? null : (
       <motion.div
         role="status"
         aria-live="polite"
@@ -191,6 +190,7 @@ export function UpgradeConfirmation() {
           )}
         </div>
       </motion.div>
+      )}
     </AnimatePresence>
   );
 }

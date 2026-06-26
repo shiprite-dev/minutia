@@ -98,7 +98,6 @@ export function CapacityNudge({ limit }: { limit: number }) {
               type="button"
               onClick={handleUpgrade}
               disabled={isPending}
-              aria-disabled={isPending}
               className="mt-2.5 inline-flex items-center gap-1 text-xs font-medium text-accent transition-colors hover:text-accent-hover disabled:opacity-60 disabled:cursor-default"
             >
               {isPending ? "Starting…" : (cta?.label ?? UPSELL_DEFAULT_CTA_LABEL)}

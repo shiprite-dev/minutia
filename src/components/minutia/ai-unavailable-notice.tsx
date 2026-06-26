@@ -45,7 +45,6 @@ export function AiUnavailableNotice({ className }: { className?: string }) {
             type="button"
             onClick={handleUpgrade}
             disabled={isPending}
-            aria-disabled={isPending}
             className="ml-auto shrink-0 font-medium text-accent underline underline-offset-2 hover:text-accent-hover disabled:opacity-60 disabled:cursor-default"
           >
             {isPending ? "Starting…" : (cta?.label ?? AI_NOTICE_DEFAULT_CTA_LABEL)}
