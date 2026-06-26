@@ -51,5 +51,12 @@ export default defineConfig({
     command: `MINUTIA_TEST_EMAIL_OUTBOX=test-results/meeting-notes-email-outbox.jsonl pnpm dev --hostname ${serverHost} --port ${serverPort}`,
     url: baseURL,
     reuseExistingServer: !process.env.CI,
+    // Activate the upgrade-link route so the 401 auth check is reachable.
+    // The checkout URL is an unreachable dummy: auth is checked before any
+    // server-to-server call, so the 401 fires without ever hitting the proxy.
+    env: {
+      UPGRADE_SIGNING_SECRET: "e2e-test-secret",
+      UPGRADE_CHECKOUT_URL: "http://127.0.0.1:9/checkout",
+    },
   },
 });

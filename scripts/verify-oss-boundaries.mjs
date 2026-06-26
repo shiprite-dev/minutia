@@ -70,8 +70,14 @@ for (const [pattern, label] of forbiddenLandingDisclosures) {
 // instance_config.ai_notice_url. This keeps the open-core boundary intact.
 const aiNoticeSeamFiles = [
   "src/components/minutia/ai-unavailable-notice.tsx",
+  "src/components/minutia/upgrade-confirmation.tsx",
   "src/lib/ai/notice.ts",
+  "src/lib/billing/upgrade-poll-state.ts",
+  "src/lib/billing/upgrade-ticket.ts",
+  "src/lib/billing/upgrade-actions.ts",
+  "src/lib/billing/upgrade-config.ts",
   "src/app/api/ai-notice/route.ts",
+  "src/app/api/billing/upgrade-link/route.ts",
   "src/lib/hooks/use-ai-access.ts",
 ];
 const forbiddenSeamDisclosures = [
