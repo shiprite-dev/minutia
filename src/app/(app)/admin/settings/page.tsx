@@ -14,6 +14,8 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { aiFormFields } from "@/lib/ai/form";
+import { getAdminCapabilities, isManagedCloud } from "@/lib/admin/capabilities";
+import { startUpgrade } from "@/lib/billing/upgrade-actions";
 
 type ConfigMap = Record<string, string | null>;
 
@@ -40,6 +42,8 @@ function field(config: ConfigMap, key: string) {
 }
 
 export default function AdminSettingsPage() {
+  const caps = getAdminCapabilities();
+
   const [loading, setLoading] = useState(true);
   const [original, setOriginal] = useState<ConfigMap>({});
   const [form, setForm] = useState<ConfigMap>({});
@@ -66,6 +70,9 @@ export default function AdminSettingsPage() {
   const [aiTestState, setAiTestState] = useState<"idle" | "sending">("idle");
   const [aiTestMessage, setAiTestMessage] = useState("");
   const [aiTestMessageState, setAiTestMessageState] = useState<"success" | "error">("success");
+
+  const [upgradeLoading, setUpgradeLoading] = useState(false);
+  const [upgradeMessage, setUpgradeMessage] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -228,6 +235,18 @@ export default function AdminSettingsPage() {
     setAiTestMessage("Connection successful.");
   }
 
+  async function handleUpgrade() {
+    if (upgradeLoading) return;
+    setUpgradeLoading(true);
+    setUpgradeMessage("");
+    const ok = await startUpgrade();
+    // On success the browser navigates away; only reset on failure.
+    if (!ok) {
+      setUpgradeLoading(false);
+      setUpgradeMessage("Upgrades are not available yet.");
+    }
+  }
+
   if (loading) {
     return (
       <div className="space-y-5">
@@ -242,6 +261,9 @@ export default function AdminSettingsPage() {
     (form.ai_provider as "openai-compatible" | "anthropic" | null) ??
     "openai-compatible";
   const visibleAiFields = aiFormFields(activeProvider || "openai-compatible");
+
+  const showFeatureFlags =
+    caps.retroToggle || caps.slackWebhook || caps.reminderWebhook || caps.promptLinks;
 
   return (
     <div className="space-y-5">
@@ -263,267 +285,313 @@ export default function AdminSettingsPage() {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Email (SMTP)</CardTitle>
-          <CardDescription>
-            Outbound email for invitations, reminders, and digests.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="smtp_host">SMTP host</Label>
-              <Input
-                id="smtp_host"
-                placeholder="smtp.example.com"
-                value={field(form, "smtp_host")}
-                onChange={(e) => setKey("smtp_host", e.target.value)}
-              />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="smtp_port">SMTP port</Label>
-              <Input
-                id="smtp_port"
-                placeholder="587"
-                inputMode="numeric"
-                value={field(form, "smtp_port")}
-                onChange={(e) => setKey("smtp_port", e.target.value)}
-              />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="smtp_user">SMTP username</Label>
-              <Input
-                id="smtp_user"
-                placeholder="apikey"
-                value={field(form, "smtp_user")}
-                onChange={(e) => setKey("smtp_user", e.target.value)}
-              />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="smtp_pass">SMTP password</Label>
-              <Input
-                id="smtp_pass"
-                type="password"
-                placeholder={smtpPassConfigured ? "configured (leave blank to keep)" : "Enter a password"}
-                value={smtpPass}
-                onChange={(e) => setSmtpPass(e.target.value)}
-              />
-            </div>
-            <div className="flex flex-col gap-1.5 sm:col-span-2">
-              <Label htmlFor="smtp_from">From address</Label>
-              <Input
-                id="smtp_from"
-                type="email"
-                placeholder="minutia@example.com"
-                value={field(form, "smtp_from")}
-                onChange={(e) => setKey("smtp_from", e.target.value)}
-              />
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center gap-3">
+      {caps.upgradePrompt && isManagedCloud() && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Upgrade</CardTitle>
+            <CardDescription>
+              Unlock AI and higher limits for your team.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
             <Button
               type="button"
-              variant="outline"
               size="sm"
-              disabled={testState === "sending"}
-              onClick={handleTestEmail}
+              disabled={upgradeLoading}
+              onClick={handleUpgrade}
             >
-              {testState === "sending" ? "Sending..." : "Send test email"}
+              {upgradeLoading ? "Starting..." : "Upgrade to Pro"}
             </Button>
-            {testMessage && (
-              <p className={cn("text-xs", testMessageState === "error" ? "text-danger" : "text-success")}>
-                {testMessage}
-              </p>
+            {upgradeMessage && (
+              <p className="mt-2 text-xs text-ink-3">{upgradeMessage}</p>
             )}
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>AI</CardTitle>
-          <CardDescription>
-            Bring-your-own-key AI configuration. Applies to AI summaries and suggestions.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {visibleAiFields.includes("provider") && (
-            <div className="flex flex-col gap-1.5">
-              <Label>Provider</Label>
-              <div className="flex gap-2">
-                <Button
-                  type="button"
-                  size="sm"
-                  variant={activeProvider === "openai-compatible" ? "outline" : "ghost"}
-                  className={cn(
-                    activeProvider === "openai-compatible" &&
-                      "border-rule-strong bg-paper-2 text-ink"
-                  )}
-                  onClick={() => setKey("ai_provider", "openai-compatible")}
-                >
-                  OpenAI-compatible
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant={activeProvider === "anthropic" ? "outline" : "ghost"}
-                  className={cn(
-                    activeProvider === "anthropic" &&
-                      "border-rule-strong bg-paper-2 text-ink"
-                  )}
-                  onClick={() => setKey("ai_provider", "anthropic")}
-                >
-                  Anthropic
-                </Button>
-              </div>
-            </div>
-          )}
-          <div className="grid gap-4 sm:grid-cols-2">
-            {visibleAiFields.includes("baseUrl") && (
-              <div className="flex flex-col gap-1.5 sm:col-span-2">
-                <Label htmlFor="ai_base_url">Base URL</Label>
-                <Input
-                  id="ai_base_url"
-                  placeholder="https://openrouter.ai/api/v1"
-                  value={field(form, "ai_base_url")}
-                  onChange={(e) => setKey("ai_base_url", e.target.value)}
-                />
-              </div>
-            )}
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="ai_api_key">API key</Label>
-              <Input
-                id="ai_api_key"
-                type="password"
-                placeholder={
-                  aiKeyConfigured ? "configured (leave blank to keep)" : "Enter an API key"
-                }
-                value={aiKey}
-                onChange={(e) => setAiKey(e.target.value)}
-              />
-            </div>
-            {visibleAiFields.includes("model") && (
+      {caps.email && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Email (SMTP)</CardTitle>
+            <CardDescription>
+              Outbound email for invitations, reminders, and digests.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2">
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="ai_model">Model</Label>
+                <Label htmlFor="smtp_host">SMTP host</Label>
                 <Input
-                  id="ai_model"
-                  placeholder={
-                    activeProvider === "anthropic"
-                      ? "anthropic/claude-3.5-sonnet"
-                      : "gpt-4o-mini"
-                  }
-                  value={field(form, "ai_model")}
-                  onChange={(e) => setKey("ai_model", e.target.value)}
+                  id="smtp_host"
+                  placeholder="smtp.example.com"
+                  value={field(form, "smtp_host")}
+                  onChange={(e) => setKey("smtp_host", e.target.value)}
                 />
               </div>
-            )}
-          </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={aiTestState === "sending"}
-              onClick={handleAiTest}
-            >
-              {aiTestState === "sending" ? "Testing..." : "Test connection"}
-            </Button>
-            {aiTestMessage && (
-              <p
-                className={cn(
-                  "text-xs",
-                  aiTestMessageState === "error" ? "text-danger" : "text-success"
-                )}
-              >
-                {aiTestMessage}
-              </p>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Feature flags</CardTitle>
-          <CardDescription>
-            Toggle optional surfaces and configure reminder channels.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-5">
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <p className="text-sm font-medium text-ink">Free retro boards</p>
-                <p className="text-xs text-ink-3">
-                  Opens a public, no-login retrospective board at /retro on this instance.
-                </p>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="smtp_port">SMTP port</Label>
+                <Input
+                  id="smtp_port"
+                  placeholder="587"
+                  inputMode="numeric"
+                  value={field(form, "smtp_port")}
+                  onChange={(e) => setKey("smtp_port", e.target.value)}
+                />
               </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="smtp_user">SMTP username</Label>
+                <Input
+                  id="smtp_user"
+                  placeholder="apikey"
+                  value={field(form, "smtp_user")}
+                  onChange={(e) => setKey("smtp_user", e.target.value)}
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="smtp_pass">SMTP password</Label>
+                <Input
+                  id="smtp_pass"
+                  type="password"
+                  placeholder={smtpPassConfigured ? "configured (leave blank to keep)" : "Enter a password"}
+                  value={smtpPass}
+                  onChange={(e) => setSmtpPass(e.target.value)}
+                />
+              </div>
+              <div className="flex flex-col gap-1.5 sm:col-span-2">
+                <Label htmlFor="smtp_from">From address</Label>
+                <Input
+                  id="smtp_from"
+                  type="email"
+                  placeholder="minutia@example.com"
+                  value={field(form, "smtp_from")}
+                  onChange={(e) => setKey("smtp_from", e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
               <Button
                 type="button"
-                variant={retroEnabled ? "outline" : "ghost"}
+                variant="outline"
                 size="sm"
-                disabled={retroSaving}
-                onClick={handleRetroToggle}
-                className={cn(retroEnabled && "border-rule-strong bg-paper-2 text-ink")}
+                disabled={testState === "sending"}
+                onClick={handleTestEmail}
               >
-                {retroSaving ? "Saving..." : retroEnabled ? "Disable" : "Enable"}
+                {testState === "sending" ? "Sending..." : "Send test email"}
               </Button>
+              {testMessage && (
+                <p className={cn("text-xs", testMessageState === "error" ? "text-danger" : "text-success")}>
+                  {testMessage}
+                </p>
+              )}
             </div>
-            {retroMessage && (
-              <p className={cn("text-xs", retroMessageState === "error" ? "text-danger" : "text-success")}>
-                {retroMessage}
-              </p>
+          </CardContent>
+        </Card>
+      )}
+
+      {caps.ai && (
+        <Card>
+          <CardHeader>
+            <CardTitle>AI</CardTitle>
+            <CardDescription>
+              Bring-your-own-key AI configuration. Applies to AI summaries and suggestions.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {visibleAiFields.includes("provider") && (
+              <div className="flex flex-col gap-1.5">
+                <Label>Provider</Label>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={activeProvider === "openai-compatible" ? "outline" : "ghost"}
+                    className={cn(
+                      activeProvider === "openai-compatible" &&
+                        "border-rule-strong bg-paper-2 text-ink"
+                    )}
+                    onClick={() => setKey("ai_provider", "openai-compatible")}
+                  >
+                    OpenAI-compatible
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={activeProvider === "anthropic" ? "outline" : "ghost"}
+                    className={cn(
+                      activeProvider === "anthropic" &&
+                        "border-rule-strong bg-paper-2 text-ink"
+                    )}
+                    onClick={() => setKey("ai_provider", "anthropic")}
+                  >
+                    Anthropic
+                  </Button>
+                </div>
+              </div>
             )}
-          </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              {visibleAiFields.includes("baseUrl") && (
+                <div className="flex flex-col gap-1.5 sm:col-span-2">
+                  <Label htmlFor="ai_base_url">Base URL</Label>
+                  <Input
+                    id="ai_base_url"
+                    placeholder="https://openrouter.ai/api/v1"
+                    value={field(form, "ai_base_url")}
+                    onChange={(e) => setKey("ai_base_url", e.target.value)}
+                  />
+                </div>
+              )}
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="ai_api_key">API key</Label>
+                <Input
+                  id="ai_api_key"
+                  type="password"
+                  placeholder={
+                    aiKeyConfigured ? "configured (leave blank to keep)" : "Enter an API key"
+                  }
+                  value={aiKey}
+                  onChange={(e) => setAiKey(e.target.value)}
+                />
+              </div>
+              {visibleAiFields.includes("model") && (
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="ai_model">Model</Label>
+                  <Input
+                    id="ai_model"
+                    placeholder={
+                      activeProvider === "anthropic"
+                        ? "anthropic/claude-3.5-sonnet"
+                        : "gpt-4o-mini"
+                    }
+                    value={field(form, "ai_model")}
+                    onChange={(e) => setKey("ai_model", e.target.value)}
+                  />
+                </div>
+              )}
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={aiTestState === "sending"}
+                onClick={handleAiTest}
+              >
+                {aiTestState === "sending" ? "Testing..." : "Test connection"}
+              </Button>
+              {aiTestMessage && (
+                <p
+                  className={cn(
+                    "text-xs",
+                    aiTestMessageState === "error" ? "text-danger" : "text-success"
+                  )}
+                >
+                  {aiTestMessage}
+                </p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
-          <div className="grid gap-4 border-t border-rule pt-5">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="slack_webhook_url">Slack webhook URL</Label>
-              <Input
-                id="slack_webhook_url"
-                placeholder="https://hooks.slack.com/services/..."
-                value={field(form, "slack_webhook_url")}
-                onChange={(e) => setKey("slack_webhook_url", e.target.value)}
-              />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="reminder_webhook_url">Reminder webhook URL</Label>
-              <Input
-                id="reminder_webhook_url"
-                placeholder="https://example.com/webhooks/minutia"
-                value={field(form, "reminder_webhook_url")}
-                onChange={(e) => setKey("reminder_webhook_url", e.target.value)}
-              />
-            </div>
-          </div>
+      {showFeatureFlags && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Feature flags</CardTitle>
+            <CardDescription>
+              Toggle optional surfaces and configure reminder channels.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-5">
+            {caps.retroToggle && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <p className="text-sm font-medium text-ink">Free retro boards</p>
+                    <p className="text-xs text-ink-3">
+                      Opens a public, no-login retrospective board at /retro on this instance.
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant={retroEnabled ? "outline" : "ghost"}
+                    size="sm"
+                    disabled={retroSaving}
+                    onClick={handleRetroToggle}
+                    className={cn(retroEnabled && "border-rule-strong bg-paper-2 text-ink")}
+                  >
+                    {retroSaving ? "Saving..." : retroEnabled ? "Disable" : "Enable"}
+                  </Button>
+                </div>
+                {retroMessage && (
+                  <p className={cn("text-xs", retroMessageState === "error" ? "text-danger" : "text-success")}>
+                    {retroMessage}
+                  </p>
+                )}
+              </div>
+            )}
 
-          <div className="grid gap-4 border-t border-rule pt-5">
-            <p className="text-xs text-ink-3">
-              Optional links shown to accounts without AI access. Leave blank and the
-              prompt stays informational, with no button.
-            </p>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="ai_notice_url">AI prompt link</Label>
-              <Input
-                id="ai_notice_url"
-                placeholder="https://example.com/enable-ai"
-                value={field(form, "ai_notice_url")}
-                onChange={(e) => setKey("ai_notice_url", e.target.value)}
-              />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="capacity_notice_url">Capacity prompt link</Label>
-              <Input
-                id="capacity_notice_url"
-                placeholder="https://example.com/more-space"
-                value={field(form, "capacity_notice_url")}
-                onChange={(e) => setKey("capacity_notice_url", e.target.value)}
-              />
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+            {(caps.slackWebhook || caps.reminderWebhook) && (
+              <div className={cn("grid gap-4 pt-5", caps.retroToggle && "border-t border-rule")}>
+                {caps.slackWebhook && (
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="slack_webhook_url">Slack webhook URL</Label>
+                    <Input
+                      id="slack_webhook_url"
+                      placeholder="https://hooks.slack.com/services/..."
+                      value={field(form, "slack_webhook_url")}
+                      onChange={(e) => setKey("slack_webhook_url", e.target.value)}
+                    />
+                  </div>
+                )}
+                {caps.reminderWebhook && (
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="reminder_webhook_url">Reminder webhook URL</Label>
+                    <Input
+                      id="reminder_webhook_url"
+                      placeholder="https://example.com/webhooks/minutia"
+                      value={field(form, "reminder_webhook_url")}
+                      onChange={(e) => setKey("reminder_webhook_url", e.target.value)}
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+
+            {caps.promptLinks && (
+              <div
+                className={cn(
+                  "grid gap-4 pt-5",
+                  (caps.retroToggle || caps.slackWebhook || caps.reminderWebhook) &&
+                    "border-t border-rule"
+                )}
+              >
+                <p className="text-xs text-ink-3">
+                  Optional links shown to accounts without AI access. Leave blank and the
+                  prompt stays informational, with no button.
+                </p>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="ai_notice_url">AI prompt link</Label>
+                  <Input
+                    id="ai_notice_url"
+                    placeholder="https://example.com/enable-ai"
+                    value={field(form, "ai_notice_url")}
+                    onChange={(e) => setKey("ai_notice_url", e.target.value)}
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="capacity_notice_url">Capacity prompt link</Label>
+                  <Input
+                    id="capacity_notice_url"
+                    placeholder="https://example.com/more-space"
+                    value={field(form, "capacity_notice_url")}
+                    onChange={(e) => setKey("capacity_notice_url", e.target.value)}
+                  />
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       <div className="flex flex-wrap items-center gap-3">
         <Button type="button" size="sm" disabled={saving} onClick={handleSave}>
