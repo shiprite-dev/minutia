@@ -15,6 +15,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { aiFormFields } from "@/lib/ai/form";
 import { getAdminCapabilities, isManagedCloud } from "@/lib/admin/capabilities";
+import { rejectedConfigKeys } from "@/lib/admin/config-capabilities";
 import { startUpgrade } from "@/lib/billing/upgrade-actions";
 
 type ConfigMap = Record<string, string | null>;
@@ -119,6 +120,14 @@ export default function AdminSettingsPage() {
     // Same rule for AI API key.
     if (aiKey.trim().length > 0) {
       changed.ai_api_key = aiKey;
+    }
+
+    // Defense in depth: never PUT a key this deployment's capabilities disable
+    // (the server also 403s these). Keeps a single rejected key from failing the
+    // whole save, and makes the gating explicit rather than relying on hidden
+    // inputs staying unchanged.
+    for (const key of rejectedConfigKeys(Object.keys(changed), caps)) {
+      delete changed[key];
     }
 
     if (Object.keys(changed).length === 0) {
