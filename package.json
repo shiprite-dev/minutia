@@ -44,6 +44,7 @@
     "test:query-contracts": "node scripts/verify-query-contracts.mjs",
     "test:ci-workflows": "node scripts/verify-ci-playwright-shards.mjs",
     "test:ai-contracts": "node scripts/verify-ai-notes-contract.mjs",
+    "test:ai-config": "node --test scripts/verify-ai-config.test.mjs",
     "test:ai-client": "node --test scripts/verify-openrouter-client.test.mjs",
     "test:ai-carryover": "node --test scripts/verify-carryover.test.mjs",
     "test:audio": "node --test scripts/verify-audio-capture.test.mjs",
