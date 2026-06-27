@@ -13,12 +13,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
+import { aiFormFields } from "@/lib/ai/form";
 
 type ConfigMap = Record<string, string | null>;
 
-// smtp_pass is a secret: GET returns "configured" (never the value). We only PUT
-// it when the admin types a NEW value, so the placeholder reflects current state
-// without ever rendering or overwriting the stored secret.
+// smtp_pass and ai_api_key are secrets: GET returns "configured" (never the value).
+// We only PUT them when the admin types a NEW value so the placeholder reflects
+// current state without ever rendering or overwriting the stored secret.
 const TEXT_KEYS = [
   "instance_name",
   "smtp_host",
@@ -29,6 +30,9 @@ const TEXT_KEYS = [
   "reminder_webhook_url",
   "ai_notice_url",
   "capacity_notice_url",
+  "ai_provider",
+  "ai_base_url",
+  "ai_model",
 ] as const;
 
 function field(config: ConfigMap, key: string) {
@@ -43,6 +47,10 @@ export default function AdminSettingsPage() {
   const [smtpPassConfigured, setSmtpPassConfigured] = useState(false);
   const [retroEnabled, setRetroEnabled] = useState(false);
 
+  // AI secret key: same pattern as smtpPass
+  const [aiKey, setAiKey] = useState("");
+  const [aiKeyConfigured, setAiKeyConfigured] = useState(false);
+
   const [saving, setSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState("");
   const [saveState, setSaveState] = useState<"success" | "error">("success");
@@ -55,6 +63,10 @@ export default function AdminSettingsPage() {
   const [testMessage, setTestMessage] = useState("");
   const [testMessageState, setTestMessageState] = useState<"success" | "error">("success");
 
+  const [aiTestState, setAiTestState] = useState<"idle" | "sending">("idle");
+  const [aiTestMessage, setAiTestMessage] = useState("");
+  const [aiTestMessageState, setAiTestMessageState] = useState<"success" | "error">("success");
+
   useEffect(() => {
     let cancelled = false;
 
@@ -65,6 +77,7 @@ export default function AdminSettingsPage() {
         setOriginal(cfg);
         setForm(cfg);
         setSmtpPassConfigured(cfg.smtp_pass === "configured");
+        setAiKeyConfigured(cfg.ai_api_key === "configured");
         setRetroEnabled(cfg.retro_enabled === "true");
         setLoading(false);
       })
@@ -96,6 +109,10 @@ export default function AdminSettingsPage() {
     if (smtpPass.trim().length > 0) {
       changed.smtp_pass = smtpPass;
     }
+    // Same rule for AI API key.
+    if (aiKey.trim().length > 0) {
+      changed.ai_api_key = aiKey;
+    }
 
     if (Object.keys(changed).length === 0) {
       setSaving(false);
@@ -122,6 +139,10 @@ export default function AdminSettingsPage() {
     if (changed.smtp_pass) {
       setSmtpPass("");
       setSmtpPassConfigured(true);
+    }
+    if (changed.ai_api_key) {
+      setAiKey("");
+      setAiKeyConfigured(true);
     }
     setSaveState("success");
     setSaveMessage("Settings saved.");
@@ -172,6 +193,41 @@ export default function AdminSettingsPage() {
     setTestMessage(data.message || "Test email sent.");
   }
 
+  async function handleAiTest() {
+    if (!aiKey && !aiKeyConfigured) {
+      setAiTestMessageState("error");
+      setAiTestMessage("Enter an API key to test.");
+      return;
+    }
+    setAiTestState("sending");
+    setAiTestMessage("");
+
+    const provider =
+      (form.ai_provider as "openai-compatible" | "anthropic" | null) ??
+      "openai-compatible";
+
+    const res = await fetch("/api/admin/ai-test", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        provider: provider || "openai-compatible",
+        baseUrl: form.ai_base_url,
+        apiKey: aiKey,
+        model: form.ai_model,
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    setAiTestState("idle");
+
+    if (!res.ok || !data.ok) {
+      setAiTestMessageState("error");
+      setAiTestMessage(data.error || "Connection test failed.");
+      return;
+    }
+    setAiTestMessageState("success");
+    setAiTestMessage("Connection successful.");
+  }
+
   if (loading) {
     return (
       <div className="space-y-5">
@@ -181,6 +237,11 @@ export default function AdminSettingsPage() {
       </div>
     );
   }
+
+  const activeProvider =
+    (form.ai_provider as "openai-compatible" | "anthropic" | null) ??
+    "openai-compatible";
+  const visibleAiFields = aiFormFields(activeProvider || "openai-compatible");
 
   return (
     <div className="space-y-5">
@@ -273,6 +334,109 @@ export default function AdminSettingsPage() {
             {testMessage && (
               <p className={cn("text-xs", testMessageState === "error" ? "text-danger" : "text-success")}>
                 {testMessage}
+              </p>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>AI</CardTitle>
+          <CardDescription>
+            Bring-your-own-key AI configuration. Applies to AI summaries and suggestions.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {visibleAiFields.includes("provider") && (
+            <div className="flex flex-col gap-1.5">
+              <Label>Provider</Label>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={activeProvider === "openai-compatible" ? "outline" : "ghost"}
+                  className={cn(
+                    activeProvider === "openai-compatible" &&
+                      "border-rule-strong bg-paper-2 text-ink"
+                  )}
+                  onClick={() => setKey("ai_provider", "openai-compatible")}
+                >
+                  OpenAI-compatible
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={activeProvider === "anthropic" ? "outline" : "ghost"}
+                  className={cn(
+                    activeProvider === "anthropic" &&
+                      "border-rule-strong bg-paper-2 text-ink"
+                  )}
+                  onClick={() => setKey("ai_provider", "anthropic")}
+                >
+                  Anthropic
+                </Button>
+              </div>
+            </div>
+          )}
+          <div className="grid gap-4 sm:grid-cols-2">
+            {visibleAiFields.includes("baseUrl") && (
+              <div className="flex flex-col gap-1.5 sm:col-span-2">
+                <Label htmlFor="ai_base_url">Base URL</Label>
+                <Input
+                  id="ai_base_url"
+                  placeholder="https://openrouter.ai/api/v1"
+                  value={field(form, "ai_base_url")}
+                  onChange={(e) => setKey("ai_base_url", e.target.value)}
+                />
+              </div>
+            )}
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="ai_api_key">API key</Label>
+              <Input
+                id="ai_api_key"
+                type="password"
+                placeholder={
+                  aiKeyConfigured ? "configured (leave blank to keep)" : "Enter an API key"
+                }
+                value={aiKey}
+                onChange={(e) => setAiKey(e.target.value)}
+              />
+            </div>
+            {visibleAiFields.includes("model") && (
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="ai_model">Model</Label>
+                <Input
+                  id="ai_model"
+                  placeholder={
+                    activeProvider === "anthropic"
+                      ? "anthropic/claude-3.5-sonnet"
+                      : "gpt-4o-mini"
+                  }
+                  value={field(form, "ai_model")}
+                  onChange={(e) => setKey("ai_model", e.target.value)}
+                />
+              </div>
+            )}
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={aiTestState === "sending"}
+              onClick={handleAiTest}
+            >
+              {aiTestState === "sending" ? "Testing..." : "Test connection"}
+            </Button>
+            {aiTestMessage && (
+              <p
+                className={cn(
+                  "text-xs",
+                  aiTestMessageState === "error" ? "text-danger" : "text-success"
+                )}
+              >
+                {aiTestMessage}
               </p>
             )}
           </div>
