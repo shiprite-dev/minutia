@@ -43,7 +43,7 @@ const VALID_PROVIDERS: readonly TranscriptionProvider[] = ["groq", "openrouter",
 /** Providers with a real client in this build. deepgram/local are reserved. */
 const IMPLEMENTED_PROVIDERS = new Set<TranscriptionProvider>(["groq", "openrouter"]);
 
-/** API key for a provider, mirroring getOpenRouterApiKey's precedence for OpenRouter. */
+/** API key for a provider (OpenRouter falls back to AI_API_KEY per config resolution). */
 function providerApiKey(provider: TranscriptionProvider, env: Env): string | null {
   if (provider === "groq") return env.GROQ_API_KEY?.trim() || null;
   if (provider === "openrouter") return env.OPENROUTER_API_KEY?.trim() || env.AI_API_KEY?.trim() || null;

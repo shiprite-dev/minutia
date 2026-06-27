@@ -15,18 +15,21 @@ import {
   AlertTriangle,
   Loader2,
   Database,
+  Sparkles,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
+import { aiFormFields } from "@/lib/ai/form";
 
-const TOTAL_STEPS = 4;
+const TOTAL_STEPS = 5;
 
 const stepMeta = [
   { label: "Environment", icon: Server },
   { label: "Admin Account", icon: ShieldCheck },
   { label: "Configure", icon: Settings2 },
+  { label: "AI", icon: Sparkles },
   { label: "Ready", icon: Rocket },
 ];
 
@@ -77,6 +80,8 @@ export default function SetupPage() {
   const [smtpTesting, setSmtpTesting] = React.useState(false);
   const [smtpTestResult, setSmtpTestResult] = React.useState<{ success: boolean; message: string } | null>(null);
   const [configSaving, setConfigSaving] = React.useState(false);
+
+  const [aiSkipped, setAiSkipped] = React.useState(false);
 
   const [seedDemo, setSeedDemo] = React.useState(true);
   const [completing, setCompleting] = React.useState(false);
@@ -344,11 +349,30 @@ export default function SetupPage() {
                 exit="exit"
                 transition={{ duration: 0.3, ease: [0.2, 0.8, 0.2, 1] }}
               >
+                <StepAi
+                  setupHeaders={setupHeaders}
+                  onNext={goNext}
+                  onSkip={() => { setAiSkipped(true); goNext(); }}
+                />
+              </motion.div>
+            )}
+
+            {step === 4 && (
+              <motion.div
+                key="step-4"
+                custom={direction}
+                variants={variants}
+                initial="enter"
+                animate="center"
+                exit="exit"
+                transition={{ duration: 0.3, ease: [0.2, 0.8, 0.2, 1] }}
+              >
                 <StepReady
                   seedDemo={seedDemo}
                   onSeedDemoChange={setSeedDemo}
                   completing={completing}
                   onComplete={handleComplete}
+                  aiSkipped={aiSkipped}
                 />
               </motion.div>
             )}
@@ -796,7 +820,151 @@ function StepConfigure({
 }
 
 // ---------------------------------------------------------------------------
-// Step 3: Ready
+// Step 3: AI Configuration (optional)
+// ---------------------------------------------------------------------------
+
+function StepAi({
+  setupHeaders,
+  onNext,
+  onSkip,
+}: {
+  setupHeaders: () => Record<string, string>;
+  onNext: () => void;
+  onSkip: () => void;
+}) {
+  const [provider, setProvider] = React.useState<"openai-compatible" | "anthropic">("openai-compatible");
+  const [baseUrl, setBaseUrl] = React.useState("https://openrouter.ai/api/v1");
+  const [apiKey, setApiKey] = React.useState("");
+  const [model, setModel] = React.useState("");
+  const [saving, setSaving] = React.useState(false);
+
+  const fields = aiFormFields(provider);
+  const showBaseUrl = fields.includes("baseUrl");
+
+  async function handleSave() {
+    setSaving(true);
+    try {
+      await fetch("/api/admin/config", {
+        method: "PUT",
+        headers: setupHeaders(),
+        body: JSON.stringify({
+          ai_provider: provider,
+          ...(showBaseUrl ? { ai_base_url: baseUrl } : {}),
+          ...(apiKey ? { ai_api_key: apiKey } : {}),
+          ai_model: model || (provider === "anthropic" ? "claude-3-5-sonnet-latest" : "gpt-4o-mini"),
+        }),
+      });
+      onNext();
+    } catch {
+      // continue anyway
+      onNext();
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="space-y-5">
+      <div>
+        <h2 className="font-display text-xl font-semibold text-ink">
+          Connect AI (optional)
+        </h2>
+        <p className="text-sm text-ink-3 mt-1">
+          Power AI features with your own API key. You can configure this later in admin settings.
+        </p>
+      </div>
+
+      <div className="space-y-4">
+        {/* Provider selector */}
+        <div className="space-y-1.5">
+          <span className="text-xs text-ink-3 font-medium">Provider</span>
+          <div className="flex gap-2">
+            {(["openai-compatible", "anthropic"] as const).map((p) => (
+              <button
+                key={p}
+                type="button"
+                onClick={() => setProvider(p)}
+                className={cn(
+                  "flex-1 rounded-lg border px-3 py-2 text-sm font-medium transition-all",
+                  provider === p
+                    ? "border-accent bg-accent/10 text-accent"
+                    : "border-rule bg-transparent text-ink-3 hover:border-ink-4"
+                )}
+              >
+                {p === "openai-compatible" ? "OpenAI-compatible" : "Anthropic"}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Base URL (openai-compatible only) */}
+        {showBaseUrl && (
+          <div className="space-y-1.5">
+            <label htmlFor="ai-base-url" className="text-xs text-ink-3 font-medium">Base URL</label>
+            <Input
+              id="ai-base-url"
+              value={baseUrl}
+              onChange={(e) => setBaseUrl(e.target.value)}
+              placeholder="https://openrouter.ai/api/v1"
+              className="h-10 rounded-xl"
+            />
+          </div>
+        )}
+
+        {/* API Key */}
+        <div className="space-y-1.5">
+          <label htmlFor="ai-api-key" className="text-xs text-ink-3 font-medium">API key</label>
+          <Input
+            id="ai-api-key"
+            type="password"
+            value={apiKey}
+            onChange={(e) => setApiKey(e.target.value)}
+            placeholder="sk-..."
+            className="h-10 rounded-xl"
+          />
+        </div>
+
+        {/* Model */}
+        <div className="space-y-1.5">
+          <label htmlFor="ai-model" className="text-xs text-ink-3 font-medium">Model</label>
+          <Input
+            id="ai-model"
+            value={model}
+            onChange={(e) => setModel(e.target.value)}
+            placeholder="gpt-4o-mini"
+            className="h-10 rounded-xl"
+          />
+        </div>
+      </div>
+
+      <div className="flex gap-3 pt-1">
+        <Button variant="ghost" onClick={onSkip} className="text-ink-3">
+          Skip for now
+        </Button>
+        <Button
+          onClick={handleSave}
+          disabled={saving}
+          className="flex-1 h-11 rounded-xl bg-accent text-white hover:bg-accent-hover"
+        >
+          {saving ? (
+            <>
+              <Loader2 className="size-4 mr-1.5 animate-spin" />
+              Saving...
+            </>
+          ) : (
+            <>
+              Save & continue
+              <ArrowRight className="size-4 ml-1" />
+            </>
+          )}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Step 4: Ready
 // ---------------------------------------------------------------------------
 
 function StepReady({
@@ -804,11 +972,13 @@ function StepReady({
   onSeedDemoChange,
   completing,
   onComplete,
+  aiSkipped,
 }: {
   seedDemo: boolean;
   onSeedDemoChange: (v: boolean) => void;
   completing: boolean;
   onComplete: () => void;
+  aiSkipped: boolean;
 }) {
   return (
     <div className="space-y-6">
@@ -828,6 +998,15 @@ function StepReady({
           You can start tracking meeting issues right away.
         </p>
       </div>
+
+      {aiSkipped && (
+        <div className="flex items-start gap-2 rounded-lg border border-rule bg-paper-2 px-3 py-2.5">
+          <Sparkles className="size-4 text-ink-3 mt-0.5 shrink-0" />
+          <p className="text-xs text-ink-3">
+            Minutia works without AI, but works best with it. You can add a provider anytime in Admin then Settings.
+          </p>
+        </div>
+      )}
 
       <label className="flex items-start gap-3 rounded-lg border border-rule p-3 cursor-pointer hover:bg-paper-2 transition-colors">
         <input

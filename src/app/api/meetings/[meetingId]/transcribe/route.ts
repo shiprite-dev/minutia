@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { requireAiAccess } from "@/lib/ai/access";
-import { getOpenRouterApiKey } from "@/lib/ai/openrouter";
+import { hasAiConfigured } from "@/lib/ai/config";
 import { generateMeetingSuggestions } from "@/lib/ai/suggestions";
 import { MEETING_AUDIO_BUCKET } from "@/lib/audio";
 import {
@@ -202,10 +202,9 @@ export async function POST(
     // facilitator finds suggestions waiting (deduped against the OIL, with
     // resolutions and duplicates flagged). Best-effort: the transcript is
     // already saved, so a failure here must not fail the transcription.
-    const aiKey = getOpenRouterApiKey();
-    if (aiKey) {
+    if (await hasAiConfigured()) {
       try {
-        await generateMeetingSuggestions(supabase, meetingId, aiKey);
+        await generateMeetingSuggestions(supabase, meetingId);
       } catch (suggestionError) {
         console.error("[transcribe] context-aware suggestion extraction failed", {
           meetingId,

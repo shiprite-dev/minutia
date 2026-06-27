@@ -6,6 +6,8 @@ import {
   prepareInstanceConfigValue,
   SECRET_CONFIG_KEYS,
 } from "@/lib/instance-config";
+import { getAdminCapabilities } from "@/lib/admin/capabilities";
+import { rejectedConfigKeys } from "@/lib/admin/config-capabilities";
 
 export async function GET(request: NextRequest) {
   const auth = await requireAdmin(request);
@@ -42,6 +44,17 @@ export async function PUT(request: NextRequest) {
     body = await request.json();
   } catch {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
+
+  const caps = getAdminCapabilities();
+  const rejected = rejectedConfigKeys(Object.keys(body), caps);
+  if (rejected.length > 0) {
+    return NextResponse.json(
+      {
+        error: `These settings are not editable on this instance: ${rejected.join(", ")}`,
+      },
+      { status: 403 }
+    );
   }
 
   const supabase = createServiceRoleClient();
