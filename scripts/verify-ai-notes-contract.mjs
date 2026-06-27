@@ -101,9 +101,9 @@ assert(client.includes("AbortController"), "Shared client must time out provider
 
 function assertSharedClient(src, name) {
   assert(!src.includes('"minimax/minimax-m3"'), `${name} route must not hardcode a model`);
-  assert(src.includes('from "@/lib/ai/openrouter"'), `${name} route must call the provider through the shared client`);
-  assert(src.includes("callOpenRouter"), `${name} route must use callOpenRouter`);
-  assert(src.includes("getOpenRouterApiKey"), `${name} route must resolve the key via getOpenRouterApiKey`);
+  assert(src.includes('from "@/lib/ai/call"'), `${name} route must call the provider through the shared callAi client`);
+  assert(src.includes("callAi"), `${name} route must use callAi`);
+  assert(src.includes("hasAiConfigured"), `${name} route must gate via hasAiConfigured`);
   assert(!/async function getOpenRouterData/.test(src), `${name} route must not re-implement the OpenRouter fetch`);
 }
 
@@ -122,8 +122,8 @@ assert(
 // the provider call + prompt contract now live in src/lib/ai/suggestions.ts.
 const suggestionsRoute = read("src/app/api/meetings/[meetingId]/suggestions/route.ts");
 assert(
-  suggestionsRoute.includes('from "@/lib/ai/openrouter"') && suggestionsRoute.includes("getOpenRouterApiKey"),
-  "Suggestions route must resolve the key via the shared getOpenRouterApiKey"
+  suggestionsRoute.includes('from "@/lib/ai/config"') && suggestionsRoute.includes("hasAiConfigured"),
+  "Suggestions route must gate via hasAiConfigured from the shared config module"
 );
 assert(
   suggestionsRoute.includes("generateMeetingSuggestions"),
@@ -136,8 +136,8 @@ assert(
 const suggestionsGenerator = read("src/lib/ai/suggestions.ts");
 assert(!suggestionsGenerator.includes('"minimax/minimax-m3"'), "Suggestions generator must not hardcode a model");
 assert(
-  suggestionsGenerator.includes("callOpenRouter"),
-  "Suggestions generator must call the provider through the shared callOpenRouter client"
+  suggestionsGenerator.includes("callAi"),
+  "Suggestions generator must call the provider through the shared callAi client"
 );
 assert(
   !/async function getOpenRouterData/.test(suggestionsGenerator),

@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
-import { callOpenRouter, getOpenRouterApiKey } from "@/lib/ai/openrouter";
+import { callAi } from "@/lib/ai/call";
+import { hasAiConfigured } from "@/lib/ai/config";
 import { getTextFromOpenRouter } from "@/lib/ai/ask-series-answer";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { getInstanceConfigMap } from "@/lib/instance-config";
@@ -32,8 +33,7 @@ export async function POST(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  const apiKey = getOpenRouterApiKey();
-  if (!apiKey) {
+  if (!(await hasAiConfigured())) {
     return NextResponse.json({ error: "AI theme suggestions are not configured" }, { status: 503 });
   }
 
@@ -93,11 +93,7 @@ export async function POST(
   ].join("\n");
 
   try {
-    const { data: providerData } = await callOpenRouter({
-      apiKey,
-      system: SYSTEM_PROMPT,
-      prompt,
-    });
+    const { data: providerData } = await callAi({ system: SYSTEM_PROMPT, prompt });
     const parsed = groupsSchema.parse(JSON.parse(getTextFromOpenRouter(providerData)));
     const valid = new Set(cards.map((c) => c.id));
     const groups = parsed.groups

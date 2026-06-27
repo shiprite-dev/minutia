@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
-import { getOpenRouterApiKey } from "@/lib/ai/openrouter";
+import { hasAiConfigured } from "@/lib/ai/config";
 import { requireAiAccess } from "@/lib/ai/access";
 import { generateMeetingSuggestions } from "@/lib/ai/suggestions";
 import { userManagesSeries } from "@/lib/series/manage-access";
@@ -68,8 +68,7 @@ export async function POST(
     );
   }
 
-  const apiKey = getOpenRouterApiKey();
-  if (!apiKey) {
+  if (!(await hasAiConfigured())) {
     return NextResponse.json(
       { error: "AI suggestions are not configured.", request_id: requestId },
       { status: 503 }
@@ -100,7 +99,7 @@ export async function POST(
   // MIN-121: context-aware extraction lives in the shared generator so the
   // transcribe pipeline can reuse it. The series history is what lets the model
   // deduplicate, detect resolutions, and flag contradictions.
-  const outcome = await generateMeetingSuggestions(supabase, meetingId, apiKey);
+  const outcome = await generateMeetingSuggestions(supabase, meetingId);
   if (!outcome.ok) {
     return NextResponse.json({ error: outcome.error, request_id: requestId }, { status: outcome.status });
   }
