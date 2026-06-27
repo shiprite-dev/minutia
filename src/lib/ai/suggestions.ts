@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { createClient } from "@/lib/supabase/server";
 import { getTextFromOpenRouter } from "./ask-series-answer";
-import { callOpenRouter } from "./openrouter";
+import { callAi } from "./call";
 import {
   buildSeriesContext,
   formatSeriesContextForPrompt,
@@ -134,8 +134,7 @@ export type GenerateOutcome =
  */
 export async function generateMeetingSuggestions(
   supabase: SupabaseServerClient,
-  meetingId: string,
-  apiKey: string
+  meetingId: string
 ): Promise<GenerateOutcome> {
   const { data: meeting, error } = await supabase
     .from("meetings")
@@ -169,7 +168,7 @@ export async function generateMeetingSuggestions(
   let providerData: unknown;
   let model: string;
   try {
-    ({ data: providerData, model } = await callOpenRouter({ apiKey, system: SYSTEM_PROMPT, prompt }));
+    ({ data: providerData, model } = await callAi({ system: SYSTEM_PROMPT, prompt }));
   } catch {
     return { ok: false, status: 502, error: "AI provider request failed." };
   }

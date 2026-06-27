@@ -2,7 +2,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { parseAskSeriesAnswer } from "@/lib/ai/ask-series-answer";
 import { createClient } from "@/lib/supabase/server";
-import { callOpenRouter, getOpenRouterApiKey } from "@/lib/ai/openrouter";
+import { callAi } from "@/lib/ai/call";
+import { hasAiConfigured } from "@/lib/ai/config";
 import { requireAiAccess } from "@/lib/ai/access";
 
 const PROMPT_VERSION = "ask-series-v1";
@@ -95,8 +96,7 @@ export async function POST(
     return NextResponse.json({ error: "Not authenticated", request_id: requestId }, { status: 401 });
   }
 
-  const apiKey = getOpenRouterApiKey();
-  if (!apiKey) {
+  if (!(await hasAiConfigured())) {
     return NextResponse.json(
       { error: "Ask this series is not configured.", request_id: requestId },
       { status: 503 }
@@ -152,7 +152,7 @@ export async function POST(
   let providerData: unknown;
   let model: string;
   try {
-    ({ data: providerData, model } = await callOpenRouter({ apiKey, system: SYSTEM_PROMPT, prompt }));
+    ({ data: providerData, model } = await callAi({ system: SYSTEM_PROMPT, prompt }));
   } catch {
     return NextResponse.json(
       { error: "AI provider request failed.", request_id: requestId },

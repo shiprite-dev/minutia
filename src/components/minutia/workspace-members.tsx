@@ -20,8 +20,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { UserPlus, Users, Mail, UserMinus, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { shouldPromptSeatBilling } from "@/lib/billing/seat-billing";
 
 type OrgAdminData = {
   organization: { id: string; name: string; slug: string };
@@ -69,6 +78,7 @@ export function WorkspaceMembers() {
   const [inviteRole, setInviteRole] = useState<"member" | "admin">("member");
   const [inviteState, setInviteState] = useState<"idle" | "loading" | "sent" | "error">("idle");
   const [inviteMessage, setInviteMessage] = useState("");
+  const [pendingInvite, setPendingInvite] = useState(false);
   const [memberActionId, setMemberActionId] = useState<string | null>(null);
   const [memberMessage, setMemberMessage] = useState("");
   const [memberMessageState, setMemberMessageState] = useState<"success" | "error">("success");
@@ -103,8 +113,7 @@ export function WorkspaceMembers() {
     };
   }, []);
 
-  async function handleInvite(e: React.FormEvent) {
-    e.preventDefault();
+  async function submitInvite() {
     setInviteState("loading");
     setInviteMessage("");
 
@@ -125,6 +134,15 @@ export function WorkspaceMembers() {
     setInviteMessage("Invitation sent.");
     setInviteEmail("");
     await refreshOrgAdmin();
+  }
+
+  async function handleInvite(e: React.FormEvent) {
+    e.preventDefault();
+    if (shouldPromptSeatBilling()) {
+      setPendingInvite(true);
+      return;
+    }
+    await submitInvite();
   }
 
   async function handleMemberRoleChange(member: OrgMember, role: "admin" | "member") {
@@ -363,6 +381,33 @@ export function WorkspaceMembers() {
           </div>
         </section>
       </CardContent>
+
+      <Dialog open={pendingInvite} onOpenChange={(open) => { if (!open) setPendingInvite(false); }}>
+        <DialogContent showCloseButton={false}>
+          <DialogHeader>
+            <DialogTitle>Add a seat?</DialogTitle>
+            <DialogDescription>
+              Adding a member adds a seat to your subscription and updates your bill.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setPendingInvite(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={async () => {
+                setPendingInvite(false);
+                await submitInvite();
+              }}
+            >
+              Add member
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }

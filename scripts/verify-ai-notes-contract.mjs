@@ -82,28 +82,27 @@ assert(
   "Missing Ask this series API route"
 );
 
-const modelConfig = read("src/lib/ai/model.ts");
-assert(modelConfig.includes('"google/gemini-3.1-flash-lite"'), "AI model default must be google/gemini-3.1-flash-lite");
-assert(modelConfig.includes("AI_MODEL"), "AI model must be configurable via AI_MODEL");
-assert(modelConfig.includes("getAiModels"), "model.ts must expose getAiModels for resilient fallback");
-assert(modelConfig.includes("AI_MODEL_FALLBACK"), "model.ts must support a configurable fallback model");
-
-// Transport contract lives in the shared client, not in each route.
-const client = read("src/lib/ai/openrouter.ts");
-assert(client.includes("https://openrouter.ai/api/v1/chat/completions"), "Shared client must call OpenRouter chat completions");
-assert(client.includes('response_format: { type: "json_object" }'), "Shared client must request OpenRouter JSON mode");
+// Config contract: resolveAiConfig in config.ts owns defaults, provider, key precedence.
+const aiConfig = read("src/lib/ai/config.ts");
+assert(aiConfig.includes('"google/gemini-3.1-flash-lite"'), "AI config default model must be google/gemini-3.1-flash-lite");
+assert(aiConfig.includes("AI_MODEL"), "AI config must be configurable via AI_MODEL env var");
+assert(aiConfig.includes("resolveAiConfig"), "config.ts must export resolveAiConfig");
 assert(
-  client.includes("OPENROUTER_API_KEY") && client.includes("AI_API_KEY"),
-  "Shared client must resolve OPENROUTER_API_KEY then AI_API_KEY"
+  aiConfig.includes("OPENROUTER_API_KEY") && aiConfig.includes("AI_API_KEY"),
+  "AI config must honour AI_API_KEY then OPENROUTER_API_KEY"
 );
-assert(client.includes("getAiModels"), "Shared client must use getAiModels for primary+fallback resilience");
-assert(client.includes("AbortController"), "Shared client must time out provider calls");
+
+// Transport contract: shared call.ts dispatches through provider clients, not in each route.
+const callClient = read("src/lib/ai/call.ts");
+assert(callClient.includes("dispatchAi"), "Shared call client must export dispatchAi");
+assert(callClient.includes("callAi"), "Shared call client must export callAi");
+assert(callClient.includes("timeoutMs"), "Shared call client must forward timeout to providers");
 
 function assertSharedClient(src, name) {
   assert(!src.includes('"minimax/minimax-m3"'), `${name} route must not hardcode a model`);
-  assert(src.includes('from "@/lib/ai/openrouter"'), `${name} route must call the provider through the shared client`);
-  assert(src.includes("callOpenRouter"), `${name} route must use callOpenRouter`);
-  assert(src.includes("getOpenRouterApiKey"), `${name} route must resolve the key via getOpenRouterApiKey`);
+  assert(src.includes('from "@/lib/ai/call"'), `${name} route must call the provider through the shared callAi client`);
+  assert(src.includes("callAi"), `${name} route must use callAi`);
+  assert(src.includes("hasAiConfigured"), `${name} route must gate via hasAiConfigured`);
   assert(!/async function getOpenRouterData/.test(src), `${name} route must not re-implement the OpenRouter fetch`);
 }
 
@@ -122,22 +121,21 @@ assert(
 // the provider call + prompt contract now live in src/lib/ai/suggestions.ts.
 const suggestionsRoute = read("src/app/api/meetings/[meetingId]/suggestions/route.ts");
 assert(
-  suggestionsRoute.includes('from "@/lib/ai/openrouter"') && suggestionsRoute.includes("getOpenRouterApiKey"),
-  "Suggestions route must resolve the key via the shared getOpenRouterApiKey"
+  suggestionsRoute.includes('from "@/lib/ai/config"') && suggestionsRoute.includes("hasAiConfigured"),
+  "Suggestions route must gate via hasAiConfigured from the shared config module"
 );
 assert(
   suggestionsRoute.includes("generateMeetingSuggestions"),
   "Suggestions route must delegate generation to the shared generateMeetingSuggestions"
 );
 
-// The generator lives in src/lib/ai/ so it imports its siblings by relative
-// path ("./openrouter", "./ask-series-answer"); assert on the shared function
-// usage rather than the import style.
+// The generator lives in src/lib/ai/ and imports its siblings by relative path;
+// assert on the shared function usage rather than the import style.
 const suggestionsGenerator = read("src/lib/ai/suggestions.ts");
 assert(!suggestionsGenerator.includes('"minimax/minimax-m3"'), "Suggestions generator must not hardcode a model");
 assert(
-  suggestionsGenerator.includes("callOpenRouter"),
-  "Suggestions generator must call the provider through the shared callOpenRouter client"
+  suggestionsGenerator.includes("callAi"),
+  "Suggestions generator must call the provider through the shared callAi client"
 );
 assert(
   !/async function getOpenRouterData/.test(suggestionsGenerator),
