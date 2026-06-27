@@ -54,6 +54,7 @@
     "test:feature-access": "node --test scripts/verify-feature-access.test.mjs",
     "test:ai-openai-compatible": "node --test scripts/verify-ai-openai-compatible.test.mjs",
     "test:ai-anthropic": "node --test scripts/verify-ai-anthropic.test.mjs",
+    "test:ai-call": "node --test scripts/verify-ai-call.test.mjs",
     "test:ai-notice": "node --test scripts/verify-ai-notice.test.mjs",
     "test:checkout-response": "node --test scripts/verify-checkout-response.test.mjs",
     "test:upgrade-ticket": "node --test scripts/verify-upgrade-ticket.test.mjs",
