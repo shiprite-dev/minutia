@@ -3,6 +3,7 @@ import { requireAdmin } from "@/lib/supabase/admin-auth";
 import { validateAiBaseUrl } from "@/lib/ai/validate-url";
 import { callOpenAiCompatible } from "@/lib/ai/providers/openai-compatible";
 import { callAnthropic } from "@/lib/ai/providers/anthropic";
+import { getInstanceConfigMap } from "@/lib/instance-config";
 
 export async function POST(request: NextRequest) {
   const auth = await requireAdmin(request);
@@ -24,7 +25,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: false, error: "Invalid request body" }, { status: 400 });
   }
 
-  const { provider, baseUrl, apiKey, model } = body as Record<string, unknown>;
+  const { provider, baseUrl, apiKey: bodyApiKey, model } = body as Record<string, unknown>;
 
   if (provider !== "openai-compatible" && provider !== "anthropic") {
     return NextResponse.json(
@@ -33,9 +34,20 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  if (!apiKey || typeof apiKey !== "string" || apiKey.trim() === "") {
+  // Resolve API key: prefer the body value; fall back to the stored (decrypted) key.
+  let resolvedApiKey: string | null =
+    typeof bodyApiKey === "string" && bodyApiKey.trim() !== "" ? bodyApiKey.trim() : null;
+  if (resolvedApiKey === null) {
+    const stored = await getInstanceConfigMap(["ai_api_key"]);
+    const storedKey = stored.ai_api_key;
+    if (typeof storedKey === "string" && storedKey.trim() !== "") {
+      resolvedApiKey = storedKey.trim();
+    }
+  }
+  if (resolvedApiKey === null) {
     return NextResponse.json({ ok: false, error: "apiKey is required" }, { status: 400 });
   }
+  const apiKey = resolvedApiKey;
 
   if (!model || typeof model !== "string" || model.trim() === "") {
     return NextResponse.json({ ok: false, error: "model is required" }, { status: 400 });

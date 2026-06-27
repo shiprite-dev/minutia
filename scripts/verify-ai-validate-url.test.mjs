@@ -129,3 +129,50 @@ test("port and query string are preserved", () => {
   const result = validateAiBaseUrl("https://api.example.com:8443/v2?foo=bar");
   assert.deepEqual(result, { ok: true, url: "https://api.example.com:8443/v2?foo=bar" });
 });
+
+// --- SSRF: IPv4-mapped IPv6 and IPv6 private ranges ---
+
+test("https IPv4-mapped link-local is blocked-host", () => {
+  // ::ffff:169.254.169.254 maps to the cloud metadata IP - must be blocked.
+  const result = validateAiBaseUrl("https://[::ffff:169.254.169.254]");
+  assert.deepEqual(result, { ok: false, reason: "blocked-host" });
+});
+
+test("https IPv4-mapped link-local hex form is blocked-host", () => {
+  // ::ffff:a9fe:a9fe is the hex encoding of 169.254.169.254.
+  const result = validateAiBaseUrl("https://[::ffff:a9fe:a9fe]");
+  assert.deepEqual(result, { ok: false, reason: "blocked-host" });
+});
+
+test("https IPv4-mapped private range is allowed (mirrors plain IPv4 behavior)", () => {
+  // Plain https://10.0.0.1 is allowed; mapped form must be consistent.
+  // Node's URL parser normalises ::ffff:10.0.0.1 to its hex form ::ffff:a00:1.
+  const result = validateAiBaseUrl("https://[::ffff:10.0.0.1]");
+  assert.equal(result.ok, true, `expected ok but got: ${JSON.stringify(result)}`);
+});
+
+test("https IPv6 link-local fe80::1 is blocked-host", () => {
+  const result = validateAiBaseUrl("https://[fe80::1]");
+  assert.deepEqual(result, { ok: false, reason: "blocked-host" });
+});
+
+test("https IPv6 loopback ::1 is blocked-host", () => {
+  // ::1 over https must be blocked (only http loopback is allowed).
+  const result = validateAiBaseUrl("https://[::1]");
+  assert.deepEqual(result, { ok: false, reason: "blocked-host" });
+});
+
+test("http IPv6 loopback ::1 is ok (existing behavior preserved)", () => {
+  const result = validateAiBaseUrl("http://[::1]:8080");
+  assert.deepEqual(result, { ok: true, url: "http://[::1]:8080" });
+});
+
+test("https IPv6 ULA fc00:: is blocked-host", () => {
+  const result = validateAiBaseUrl("https://[fc00::1]");
+  assert.deepEqual(result, { ok: false, reason: "blocked-host" });
+});
+
+test("https IPv6 ULA fd00:: is blocked-host", () => {
+  const result = validateAiBaseUrl("https://[fd12:3456:789a::1]");
+  assert.deepEqual(result, { ok: false, reason: "blocked-host" });
+});

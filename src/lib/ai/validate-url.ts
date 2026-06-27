@@ -39,6 +39,37 @@ function isPrivateIPv4(hostname: string): boolean {
   return a === 10 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168);
 }
 
+/**
+ * If the IPv6 address is an IPv4-mapped form (::ffff:a.b.c.d or ::ffff:HHHH:HHHH),
+ * return the embedded dotted-quad. Returns null for all other addresses.
+ */
+function ipv4MappedAddress(ipv6: string): string | null {
+  // Dotted form: ::ffff:169.254.169.254
+  const dottedMatch = /^::ffff:(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/i.exec(ipv6);
+  if (dottedMatch) return dottedMatch[1];
+  // Hex form: ::ffff:a9fe:a9fe (two 16-bit groups)
+  const hexMatch = /^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/i.exec(ipv6);
+  if (hexMatch) {
+    const hi = parseInt(hexMatch[1], 16);
+    const lo = parseInt(hexMatch[2], 16);
+    return `${(hi >> 8) & 0xff}.${hi & 0xff}.${(lo >> 8) & 0xff}.${lo & 0xff}`;
+  }
+  return null;
+}
+
+/**
+ * Returns true for IPv6 addresses that are always internal/private:
+ * loopback (::1), link-local (fe80::/10), or unique-local (fc00::/7).
+ */
+function isPrivateIPv6(ipv6: string): boolean {
+  if (ipv6 === "::1") return true;
+  // fe80::/10 covers fe80:: through febf::
+  if (/^fe[89ab][0-9a-f]:/i.test(ipv6)) return true;
+  // fc00::/7 covers addresses starting with fc or fd
+  if (/^f[cd]/i.test(ipv6)) return true;
+  return false;
+}
+
 /** Returns true when the host is allowed over plain HTTP. */
 function isHttpAllowed(hostname: string): boolean {
   if (hostname === "localhost") return true;
@@ -74,6 +105,23 @@ export function validateAiBaseUrl(raw: string): ValidateAiBaseUrlResult {
   // Block link-local (169.254.0.0/16) for all schemes.
   if (isLinkLocal(hostname)) {
     return { ok: false, reason: "blocked-host" };
+  }
+
+  // Handle IPv6 literals: strip brackets then classify.
+  const ipv6Plain = stripBrackets(hostname);
+  if (isIP(ipv6Plain) === 6) {
+    const mapped = ipv4MappedAddress(ipv6Plain);
+    if (mapped !== null) {
+      // IPv4-mapped: apply the same IPv4 classification to the embedded address.
+      // Link-local and loopback are blocked regardless of scheme.
+      if (isLinkLocal(mapped) || isLoopback(mapped)) {
+        return { ok: false, reason: "blocked-host" };
+      }
+      // Private mapped over https: allowed, consistent with plain IPv4 behavior.
+    } else if (protocol === "https:" && isPrivateIPv6(ipv6Plain)) {
+      // Block ::1, fe80::/10, and fc00::/7 on the https "allow any host" path.
+      return { ok: false, reason: "blocked-host" };
+    }
   }
 
   if (protocol === "http:" && !isHttpAllowed(hostname)) {

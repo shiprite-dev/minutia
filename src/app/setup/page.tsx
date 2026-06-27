@@ -851,7 +851,7 @@ function StepAi({
           ai_provider: provider,
           ...(showBaseUrl ? { ai_base_url: baseUrl } : {}),
           ...(apiKey ? { ai_api_key: apiKey } : {}),
-          ai_model: model || "gpt-4o-mini",
+          ai_model: model || (provider === "anthropic" ? "claude-3-5-sonnet-latest" : "gpt-4o-mini"),
         }),
       });
       onNext();
