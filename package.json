@@ -62,6 +62,7 @@
     "test:upsell": "node --test scripts/verify-upsell.test.mjs",
     "test:upgrade-confirmation": "node --test scripts/verify-upgrade-confirmation.test.mjs",
     "test:reminders": "node --test scripts/verify-reminders.test.mjs",
+    "test:seat-billing": "node --test scripts/verify-seat-billing.test.mjs",
     "test:admin-capabilities": "node --test scripts/verify-admin-capabilities.test.mjs",
     "test:admin-config-capabilities": "node --test scripts/verify-admin-config-capabilities.test.mjs",
     "test:admin-health": "node --test scripts/verify-admin-health.test.mjs",
