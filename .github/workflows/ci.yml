@@ -44,8 +44,23 @@ jobs:
       - name: Verify AI contracts
         run: pnpm test:ai-contracts
 
-      - name: Verify OpenRouter client
-        run: pnpm test:ai-client
+      - name: Verify AI config resolution
+        run: pnpm test:ai-config
+
+      - name: Verify AI base URL validation
+        run: pnpm test:ai-validate-url
+
+      - name: Verify OpenAI-compatible adapter
+        run: pnpm test:ai-openai-compatible
+
+      - name: Verify Anthropic adapter
+        run: pnpm test:ai-anthropic
+
+      - name: Verify AI dispatch and normalization
+        run: pnpm test:ai-call
+
+      - name: Verify AI form fields
+        run: pnpm test:ai-form
 
       - name: Verify carry-over logic
         run: pnpm test:ai-carryover
