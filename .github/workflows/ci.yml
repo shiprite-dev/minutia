@@ -89,6 +89,15 @@ jobs:
       - name: Verify admin health summarizer
         run: pnpm test:admin-health
 
+      - name: Verify admin capability model
+        run: pnpm test:admin-capabilities
+
+      - name: Verify admin config capability enforcement
+        run: pnpm test:admin-config-capabilities
+
+      - name: Verify seat-billing gate
+        run: pnpm test:seat-billing
+
       - name: Build (includes typecheck)
         run: pnpm build
         env:
