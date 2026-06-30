@@ -12,14 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { Cadence } from "@/lib/types";
-
-const cadenceLabels: Record<Cadence, string> = {
-  weekly: "Weekly",
-  biweekly: "Biweekly",
-  monthly: "Monthly",
-  adhoc: "Ad hoc",
-};
+import { CADENCE_LABELS } from "@/lib/constants";
 
 const detailPanelMotion = {
   initial: { opacity: 0, y: 8, scale: 0.98 },
@@ -131,7 +124,7 @@ export default function SeriesListPage() {
                         className="shrink-0 gap-1 text-[10px]"
                       >
                         <MinutiaCadenceIcon cadence={series.cadence} className="size-3 text-ink" />
-                        {cadenceLabels[series.cadence]}
+                        {CADENCE_LABELS[series.cadence]}
                       </Badge>
                     </div>
 
@@ -180,7 +173,7 @@ export default function SeriesListPage() {
                           </p>
                         )}
                         <div className="mt-2 flex items-center gap-2 text-[10px] font-mono uppercase tracking-wider text-ink-4">
-                          <span>{cadenceLabels[series.cadence]}</span>
+                          <span>{CADENCE_LABELS[series.cadence]}</span>
                           <span aria-hidden="true">/</span>
                           <span>Updated {formatDate(series.updated_at)}</span>
                         </div>
