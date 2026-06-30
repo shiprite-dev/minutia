@@ -166,6 +166,47 @@ test.describe("Series List Page", () => {
     }
   });
 
+  test("creates a series with the Daily cadence", async ({ page, request }) => {
+    test.skip(!HAS_SERVICE_ROLE, "Requires service role cleanup for isolated series data");
+
+    // Name deliberately avoids the word "Daily" so the cadence-label assertion
+    // below is not ambiguous with the series title.
+    const name = `Standup schedule coverage ${Date.now()}`;
+    let createdSeriesId: string | undefined;
+
+    try {
+      await page.goto("/series");
+      await waitForApp(page);
+
+      await page.getByRole("button", { name: "Create series" }).click();
+      const dialog = page.locator("[role='dialog']");
+      await dialog.getByLabel("Name").fill(name);
+      await dialog.getByRole("radio", { name: "Daily", exact: true }).click();
+      await dialog.getByRole("button", { name: "Create series" }).click();
+
+      await expect(dialog).not.toBeVisible();
+      const card = page
+        .locator('main a[href^="/series/"]')
+        .filter({ hasText: name });
+      // The persisted series renders its cadence label; "daily" is only accepted
+      // if the DB CHECK constraint migration applied.
+      await expect(card.getByText("Daily", { exact: true })).toBeVisible();
+
+      await card.click();
+      await expect(page.getByRole("heading", { name }).first()).toBeVisible();
+      createdSeriesId = seriesIdFromUrl(page.url());
+
+      await page.getByRole("button", { name: "Series settings" }).click();
+      const settings = page.locator("[role='dialog']");
+      await expect(
+        settings.getByRole("radio", { name: "Daily", exact: true })
+      ).toHaveAttribute("aria-checked", "true");
+    } finally {
+      if (createdSeriesId) await deleteSeries(request, createdSeriesId);
+      await deleteSeriesByName(request, name);
+    }
+  });
+
   test("series card links to series detail", async ({ page }) => {
     await page.goto("/series");
     await waitForApp(page);
@@ -303,6 +344,9 @@ test.describe("Series Detail Page", () => {
       dialog.getByRole("button", { name: "Save changes" })
     ).toBeVisible();
 
+    await expect(
+      dialog.getByRole("radio", { name: "Daily", exact: true })
+    ).toBeVisible();
     await expect(
       dialog.getByRole("radio", { name: "Weekly", exact: true })
     ).toBeVisible();

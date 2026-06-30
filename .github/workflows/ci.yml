@@ -44,6 +44,9 @@ jobs:
       - name: Verify AI contracts
         run: pnpm test:ai-contracts
 
+      - name: Verify cadence contract
+        run: pnpm test:cadence-contract
+
       - name: Verify AI config resolution
         run: pnpm test:ai-config
 

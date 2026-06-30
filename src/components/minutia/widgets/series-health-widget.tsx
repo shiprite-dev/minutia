@@ -4,6 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { WidgetShell } from "./widget-shell";
 import { MinutiaCadenceIcon } from "@/components/minutia/minutia-icons";
+import { CADENCE_LABELS } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import type { Issue, MeetingSeries } from "@/lib/types";
 
@@ -68,9 +69,9 @@ export function SeriesHealthWidget({
                 >
                   {series.name}
                 </Link>
-                <span className="inline-flex items-center gap-1 text-xs text-ink-4 capitalize">
+                <span className="inline-flex items-center gap-1 text-xs text-ink-4">
                   <MinutiaCadenceIcon cadence={series.cadence} className="size-3 text-ink" />
-                  {series.cadence === "adhoc" ? "Ad hoc" : series.cadence}
+                  {CADENCE_LABELS[series.cadence]}
                 </span>
                 <span className="ml-auto text-xs text-ink-4 tabular-nums">
                   {total} items

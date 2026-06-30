@@ -5,7 +5,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { createSeriesSchema, type CreateSeriesInput } from "@/lib/schemas";
 import { useCreateSeries } from "@/lib/hooks/use-series";
-import { CADENCES } from "@/lib/constants";
+import { CADENCES, CADENCE_LABELS } from "@/lib/constants";
 import {
   Dialog,
   DialogContent,
@@ -26,13 +26,6 @@ interface CreateSeriesDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
-
-const cadenceLabels: Record<string, string> = {
-  weekly: "Weekly",
-  biweekly: "Biweekly",
-  monthly: "Monthly",
-  adhoc: "Ad hoc",
-};
 
 export function CreateSeriesDialog({
   open,
@@ -132,7 +125,7 @@ export function CreateSeriesDialog({
                   onClick={() => setValue("cadence", cadence)}
                 >
                   <MinutiaCadenceIcon cadence={cadence} className="size-3.5 text-current" />
-                  {cadenceLabels[cadence]}
+                  {CADENCE_LABELS[cadence]}
                 </button>
               ))}
             </div>

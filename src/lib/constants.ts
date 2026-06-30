@@ -4,7 +4,15 @@ export const ISSUE_CATEGORIES = ["action", "decision", "info", "risk", "blocker"
 export const ISSUE_STATUSES = ["open", "in_progress", "pending", "resolved", "dropped"] as const;
 export const PRIORITIES = ["low", "medium", "high", "critical"] as const;
 export const MEETING_STATUSES = ["upcoming", "live", "completed"] as const;
-export const CADENCES = ["weekly", "biweekly", "monthly", "adhoc"] as const;
+export const CADENCES = ["daily", "weekly", "biweekly", "monthly", "adhoc"] as const;
+
+export const CADENCE_LABELS: Record<Cadence, string> = {
+  daily: "Daily",
+  weekly: "Weekly",
+  biweekly: "Biweekly",
+  monthly: "Monthly",
+  adhoc: "Ad hoc",
+};
 
 export const STATUS_CONFIG: Record<IssueStatus, { label: string; color: string }> = {
   open: { label: "Open", color: "ink" },

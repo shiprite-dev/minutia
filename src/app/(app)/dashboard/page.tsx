@@ -16,7 +16,7 @@ import {
 import { useSeries } from "@/lib/hooks/use-series";
 import { useAllMeetings } from "@/lib/hooks/use-meetings";
 import { useDecisions } from "@/lib/hooks/use-decisions";
-import { PRIORITY_CONFIG, STATUS_CONFIG } from "@/lib/constants";
+import { CADENCE_LABELS, PRIORITY_CONFIG, STATUS_CONFIG } from "@/lib/constants";
 import { StatusChip } from "@/components/minutia/status-chip";
 import { CategoryBadge } from "@/components/minutia/category-badge";
 import { MinutiaCadenceIcon } from "@/components/minutia/minutia-icons";
@@ -262,9 +262,9 @@ function NextMeetingWidget({
           )}
         </div>
       ) : (
-        <p className="mb-4 inline-flex items-center gap-1.5 text-sm text-ink-2 capitalize">
+        <p className="mb-4 inline-flex items-center gap-1.5 text-sm text-ink-2">
           <MinutiaCadenceIcon cadence={nextSeries.cadence} className="size-3.5 text-ink" />
-          {nextSeries.cadence === "adhoc" ? "Ad hoc" : nextSeries.cadence}
+          {CADENCE_LABELS[nextSeries.cadence]}
         </p>
       )}
       {nextSeries.open_issues_count > 0 && (
@@ -421,8 +421,8 @@ function OutstandingWidget({
                   >
                     {series.name}
                   </Link>
-                  <span className="inline-flex items-center gap-1 text-xs text-ink-4 capitalize">
-                    {series.cadence === "adhoc" ? "Ad hoc" : series.cadence}
+                  <span className="inline-flex items-center gap-1 text-xs text-ink-4">
+                    {CADENCE_LABELS[series.cadence]}
                   </span>
                   <span className="ml-auto text-xs text-ink-4 tabular-nums">
                     {seriesIssues.length} item{seriesIssues.length !== 1 ? "s" : ""}
