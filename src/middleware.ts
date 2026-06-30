@@ -134,6 +134,7 @@ export async function middleware(request: NextRequest) {
 
   if (
     pathname === "/login" ||
+    pathname === "/signup" ||
     pathname === "/accept-invite" ||
     pathname === "/auth/callback" ||
     pathname === "/reset-password"
@@ -157,6 +158,17 @@ export async function middleware(request: NextRequest) {
       const redirect = NextResponse.redirect(url);
       return applySecurityHeaders(redirect);
     }
+  }
+
+  // Public sign-up is managed-cloud only. When the build flag is off (self-host
+  // default), the dedicated /signup screen is unreachable; fall back to login.
+  if (
+    pathname === "/signup" &&
+    process.env.NEXT_PUBLIC_ENABLE_PUBLIC_SIGNUP !== "true"
+  ) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/login";
+    return applySecurityHeaders(NextResponse.redirect(url));
   }
 
   let supabaseResponse = NextResponse.next({ request });
@@ -191,6 +203,7 @@ export async function middleware(request: NextRequest) {
   const publicPaths = [
     "/",
     "/login",
+    "/signup",
     "/accept-invite",
     "/auth/callback",
     "/reset-password",
@@ -230,7 +243,7 @@ export async function middleware(request: NextRequest) {
     return applySecurityHeaders(redirect);
   }
 
-  if (user && pathname === "/login") {
+  if (user && (pathname === "/login" || pathname === "/signup")) {
     const url = request.nextUrl.clone();
     const next = request.nextUrl.searchParams.get("next");
     const target = next && next.startsWith("/") && !next.startsWith("//")

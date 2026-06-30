@@ -18,7 +18,16 @@ const siteUrl = normalizeUrl(String(args.get("site-url") || args.get("url") || a
 const defaultApiUrl = isLocalUrl(siteUrl) ? replacePort(siteUrl, "8000") : siteUrl;
 const apiUrl = normalizeUrl(String(args.get("api-url") || defaultApiUrl));
 const siteAddress = siteUrl.startsWith("https://") ? new URL(siteUrl).host : siteUrl;
-const inviteRedirectUrl = `${siteUrl}/accept-invite`;
+// Same-origin redirect targets GoTrue is allowed to bounce to after a verify
+// link: /auth/callback exchanges the code for a session (signup confirmation,
+// magic link, OAuth), /accept-invite handles invites, /reset-password handles
+// recovery. Anything not listed is dropped to SITE_URL, which silently breaks
+// the code exchange. All entries are same-origin, so no open-redirect surface.
+const authRedirectUrls = [
+  `${siteUrl}/auth/callback`,
+  `${siteUrl}/accept-invite`,
+  `${siteUrl}/reset-password`,
+].join(",");
 const calendarWebhookUrl = siteUrl.startsWith("https://") ? `${siteUrl}/api/calendar/webhook` : "";
 
 if (existsSync(out) && !force) {
@@ -60,15 +69,15 @@ POSTGRES_DB=minutia
 JWT_EXPIRY=3600
 SECRET_KEY_BASE=${secretKeyBase}
 
-DISABLE_SIGNUP=false
-NEXT_PUBLIC_ENABLE_PUBLIC_SIGNUP=true
+DISABLE_SIGNUP=true
+NEXT_PUBLIC_ENABLE_PUBLIC_SIGNUP=false
 NEXT_PUBLIC_ENABLE_MAGIC_LINK=false
 NEXT_PUBLIC_ENABLE_GUEST_LOGIN=false
 NEXT_PUBLIC_FEATURE_GATING=false
 ENABLE_EMAIL_AUTOCONFIRM=false
 ENABLE_EMAIL_SIGNUP=true
 ENABLE_ANONYMOUS_SIGN_INS=false
-ADDITIONAL_REDIRECT_URLS=${inviteRedirectUrl}
+ADDITIONAL_REDIRECT_URLS=${authRedirectUrls}
 
 SMTP_HOST=
 SMTP_PORT=587

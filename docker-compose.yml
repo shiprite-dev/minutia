@@ -19,7 +19,7 @@ services:
       args:
         NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL:-http://localhost:8000}
         NEXT_PUBLIC_SUPABASE_ANON_KEY: ${ANON_KEY}
-        NEXT_PUBLIC_ENABLE_PUBLIC_SIGNUP: ${NEXT_PUBLIC_ENABLE_PUBLIC_SIGNUP:-true}
+        NEXT_PUBLIC_ENABLE_PUBLIC_SIGNUP: ${NEXT_PUBLIC_ENABLE_PUBLIC_SIGNUP:-false}
         NEXT_PUBLIC_ENABLE_MAGIC_LINK: ${NEXT_PUBLIC_ENABLE_MAGIC_LINK:-false}
         NEXT_PUBLIC_ENABLE_GOOGLE_AUTH: ${NEXT_PUBLIC_ENABLE_GOOGLE_AUTH:-false}
         NEXT_PUBLIC_ENABLE_GUEST_LOGIN: ${NEXT_PUBLIC_ENABLE_GUEST_LOGIN:-false}
@@ -113,8 +113,8 @@ services:
       GOTRUE_DB_DATABASE_URL: postgres://supabase_auth_admin:${POSTGRES_PASSWORD:-postgres}@supabase-db:5432/${POSTGRES_DB:-minutia}
 
       GOTRUE_SITE_URL: ${SITE_URL:-http://localhost:3000}
-      GOTRUE_URI_ALLOW_LIST: ${ADDITIONAL_REDIRECT_URLS:-${SITE_URL:-http://localhost:3000}/accept-invite}
-      GOTRUE_DISABLE_SIGNUP: ${DISABLE_SIGNUP:-false}
+      GOTRUE_URI_ALLOW_LIST: ${ADDITIONAL_REDIRECT_URLS:-${SITE_URL:-http://localhost:3000}/auth/callback,${SITE_URL:-http://localhost:3000}/accept-invite,${SITE_URL:-http://localhost:3000}/reset-password}
+      GOTRUE_DISABLE_SIGNUP: ${DISABLE_SIGNUP:-true}
 
       GOTRUE_JWT_ADMIN_ROLES: service_role
       GOTRUE_JWT_AUD: authenticated
