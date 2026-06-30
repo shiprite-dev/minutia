@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -10,6 +11,7 @@ import { Separator } from "@/components/ui/separator";
 import { Mail, ArrowRight, ExternalLink } from "lucide-react";
 import { motion } from "motion/react";
 import { GOOGLE_WORKSPACE_SCOPES } from "@/lib/google-oauth-scopes";
+import { getSafeNext, buildCallbackUrl, LoadingDots, GoogleIcon } from "../_shared";
 
 type FormState = "idle" | "loading" | "sent" | "error";
 type InviteState = "idle" | "loading" | "sent" | "error";
@@ -84,10 +86,8 @@ function LoginForm() {
   const secondaryAuthEnabled =
     magicLinkEnabled || googleAuthEnabled || guestLoginEnabled;
   const canSignIn = email.trim().length > 0 && password.length > 0;
-  const canSignUp =
-    publicSignupEnabled && email.trim().length > 0 && password.length >= 8;
   const nextPath = getSafeNext(searchParams.get("next"));
-  const callbackUrl = `${typeof window !== "undefined" ? window.location.origin : ""}/auth/callback?next=${encodeURIComponent(nextPath)}`;
+  const callbackUrl = buildCallbackUrl(nextPath);
 
   async function handlePasswordLogin(e: React.FormEvent) {
     e.preventDefault();
@@ -106,34 +106,6 @@ function LoginForm() {
       setErrorMessage(error.message);
     } else {
       window.location.replace(nextPath);
-    }
-  }
-
-  async function handlePasswordSignUp() {
-    if (!canSignUp) return;
-
-    setFormState("loading");
-    setErrorMessage("");
-
-    const { data, error } = await supabase.auth.signUp({
-      email: email.trim(),
-      password,
-      options: {
-        emailRedirectTo: callbackUrl,
-      },
-    });
-
-    if (error) {
-      setFormState("error");
-      setErrorMessage(error.message);
-    } else if (data.session) {
-      // Auto-confirmed signup (email confirmation disabled): new accounts still
-      // get the onboarding confirmation beat via the ?confirmed=1 marker.
-      const sep = nextPath.includes("?") ? "&" : "?";
-      window.location.replace(`${nextPath}${sep}confirmed=1`);
-    } else {
-      setSentMessage("Confirm your account at");
-      setFormState("sent");
     }
   }
 
@@ -356,6 +328,8 @@ function LoginForm() {
 
               {formState === "error" && errorMessage && (
                 <motion.p
+                  role="alert"
+                  aria-live="assertive"
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   className="font-sans text-sm text-danger"
@@ -382,17 +356,6 @@ function LoginForm() {
                 )}
               </Button>
 
-              {publicSignupEnabled && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={handlePasswordSignUp}
-                  disabled={formState === "loading" || !canSignUp}
-                  className="h-10 w-full rounded-[12px] font-sans text-sm text-ink-3 hover:bg-paper-3 hover:text-ink-2"
-                >
-                  Create account
-                </Button>
-              )}
             </form>
 
             {secondaryAuthEnabled && (
@@ -450,34 +413,47 @@ function LoginForm() {
               </Button>
             )}
 
-            <div className="mt-5 rounded-[14px] border border-rule bg-paper px-4 py-3">
-              <p className="font-sans text-xs font-medium text-ink">
-                Need access to this Minutia workspace?
+            {publicSignupEnabled ? (
+              <p className="mt-6 text-center font-sans text-sm text-ink-3">
+                New to Minutia?{" "}
+                <Link
+                  href={`/signup${nextPath !== "/" ? `?next=${encodeURIComponent(nextPath)}` : ""}`}
+                  className="inline-flex items-center gap-1 font-medium text-accent underline-offset-4 transition-colors hover:underline"
+                >
+                  Create an account
+                  <ArrowRight className="h-3.5 w-3.5" />
+                </Link>
               </p>
-              <div className="mt-2 flex items-center justify-between gap-3">
-                <p className="font-sans text-xs text-ink-4">
-                  Enter your email and ask the admin for an invite.
+            ) : (
+              <div className="mt-5 rounded-[14px] border border-rule bg-paper px-4 py-3">
+                <p className="font-sans text-xs font-medium text-ink">
+                  Need access to this Minutia workspace?
                 </p>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={handleInviteRequest}
-                  disabled={inviteState === "loading" || !email.trim()}
-                  className="h-8 shrink-0 rounded-[10px] border-rule bg-paper text-xs text-ink hover:bg-paper-3"
-                >
-                  {inviteState === "loading" ? "Sending" : "Request invite"}
-                </Button>
+                <div className="mt-2 flex items-center justify-between gap-3">
+                  <p className="font-sans text-xs text-ink-4">
+                    Enter your email and ask the admin for an invite.
+                  </p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleInviteRequest}
+                    disabled={inviteState === "loading" || !email.trim()}
+                    className="h-8 shrink-0 rounded-[10px] border-rule bg-paper text-xs text-ink hover:bg-paper-3"
+                  >
+                    {inviteState === "loading" ? "Sending" : "Request invite"}
+                  </Button>
+                </div>
+                {inviteMessage && (
+                  <p
+                    className={`mt-2 font-sans text-xs ${
+                      inviteState === "error" ? "text-danger" : "text-ink-3"
+                    }`}
+                  >
+                    {inviteMessage}
+                  </p>
+                )}
               </div>
-              {inviteMessage && (
-                <p
-                  className={`mt-2 font-sans text-xs ${
-                    inviteState === "error" ? "text-danger" : "text-ink-3"
-                  }`}
-                >
-                  {inviteMessage}
-                </p>
-              )}
-            </div>
+            )}
           </>
         )}
       </div>
@@ -502,57 +478,3 @@ function LoginForm() {
   );
 }
 
-function getSafeNext(value: string | null) {
-  if (!value || !value.startsWith("/") || value.startsWith("//")) return "/";
-  return value;
-}
-
-function LoadingDots() {
-  return (
-    <span className="flex items-center gap-0.5" aria-label="Loading">
-      {[0, 1, 2].map((i) => (
-        <motion.span
-          key={i}
-          className="inline-block h-1 w-1 rounded-full bg-white"
-          animate={{ opacity: [0.3, 1, 0.3] }}
-          transition={{
-            duration: 1,
-            repeat: Infinity,
-            delay: i * 0.2,
-            ease: "easeInOut",
-          }}
-        />
-      ))}
-    </span>
-  );
-}
-
-function GoogleIcon() {
-  return (
-    <svg
-      width="18"
-      height="18"
-      viewBox="0 0 18 18"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      className="mr-2"
-    >
-      <path
-        d="M17.64 9.205c0-.639-.057-1.252-.164-1.841H9v3.481h4.844a4.14 4.14 0 01-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z"
-        fill="#4285F4"
-      />
-      <path
-        d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 009 18z"
-        fill="#34A853"
-      />
-      <path
-        d="M3.964 10.71A5.41 5.41 0 013.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.997 8.997 0 000 9c0 1.452.348 2.827.957 4.042l3.007-2.332z"
-        fill="#FBBC05"
-      />
-      <path
-        d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 00.957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z"
-        fill="#EA4335"
-      />
-    </svg>
-  );
-}
