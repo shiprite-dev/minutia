@@ -12,17 +12,10 @@ import { cn } from "@/lib/utils";
 import { useUpdateProfile } from "@/lib/hooks/use-profile";
 import { useCompleteOnboarding } from "@/lib/hooks/use-profile";
 import { useCreateSeries } from "@/lib/hooks/use-series";
-import { CADENCES } from "@/lib/constants";
+import { CADENCES, CADENCE_LABELS } from "@/lib/constants";
 import type { Cadence } from "@/lib/types";
 
 const TOTAL_STEPS = 3;
-
-const cadenceLabels: Record<Cadence, string> = {
-  weekly: "Weekly",
-  biweekly: "Biweekly",
-  monthly: "Monthly",
-  adhoc: "Ad hoc",
-};
 
 interface OnboardingWizardProps {
   userName: string | null;
@@ -405,7 +398,7 @@ function StepCreateSeries({
               onClick={() => onCadenceChange(c)}
             >
               <MinutiaCadenceIcon cadence={c} className="size-3 text-current" />
-              {cadenceLabels[c]}
+              {CADENCE_LABELS[c]}
             </button>
           ))}
         </div>

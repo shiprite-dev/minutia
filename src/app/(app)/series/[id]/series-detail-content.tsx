@@ -34,7 +34,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { CADENCES } from "@/lib/constants";
+import { CADENCES, CADENCE_LABELS } from "@/lib/constants";
 import { createSeriesSchema, type CreateSeriesInput } from "@/lib/schemas";
 import { ShareButton } from "@/components/minutia/share-button";
 import { RemindOwnersButton } from "@/components/minutia/remind-owners-button";
@@ -51,13 +51,6 @@ import {
   useUnlinkCalendar,
 } from "@/lib/hooks/use-google-calendar";
 import Link from "next/link";
-
-const cadenceLabels: Record<Cadence, string> = {
-  weekly: "Weekly",
-  biweekly: "Biweekly",
-  monthly: "Monthly",
-  adhoc: "Ad hoc",
-};
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -514,7 +507,7 @@ function SeriesSettingsDialog({
                   onClick={() => setValue("cadence", cadence)}
                 >
                   <MinutiaCadenceIcon cadence={cadence} className="size-3 text-current" />
-                  {cadenceLabels[cadence]}
+                  {CADENCE_LABELS[cadence]}
                 </button>
               ))}
             </div>
