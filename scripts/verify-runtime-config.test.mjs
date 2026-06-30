@@ -133,6 +133,20 @@ GOOGLE_CALENDAR_WEBHOOK_URL=https://app.example.com/api/calendar/hooks
       /^GOOGLE_CALENDAR_WEBHOOK_URL=https:\/\/app\.example\.com\/api\/calendar\/webhook$/m
     );
 
+    // Self-host defaults to invite-only; public signup is a managed-cloud opt-in.
+    assert.match(generatedEnv, /^DISABLE_SIGNUP=true$/m);
+    assert.match(generatedEnv, /^NEXT_PUBLIC_ENABLE_PUBLIC_SIGNUP=false$/m);
+
+    // GoTrue must be allowed to redirect verify links to /auth/callback (code
+    // exchange), /accept-invite, and /reset-password, or those flows break.
+    const allowList = generatedEnv.match(/^ADDITIONAL_REDIRECT_URLS=(.+)$/m)?.[1] ?? "";
+    for (const path of ["/auth/callback", "/accept-invite", "/reset-password"]) {
+      assert.ok(
+        allowList.includes(`https://app.example.com${path}`),
+        `ADDITIONAL_REDIRECT_URLS missing ${path}: ${allowList}`
+      );
+    }
+
     const verify = spawnSync(process.execPath, [verifyScript, "--env-file", out], {
       cwd: root,
       encoding: "utf8",

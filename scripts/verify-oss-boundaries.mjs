@@ -37,9 +37,13 @@ const calendarWatchMigration = readFileSync(
 assert.match(envExample, /MINUTIA_SETUP_TOKEN=/, ".env.example must document the production setup token");
 assert.match(generatedEnvScript, /MINUTIA_SETUP_TOKEN=/, "generated self-host env must include a setup token");
 assert.match(envExample, /^ADDITIONAL_REDIRECT_URLS=.*\/accept-invite/m, ".env.example must allow invite redirects");
-assert.match(generatedEnvScript, /ADDITIONAL_REDIRECT_URLS=\$\{inviteRedirectUrl\}/, "generated self-host env must allow invite redirects");
+assert.match(envExample, /^ADDITIONAL_REDIRECT_URLS=.*\/auth\/callback/m, ".env.example must allow the /auth/callback code exchange");
+assert.match(generatedEnvScript, /ADDITIONAL_REDIRECT_URLS=\$\{authRedirectUrls\}/, "generated self-host env must set the auth redirect allow-list");
+assert.match(generatedEnvScript, /\$\{siteUrl\}\/auth\/callback/, "generated self-host env must allow the /auth/callback code exchange");
+assert.match(generatedEnvScript, /\$\{siteUrl\}\/accept-invite/, "generated self-host env must allow invite redirects");
 assert.match(generatedEnvScript, /GOOGLE_CALENDAR_WEBHOOK_URL=\$\{calendarWebhookUrl\}/, "generated self-host env must include the calendar webhook URL");
 assert.match(dockerCompose, /GOTRUE_URI_ALLOW_LIST: .*\/accept-invite/, "docker compose must allow invite redirects by default");
+assert.match(dockerCompose, /GOTRUE_URI_ALLOW_LIST: .*\/auth\/callback/, "docker compose must allow the /auth/callback code exchange by default");
 assert.match(dockerCompose, /MINUTIA_SETUP_TOKEN=\$\{MINUTIA_SETUP_TOKEN/, "docker compose must pass setup token to the web app");
 assert.match(dockerCompose, /NEXT_PUBLIC_SUPABASE_URL=\$\{NEXT_PUBLIC_SUPABASE_URL/, "docker compose must use the configured public Supabase URL");
 assert.match(dockerCompose, /GOOGLE_CALENDAR_WEBHOOK_URL=\$\{GOOGLE_CALENDAR_WEBHOOK_URL/, "docker compose must pass the calendar webhook URL to the web app");
