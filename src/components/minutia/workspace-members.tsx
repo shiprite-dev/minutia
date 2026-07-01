@@ -31,7 +31,8 @@ import {
 import { UserPlus, Users, Mail, UserMinus, Trash2, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { shouldPromptSeatBilling } from "@/lib/billing/seat-billing";
-import { useAiAccess } from "@/lib/hooks/use-ai-access";
+import { useAiAccess, useUpsellNoticeUrl } from "@/lib/hooks/use-ai-access";
+import { resolveUpsellCta } from "@/lib/upsell";
 import { startUpgrade } from "@/lib/billing/upgrade-actions";
 
 type OrgAdminData = {
@@ -79,6 +80,13 @@ export function WorkspaceMembers() {
   // blocked until upgraded. The server route is the real enforcement.
   const { data: entitlement } = useAiAccess();
   const canInvite = entitlement?.hasAccess !== false;
+  // Upgrade destination for the invite CTA (only when gating is on). Mirrors
+  // the capacity nudge: an in-app checkout when configured, else an external
+  // link, else no button (never a silent dead-end).
+  const { data: upsell } = useUpsellNoticeUrl("capacity");
+  const upsellCta = resolveUpsellCta(upsell?.ctaUrl);
+  const [upgradePending, setUpgradePending] = useState(false);
+  const [upgradeError, setUpgradeError] = useState(false);
 
   const [orgAdmin, setOrgAdmin] = useState<OrgAdminData | null>(null);
   const [inviteEmail, setInviteEmail] = useState("");
@@ -90,6 +98,18 @@ export function WorkspaceMembers() {
   const [memberMessage, setMemberMessage] = useState("");
   const [memberMessageState, setMemberMessageState] = useState<"success" | "error">("success");
   const [invitationActionId, setInvitationActionId] = useState<string | null>(null);
+
+  async function handleUpgrade() {
+    if (upgradePending) return;
+    setUpgradePending(true);
+    setUpgradeError(false);
+    const ok = await startUpgrade();
+    // On success the browser navigates away; only reset on failure.
+    if (!ok) {
+      setUpgradePending(false);
+      setUpgradeError(true);
+    }
+  }
 
   async function refreshOrgAdmin() {
     const res = await fetch("/api/admin/invitations");
@@ -299,20 +319,26 @@ export function WorkspaceMembers() {
               <div className="space-y-0.5">
                 <p className="text-sm font-medium text-ink">Bring your team into {orgAdmin.organization.name}</p>
                 <p className="text-xs text-ink-3">
-                  Your workspace is on the solo plan. Upgrade to invite teammates and assign work across your meetings.
+                  This workspace is solo right now. Upgrade to invite teammates and assign work across your meetings.
                 </p>
+                {upgradeError && (
+                  <p className="text-xs text-danger">Could not start the upgrade. Please try again.</p>
+                )}
               </div>
             </div>
-            <Button
-              size="sm"
-              className="shrink-0"
-              onClick={() => {
-                void startUpgrade();
-              }}
-            >
-              <Sparkles className="size-3.5" />
-              Upgrade workspace
-            </Button>
+            {upsell?.upgradeEnabled ? (
+              <Button size="sm" className="shrink-0" onClick={handleUpgrade} loading={upgradePending}>
+                {!upgradePending && <Sparkles className="size-3.5" />}
+                {upgradePending ? "Starting" : "Upgrade workspace"}
+              </Button>
+            ) : upsellCta ? (
+              <Button asChild size="sm" className="shrink-0">
+                <a href={upsellCta.href} target="_blank" rel="noopener noreferrer">
+                  <Sparkles className="size-3.5" />
+                  {upsellCta.label}
+                </a>
+              </Button>
+            ) : null}
           </div>
         )}
 
