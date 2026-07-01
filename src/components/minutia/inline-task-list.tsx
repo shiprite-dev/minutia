@@ -304,6 +304,16 @@ function InlineTaskItem({
         <ExternalLink className="size-3" />
       </PrefetchIssueLink>
 
+      {/* Draft badge for calendar auto-drafted items */}
+      {issue.source === "calendar_auto_draft" && (
+        <span
+          title="Auto-drafted from a calendar event"
+          className="text-[10px] font-medium px-2 py-0.5 rounded-full shrink-0 bg-accent/10 text-accent"
+        >
+          Draft
+        </span>
+      )}
+
       {/* Category pill */}
       <span
         className={cn(

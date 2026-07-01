@@ -29,6 +29,7 @@ import { CaptureInput } from "@/components/minutia/capture-input";
 import { InlineTaskList } from "@/components/minutia/inline-task-list";
 import { IssueCard } from "@/components/minutia/issue-card";
 import { BriefCard } from "@/components/minutia/brief-card";
+import { CalendarDraftNotice } from "@/components/minutia/calendar-draft-notice";
 import { PrefetchIssueLink } from "@/components/minutia/prefetch-issue-link";
 import { StatusChip } from "@/components/minutia/status-chip";
 import { CategoryBadge } from "@/components/minutia/category-badge";
@@ -1445,6 +1446,12 @@ export function MeetingDetailContent({
     const openIssues = (seriesIssues ?? []).filter(
       (issue) => issue.status !== "resolved" && issue.status !== "dropped"
     );
+    const agendaDrafts = raisedInThisMeeting.filter(
+      (issue) => issue.source === "calendar_auto_draft"
+    );
+    const briefIssues = openIssues.filter(
+      (issue) => issue.source !== "calendar_auto_draft"
+    );
 
     return (
       <div className="min-h-full bg-paper">
@@ -1479,11 +1486,24 @@ export function MeetingDetailContent({
             </Button>
           </div>
 
+          {agendaDrafts.length > 0 && (
+            <section className="mb-6 space-y-3" aria-label="Drafted agenda items">
+              <CalendarDraftNotice count={agendaDrafts.length} />
+              <InlineTaskList
+                issues={agendaDrafts}
+                attendees={meeting.attendees ?? series?.default_attendees ?? []}
+                onStatusChange={handleStatusChange}
+                onTitleChange={handleTitleChange}
+                onAssigneeChange={handleAssigneeChange}
+              />
+            </section>
+          )}
+
           <div className="mb-6">
             <BriefCard
               seriesName={series?.name ?? ""}
               nextMeetingDate={new Date(meeting.date)}
-              pendingIssues={openIssues.slice(0, 10)}
+              pendingIssues={briefIssues.slice(0, 10)}
             />
           </div>
 

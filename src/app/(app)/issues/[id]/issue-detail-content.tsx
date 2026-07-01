@@ -55,6 +55,7 @@ function sourceBadgeLabel(source: string): string {
     email: "Email",
     api: "API",
     ai_suggested: "AI Suggested",
+    calendar_auto_draft: "Calendar draft",
   };
   return map[source] ?? source;
 }

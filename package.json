@@ -70,6 +70,7 @@
     "test:retro": "node --test scripts/verify-retro-contracts.test.mjs",
     "test:proxy": "node --test scripts/verify-proxy-trust.test.mjs",
     "test:csv": "node --test scripts/verify-csv-injection.test.mjs",
+    "test:calendar-draft": "node --test scripts/verify-calendar-draft.test.mjs",
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed",
     "test:e2e:ui": "playwright test --ui",
