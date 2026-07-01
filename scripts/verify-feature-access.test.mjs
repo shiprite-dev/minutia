@@ -18,7 +18,9 @@ await esbuild.build({
   logLevel: "silent",
   absWorkingDir: root,
 });
-const { isFeatureGatingEnabled } = await import(pathToFileURL(bundled).href);
+const { isFeatureGatingEnabled, isMemberInviteAllowed } = await import(
+  pathToFileURL(bundled).href
+);
 
 const original = process.env.NEXT_PUBLIC_FEATURE_GATING;
 test.afterEach(() => {
@@ -40,4 +42,29 @@ test("feature gating is on only when the flag is exactly 'true'", () => {
   assert.equal(isFeatureGatingEnabled(), false);
   process.env.NEXT_PUBLIC_FEATURE_GATING = "TRUE";
   assert.equal(isFeatureGatingEnabled(), false);
+});
+
+test("invites are always allowed when gating is off (self-host default)", () => {
+  delete process.env.NEXT_PUBLIC_FEATURE_GATING;
+  assert.equal(isMemberInviteAllowed(false), true);
+  assert.equal(isMemberInviteAllowed(true), true);
+});
+
+test("gated free workspace cannot invite (solo); full access can", () => {
+  process.env.NEXT_PUBLIC_FEATURE_GATING = "true";
+  assert.equal(isMemberInviteAllowed(false), false);
+  assert.equal(isMemberInviteAllowed(true), true);
+});
+
+test("only the exact 'true' flag gates invites", () => {
+  process.env.NEXT_PUBLIC_FEATURE_GATING = "1";
+  assert.equal(isMemberInviteAllowed(false), true);
+  process.env.NEXT_PUBLIC_FEATURE_GATING = "TRUE";
+  assert.equal(isMemberInviteAllowed(false), true);
+});
+
+test("non-boolean has_full_access is treated as no access under gating", () => {
+  process.env.NEXT_PUBLIC_FEATURE_GATING = "true";
+  assert.equal(isMemberInviteAllowed(undefined), false);
+  assert.equal(isMemberInviteAllowed(null), false);
 });
