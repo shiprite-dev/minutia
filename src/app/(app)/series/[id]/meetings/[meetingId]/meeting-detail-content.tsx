@@ -16,7 +16,7 @@ import {
   useUpdateMeetingTranscript,
 } from "@/lib/hooks/use-meetings";
 import { useSeriesDetail, useSeriesParticipantRole } from "@/lib/hooks/use-series";
-import { useIssues, useCreateIssue, useUpdateIssueStatus, useUpdateIssue, issueKeys } from "@/lib/hooks/use-issues";
+import { useIssues, useCreateIssue, useUpdateIssueStatus, useUpdateIssue, useAssignIssue, issueKeys } from "@/lib/hooks/use-issues";
 import { useCreateDecision, decisionKeys } from "@/lib/hooks/use-decisions";
 import { SyncIndicator } from "@/components/minutia/sync-indicator";
 import { useOfflineSync } from "@/lib/hooks/use-offline-sync";
@@ -764,6 +764,7 @@ export function MeetingDetailContent({
   const createDecision = useCreateDecision();
   const updateIssueStatus = useUpdateIssueStatus();
   const updateIssue = useUpdateIssue();
+  const assignIssue = useAssignIssue();
 
   const { isOnline, pendingCount, syncStatus, refreshCount } = useOfflineSync();
   const { data: aiAccess } = useAiAccess();
@@ -1058,8 +1059,15 @@ export function MeetingDetailContent({
     updateIssue.mutate({ issueId, title });
   }
 
-  function handleAssigneeChange(issueId: string, ownerName: string | null) {
-    updateIssue.mutate({ issueId, owner_name: ownerName });
+  function handleAssigneeChange(
+    issueId: string,
+    payload: { owner_user_id: string | null; owner_name: string }
+  ) {
+    assignIssue.mutate({
+      issueId,
+      owner_user_id: payload.owner_user_id,
+      owner_name: payload.owner_name,
+    });
   }
 
   async function handleInlineAdd(title: string, category: IssueCategory) {
