@@ -366,7 +366,9 @@ test.describe("Issue Detail", () => {
         .getByPlaceholder("What's the latest on this issue?")
         .fill(updateNote);
       await page.getByRole("button", { name: "Add update" }).last().click();
-      await expect(page.getByText(updateNote)).toBeVisible();
+      // The note can momentarily render twice (optimistic node + server node),
+      // so scope to the first match to avoid a strict-mode violation.
+      await expect(page.getByText(updateNote).first()).toBeVisible();
 
       await page.reload();
       await waitForApp(page);
