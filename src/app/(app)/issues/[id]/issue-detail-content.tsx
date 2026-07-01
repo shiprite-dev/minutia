@@ -427,6 +427,7 @@ export function IssueDetailContent({ issueId }: IssueDetailContentProps) {
                 <Calendar
                   mode="single"
                   selected={issue.due_date ? new Date(issue.due_date) : undefined}
+                  defaultMonth={issue.due_date ? new Date(issue.due_date) : undefined}
                   onSelect={handleDueDateSelect}
                 />
                 {issue.due_date && (
