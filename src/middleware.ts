@@ -3,6 +3,7 @@ import { createClient as createSupabaseAdmin } from "@supabase/supabase-js";
 import { NextResponse, type NextRequest } from "next/server";
 import { getSupabaseAuthCookieName } from "@/lib/supabase/auth-cookie";
 import { getSupabaseServerUrl } from "@/lib/supabase/url";
+import { getClientIp } from "@/lib/trusted-proxy";
 
 const SECURITY_HEADERS: Record<string, string> = {
   "X-Frame-Options": "DENY",
@@ -79,14 +80,6 @@ function isRateLimited(ip: string, limit: number, windowMs: number): boolean {
   return entry.count > limit;
 }
 
-function getClientIp(request: NextRequest): string {
-  return (
-    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-    request.headers.get("x-real-ip") ||
-    "unknown"
-  );
-}
-
 function applySecurityHeaders(response: NextResponse): NextResponse {
   for (const [key, value] of Object.entries(SECURITY_HEADERS)) {
     response.headers.set(key, value);
@@ -119,7 +112,7 @@ function safeNextPath(pathname: string, search: string) {
 
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
-  const ip = getClientIp(request);
+  const ip = getClientIp(request.headers);
 
   if (isSensitiveProbePath(pathname)) {
     return applySecurityHeaders(new NextResponse("Not Found", { status: 404 }));

@@ -68,6 +68,7 @@
     "test:admin-config-capabilities": "node --test scripts/verify-admin-config-capabilities.test.mjs",
     "test:admin-health": "node --test scripts/verify-admin-health.test.mjs",
     "test:retro": "node --test scripts/verify-retro-contracts.test.mjs",
+    "test:proxy": "node --test scripts/verify-proxy-trust.test.mjs",
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed",
     "test:e2e:ui": "playwright test --ui",
