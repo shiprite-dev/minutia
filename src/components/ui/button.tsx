@@ -65,7 +65,7 @@ function Button({
       data-size={size}
       className={cn(buttonVariants({ variant, size, className }))}
       disabled={asChild ? disabled : disabled || loading}
-      aria-busy={loading || undefined}
+      aria-busy={asChild ? undefined : loading || undefined}
       {...props}
     >
       {loading && !asChild ? (
