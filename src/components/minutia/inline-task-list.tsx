@@ -14,14 +14,17 @@ import { CATEGORY_CONFIG } from "@/lib/constants";
 import { IssueKey } from "@/components/minutia/issue-key";
 import { PrefetchIssueLink } from "@/components/minutia/prefetch-issue-link";
 import { useWorkspaceDirectorySearch } from "@/lib/hooks/use-google-workspace";
+import { useOrgMembers } from "@/lib/hooks/use-org-members";
 import type { Issue, IssueCategory, IssueStatus } from "@/lib/types";
+
+type AssigneePayload = { owner_user_id: string | null; owner_name: string };
 
 interface InlineTaskListProps {
   issues: Issue[];
   attendees: string[];
   onStatusChange: (issueId: string, newStatus: IssueStatus) => void;
   onTitleChange?: (issueId: string, title: string) => void;
-  onAssigneeChange?: (issueId: string, ownerName: string | null) => void;
+  onAssigneeChange?: (issueId: string, payload: AssigneePayload) => void;
   onAddItem?: (title: string, category: IssueCategory) => void;
   readOnly?: boolean;
 }
@@ -49,7 +52,7 @@ function InlineTaskItem({
   attendees: string[];
   onStatusChange: (issueId: string, newStatus: IssueStatus) => void;
   onTitleChange?: (issueId: string, title: string) => void;
-  onAssigneeChange?: (issueId: string, ownerName: string | null) => void;
+  onAssigneeChange?: (issueId: string, payload: AssigneePayload) => void;
   readOnly?: boolean;
   index: number;
   isFocused: boolean;
@@ -130,11 +133,11 @@ function InlineTaskItem({
     }
   }
 
-  function handleAssign(name: string) {
+  function handleAssign(payload: AssigneePayload) {
     setMentionOpen(false);
     setMentionFilter("");
     if (onAssigneeChange) {
-      onAssigneeChange(issue.id, name);
+      onAssigneeChange(issue.id, payload);
     }
   }
 
@@ -153,6 +156,14 @@ function InlineTaskItem({
       const value = attendee.toLowerCase();
       return value === email || value === name;
     });
+  });
+  const { data: orgMembers = [] } = useOrgMembers();
+  const memberMatches = orgMembers.filter((member) => {
+    const filter = mentionFilter.toLowerCase();
+    return (
+      (member.name ?? "").toLowerCase().includes(filter) ||
+      member.email.toLowerCase().includes(filter)
+    );
   });
 
   const config = CATEGORY_CONFIG[issue.category];
@@ -235,37 +246,74 @@ function InlineTaskItem({
                 autoFocus
                 onKeyDown={(e) => {
                   if (e.key === "Escape") setMentionOpen(false);
-                  if (e.key === "Enter" && filteredAttendees.length > 0) {
-                    handleAssign(filteredAttendees[0]);
+                  if (e.key === "Enter" && memberMatches.length > 0) {
+                    const member = memberMatches[0];
+                    handleAssign({
+                      owner_user_id: member.id,
+                      owner_name: member.name || member.email,
+                    });
+                  } else if (e.key === "Enter" && filteredAttendees.length > 0) {
+                    handleAssign({ owner_user_id: null, owner_name: filteredAttendees[0] });
                   }
                 }}
               />
             </div>
-            {filteredAttendees.length === 0 &&
+            {memberMatches.length === 0 &&
+            filteredAttendees.length === 0 &&
             directoryMatches.length === 0 &&
             !directoryLoading ? (
               <p className="text-xs text-ink-4 px-3 py-2">No matches</p>
             ) : (
-              filteredAttendees.map((name) => (
-                <button
-                  key={name}
-                  type="button"
-                  onClick={() => handleAssign(name)}
-                  aria-label={`Assign ${name}`}
-                  className="w-full text-left px-3 py-1.5 text-sm text-ink hover:bg-paper-2 transition-colors flex items-center gap-2"
-                >
-                  <span className="inline-flex items-center justify-center size-5 rounded-full bg-accent text-white text-[9px] font-medium shrink-0">
-                    {name.charAt(0).toUpperCase()}
-                  </span>
-                  {name}
-                </button>
-              ))
+              <>
+                {memberMatches.map((member) => {
+                  const label = member.name || member.email;
+                  return (
+                    <button
+                      key={member.id}
+                      type="button"
+                      onClick={() =>
+                        handleAssign({ owner_user_id: member.id, owner_name: label })
+                      }
+                      aria-label={`Assign ${label}`}
+                      className="w-full text-left px-3 py-1.5 text-sm text-ink hover:bg-paper-2 transition-colors flex items-center gap-2"
+                    >
+                      <span className="inline-flex items-center justify-center size-5 rounded-full bg-success text-white text-[9px] font-medium shrink-0">
+                        {label.charAt(0).toUpperCase()}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate">{label}</span>
+                        {member.name && (
+                          <span className="block truncate text-[11px] text-ink-4">
+                            {member.email}
+                          </span>
+                        )}
+                      </span>
+                    </button>
+                  );
+                })}
+                {filteredAttendees.map((name) => (
+                  <button
+                    key={name}
+                    type="button"
+                    onClick={() => handleAssign({ owner_user_id: null, owner_name: name })}
+                    aria-label={`Assign ${name}`}
+                    className="w-full text-left px-3 py-1.5 text-sm text-ink hover:bg-paper-2 transition-colors flex items-center gap-2"
+                  >
+                    <span className="inline-flex items-center justify-center size-5 rounded-full bg-accent text-white text-[9px] font-medium shrink-0">
+                      {name.charAt(0).toUpperCase()}
+                    </span>
+                    {name}
+                  </button>
+                ))}
+              </>
             )}
             {directoryMatches.map((person) => (
               <button
                 key={person.resourceName}
                 type="button"
-                onClick={() => handleAssign(person.email)}
+                onClick={() =>
+                  handleAssign({ owner_user_id: null, owner_name: person.email })
+                }
                 aria-label={`Assign ${person.name} ${person.email}`}
                 className="w-full text-left px-3 py-1.5 text-sm text-ink hover:bg-paper-2 transition-colors flex items-center gap-2"
               >

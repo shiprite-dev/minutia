@@ -17,10 +17,12 @@ import {
   useUpdateIssueStatus,
   useDeleteIssue,
   useAddIssueUpdate,
+  useAssignIssue,
 } from "@/lib/hooks/use-issues";
 import { StatusChip } from "@/components/minutia/status-chip";
 import { CategoryBadge } from "@/components/minutia/category-badge";
 import { IssueKey } from "@/components/minutia/issue-key";
+import { MemberCombobox } from "@/components/minutia/member-combobox";
 import { PriorityIndicator } from "@/components/minutia/priority-indicator";
 import { TimelineNode } from "@/components/minutia/timeline-node";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -209,6 +211,7 @@ export function IssueDetailContent({ issueId }: IssueDetailContentProps) {
   const updateIssueStatus = useUpdateIssueStatus();
   const deleteIssue = useDeleteIssue();
   const addUpdate = useAddIssueUpdate();
+  const assignIssue = useAssignIssue();
   const [confirmDelete, setConfirmDelete] = React.useState(false);
   const [showUpdateForm, setShowUpdateForm] = React.useState(false);
   const [updateNote, setUpdateNote] = React.useState("");
@@ -398,11 +401,15 @@ export function IssueDetailContent({ issueId }: IssueDetailContentProps) {
           {/* Owner */}
           <div className="flex items-center gap-2 text-sm">
             <span className="text-ink-3 w-20 shrink-0">Owner</span>
-            <InlineEditText
-              value={issue.owner_name ?? ""}
-              onSave={(v) => handleFieldSave("owner_name", v)}
-              className="text-sm text-ink"
-              placeholder="Unassigned"
+            <MemberCombobox
+              ownerName={issue.owner_name}
+              onAssign={(payload) =>
+                assignIssue.mutate({
+                  issueId: issue.id,
+                  owner_user_id: payload.owner_user_id,
+                  owner_name: payload.owner_name,
+                })
+              }
             />
           </div>
 

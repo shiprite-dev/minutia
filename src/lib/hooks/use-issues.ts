@@ -379,6 +379,74 @@ export function useUpdateIssue() {
 }
 
 // ---------------------------------------------------------------------------
+// useAssignIssue - assign to a workspace member (owner_user_id) or free text
+// ---------------------------------------------------------------------------
+export function useAssignIssue() {
+  const supabase = createClient();
+  const queryClient = useQueryClient();
+
+  return useMutation<
+    void,
+    Error,
+    { issueId: string; owner_user_id: string | null; owner_name: string | null },
+    {
+      previousIssueLists: IssueListSnapshot;
+      previousDetail: IssueWithUpdates | undefined;
+    }
+  >({
+    mutationFn: async ({ issueId, owner_user_id, owner_name }) => {
+      const { error } = await supabase.rpc("assign_issue", {
+        p_issue_id: issueId,
+        p_owner_user_id: owner_user_id,
+        p_owner_name: owner_name ?? "",
+      });
+      if (error) throw error;
+    },
+
+    onMutate: async ({ issueId, owner_user_id, owner_name }) => {
+      await queryClient.cancelQueries({ queryKey: issueKeys.all });
+      await queryClient.cancelQueries({ queryKey: issueKeys.detail(issueId) });
+
+      const previousIssueLists = getIssueListSnapshots(queryClient);
+      const previousDetail = queryClient.getQueryData<IssueWithUpdates>(
+        issueKeys.detail(issueId)
+      );
+      const nextOwnerName = owner_name ?? "";
+
+      updateCachedIssueLists(queryClient, (issue) =>
+        issue.id === issueId
+          ? { ...issue, owner_user_id, owner_name: nextOwnerName }
+          : issue
+      );
+
+      queryClient.setQueryData<IssueWithUpdates>(
+        issueKeys.detail(issueId),
+        (old) =>
+          old ? { ...old, owner_user_id, owner_name: nextOwnerName } : old
+      );
+
+      return { previousIssueLists, previousDetail };
+    },
+
+    onError: (_err, vars, context) => {
+      if (!context) return;
+      restoreIssueListSnapshots(queryClient, context.previousIssueLists);
+      queryClient.setQueryData(
+        issueKeys.detail(vars.issueId),
+        context.previousDetail
+      );
+    },
+
+    onSettled: (_data, _error, variables) => {
+      queryClient.invalidateQueries({ queryKey: issueKeys.all });
+      queryClient.invalidateQueries({ queryKey: issueKeys.detail(variables.issueId) });
+    },
+
+    meta: { errorMessage: "Couldn't update the assignee." },
+  });
+}
+
+// ---------------------------------------------------------------------------
 // useAddIssueUpdate - add a standalone timeline entry (note/status change)
 // ---------------------------------------------------------------------------
 export function useAddIssueUpdate() {
