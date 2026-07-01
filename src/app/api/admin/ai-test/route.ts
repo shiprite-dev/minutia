@@ -1,11 +1,15 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { requireAdmin } from "@/lib/supabase/admin-auth";
+import { rejectCrossOrigin } from "@/lib/request-origin";
 import { validateAiBaseUrl } from "@/lib/ai/validate-url";
 import { callOpenAiCompatible } from "@/lib/ai/providers/openai-compatible";
 import { callAnthropic } from "@/lib/ai/providers/anthropic";
 import { getInstanceConfigMap } from "@/lib/instance-config";
 
 export async function POST(request: NextRequest) {
+  const crossOrigin = rejectCrossOrigin(request);
+  if (crossOrigin) return crossOrigin;
+
   const auth = await requireAdmin(request);
   if (!auth.authorized) {
     return NextResponse.json({ error: auth.error }, { status: auth.status });

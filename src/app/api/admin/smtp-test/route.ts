@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { requireAdmin } from "@/lib/supabase/admin-auth";
+import { rejectCrossOrigin } from "@/lib/request-origin";
 import { createMailTransport, getSmtpConfig } from "@/lib/email";
 
 const schema = z.object({
@@ -8,6 +9,9 @@ const schema = z.object({
 });
 
 export async function POST(request: NextRequest) {
+  const crossOrigin = rejectCrossOrigin(request);
+  if (crossOrigin) return crossOrigin;
+
   const auth = await requireAdmin(request);
   if (!auth.authorized) {
     return NextResponse.json({ error: auth.error }, { status: auth.status });
