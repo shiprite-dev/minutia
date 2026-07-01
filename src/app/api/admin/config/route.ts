@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { requireAdmin } from "@/lib/supabase/admin-auth";
+import { rejectCrossOrigin } from "@/lib/request-origin";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import {
   displayInstanceConfigValue,
@@ -34,6 +35,9 @@ export async function GET(request: NextRequest) {
 }
 
 export async function PUT(request: NextRequest) {
+  const crossOrigin = rejectCrossOrigin(request);
+  if (crossOrigin) return crossOrigin;
+
   const auth = await requireAdmin(request);
   if (!auth.authorized) {
     return NextResponse.json({ error: auth.error }, { status: auth.status });

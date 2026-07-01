@@ -16,10 +16,17 @@ function issueToCsvRow(issue: Issue): Record<string, string> {
 }
 
 function escapeCsvField(field: string): string {
-  if (field.includes(",") || field.includes('"') || field.includes("\n")) {
-    return `"${field.replace(/"/g, '""')}"`;
+  // Neutralize spreadsheet formula injection: prefix with a single quote so
+  // Excel/Sheets/LibreOffice treat the cell as plain text, not a formula.
+  const injectionPrefixes = ["=", "+", "-", "@", "\t", "\r"];
+  const safe =
+    field.length > 0 && injectionPrefixes.some((p) => field.startsWith(p))
+      ? `'${field}`
+      : field;
+  if (safe.includes(",") || safe.includes('"') || safe.includes("\n")) {
+    return `"${safe.replace(/"/g, '""')}"`;
   }
-  return field;
+  return safe;
 }
 
 export function issuesToCsv(issues: Issue[]): string {

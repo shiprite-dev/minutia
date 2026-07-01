@@ -3,6 +3,7 @@ import { z } from "zod";
 import { absoluteAppUrl, sendMail } from "@/lib/email";
 import { buildMeetingNotesEmail, extractEmails } from "@/lib/meeting-notes-email";
 import { createClient } from "@/lib/supabase/server";
+import { userManagesSeries } from "@/lib/series/manage-access";
 import type { Decision, Issue, Meeting, MeetingSeries } from "@/lib/types";
 
 const schema = z.object({
@@ -55,6 +56,12 @@ export async function POST(
   }
 
   const payload = meeting as MeetingPayload;
+
+  const canManage = await userManagesSeries(payload.series_id, user.id);
+  if (!canManage) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   if (payload.status !== "completed") {
     return NextResponse.json(
       { error: "Meeting notes can only be sent after a meeting is completed." },
