@@ -9,6 +9,8 @@ export const SECRET_CONFIG_KEYS = new Set([
   "smtp_pass",
   "ai_api_key",
   "google_client_secret",
+  "slack_webhook_url",
+  "reminder_webhook_url",
 ]);
 
 type ConfigRow = {

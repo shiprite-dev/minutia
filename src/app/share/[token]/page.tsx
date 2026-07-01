@@ -664,13 +664,13 @@ export default async function GuestSharePage({
         .contains("metadata", { share_token: token });
 
       if (!count || count === 0) {
-        await supabase.from("notifications").insert({
-          user_id: user.id,
-          type: "share_received" as const,
-          title: `Someone shared a ${existingShare.resource_type} with you`,
-          body: `View the shared ${existingShare.resource_type}`,
-          link: `/share/${token}`,
-          metadata: { share_token: token, resource_type: existingShare.resource_type, resource_id: existingShare.resource_id },
+        await supabase.rpc("create_notification", {
+          p_user_id: user.id,
+          p_type: "share_received",
+          p_title: `Someone shared a ${existingShare.resource_type} with you`,
+          p_body: `View the shared ${existingShare.resource_type}`,
+          p_link: `/share/${token}`,
+          p_metadata: { share_token: token, resource_type: existingShare.resource_type, resource_id: existingShare.resource_id },
         });
       }
 
