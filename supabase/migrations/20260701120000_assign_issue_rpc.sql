@@ -46,4 +46,5 @@ begin
     where id = p_issue_id;
 end $$;
 
-grant execute on function public.assign_issue(uuid, uuid, text) to authenticated;
+revoke all on function public.assign_issue(uuid, uuid, text) from public;
+grant execute on function public.assign_issue(uuid, uuid, text) to authenticated, service_role;

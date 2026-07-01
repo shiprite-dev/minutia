@@ -18,6 +18,21 @@ async function resetOwner(issueId: string, ownerName: string) {
   });
 }
 
+// Read back the persisted owner columns so we can assert the actual acceptance
+// criterion: assigning a workspace member links a real user FK (owner_user_id),
+// while a free-text name does not. Returns null when no service key is present.
+async function fetchOwner(
+  issueId: string
+): Promise<{ owner_user_id: string | null; owner_name: string } | null> {
+  if (!SERVICE_KEY) return null;
+  const res = await fetch(
+    `${SUPABASE_URL}/rest/v1/issues?id=eq.${issueId}&select=owner_user_id,owner_name`,
+    { headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` } }
+  );
+  const rows = await res.json();
+  return Array.isArray(rows) && rows[0] ? rows[0] : null;
+}
+
 test.describe("Issue assignment", () => {
   test.describe.configure({ mode: "serial" });
 
@@ -50,6 +65,11 @@ test.describe("Issue assignment", () => {
     await expect(page.getByRole("button", { name: "Assign owner" }).first()).toContainText(
       /Test User/
     );
+
+    // The point of the feature: a workspace member is linked by user FK, not
+    // just a display name (this is what drives notifications + My Actions).
+    const owner = await fetchOwner(ISSUES.headcount);
+    if (owner) expect(owner.owner_user_id).not.toBeNull();
   });
 
   test("assigns to a free-text name and persists across reload", async ({ page }) => {
@@ -78,5 +98,12 @@ test.describe("Issue assignment", () => {
     await expect(page.getByRole("button", { name: "Assign owner" }).first()).toContainText(
       /Alex External/
     );
+
+    // Free-text names do not link a user account.
+    const owner = await fetchOwner(ISSUES.graphql);
+    if (owner) {
+      expect(owner.owner_user_id).toBeNull();
+      expect(owner.owner_name).toBe("Alex External");
+    }
   });
 });
