@@ -30,7 +30,8 @@ RUN pnpm build
 
 FROM base AS runner
 WORKDIR /app
-ENV NODE_ENV=production
+ENV NODE_ENV=production \
+    NODE_OPTIONS=--max-old-space-size=1500
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/public ./public

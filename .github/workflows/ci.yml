@@ -101,6 +101,9 @@ jobs:
       - name: Verify seat-billing gate
         run: pnpm test:seat-billing
 
+      - name: Verify trusted proxy IP resolution
+        run: pnpm test:proxy
+
       - name: Build (includes typecheck)
         run: pnpm build
         env:
