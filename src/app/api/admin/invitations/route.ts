@@ -9,6 +9,10 @@ import {
 import { rejectCrossOrigin } from "@/lib/request-origin";
 import { requireCurrentOrgAdmin } from "@/lib/supabase/org-auth";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
+import { isMemberInviteAllowed } from "@/lib/feature-access";
+
+const INVITE_UPGRADE_REQUIRED =
+  "Inviting teammates requires an upgraded workspace.";
 
 const inviteSchema = z.object({
   email: z.string().email(),
@@ -92,6 +96,20 @@ export async function POST(request: NextRequest) {
   const supabase = createServiceRoleClient();
   const email = parsed.data.email.toLowerCase();
   const role = parsed.data.role;
+
+  // Free workspaces are solo: adding a member requires the full-access
+  // entitlement. No-op when feature gating is off (the self-host default).
+  const { data: inviter } = await supabase
+    .from("profiles")
+    .select("has_full_access")
+    .eq("id", auth.userId)
+    .single();
+  if (!isMemberInviteAllowed(inviter?.has_full_access === true)) {
+    return NextResponse.json(
+      { error: INVITE_UPGRADE_REQUIRED },
+      { status: 403 }
+    );
+  }
 
   const { data: existingProfile } = await supabase
     .from("profiles")

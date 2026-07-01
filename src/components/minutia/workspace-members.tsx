@@ -28,9 +28,11 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { UserPlus, Users, Mail, UserMinus, Trash2 } from "lucide-react";
+import { UserPlus, Users, Mail, UserMinus, Trash2, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { shouldPromptSeatBilling } from "@/lib/billing/seat-billing";
+import { useAiAccess } from "@/lib/hooks/use-ai-access";
+import { startUpgrade } from "@/lib/billing/upgrade-actions";
 
 type OrgAdminData = {
   organization: { id: string; name: string; slug: string };
@@ -72,6 +74,11 @@ function roleMessageArticle(role: "admin" | "member") {
 
 export function WorkspaceMembers() {
   const { data: profile } = useProfile();
+  // has_full_access entitlement (resolves to true when feature gating is off,
+  // the self-host default). A free, gated workspace stays solo: inviting is
+  // blocked until upgraded. The server route is the real enforcement.
+  const { data: entitlement } = useAiAccess();
+  const canInvite = entitlement?.hasAccess !== false;
 
   const [orgAdmin, setOrgAdmin] = useState<OrgAdminData | null>(null);
   const [inviteEmail, setInviteEmail] = useState("");
@@ -244,41 +251,69 @@ export function WorkspaceMembers() {
         </div>
       </CardHeader>
       <CardContent className="space-y-5">
-        <form onSubmit={handleInvite} className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_9rem_auto] sm:items-end">
-          <div className="space-y-1.5">
-            <Label htmlFor="invite-email">Invite by email</Label>
-            <Input
-              id="invite-email"
-              type="email"
-              placeholder="teammate@company.com"
-              value={inviteEmail}
-              onChange={(e) => setInviteEmail(e.target.value)}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Role</Label>
-            <Select
-              value={inviteRole}
-              onValueChange={(value) => setInviteRole(value as "member" | "admin")}
+        {canInvite ? (
+          <>
+            <form onSubmit={handleInvite} className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_9rem_auto] sm:items-end">
+              <div className="space-y-1.5">
+                <Label htmlFor="invite-email">Invite by email</Label>
+                <Input
+                  id="invite-email"
+                  type="email"
+                  placeholder="teammate@company.com"
+                  value={inviteEmail}
+                  onChange={(e) => setInviteEmail(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Role</Label>
+                <Select
+                  value={inviteRole}
+                  onValueChange={(value) => setInviteRole(value as "member" | "admin")}
+                >
+                  <SelectTrigger aria-label="Invitation role" className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="member">Member</SelectItem>
+                    <SelectItem value="admin">Admin</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <Button type="submit" size="sm" disabled={inviteState === "loading" || !inviteEmail}>
+                <UserPlus className="size-3.5" />
+                {inviteState === "loading" ? "Sending" : "Invite"}
+              </Button>
+            </form>
+            {inviteMessage && (
+              <p className={cn("text-xs", inviteState === "error" ? "text-danger" : "text-success")}>
+                {inviteMessage}
+              </p>
+            )}
+          </>
+        ) : (
+          <div className="flex flex-col gap-3 rounded-xl border border-dashed border-border/60 bg-muted/30 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-3">
+              <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                <Users className="size-4" />
+              </span>
+              <div className="space-y-0.5">
+                <p className="text-sm font-medium text-ink">Bring your team into {orgAdmin.organization.name}</p>
+                <p className="text-xs text-ink-3">
+                  Your workspace is on the solo plan. Upgrade to invite teammates and assign work across your meetings.
+                </p>
+              </div>
+            </div>
+            <Button
+              size="sm"
+              className="shrink-0"
+              onClick={() => {
+                void startUpgrade();
+              }}
             >
-              <SelectTrigger aria-label="Invitation role" className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="member">Member</SelectItem>
-                <SelectItem value="admin">Admin</SelectItem>
-              </SelectContent>
-            </Select>
+              <Sparkles className="size-3.5" />
+              Upgrade workspace
+            </Button>
           </div>
-          <Button type="submit" size="sm" disabled={inviteState === "loading" || !inviteEmail}>
-            <UserPlus className="size-3.5" />
-            {inviteState === "loading" ? "Sending" : "Invite"}
-          </Button>
-        </form>
-        {inviteMessage && (
-          <p className={cn("text-xs", inviteState === "error" ? "text-danger" : "text-success")}>
-            {inviteMessage}
-          </p>
         )}
 
         <section className="space-y-2" aria-labelledby="workspace-members-title">
