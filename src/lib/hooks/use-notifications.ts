@@ -65,13 +65,17 @@ export function useMarkAsRead() {
       if (error) throw error;
     },
     onMutate: (notificationId) => {
-      // Only decrement the badge when the row is actually still unread in cache,
-      // so the count can never drift below truth regardless of the caller.
+      // exact: true throughout so the ["notifications"] list key does not also
+      // match the ["notifications","unread-count"] number cache under the same
+      // prefix (a list updater run against a number throws).
       const wasUnread = queryClient
-        .getQueriesData<Notification[]>({ queryKey: notificationKeys.all })
+        .getQueriesData<Notification[]>({ queryKey: notificationKeys.all, exact: true })
         .some(([, data]) => data?.some((n) => n.id === notificationId && !n.read));
       const patches = [
-        patch<Notification[]>({ queryKey: notificationKeys.all }, markRead(notificationId)),
+        patch<Notification[]>(
+          { queryKey: notificationKeys.all, exact: true },
+          markRead(notificationId)
+        ),
       ];
       if (wasUnread) {
         patches.push(
@@ -103,7 +107,10 @@ export function useMarkAllAsRead() {
     },
     onMutate: () =>
       applyOptimistic(queryClient, [
-        patch<Notification[]>({ queryKey: notificationKeys.all }, markAllRead()),
+        patch<Notification[]>(
+          { queryKey: notificationKeys.all, exact: true },
+          markAllRead()
+        ),
         patch<number>({ queryKey: notificationKeys.unreadCount }, () => 0),
       ]),
     onError: (_err, _vars, context) => context?.rollback(),
