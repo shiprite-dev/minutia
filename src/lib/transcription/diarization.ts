@@ -11,7 +11,7 @@ export interface SpeakerProposal {
   speaker: string;
   attendee: string | null;
   confidence: number;
-  reason: "self_intro" | "name_mention" | "roster_single" | "unresolved";
+  reason: "prior_map" | "self_intro" | "roster_single" | "unresolved";
 }
 
 export interface SpeakerMapResult {
@@ -68,7 +68,7 @@ export function resolveSpeakerMap(
   for (const speaker of speakers) {
     const prior = priorMap?.[speaker];
     if (prior && attendees.includes(prior) && !claimed.has(prior)) {
-      claim(speaker, prior, "self_intro", 0.75);
+      claim(speaker, prior, "prior_map", 0.75);
     }
   }
 

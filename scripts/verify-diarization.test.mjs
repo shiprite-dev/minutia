@@ -31,7 +31,7 @@ test("single attendee resolves the only speaker with low confidence", () => {
   assert.equal(proposals[0].reason, "roster_single");
 });
 
-test("more speakers than attendees leaves the extras unresolved, never invents", () => {
+test("more speakers than attendees resolves none via fallback and never invents", () => {
   const segments = [seg("A", "one"), seg("B", "two", 2), seg("C", "three", 4)];
   const { map } = resolveSpeakerMap(segments, ["Sarah Lee"]);
   assert.equal(Object.values(map).filter((v) => v === "Sarah Lee").length <= 1, true);
@@ -39,8 +39,22 @@ test("more speakers than attendees leaves the extras unresolved, never invents",
 });
 
 test("priorMap seeds a stable assignment across meetings", () => {
-  const { map } = resolveSpeakerMap([seg("A", "no cues")], ["Sarah Lee", "Mike Ross"], { A: "Mike Ross" });
+  const { map, proposals } = resolveSpeakerMap([seg("A", "no cues")], ["Sarah Lee", "Mike Ross"], { A: "Mike Ross" });
   assert.equal(map.A, "Mike Ross");
+  assert.equal(proposals.find((p) => p.speaker === "A").reason, "prior_map");
+});
+
+test("composed priority: self-intro then single-attendee fallback resolves both", () => {
+  const segments = [seg("A", "Hi, this is Sarah."), seg("B", "No cues here.", 2)];
+  const { map, proposals } = resolveSpeakerMap(segments, ["Sarah Lee", "Mike Ross"]);
+  assert.equal(map.A, "Sarah Lee");
+  assert.equal(map.B, "Mike Ross");
+  assert.equal(proposals.find((p) => p.speaker === "B").reason, "roster_single");
+});
+
+test("non-alphabetic speaker label renders as-is", () => {
+  const out = flattenSegments([seg("SPEAKER_00", "hello")], {});
+  assert.equal(out, "Speaker SPEAKER_00: hello");
 });
 
 test("flattenSegments renders mapped names and merges consecutive turns", () => {
