@@ -54,7 +54,6 @@ export function RetroClient({
 
   const [ftoken, setFtoken] = React.useState<string | null>(null);
   const [theme, setTheme] = React.useState<"studio" | "daylight">("studio");
-  const [sound, setSound] = React.useState(false);
   const [people, setPeople] = React.useState(snapshot.participants);
   const [revealed, setRevealed] = React.useState<Set<string>>(() => new Set());
   const [revealComplete, setRevealComplete] = React.useState(false);
@@ -457,9 +456,6 @@ export function RetroClient({
             <Switch checked={theme === "daylight"} onChange={(v) => setTheme(v ? "daylight" : "studio")} size="sm" />
             <Icons.Moon size={14} style={{ color: theme === "studio" ? "var(--studio-ink-2)" : "var(--studio-ink-3)" }} />
           </div>
-          <button type="button" onClick={() => setSound((s) => !s)} aria-label="sound" style={{ display: "inline-flex", padding: 6, borderRadius: "var(--r-control)", cursor: "pointer", background: "transparent", border: "none", color: sound ? "var(--studio-ink-2)" : "var(--studio-ink-3)" }}>
-            <Icons.Volume size={18} style={{ opacity: sound ? 1 : 0.4 }} />
-          </button>
         </div>
       </header>
 

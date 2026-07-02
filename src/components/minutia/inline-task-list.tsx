@@ -13,6 +13,14 @@ import { cn } from "@/lib/utils";
 import { CATEGORY_CONFIG } from "@/lib/constants";
 import { IssueKey } from "@/components/minutia/issue-key";
 import { PrefetchIssueLink } from "@/components/minutia/prefetch-issue-link";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 import { useWorkspaceDirectorySearch } from "@/lib/hooks/use-google-workspace";
 import { useOrgMembers } from "@/lib/hooks/use-org-members";
 import type { Issue, IssueCategory, IssueStatus } from "@/lib/types";
@@ -234,111 +242,95 @@ function InlineTaskItem({
         {mentionOpen && (
           <div
             ref={mentionRef}
-            className="absolute left-0 top-full mt-1 z-50 w-56 rounded-lg border border-rule bg-paper shadow-lg py-1"
+            className="absolute left-0 top-full mt-1 z-50 w-56 rounded-lg border border-rule bg-paper shadow-lg"
           >
-            <div className="px-2 pb-1">
-              <input
-                type="text"
-                value={mentionFilter}
-                onChange={(e) => setMentionFilter(e.target.value)}
+            <Command shouldFilter={false}>
+              <CommandInput
                 placeholder="Search people..."
-                className="w-full text-xs bg-paper-2 rounded px-2 py-1.5 outline-none border border-rule"
+                value={mentionFilter}
+                onValueChange={setMentionFilter}
                 autoFocus
                 onKeyDown={(e) => {
                   if (e.key === "Escape") setMentionOpen(false);
-                  if (e.key === "Enter" && memberMatches.length > 0) {
-                    const member = memberMatches[0];
-                    handleAssign({
-                      owner_user_id: member.id,
-                      owner_name: member.name || member.email,
-                    });
-                  } else if (e.key === "Enter" && filteredAttendees.length > 0) {
-                    handleAssign({ owner_user_id: null, owner_name: filteredAttendees[0] });
-                  }
                 }}
               />
-            </div>
-            {memberMatches.length === 0 &&
-            filteredAttendees.length === 0 &&
-            directoryMatches.length === 0 &&
-            !directoryLoading ? (
-              <p className="text-xs text-ink-4 px-3 py-2">No matches</p>
-            ) : (
-              <>
-                {memberMatches.map((member) => {
-                  const label = member.name || member.email;
-                  return (
-                    <button
-                      key={member.id}
-                      type="button"
-                      onClick={() =>
-                        handleAssign({ owner_user_id: member.id, owner_name: label })
-                      }
-                      aria-label={`Assign ${label}`}
-                      className="w-full text-left px-3 py-1.5 text-sm text-ink hover:bg-paper-2 transition-colors flex items-center gap-2"
-                    >
-                      <span className="inline-flex items-center justify-center size-5 rounded-full bg-success text-white text-[9px] font-medium shrink-0">
-                        {label.charAt(0).toUpperCase()}
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate">{label}</span>
-                        {member.name && (
-                          <span className="block truncate text-[11px] text-ink-4">
-                            {member.email}
+              <CommandList>
+                <CommandEmpty>
+                  {directoryLoading ? "Searching..." : "No people found"}
+                </CommandEmpty>
+                {(memberMatches.length > 0 || filteredAttendees.length > 0) && (
+                  <CommandGroup>
+                    {memberMatches.map((member) => {
+                      const label = member.name || member.email;
+                      return (
+                        <CommandItem
+                          key={member.id}
+                          value={`member-${member.id}`}
+                          onSelect={() =>
+                            handleAssign({ owner_user_id: member.id, owner_name: label })
+                          }
+                        >
+                          <span className="inline-flex items-center justify-center size-5 rounded-full bg-success text-white text-[9px] font-medium shrink-0">
+                            {label.charAt(0).toUpperCase()}
                           </span>
-                        )}
-                      </span>
-                    </button>
-                  );
-                })}
-                {filteredAttendees.map((name) => (
-                  <button
-                    key={name}
-                    type="button"
-                    onClick={() => handleAssign({ owner_user_id: null, owner_name: name })}
-                    aria-label={`Assign ${name}`}
-                    className="w-full text-left px-3 py-1.5 text-sm text-ink hover:bg-paper-2 transition-colors flex items-center gap-2"
-                  >
-                    <span className="inline-flex items-center justify-center size-5 rounded-full bg-accent text-white text-[9px] font-medium shrink-0">
-                      {name.charAt(0).toUpperCase()}
-                    </span>
-                    {name}
-                  </button>
-                ))}
-              </>
-            )}
-            {directoryMatches.map((person) => (
-              <button
-                key={person.resourceName}
-                type="button"
-                onClick={() =>
-                  handleAssign({ owner_user_id: null, owner_name: person.email })
-                }
-                aria-label={`Assign ${person.name} ${person.email}`}
-                className="w-full text-left px-3 py-1.5 text-sm text-ink hover:bg-paper-2 transition-colors flex items-center gap-2"
-              >
-                <span className="inline-flex items-center justify-center size-5 rounded-full bg-ink text-paper text-[9px] font-medium shrink-0">
-                  {person.name.charAt(0).toUpperCase()}
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate">{person.name}</span>
-                  <span className="block truncate text-[11px] text-ink-4">
-                    {person.email}
-                  </span>
-                </span>
-              </button>
-            ))}
-            {directoryLoading && (
-              <p className="text-xs text-ink-4 px-3 py-2">Searching...</p>
-            )}
-            {directoryError && (
-              <Link
-                href="/settings"
-                className="block px-3 py-2 text-xs text-accent hover:underline"
-              >
-                Connect Google Workspace
-              </Link>
-            )}
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate">{label}</span>
+                            {member.name && (
+                              <span className="block truncate text-[11px] text-ink-4">
+                                {member.email}
+                              </span>
+                            )}
+                          </span>
+                        </CommandItem>
+                      );
+                    })}
+                    {filteredAttendees.map((name) => (
+                      <CommandItem
+                        key={name}
+                        value={`attendee-${name}`}
+                        onSelect={() => handleAssign({ owner_user_id: null, owner_name: name })}
+                      >
+                        <span className="inline-flex items-center justify-center size-5 rounded-full bg-accent text-white text-[9px] font-medium shrink-0">
+                          {name.charAt(0).toUpperCase()}
+                        </span>
+                        {name}
+                      </CommandItem>
+                    ))}
+                  </CommandGroup>
+                )}
+                {directoryMatches.length > 0 && (
+                  <CommandGroup>
+                    {directoryMatches.map((person) => (
+                      <CommandItem
+                        key={person.resourceName}
+                        value={`directory-${person.resourceName}`}
+                        onSelect={() =>
+                          handleAssign({ owner_user_id: null, owner_name: person.email })
+                        }
+                      >
+                        <span className="inline-flex items-center justify-center size-5 rounded-full bg-ink text-paper text-[9px] font-medium shrink-0">
+                          {person.name.charAt(0).toUpperCase()}
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate">{person.name}</span>
+                          <span className="block truncate text-[11px] text-ink-4">
+                            {person.email}
+                          </span>
+                        </span>
+                      </CommandItem>
+                    ))}
+                  </CommandGroup>
+                )}
+              </CommandList>
+              {directoryError && (
+                <Link
+                  href="/settings"
+                  className="block px-3 py-2 text-xs text-accent hover:underline border-t border-rule"
+                >
+                  Connect Google Workspace
+                </Link>
+              )}
+            </Command>
           </div>
         )}
       </div>

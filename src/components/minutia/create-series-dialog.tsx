@@ -3,9 +3,11 @@
 import * as React from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { motion } from "motion/react";
 import { createSeriesSchema, type CreateSeriesInput } from "@/lib/schemas";
 import { useCreateSeries } from "@/lib/hooks/use-series";
 import { CADENCES, CADENCE_LABELS } from "@/lib/constants";
+import type { Cadence } from "@/lib/types";
 import {
   Dialog,
   DialogContent,
@@ -18,6 +20,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { MinutiaCadenceIcon } from "@/components/minutia/minutia-icons";
 import { cn } from "@/lib/utils";
 import { Loader2 } from "lucide-react";
@@ -109,26 +112,37 @@ export function CreateSeriesDialog({
           {/* Cadence */}
           <div className="space-y-2.5">
             <Label className="text-sm font-semibold text-ink">Cadence</Label>
-            <div className="flex flex-wrap gap-2" role="radiogroup">
+            <RadioGroup
+              value={selectedCadence}
+              onValueChange={(value) => setValue("cadence", value as Cadence)}
+              aria-label="Cadence"
+              className="flex flex-wrap gap-1 rounded-full bg-paper-2 p-1"
+            >
               {CADENCES.map((cadence) => (
-                <button
+                <RadioGroupItem
                   key={cadence}
-                  type="button"
-                  role="radio"
-                  aria-checked={selectedCadence === cadence}
+                  value={cadence}
                   className={cn(
-                    "inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-sm font-medium transition-colors",
+                    "relative aspect-auto size-auto cursor-pointer rounded-full border-0 px-4 py-1.5 text-sm font-medium shadow-none outline-none transition-colors",
                     selectedCadence === cadence
-                      ? "bg-ink text-paper"
-                      : "bg-paper-2 text-ink-3 hover:text-ink-2 hover:bg-paper-3"
+                      ? "text-paper"
+                      : "text-ink-3 hover:text-ink-2"
                   )}
-                  onClick={() => setValue("cadence", cadence)}
                 >
-                  <MinutiaCadenceIcon cadence={cadence} className="size-3.5 text-current" />
-                  {CADENCE_LABELS[cadence]}
-                </button>
+                  {selectedCadence === cadence && (
+                    <motion.span
+                      layoutId="cadence-active-pill-create"
+                      className="absolute inset-0 -z-10 rounded-full bg-ink"
+                      transition={{ duration: 0.2, ease: "easeOut" }}
+                    />
+                  )}
+                  <span className="relative inline-flex items-center gap-1.5">
+                    <MinutiaCadenceIcon cadence={cadence} className="size-3.5 text-current" />
+                    {CADENCE_LABELS[cadence]}
+                  </span>
+                </RadioGroupItem>
               ))}
-            </div>
+            </RadioGroup>
           </div>
 
           {/* Default attendees */}

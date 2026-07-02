@@ -111,14 +111,13 @@ test.describe("Issue Detail Page", () => {
     await expect(page.getByText("Resolved after this update.")).toBeVisible();
   });
 
-  test("priority select changes value", async ({ page }) => {
+  test("priority control shows the current priority", async ({ page }) => {
     await page.goto(`/issues/${ISSUE_ID}`);
 
-    const prioritySelect = page.locator("select").first();
-    await expect(prioritySelect).toBeVisible();
-
-    const currentValue = await prioritySelect.inputValue();
-    expect(["low", "medium", "high", "critical"]).toContain(currentValue);
+    // Priority is a shadcn Select (role=combobox), not a native <select>.
+    const priority = page.getByRole("combobox", { name: "Priority" });
+    await expect(priority).toBeVisible();
+    await expect(priority).toContainText(/low|medium|high|critical/i);
   });
 
   test("issue detail is reachable from OIL Board", async ({ page }) => {

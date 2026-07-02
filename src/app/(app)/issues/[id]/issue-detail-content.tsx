@@ -40,10 +40,25 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { daysBetween, toLocalISODate } from "@/lib/date-utils";
 import { PRIORITIES, STATUS_CONFIG } from "@/lib/constants";
 import type { Issue, IssueStatus, Priority, IssueUpdate, Meeting } from "@/lib/types";
+
+// Mirrors the priority color tokens in priority-indicator.tsx.
+const priorityDotColor: Record<Priority, string> = {
+  critical: "bg-accent",
+  high: "bg-ink",
+  medium: "bg-ink-3",
+  low: "bg-ink-4",
+};
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -229,6 +244,7 @@ export function IssueDetailContent({ issueId }: IssueDetailContentProps) {
   const assignIssue = useAssignIssue();
   const [showUpdateForm, setShowUpdateForm] = React.useState(false);
   const [updateNote, setUpdateNote] = React.useState("");
+  const [dueOpen, setDueOpen] = React.useState(false);
   const updateInputRef = React.useRef<HTMLTextAreaElement>(null);
 
   const statusCycle: IssueStatus[] = ["open", "pending", "in_progress", "resolved"];
@@ -347,13 +363,14 @@ export function IssueDetailContent({ issueId }: IssueDetailContentProps) {
     updateIssue.mutate({ issueId: issue.id, [field]: value });
   }
 
-  function handlePriorityChange(e: React.ChangeEvent<HTMLSelectElement>) {
-    handleFieldSave("priority", e.target.value);
+  function handlePriorityChange(value: string) {
+    handleFieldSave("priority", value);
   }
 
   function handleDueDateSelect(date: Date | undefined) {
     const val = date ? formatISODate(date) : null;
     handleFieldSave("due_date", val);
+    setDueOpen(false);
   }
 
   async function handleSubmitUpdate() {
@@ -457,7 +474,7 @@ export function IssueDetailContent({ issueId }: IssueDetailContentProps) {
           {/* Due date */}
           <div className="flex items-center gap-2 text-sm">
             <span className="text-ink-3 w-20 shrink-0">Due</span>
-            <Popover>
+            <Popover open={dueOpen} onOpenChange={setDueOpen}>
               <PopoverTrigger asChild>
                 <Button
                   variant="ghost"
@@ -498,17 +515,26 @@ export function IssueDetailContent({ issueId }: IssueDetailContentProps) {
           {/* Priority */}
           <div className="flex items-center gap-2 text-sm">
             <span className="text-ink-3 w-20 shrink-0">Priority</span>
-            <select
-              value={issue.priority}
-              onChange={handlePriorityChange}
-              className="bg-transparent border border-transparent hover:border-rule focus:border-ink-3 rounded px-1 py-0.5 text-sm text-ink focus:outline-none cursor-pointer transition-colors"
-            >
-              {PRIORITIES.map((p) => (
-                <option key={p} value={p}>
-                  {p.charAt(0).toUpperCase() + p.slice(1)}
-                </option>
-              ))}
-            </select>
+            <Select value={issue.priority} onValueChange={handlePriorityChange}>
+              <SelectTrigger
+                size="sm"
+                aria-label="Priority"
+                className="h-7 w-auto gap-1.5 border-transparent bg-transparent px-1.5 py-0.5 text-sm text-ink hover:border-rule focus:border-ink-3 focus-visible:ring-1 focus-visible:ring-accent"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {PRIORITIES.map((p) => (
+                  <SelectItem key={p} value={p}>
+                    <span
+                      className={cn("size-2 rounded-full", priorityDotColor[p])}
+                      aria-hidden="true"
+                    />
+                    {p.charAt(0).toUpperCase() + p.slice(1)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           {/* Source */}

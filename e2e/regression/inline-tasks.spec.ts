@@ -74,8 +74,8 @@ test.describe("Inline Tasks", () => {
       .click();
     await page.getByPlaceholder("Search people...").fill("mina");
 
-    const directoryMatch = page.getByRole("button", {
-      name: /Assign Mina Director mina@example.com/,
+    const directoryMatch = page.getByRole("option", {
+      name: /Mina Director/,
     });
     await expect(directoryMatch).toBeVisible();
     await directoryMatch.click();
