@@ -76,14 +76,13 @@ export function useIssues(seriesId?: string, enabled = true) {
     queryKey: issueKeys.list(seriesId),
     enabled,
     queryFn: async () => {
-      let query = supabase
-        .from("issues")
-        .select("*, issue_updates(count)")
-        .order("created_at", { ascending: false });
-
-      if (seriesId) {
-        query = query.eq("series_id", seriesId);
-      }
+      let query = supabase.from("issues").select("*, issue_updates(count)");
+      query = seriesId
+        ? query
+            .eq("series_id", seriesId)
+            .order("sort_order", { ascending: true })
+            .order("created_at", { ascending: false })
+        : query.order("created_at", { ascending: false });
 
       const { data, error } = await query;
       if (error) throw error;
@@ -472,6 +471,33 @@ export function useUpdateIssue() {
       });
       queryClient.invalidateQueries({ queryKey: issueKeys.all });
     },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// useReorderIssues - persist drag-to-reorder within a series (issues.sort_order)
+// ---------------------------------------------------------------------------
+export function useReorderIssues() {
+  const supabase = createClient();
+  const queryClient = useQueryClient();
+  return useMutation<void, Error, { seriesId: string; orderedIds: string[] }, { previousIssueLists: IssueListSnapshot }>({
+    mutationFn: async ({ seriesId, orderedIds }) => {
+      const { error } = await supabase.rpc("reorder_issues", { p_series_id: seriesId, p_ordered_ids: orderedIds });
+      if (error) throw error;
+    },
+    onMutate: async ({ orderedIds }) => {
+      await queryClient.cancelQueries({ queryKey: issueKeys.all });
+      const previousIssueLists = getIssueListSnapshots(queryClient);
+      const pos = new Map(orderedIds.map((id, i) => [id, i + 1]));
+      updateCachedIssueLists(queryClient, (issue) => pos.has(issue.id) ? { ...issue, sort_order: pos.get(issue.id)! } : issue);
+      return { previousIssueLists };
+    },
+    onError: (_e, _v, ctx) => { if (ctx) restoreIssueListSnapshots(queryClient, ctx.previousIssueLists); },
+    onSettled: (_d, _e, { seriesId }) => {
+      queryClient.invalidateQueries({ queryKey: issueKeys.all });
+      queryClient.invalidateQueries({ queryKey: issueKeys.list(seriesId) });
+    },
+    meta: { errorMessage: "Couldn't save the new order." },
   });
 }
 

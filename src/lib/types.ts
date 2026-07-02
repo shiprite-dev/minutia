@@ -199,6 +199,7 @@ export interface Issue {
   category: IssueCategory;
   status: IssueStatus;
   priority: Priority;
+  sort_order: number;
   owner_user_id: string | null;
   owner_name: string | null;
   source: ItemSource;
