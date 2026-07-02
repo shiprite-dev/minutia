@@ -4,6 +4,8 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "motion/react";
+import { toast } from "sonner";
+import { useConfirm } from "@/components/ui/confirm";
 import {
   useMeeting,
   meetingKeys,
@@ -758,6 +760,7 @@ export function MeetingDetailContent({
 
   useMeetingRealtime(meetingId, seriesId);
   const presenceUsers = useMeetingPresence(meeting?.status === "live" ? meetingId : "");
+  const confirm = useConfirm();
   const endMeeting = useEndMeeting();
   const startOrJoinMeeting = useStartOrJoinMeeting();
   const createIssue = useCreateIssue();
@@ -1038,12 +1041,18 @@ export function MeetingDetailContent({
       }
     } catch {
       // Upload failed; the recording stays buffered in IndexedDB for recovery.
+      toast.error("Couldn't upload the recording, it's saved locally and will retry.");
     } finally {
       setSavingRecording(false);
     }
   }
 
   async function handleEndMeeting() {
+    if (!(await confirm({
+      title: "End meeting?",
+      description: "Notes become read-only for everyone once the meeting ends.",
+      confirmLabel: "End meeting",
+    }))) return;
     await handleStopRecording();
     await endMeeting.mutateAsync(meetingId);
   }
@@ -1407,7 +1416,9 @@ export function MeetingDetailContent({
                 <h3 className="text-[11px] font-mono uppercase tracking-wider text-ink-4 font-medium">
                   Freeform notes
                 </h3>
-                <span className="text-[10px] text-ink-4">Autosaved</span>
+                <span className="text-[10px] text-ink-4">
+                  {updateNotes.isPending ? "Saving…" : updateNotes.isError ? "Save failed" : "Autosaved"}
+                </span>
               </div>
               <Textarea
                 value={notes}

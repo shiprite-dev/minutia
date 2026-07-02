@@ -264,8 +264,14 @@ test.describe("Onboarding wizard", () => {
     await page.getByText("Skip setup").click();
     await page.waitForURL("**/dashboard");
     await waitForApp(page);
-    await expect(page.getByText("OIL Board")).toBeVisible();
-    await expect(page.getByText("Outstanding items")).toBeVisible();
+    // A freshly-onboarded user belongs to no series yet, so the dashboard shows
+    // the first-run empty state rather than the widget board.
+    await expect(
+      page.getByText("Every good log starts with one meeting.")
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Create your first series" })
+    ).toBeVisible();
   });
 
   test("completing onboarding does not show wizard on next visit", async ({
@@ -278,7 +284,9 @@ test.describe("Onboarding wizard", () => {
     await page.reload();
     await waitForApp(page);
     await expect(page.getByText("Welcome to Minutia")).not.toBeVisible();
-    await expect(page.getByText("Outstanding items")).toBeVisible();
+    await expect(
+      page.getByText("Every good log starts with one meeting.")
+    ).toBeVisible();
   });
 
   test("full flow: name, create series, complete", async ({ page }) => {

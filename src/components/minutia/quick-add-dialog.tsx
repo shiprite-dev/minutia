@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import {
   Dialog,
   DialogContent,
@@ -24,6 +25,7 @@ import { CATEGORY_CONFIG } from "@/lib/constants";
 import type { IssueCategory } from "@/lib/types";
 
 export function QuickAddDialog() {
+  const router = useRouter();
   const open = useUIStore((s) => s.quickAddDialogOpen);
   const closeQuickAddDialog = useUIStore((s) => s.closeQuickAddDialog);
 
@@ -31,6 +33,7 @@ export function QuickAddDialog() {
   const [seriesId, setSeriesId] = React.useState("");
   const [category, setCategory] = React.useState<IssueCategory>("action");
   const [error, setError] = React.useState<string | null>(null);
+  const [noMeetingSeriesId, setNoMeetingSeriesId] = React.useState<string | null>(null);
   const titleRef = React.useRef<HTMLInputElement>(null);
 
   const createIssue = useCreateIssue();
@@ -64,8 +67,14 @@ export function QuickAddDialog() {
       setSeriesId("");
       setCategory("action");
       setError(null);
+      setNoMeetingSeriesId(null);
     }
   }, [open]);
+
+  function goToSeries(id?: string) {
+    closeQuickAddDialog();
+    router.push(id ? `/series/${id}` : "/series");
+  }
 
   // Auto-select first series when dialog opens.
   React.useEffect(() => {
@@ -77,6 +86,7 @@ export function QuickAddDialog() {
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    setNoMeetingSeriesId(null);
 
     if (!title.trim()) {
       setError("Title is required");
@@ -90,6 +100,7 @@ export function QuickAddDialog() {
 
     if (!latestMeetingId) {
       setError("No meeting found for this series. Create a meeting first.");
+      setNoMeetingSeriesId(seriesId);
       return;
     }
 
@@ -157,21 +168,35 @@ export function QuickAddDialog() {
             >
               Series
             </label>
-            <Select
-              value={seriesId}
-              onValueChange={setSeriesId}
-            >
-              <SelectTrigger id="quick-add-series" className="w-full" aria-label="Series">
-                <SelectValue placeholder="Select a series" />
-              </SelectTrigger>
-              <SelectContent>
-                {seriesList.map((s) => (
-                  <SelectItem key={s.id} value={s.id}>
-                    {s.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {seriesList.length > 0 ? (
+              <Select
+                value={seriesId}
+                onValueChange={setSeriesId}
+              >
+                <SelectTrigger id="quick-add-series" className="w-full" aria-label="Series">
+                  <SelectValue placeholder="Select a series" />
+                </SelectTrigger>
+                <SelectContent>
+                  {seriesList.map((s) => (
+                    <SelectItem key={s.id} value={s.id}>
+                      {s.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : (
+              <div className="flex items-center justify-between gap-3 rounded-md border border-dashed border-border px-3 py-2.5">
+                <p className="text-sm text-ink-3">No series yet.</p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => goToSeries()}
+                >
+                  Create a series
+                </Button>
+              </div>
+            )}
           </div>
 
           <div className="space-y-1.5">
@@ -199,9 +224,19 @@ export function QuickAddDialog() {
           </div>
 
           {error && (
-            <p role="alert" className="text-sm text-destructive">
-              {error}
-            </p>
+            <div role="alert" className="space-y-2">
+              <p className="text-sm text-destructive">{error}</p>
+              {noMeetingSeriesId && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => goToSeries(noMeetingSeriesId)}
+                >
+                  Go to series to start a meeting
+                </Button>
+              )}
+            </div>
           )}
 
           <div className="flex justify-end gap-2 pt-2">

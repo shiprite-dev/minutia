@@ -6,9 +6,14 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
+import { applyOptimistic, patch } from "@/lib/optimistic";
+import { appendDecision, isListCache } from "@/lib/optimistic-updates";
 import type { Decision } from "@/lib/types";
 import type { CreateDecisionInput } from "@/lib/schemas";
 import { meetingKeys } from "./use-meetings";
+
+/** The meeting-detail cache carries a denormalized decisions array. */
+type MeetingWithDecisions = { decisions?: Decision[] } | undefined;
 
 // ---------------------------------------------------------------------------
 // Query key factory
@@ -63,10 +68,13 @@ export function useCreateDecision() {
   const supabase = createClient();
   const queryClient = useQueryClient();
 
-  return useMutation({
-    mutationFn: async (
-      input: CreateDecisionInput & { meeting_id: string; series_id: string }
-    ) => {
+  return useMutation<
+    Decision,
+    Error,
+    CreateDecisionInput & { meeting_id: string; series_id: string },
+    { rollback: () => void; tempId: string }
+  >({
+    mutationFn: async (input) => {
       const {
         data: { user },
       } = await supabase.auth.getUser();
@@ -84,7 +92,52 @@ export function useCreateDecision() {
       if (error) throw error;
       return data as Decision;
     },
-    onSuccess: (_data, variables) => {
+
+    // Append into the live meeting's denormalized decisions immediately so the
+    // in-meeting typing loop feels instant. The 2s poll reconciles the real row.
+    onMutate: async (input) => {
+      const tempId = globalThis.crypto?.randomUUID?.() ?? `optimistic-${Date.now()}`;
+      const optimistic = {
+        ...input,
+        id: tempId,
+        created_at: new Date().toISOString(),
+      } as unknown as Decision;
+
+      const { rollback } = await applyOptimistic(queryClient, [
+        // Live meeting's denormalized blob (the typing loop).
+        patch<MeetingWithDecisions>(
+          { queryKey: meetingKeys.detail(input.meeting_id) },
+          (old) =>
+            old ? { ...old, decisions: [optimistic, ...(old.decisions ?? [])] } : old
+        ),
+        // Standalone decision lists (series detail, palette, dashboard).
+        patch<Decision[]>(
+          { queryKey: decisionKeys.all, predicate: isListCache },
+          appendDecision(optimistic)
+        ),
+      ]);
+      return { rollback, tempId };
+    },
+
+    onError: (_err, _vars, context) => context?.rollback(),
+
+    onSuccess: (data, variables, context) => {
+      // Swap the temp row for the server row in place (no flicker before poll).
+      queryClient.setQueryData<MeetingWithDecisions>(
+        meetingKeys.detail(variables.meeting_id),
+        (old) =>
+          old
+            ? {
+                ...old,
+                decisions: (old.decisions ?? []).map((d) =>
+                  d.id === context?.tempId ? data : d
+                ),
+              }
+            : old
+      );
+    },
+
+    onSettled: (_data, _error, variables) => {
       queryClient.invalidateQueries({ queryKey: decisionKeys.all });
       queryClient.invalidateQueries({
         queryKey: meetingKeys.detail(variables.meeting_id),

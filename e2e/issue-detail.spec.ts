@@ -71,19 +71,27 @@ test.describe("Issue Detail Page", () => {
     }
   });
 
-  test("delete button shows confirmation dialog", async ({ page }) => {
+  test("delete shows an undo toast and Undo restores the issue", async ({ page }) => {
     await page.goto(`/issues/${ISSUE_ID}`);
 
     const deleteBtn = page.getByRole("button", { name: /Delete issue/i });
     await expect(deleteBtn).toBeVisible();
     await deleteBtn.click();
 
-    await expect(page.getByText("Permanently delete this issue?")).toBeVisible();
-    await expect(page.getByRole("button", { name: /Yes, delete/i })).toBeVisible();
-    await expect(page.getByRole("button", { name: /Cancel/i })).toBeVisible();
+    // Delete is optimistic-with-undo (no confirm dialog): it navigates away and
+    // surfaces an Undo toast. Undo BEFORE the toast auto-commits so the shared
+    // seeded issue survives for the rest of the suite.
+    await expect(page).toHaveURL(/\/dashboard/);
+    await expect(page.getByText("Issue deleted").first()).toBeVisible();
+    const undo = page.getByRole("button", { name: /Undo/i }).first();
+    await expect(undo).toBeVisible();
+    await undo.click();
 
-    await page.getByRole("button", { name: /Cancel/i }).click();
-    await expect(page.getByText("Permanently delete this issue?")).not.toBeVisible();
+    // The issue was never committed, so it still loads.
+    await page.goto(`/issues/${ISSUE_ID}`);
+    await expect(
+      page.getByRole("button", { name: /Delete issue/i })
+    ).toBeVisible();
   });
 
   test("shows 404 state for non-existent issue", async ({ page }) => {

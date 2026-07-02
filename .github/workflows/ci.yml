@@ -89,6 +89,9 @@ jobs:
       - name: Verify reminders core
         run: pnpm test:reminders
 
+      - name: Verify email sender resolution
+        run: pnpm test:email-sender
+
       - name: Verify local date formatting
         run: pnpm test:date
 
@@ -106,6 +109,12 @@ jobs:
 
       - name: Verify trusted proxy IP resolution
         run: pnpm test:proxy
+
+      - name: Verify humanized error contract
+        run: pnpm test:errors
+
+      - name: Verify optimistic cache + pending-delete core
+        run: pnpm test:optimistic
 
       - name: Build (includes typecheck)
         run: pnpm build
