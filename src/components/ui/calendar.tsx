@@ -16,21 +16,25 @@ function Calendar({
   return (
     <DayPicker
       showOutsideDays={showOutsideDays}
+      // Render prev/next as children of each month so they flank the caption.
+      // Without this, rdp v10 renders Nav at the root and the absolutely
+      // positioned arrows escape to the popover, floating over the date field.
+      navLayout="around"
       className={cn("p-3", className)}
       classNames={{
         root: "w-full",
         months: "flex flex-col sm:flex-row gap-4 sm:gap-6",
-        month: "space-y-4",
+        month: "space-y-4 relative",
         month_caption: "flex justify-center pt-1 relative items-center",
         caption_label: "text-sm font-medium",
         nav: "flex items-center gap-1",
         button_previous: cn(
           buttonVariants({ variant: "outline" }),
-          "size-7 bg-transparent p-0 opacity-50 hover:opacity-100 absolute left-1"
+          "size-7 bg-transparent p-0 opacity-50 hover:opacity-100 absolute left-1 top-0"
         ),
         button_next: cn(
           buttonVariants({ variant: "outline" }),
-          "size-7 bg-transparent p-0 opacity-50 hover:opacity-100 absolute right-1"
+          "size-7 bg-transparent p-0 opacity-50 hover:opacity-100 absolute right-1 top-0"
         ),
         month_grid: "w-full border-collapse space-y-1",
         weekdays: "flex",

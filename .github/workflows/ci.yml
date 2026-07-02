@@ -92,6 +92,9 @@ jobs:
       - name: Verify email sender resolution
         run: pnpm test:email-sender
 
+      - name: Verify local date formatting
+        run: pnpm test:date
+
       - name: Verify admin health summarizer
         run: pnpm test:admin-health
 
