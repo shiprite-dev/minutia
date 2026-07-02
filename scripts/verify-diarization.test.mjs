@@ -78,3 +78,9 @@ test("assembleDiarizedTranscript resolves speakers and attributes transcript_raw
   assert.match(out.transcriptRaw, /^Sarah Lee: Hi this is Sarah\./);
   assert.equal(out.segments.length, 2);
 });
+
+test("re-flatten after a speaker correction updates the attributed transcript", () => {
+  const segments = [{ speaker: "A", start: 0, end: 2, text: "Hello.", confidence: 0.9 }];
+  const corrected = { A: "Mike Ross" };
+  assert.equal(flattenSegments(segments, corrected), "Mike Ross: Hello.");
+});
