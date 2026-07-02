@@ -76,7 +76,7 @@ function SpeakerChip({
   function commit() {
     const trimmed = value.trim();
     setOpen(false);
-    if (trimmed && trimmed !== name) onRename(trimmed);
+    if (trimmed !== (name ?? "")) onRename(trimmed || null);
   }
 
   return (
