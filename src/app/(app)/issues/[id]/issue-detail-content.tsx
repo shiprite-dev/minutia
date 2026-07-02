@@ -30,7 +30,7 @@ import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
-import { daysBetween } from "@/lib/date-utils";
+import { daysBetween, toLocalISODate } from "@/lib/date-utils";
 import { PRIORITIES, STATUS_CONFIG } from "@/lib/constants";
 import type { IssueStatus, Priority, IssueUpdate, Meeting } from "@/lib/types";
 
@@ -47,7 +47,10 @@ function formatDate(date: Date | string): string {
 }
 
 function formatISODate(date: Date | string): string {
-  return new Date(date).toISOString().split("T")[0];
+  // A picked Date is at local midnight; format from local fields so it is not
+  // shifted back a day in timezones ahead of UTC. Stored strings are already
+  // date-only, so slice them directly without re-parsing.
+  return typeof date === "string" ? date.slice(0, 10) : toLocalISODate(date);
 }
 
 function sourceBadgeLabel(source: string): string {

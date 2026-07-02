@@ -89,6 +89,9 @@ jobs:
       - name: Verify reminders core
         run: pnpm test:reminders
 
+      - name: Verify local date formatting
+        run: pnpm test:date
+
       - name: Verify admin health summarizer
         run: pnpm test:admin-health
 
