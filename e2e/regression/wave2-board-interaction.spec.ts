@@ -74,17 +74,36 @@ test.describe("Wave 2: OIL board drag-to-reorder", () => {
       const titlesBefore = await rowTitles(section);
       expect(titlesBefore.length).toBe(snapshot.length);
 
-      const grip = issueRow(page, titlesBefore[0]).locator('[aria-roledescription="sortable issue"]');
+      const firstRow = issueRow(page, titlesBefore[0]);
+      const secondRow = issueRow(page, titlesBefore[1]);
+      await firstRow.hover(); // grip is opacity-0 until row hover
+      const grip = firstRow.locator('[aria-roledescription="sortable issue"]');
       await expect(grip).toBeVisible();
+      const gripBox = await grip.boundingBox();
+      const targetBox = await secondRow.boundingBox();
+      if (!gripBox || !targetBox) throw new Error("missing bounding box for drag");
 
       const reorderResponse = page.waitForResponse(
         (res) =>
-          res.url().includes("/rest/v1/rpc/reorder_issues") && res.request().method() === "POST"
+          res.url().includes("/rest/v1/rpc/reorder_issues") &&
+          res.request().method() === "POST",
+        { timeout: 15000 }
       );
-      await grip.focus();
-      await page.keyboard.press("Space");
-      await page.keyboard.press("ArrowDown");
-      await page.keyboard.press("Space");
+      // Mouse drag (dnd-kit PointerSensor). Move past the 4px activation
+      // constraint, then step down past the second row so it drops below it.
+      await page.mouse.move(gripBox.x + gripBox.width / 2, gripBox.y + gripBox.height / 2);
+      await page.mouse.down();
+      await page.mouse.move(
+        gripBox.x + gripBox.width / 2,
+        gripBox.y + gripBox.height / 2 + 8,
+        { steps: 5 }
+      );
+      await page.mouse.move(
+        targetBox.x + targetBox.width / 2,
+        targetBox.y + targetBox.height - 2,
+        { steps: 12 }
+      );
+      await page.mouse.up();
       const response = await reorderResponse;
       expect(response.ok()).toBeTruthy();
 
