@@ -2,8 +2,10 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { motion } from "motion/react";
 import Link from "next/link";
+import { toast } from "sonner";
 import {
   ArrowLeft,
   Check,
@@ -18,7 +20,16 @@ import {
   useDeleteIssue,
   useAddIssueUpdate,
   useAssignIssue,
+  issueKeys,
 } from "@/lib/hooks/use-issues";
+import { applyOptimistic, patch } from "@/lib/optimistic";
+import { removeIssue, isListCache } from "@/lib/optimistic-updates";
+import {
+  beginPendingDelete,
+  undoPendingDelete,
+  isPendingDelete,
+  markCommitting,
+} from "@/lib/pending-delete";
 import { StatusChip } from "@/components/minutia/status-chip";
 import { CategoryBadge } from "@/components/minutia/category-badge";
 import { IssueKey } from "@/components/minutia/issue-key";
@@ -32,7 +43,7 @@ import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover
 import { cn } from "@/lib/utils";
 import { daysBetween } from "@/lib/date-utils";
 import { PRIORITIES, STATUS_CONFIG } from "@/lib/constants";
-import type { IssueStatus, Priority, IssueUpdate, Meeting } from "@/lib/types";
+import type { Issue, IssueStatus, Priority, IssueUpdate, Meeting } from "@/lib/types";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -206,13 +217,13 @@ interface IssueDetailContentProps {
 
 export function IssueDetailContent({ issueId }: IssueDetailContentProps) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { data: issue, isLoading, isError } = useIssue(issueId);
   const updateIssue = useUpdateIssue();
   const updateIssueStatus = useUpdateIssueStatus();
   const deleteIssue = useDeleteIssue();
   const addUpdate = useAddIssueUpdate();
   const assignIssue = useAssignIssue();
-  const [confirmDelete, setConfirmDelete] = React.useState(false);
   const [showUpdateForm, setShowUpdateForm] = React.useState(false);
   const [updateNote, setUpdateNote] = React.useState("");
   const updateInputRef = React.useRef<HTMLTextAreaElement>(null);
@@ -354,10 +365,37 @@ export function IssueDetailContent({ issueId }: IssueDetailContentProps) {
     setShowUpdateForm(false);
   }
 
-  async function handleDelete() {
+  function handleDelete() {
     if (!issue) return;
-    await deleteIssue.mutateAsync(issue.id);
-    router.push("/");
+    const id = issue.id;
+    // Re-entrancy guard: a double-click (client navigation isn't instant) must
+    // not spawn a second toast + second commit for the same issue.
+    if (isPendingDelete(id)) return;
+
+    function commit() {
+      if (!isPendingDelete(id)) return;
+      markCommitting(id);
+      deleteIssue.mutate(id);
+    }
+
+    beginPendingDelete(id);
+    void applyOptimistic(queryClient, [
+      patch<Issue[]>({ queryKey: issueKeys.all, predicate: isListCache }, removeIssue(id)),
+    ]);
+    router.push("/dashboard");
+    toast("Issue deleted", {
+      duration: 5000,
+      action: {
+        label: "Undo",
+        onClick: () => {
+          if (undoPendingDelete(id)) {
+            queryClient.invalidateQueries({ queryKey: issueKeys.all });
+          }
+        },
+      },
+      onAutoClose: commit,
+      onDismiss: commit,
+    });
   }
 
   return (
@@ -615,37 +653,14 @@ export function IssueDetailContent({ issueId }: IssueDetailContentProps) {
         {/* Divider before danger zone */}
         <div className="border-t border-rule pt-6">
           {/* Delete */}
-          {!confirmDelete ? (
-            <Button
-              variant="outline"
-              className="text-danger border-danger/30 hover:bg-danger-soft text-sm"
-              onClick={() => setConfirmDelete(true)}
-            >
-              <Trash2 className="size-3.5" />
-              Delete issue
-            </Button>
-          ) : (
-            <div className="flex items-center gap-3">
-              <span className="text-sm text-ink-2">
-                Permanently delete this issue?
-              </span>
-              <Button
-                variant="outline"
-                className="text-danger border-danger/30 hover:bg-danger-soft text-sm"
-                onClick={handleDelete}
-                disabled={deleteIssue.isPending}
-              >
-                {deleteIssue.isPending ? "Deleting..." : "Yes, delete"}
-              </Button>
-              <Button
-                variant="outline"
-                className="text-sm"
-                onClick={() => setConfirmDelete(false)}
-              >
-                Cancel
-              </Button>
-            </div>
-          )}
+          <Button
+            variant="outline"
+            className="text-danger border-danger/30 hover:bg-danger-soft text-sm"
+            onClick={handleDelete}
+          >
+            <Trash2 className="size-3.5" />
+            Delete issue
+          </Button>
         </div>
       </div>
     </div>
