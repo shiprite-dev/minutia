@@ -35,6 +35,12 @@ export {
   type TranscriptionResult,
   type TranscriptionErrorCode,
 } from "./shared";
+export {
+  resolveSpeakerMap,
+  flattenSegments,
+  type SpeakerProposal,
+  type SpeakerMapResult,
+} from "./diarization";
 
 type Env = Record<string, string | undefined>;
 
