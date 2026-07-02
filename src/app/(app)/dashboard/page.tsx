@@ -2,22 +2,44 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { motion } from "motion/react";
+import { motion, AnimatePresence } from "motion/react";
 import Link from "next/link";
 import {
   ArrowRight,
   Calendar,
+  GripVertical,
   Layers,
   Plus,
 } from "lucide-react";
 import {
+  DndContext,
+  DragOverlay,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type Announcements,
+  type DragStartEvent,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  verticalListSortingStrategy,
+  useSortable,
+  sortableKeyboardCoordinates,
+  arrayMove,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import {
   useIssues,
   useUpdateIssueStatus,
+  useReorderIssues,
 } from "@/lib/hooks/use-issues";
 import { useSeries } from "@/lib/hooks/use-series";
 import { useAllMeetings } from "@/lib/hooks/use-meetings";
 import { useDecisions } from "@/lib/hooks/use-decisions";
-import { CADENCE_LABELS, PRIORITY_CONFIG, STATUS_CONFIG } from "@/lib/constants";
+import { CADENCE_LABELS, STATUS_CONFIG } from "@/lib/constants";
 import { StatusChip } from "@/components/minutia/status-chip";
 import { CategoryBadge } from "@/components/minutia/category-badge";
 import { MinutiaCadenceIcon } from "@/components/minutia/minutia-icons";
@@ -25,6 +47,7 @@ import { IssueKey } from "@/components/minutia/issue-key";
 import { PrefetchIssueLink } from "@/components/minutia/prefetch-issue-link";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
   Empty,
   EmptyMedia,
@@ -35,7 +58,8 @@ import {
 import { HintTooltip } from "@/components/minutia/hint-tooltip";
 import { cn } from "@/lib/utils";
 import { formatShortDate, daysBetween } from "@/lib/date-utils";
-import { isOpen, isOverdue } from "@/lib/issue-utils";
+import { isOpen, isOverdue, byManualOrder } from "@/lib/issue-utils";
+import { isEditableTarget } from "@/components/minutia/command-palette";
 import { useWidgetStore } from "@/lib/stores/widget-store";
 import { useUIStore } from "@/lib/stores/ui-store";
 import { WidgetShell } from "@/components/minutia/widgets/widget-shell";
@@ -93,6 +117,37 @@ function ageGroup(days: number): string {
   if (days <= 14) return "8–14d";
   if (days <= 30) return "15–30d";
   return "30d+";
+}
+
+function ownerKeyOf(issue: Issue): string | null {
+  return issue.owner_user_id ?? issue.owner_name ?? null;
+}
+
+function matchesQuery(issue: Issue, query: string): boolean {
+  const needle = query.trim().toLowerCase();
+  if (!needle) return true;
+  const key = `MIN-${issue.issue_number}`;
+  return (
+    issue.title.toLowerCase().includes(needle) ||
+    key.toLowerCase().includes(needle) ||
+    (issue.owner_name ?? "").toLowerCase().includes(needle)
+  );
+}
+
+function highlightMatch(text: string, query: string): React.ReactNode {
+  const q = query.trim();
+  if (!q) return text;
+  const idx = text.toLowerCase().indexOf(q.toLowerCase());
+  if (idx === -1) return text;
+  return (
+    <>
+      {text.slice(0, idx)}
+      <mark className="rounded-sm bg-accent/15 text-inherit">
+        {text.slice(idx, idx + q.length)}
+      </mark>
+      {text.slice(idx + q.length)}
+    </>
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -315,14 +370,37 @@ function OutstandingWidget({
   const [filter, setFilter] = React.useState<"all" | "open" | "pending" | "overdue">("all");
   const [focusedIdx, setFocusedIdx] = React.useState(-1);
   const [expandedSeries, setExpandedSeries] = React.useState<Set<string>>(new Set());
+  const [ownerFilter, setOwnerFilter] = React.useState<{ key: string; label: string } | null>(null);
+  const [query, setQuery] = React.useState("");
+  const deferredQuery = React.useDeferredValue(query);
+  const [activeId, setActiveId] = React.useState<string | null>(null);
+  const searchRef = React.useRef<HTMLInputElement>(null);
+  const reorder = useReorderIssues();
   const PREVIEW_COUNT = 3;
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
+
+  // Dragging while a subset of issues is filtered out would rewrite hidden
+  // rows' positions, so reordering is only offered on the full, unfiltered view.
+  const dragEnabled = filter === "all" && !ownerFilter && !query;
+
+  const issueById = React.useMemo(() => {
+    const map = new Map<string, Issue>();
+    for (const issue of issues) map.set(issue.id, issue);
+    return map;
+  }, [issues]);
 
   const openIssues = issues.filter(isOpen);
 
   const filtered = openIssues.filter((issue) => {
-    if (filter === "open") return issue.status === "open";
-    if (filter === "pending") return issue.status === "pending";
-    if (filter === "overdue") return isOverdue(issue);
+    if (filter === "open" && issue.status !== "open") return false;
+    if (filter === "pending" && issue.status !== "pending") return false;
+    if (filter === "overdue" && !isOverdue(issue)) return false;
+    if (ownerFilter && ownerKeyOf(issue) !== ownerFilter.key) return false;
+    if (deferredQuery && !matchesQuery(issue, deferredQuery)) return false;
     return true;
   });
 
@@ -333,13 +411,10 @@ function OutstandingWidget({
     grouped.set(issue.series_id, existing);
   }
 
-  const sortedPriority = (a: Issue, b: Issue) =>
-    PRIORITY_CONFIG[a.priority].order - PRIORITY_CONFIG[b.priority].order;
-
   const flatIssues = React.useMemo(() => {
     const result: Issue[] = [];
     for (const series of seriesList) {
-      const seriesIssues = (grouped.get(series.id) ?? []).sort(sortedPriority);
+      const seriesIssues = (grouped.get(series.id) ?? []).slice().sort(byManualOrder);
       const visible = expandedSeries.has(series.id)
         ? seriesIssues
         : seriesIssues.slice(0, PREVIEW_COUNT);
@@ -352,6 +427,8 @@ function OutstandingWidget({
     function handleKey(e: KeyboardEvent) {
       const tag = (e.target as HTMLElement).tagName;
       if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      // Don't let j/k/arrow nav fight a keyboard drag-reorder in progress.
+      if (activeId) return;
 
       if (e.key === "j" || e.key === "ArrowDown") {
         e.preventDefault();
@@ -366,9 +443,78 @@ function OutstandingWidget({
     }
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
-  }, [flatIssues, focusedIdx, router]);
+  }, [flatIssues, focusedIdx, router, activeId]);
 
-  React.useEffect(() => { setFocusedIdx(-1); }, [filter]);
+  React.useEffect(() => { setFocusedIdx(-1); }, [filter, ownerFilter, query]);
+
+  // Capture phase so "/" focuses in-board search before the ⌘K palette's
+  // bubble-phase listener sees it (the two stay distinct surfaces).
+  React.useEffect(() => {
+    function handleSlash(e: KeyboardEvent) {
+      if (e.key !== "/" || isEditableTarget(e.target)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      searchRef.current?.focus();
+    }
+    document.addEventListener("keydown", handleSlash, { capture: true });
+    return () => document.removeEventListener("keydown", handleSlash, { capture: true });
+  }, []);
+
+  function handleOwnerClick(issue: Issue) {
+    const key = ownerKeyOf(issue);
+    if (!key) return;
+    setOwnerFilter((cur) =>
+      cur?.key === key ? null : { key, label: issue.owner_name ?? "Unassigned" }
+    );
+  }
+
+  function handleDragStart(event: DragStartEvent) {
+    setActiveId(String(event.active.id));
+  }
+
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) {
+      setActiveId(null);
+      return;
+    }
+    const seriesId = issueById.get(String(active.id))?.series_id;
+    if (!seriesId) {
+      setActiveId(null);
+      return;
+    }
+    const fullIds = (grouped.get(seriesId) ?? []).slice().sort(byManualOrder).map((i) => i.id);
+    const from = fullIds.indexOf(String(active.id));
+    const to = fullIds.indexOf(String(over.id));
+    if (from !== -1 && to !== -1) {
+      reorder.mutate({ seriesId, orderedIds: arrayMove(fullIds, from, to) });
+    }
+    setActiveId(null);
+  }
+
+  const announcements: Announcements = {
+    onDragStart({ active }) {
+      const title = issueById.get(String(active.id))?.title ?? "issue";
+      return `Picked up issue ${title}. Use arrow keys to move, space to drop, escape to cancel.`;
+    },
+    onDragOver({ active, over }) {
+      if (!over) return undefined;
+      const seriesId = issueById.get(String(active.id))?.series_id;
+      if (!seriesId) return undefined;
+      const fullIds = (grouped.get(seriesId) ?? []).slice().sort(byManualOrder).map((i) => i.id);
+      const index = fullIds.indexOf(String(over.id));
+      if (index === -1) return undefined;
+      return `Issue moved to position ${index + 1} of ${fullIds.length}.`;
+    },
+    onDragEnd() {
+      return "Issue dropped.";
+    },
+    onDragCancel() {
+      return "Reorder cancelled.";
+    },
+  };
+
+  const activeIssue = activeId ? issueById.get(activeId) : null;
 
   const filters = [
     { key: "all" as const, label: "All" },
@@ -379,128 +525,226 @@ function OutstandingWidget({
 
   return (
     <WidgetShell id={id} index={widgetIndex}>
-      <div className="flex flex-wrap items-start justify-between gap-2 mb-1">
-        <h3 className="font-display text-lg font-semibold text-ink">Outstanding items</h3>
-        <div className="flex items-center gap-1 overflow-x-auto" role="tablist" aria-label="Filter outstanding items">
-          {filters.map((f) => (
-            <button
-              key={f.key}
-              type="button"
-              role="tab"
-              aria-selected={filter === f.key}
-              onClick={() => setFilter(f.key)}
-              className={cn(
-                "rounded-full px-3 py-1 text-xs font-medium transition-colors outline-none",
-                "focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-paper",
-                filter === f.key
-                  ? "bg-ink text-paper"
-                  : "bg-paper-2 text-ink-3 hover:text-ink-2"
-              )}
-            >
-              {f.label}
-            </button>
-          ))}
-        </div>
-      </div>
-      <p className="text-xs text-ink-4 mb-5">Grouped by series</p>
-
-      {openIssues.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-12 text-center">
-          <p className="text-[13px] text-ink-2">Nothing outstanding. Enjoy the quiet.</p>
-          <div className="mt-3 flex gap-1 text-ink-4" aria-hidden="true">
-            {"— · — · — · — · —".split("").map((c, i) => (
-              <span key={i} className="font-display text-xs">{c}</span>
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
+        onDragCancel={() => setActiveId(null)}
+        accessibility={{ announcements }}
+      >
+        <div className="flex flex-wrap items-start justify-between gap-2 mb-3">
+          <h3 className="font-display text-lg font-semibold text-ink">Outstanding items</h3>
+          <div className="flex items-center gap-1 overflow-x-auto" role="tablist" aria-label="Filter outstanding items">
+            {filters.map((f) => (
+              <button
+                key={f.key}
+                type="button"
+                role="tab"
+                aria-selected={filter === f.key}
+                onClick={() => setFilter(f.key)}
+                className={cn(
+                  "rounded-full px-3 py-1 text-xs font-medium transition-colors outline-none",
+                  "focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-paper",
+                  filter === f.key
+                    ? "bg-ink text-paper"
+                    : "bg-paper-2 text-ink-3 hover:text-ink-2"
+                )}
+              >
+                {f.label}
+              </button>
             ))}
           </div>
         </div>
-      ) : (
-        <div className="divide-y divide-rule">
-          {seriesList.map((series) => {
-            const seriesIssues = (grouped.get(series.id) ?? []).sort(sortedPriority);
-            if (seriesIssues.length === 0 && filter !== "all") return null;
-
-            return (
-              <div key={series.id} className="py-5 first:pt-0 last:pb-0">
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mb-3">
-                  <MinutiaCadenceIcon cadence={series.cadence} className="size-4 shrink-0 text-ink" />
-                  <Link
-                    href={`/series/${series.id}`}
-                    className="text-sm font-semibold text-ink hover:text-accent transition-colors"
+        <input
+          ref={searchRef}
+          type="search"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") {
+              setQuery("");
+              searchRef.current?.blur();
+            }
+          }}
+          placeholder="Filter issues… /"
+          aria-label="Filter issues"
+          className="mb-2 w-full max-w-[240px] rounded-md border border-rule bg-paper px-2.5 py-1.5 text-xs text-ink placeholder:text-ink-4 outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-paper"
+        />
+        <p className="text-xs text-ink-4 mb-2">Grouped by series</p>
+        <AnimatePresence>
+          {(ownerFilter || query) && (
+            <motion.div
+              key="active-filters"
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              transition={{ duration: 0.15, ease: "easeOut" }}
+              className="flex flex-wrap items-center gap-2 mb-4"
+            >
+              {ownerFilter && (
+                <Badge variant="secondary" className="gap-1">
+                  Owner: {ownerFilter.label}
+                  <button
+                    type="button"
+                    aria-label="Remove owner filter"
+                    onClick={() => setOwnerFilter(null)}
+                    className="ml-0.5 text-ink-4 hover:text-ink"
                   >
-                    {series.name}
-                  </Link>
-                  <span className="inline-flex items-center gap-1 text-xs text-ink-4">
-                    {CADENCE_LABELS[series.cadence]}
-                  </span>
-                  <span className="ml-auto text-xs text-ink-4 tabular-nums">
-                    {seriesIssues.length} item{seriesIssues.length !== 1 ? "s" : ""}
-                  </span>
-                </div>
+                    &times;
+                  </button>
+                </Badge>
+              )}
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setOwnerFilter(null);
+                  setQuery("");
+                }}
+              >
+                Clear filters
+              </Button>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
-                {seriesIssues.length === 0 ? (
-                  <p className="text-xs text-ink-4 pl-5 mb-2">No matching items</p>
-                ) : (() => {
-                  const isExpanded = expandedSeries.has(series.id);
-                  const visible = isExpanded ? seriesIssues : seriesIssues.slice(0, PREVIEW_COUNT);
-                  const hiddenCount = seriesIssues.length - PREVIEW_COUNT;
+        {openIssues.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-12 text-center">
+            <p className="text-[13px] text-ink-2">Nothing outstanding. Enjoy the quiet.</p>
+            <div className="mt-3 flex gap-1 text-ink-4" aria-hidden="true">
+              {"— · — · — · — · —".split("").map((c, i) => (
+                <span key={i} className="font-display text-xs">{c}</span>
+              ))}
+            </div>
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="flex flex-col items-center justify-center gap-3 py-12 text-center">
+            <p className="text-[13px] text-ink-2">No issues match.</p>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setFilter("all");
+                setOwnerFilter(null);
+                setQuery("");
+              }}
+            >
+              Clear filters
+            </Button>
+          </div>
+        ) : (
+          <div className="divide-y divide-rule">
+            {seriesList.map((series) => {
+              const seriesIssues = (grouped.get(series.id) ?? []).slice().sort(byManualOrder);
+              if (
+                seriesIssues.length === 0 &&
+                (filter !== "all" || ownerFilter || query)
+              )
+                return null;
 
-                  return (
-                    <div className="space-y-1.5">
-                      {visible.map((issue, idx) => {
-                        const globalIdx = flatIssues.indexOf(issue);
-                        return (
-                          <IssueRow
-                            key={issue.id}
-                            issue={issue}
-                            index={idx}
-                            focused={globalIdx === focusedIdx}
-                            onStatusChange={onStatusChange}
-                          />
-                        );
-                      })}
-                      {hiddenCount > 0 && !isExpanded && (
-                        <div className="flex items-center gap-3 pl-3 pt-1">
+              return (
+                <div key={series.id} className="py-5 first:pt-0 last:pb-0">
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mb-3">
+                    <MinutiaCadenceIcon cadence={series.cadence} className="size-4 shrink-0 text-ink" />
+                    <Link
+                      href={`/series/${series.id}`}
+                      className="text-sm font-semibold text-ink hover:text-accent transition-colors"
+                    >
+                      {series.name}
+                    </Link>
+                    <span className="inline-flex items-center gap-1 text-xs text-ink-4">
+                      {CADENCE_LABELS[series.cadence]}
+                    </span>
+                    <span className="ml-auto text-xs text-ink-4 tabular-nums">
+                      {seriesIssues.length} item{seriesIssues.length !== 1 ? "s" : ""}
+                    </span>
+                  </div>
+
+                  {seriesIssues.length === 0 ? (
+                    <p className="text-xs text-ink-4 pl-5 mb-2">No matching items</p>
+                  ) : (() => {
+                    const isExpanded = expandedSeries.has(series.id);
+                    const visible = isExpanded ? seriesIssues : seriesIssues.slice(0, PREVIEW_COUNT);
+                    const hiddenCount = seriesIssues.length - PREVIEW_COUNT;
+                    const groupSortedIds = seriesIssues.map((i) => i.id);
+
+                    return (
+                      <div className="space-y-1.5">
+                        <SortableContext items={groupSortedIds} strategy={verticalListSortingStrategy}>
+                          {visible.map((issue, idx) => {
+                            const globalIdx = flatIssues.indexOf(issue);
+                            return (
+                              <IssueRow
+                                key={issue.id}
+                                issue={issue}
+                                index={idx}
+                                focused={globalIdx === focusedIdx}
+                                onStatusChange={onStatusChange}
+                                draggable={dragEnabled}
+                                highlightQuery={deferredQuery}
+                                activeOwnerKey={ownerFilter?.key ?? null}
+                                onOwnerClick={handleOwnerClick}
+                              />
+                            );
+                          })}
+                        </SortableContext>
+                        {hiddenCount > 0 && !isExpanded && (
+                          <div className="flex items-center gap-3 pl-3 pt-1">
+                            <button
+                              type="button"
+                              onClick={() => setExpandedSeries((prev) => {
+                                const next = new Set(prev);
+                                next.add(series.id);
+                                return next;
+                              })}
+                              className="text-xs font-medium text-ink-3 hover:text-accent transition-colors cursor-pointer"
+                            >
+                              +{hiddenCount} more
+                            </button>
+                            <span className="text-ink-4">·</span>
+                            <Link
+                              href={`/series/${series.id}`}
+                              className="text-xs font-medium text-ink-3 hover:text-accent transition-colors"
+                            >
+                              View series
+                            </Link>
+                          </div>
+                        )}
+                        {isExpanded && hiddenCount > 0 && (
                           <button
                             type="button"
                             onClick={() => setExpandedSeries((prev) => {
                               const next = new Set(prev);
-                              next.add(series.id);
+                              next.delete(series.id);
                               return next;
                             })}
-                            className="text-xs font-medium text-ink-3 hover:text-accent transition-colors cursor-pointer"
+                            className="text-xs font-medium text-ink-3 hover:text-accent transition-colors pl-3 pt-1 cursor-pointer"
                           >
-                            +{hiddenCount} more
+                            Show less
                           </button>
-                          <span className="text-ink-4">·</span>
-                          <Link
-                            href={`/series/${series.id}`}
-                            className="text-xs font-medium text-ink-3 hover:text-accent transition-colors"
-                          >
-                            View series
-                          </Link>
-                        </div>
-                      )}
-                      {isExpanded && hiddenCount > 0 && (
-                        <button
-                          type="button"
-                          onClick={() => setExpandedSeries((prev) => {
-                            const next = new Set(prev);
-                            next.delete(series.id);
-                            return next;
-                          })}
-                          className="text-xs font-medium text-ink-3 hover:text-accent transition-colors pl-3 pt-1 cursor-pointer"
-                        >
-                          Show less
-                        </button>
-                      )}
-                    </div>
-                  );
-                })()}
-              </div>
-            );
-          })}
-        </div>
-      )}
+                        )}
+                      </div>
+                    );
+                  })()}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        <DragOverlay>
+          {activeIssue ? (
+            <div className="flex items-center gap-2 rounded-lg bg-card px-3 py-2.5 shadow-lg">
+              <CategoryBadge category={activeIssue.category} size="sm" />
+              <IssueKey issue={activeIssue} className="h-5 px-1.5 text-[10px]" />
+              <span className="text-sm font-medium text-ink truncate">{activeIssue.title}</span>
+            </div>
+          ) : null}
+        </DragOverlay>
+      </DndContext>
     </WidgetShell>
   );
 }
@@ -510,14 +754,27 @@ function IssueRow({
   index,
   focused,
   onStatusChange,
+  draggable,
+  highlightQuery,
+  activeOwnerKey,
+  onOwnerClick,
 }: {
   issue: Issue;
   index: number;
   focused?: boolean;
   onStatusChange: (issueId: string, oldStatus: IssueStatus, newStatus: IssueStatus, seriesId: string) => void;
+  draggable: boolean;
+  highlightQuery: string;
+  activeOwnerKey: string | null;
+  onOwnerClick: (issue: Issue) => void;
 }) {
   const overdue = isOverdue(issue);
   const ref = React.useRef<HTMLDivElement>(null);
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: issue.id,
+    disabled: !draggable,
+  });
+  const isOwnerActive = activeOwnerKey !== null && activeOwnerKey === ownerKeyOf(issue);
 
   React.useEffect(() => {
     if (focused && ref.current) {
@@ -526,66 +783,88 @@ function IssueRow({
   }, [focused]);
 
   return (
-    <motion.div
-      ref={ref}
-      initial={{ opacity: 0, x: 20 }}
-      animate={{ opacity: 1, x: 0 }}
-      transition={{ delay: index * 0.06, duration: 0.32, ease: [0.2, 0.8, 0.2, 1] }}
-      data-focused={focused || undefined}
-      aria-label={`${issue.title}, ${STATUS_CONFIG[issue.status].label}${overdue ? ", overdue" : ""}`}
-      className={cn(
-        "group flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg px-3 py-2.5 transition-colors outline-none",
-        "focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-paper",
-        focused ? "bg-paper-2 ring-1 ring-accent/30" : "hover:bg-paper-2"
-      )}
+    <div
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition }}
+      className={cn(isDragging && "opacity-40")}
     >
-      <CategoryBadge category={issue.category} size="sm" />
-      <IssueKey issue={issue} className="h-5 px-1.5 text-[10px]" />
-      <PrefetchIssueLink
-        issueId={issue.id}
-        className="flex-1 min-w-0 text-sm font-medium text-ink group-hover:text-accent transition-colors truncate basis-[120px]"
+      <motion.div
+        ref={ref}
+        initial={{ opacity: 0, x: 20 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ delay: index * 0.06, duration: 0.32, ease: [0.2, 0.8, 0.2, 1] }}
+        data-focused={focused || undefined}
+        aria-label={`${issue.title}, ${STATUS_CONFIG[issue.status].label}${overdue ? ", overdue" : ""}`}
+        className={cn(
+          "group flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg px-3 py-2.5 transition-colors outline-none",
+          "focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-paper",
+          focused ? "bg-paper-2 ring-1 ring-accent/30" : "hover:bg-paper-2"
+        )}
       >
-        {issue.title}
-      </PrefetchIssueLink>
-      <div className="ml-auto grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 sm:w-[384px] sm:grid-cols-[132px_32px_84px_116px]">
-        <div data-testid="issue-status-lane" className="flex justify-start sm:w-[132px] sm:justify-end">
-          <StatusChip
-            status={issue.status}
-            onChange={(newStatus) => onStatusChange(issue.id, issue.status, newStatus, issue.series_id)}
-          />
-        </div>
-        <div data-testid="issue-assignee-lane" className="hidden size-6 items-center justify-center justify-self-center sm:flex">
-          {issue.owner_name ? (
-            <HintTooltip label={`Assignee: ${issue.owner_name}`} side="left">
-              <button
-                type="button"
-                aria-label={`Assignee: ${issue.owner_name}`}
-                className="flex size-6 items-center justify-center rounded-full bg-paper-3 text-[10px] font-medium text-ink outline-none transition-colors hover:bg-paper-2 focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-paper"
-              >
-                {issue.owner_name.charAt(0).toUpperCase()}
-              </button>
-            </HintTooltip>
-          ) : null}
-        </div>
-        <div data-testid="issue-update-lane" className="hidden w-[84px] justify-self-end text-right sm:block">
-          {(issue.update_count ?? 0) > 0 ? (
-            <span className="text-[11px] font-mono text-ink-4 tabular-nums">
-              {issue.update_count} update{issue.update_count !== 1 ? "s" : ""}
-            </span>
-          ) : null}
-        </div>
-        <div data-testid="issue-due-lane" className="justify-self-end text-right sm:w-[116px]">
-          {issue.due_date ? (() => {
-            const rel = formatRelativeDue(issue.due_date);
-            return (
-              <span className={cn("text-xs font-mono tabular-nums", rel.overdue ? "text-accent font-medium" : "text-ink-4")}>
-                {rel.label}
+        {draggable && (
+          <button
+            type="button"
+            {...attributes}
+            {...listeners}
+            aria-roledescription="sortable issue"
+            className="shrink-0 cursor-grab touch-none text-ink-4 opacity-0 transition-opacity group-hover:opacity-100 hover:text-ink"
+          >
+            <GripVertical className="size-4" />
+          </button>
+        )}
+        <CategoryBadge category={issue.category} size="sm" />
+        <IssueKey issue={issue} className="h-5 px-1.5 text-[10px]" />
+        <PrefetchIssueLink
+          issueId={issue.id}
+          className="flex-1 min-w-0 text-sm font-medium text-ink group-hover:text-accent transition-colors truncate basis-[120px]"
+        >
+          {highlightMatch(issue.title, highlightQuery)}
+        </PrefetchIssueLink>
+        <div className="ml-auto grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 sm:w-[384px] sm:grid-cols-[132px_32px_84px_116px]">
+          <div data-testid="issue-status-lane" className="flex justify-start sm:w-[132px] sm:justify-end">
+            <StatusChip
+              status={issue.status}
+              onChange={(newStatus) => onStatusChange(issue.id, issue.status, newStatus, issue.series_id)}
+            />
+          </div>
+          <div data-testid="issue-assignee-lane" className="hidden size-6 items-center justify-center justify-self-center sm:flex">
+            {issue.owner_name ? (
+              <HintTooltip label={`Assignee: ${issue.owner_name}`} side="left">
+                <button
+                  type="button"
+                  aria-label={`Assignee: ${issue.owner_name}`}
+                  aria-pressed={isOwnerActive}
+                  onClick={() => onOwnerClick(issue)}
+                  className={cn(
+                    "flex size-6 items-center justify-center rounded-full text-[10px] font-medium text-ink outline-none transition-colors hover:bg-paper-2 focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-paper",
+                    isOwnerActive ? "bg-accent/20 ring-1 ring-accent/40" : "bg-paper-3"
+                  )}
+                >
+                  {issue.owner_name.charAt(0).toUpperCase()}
+                </button>
+              </HintTooltip>
+            ) : null}
+          </div>
+          <div data-testid="issue-update-lane" className="hidden w-[84px] justify-self-end text-right sm:block">
+            {(issue.update_count ?? 0) > 0 ? (
+              <span className="text-[11px] font-mono text-ink-4 tabular-nums">
+                {issue.update_count} update{issue.update_count !== 1 ? "s" : ""}
               </span>
-            );
-          })() : null}
+            ) : null}
+          </div>
+          <div data-testid="issue-due-lane" className="justify-self-end text-right sm:w-[116px]">
+            {issue.due_date ? (() => {
+              const rel = formatRelativeDue(issue.due_date);
+              return (
+                <span className={cn("text-xs font-mono tabular-nums", rel.overdue ? "text-accent font-medium" : "text-ink-4")}>
+                  {rel.label}
+                </span>
+              );
+            })() : null}
+          </div>
         </div>
-      </div>
-    </motion.div>
+      </motion.div>
+    </div>
   );
 }
 

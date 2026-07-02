@@ -45,6 +45,7 @@ import { ArrowLeft, Play, Settings, Loader2, Upload, Calendar, X, Sparkles } fro
 import { cn } from "@/lib/utils";
 import type { Cadence, Issue, GoogleCalendarEntry } from "@/lib/types";
 import { AiUnavailableNotice } from "@/components/minutia/ai-unavailable-notice";
+import { byManualOrder } from "@/lib/issue-utils";
 import { useAiAccess } from "@/lib/hooks/use-ai-access";
 import {
   useGoogleCalendarStatus,
@@ -102,12 +103,13 @@ export function SeriesDetailContent({ seriesId }: SeriesDetailContentProps) {
   const { data: aiAccess } = useAiAccess();
   const hasAccess = aiAccess?.hasAccess === true;
 
-  // Filter open issues (not resolved/dropped)
+  // Filter open issues (not resolved/dropped), in manual board order so an
+  // optimistic dashboard reorder reflects here immediately.
   const openIssues = React.useMemo(
     () =>
-      (issues ?? []).filter(
-        (issue) => issue.status !== "resolved" && issue.status !== "dropped"
-      ),
+      (issues ?? [])
+        .filter((issue) => issue.status !== "resolved" && issue.status !== "dropped")
+        .sort(byManualOrder),
     [issues]
   );
 
