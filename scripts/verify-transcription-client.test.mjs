@@ -67,6 +67,15 @@ function errResponse(status) {
 // Groq client
 // ---------------------------------------------------------------------------
 
+test("transcribeWithGroq result is non-diarized and backward compatible", async () => {
+  globalThis.fetch = async () =>
+    new Response(JSON.stringify({ text: "hello world", duration: 3 }), { status: 200 });
+  const result = await transcribeWithGroq(audioBlob(), { apiKey: "k" });
+  assert.equal(result.text, "hello world");
+  assert.equal(result.diarized, false);
+  assert.equal(result.segments, undefined);
+});
+
 test("transcribeWithGroq posts multipart audio to the OpenAI-compatible endpoint", async () => {
   const calls = fakeFetch(() => okResponse({ text: "hello world", duration: 12.5 }));
   const result = await transcribeWithGroq(audioBlob(64), { apiKey: "groq-key" });
@@ -86,6 +95,7 @@ test("transcribeWithGroq posts multipart audio to the OpenAI-compatible endpoint
     model: GROQ_DEFAULT_MODEL,
     provider: "groq",
     durationSeconds: 12.5,
+    diarized: false,
   });
 });
 
