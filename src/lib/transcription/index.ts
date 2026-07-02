@@ -23,6 +23,11 @@ export {
   transcribeWithOpenRouter,
 } from "./openrouter-stt";
 export {
+  ASSEMBLYAI_BASE_URL,
+  ASSEMBLYAI_DEFAULT_MODEL,
+  transcribeWithAssemblyAI,
+} from "./assemblyai";
+export {
   MAX_TRANSCRIPTION_BYTES,
   needsChunking,
   findWebmClusterOffsets,

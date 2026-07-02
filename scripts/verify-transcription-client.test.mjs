@@ -25,6 +25,7 @@ const {
   GROQ_DEFAULT_MODEL,
   transcribeWithGroq,
   transcribeWithOpenRouter,
+  transcribeWithAssemblyAI,
   resolveTranscriptionProvider,
   getProviderChain,
   isTranscriptionConfigured,
@@ -166,6 +167,50 @@ test("transcribeWithOpenRouter posts base64 JSON with attribution headers", asyn
   assert.equal(result.provider, "openrouter");
   assert.equal(result.text, "fallback text");
   assert.equal(result.durationSeconds, 3); // from usage.seconds
+});
+
+// ---------------------------------------------------------------------------
+// AssemblyAI client (diarizing primary)
+// ---------------------------------------------------------------------------
+
+test("AssemblyAI uploads, polls, and returns diarized segments", async () => {
+  const calls = [];
+  globalThis.fetch = async (url, init) => {
+    calls.push({ url: String(url), method: init?.method });
+    if (String(url).endsWith("/v2/upload"))
+      return new Response(JSON.stringify({ upload_url: "https://cdn/audio" }), { status: 200 });
+    if (String(url).endsWith("/v2/transcript") && init?.method === "POST")
+      return new Response(JSON.stringify({ id: "t1", status: "queued" }), { status: 200 });
+    return new Response(JSON.stringify({
+      id: "t1", status: "completed", text: "Hi this is Sarah. Morning.", audio_duration: 4,
+      utterances: [
+        { speaker: "A", start: 0, end: 1800, text: "Hi this is Sarah.", confidence: 0.94 },
+        { speaker: "B", start: 1800, end: 4000, text: "Morning.", confidence: 0.9 },
+      ],
+    }), { status: 200 });
+  };
+  const result = await transcribeWithAssemblyAI(audioBlob(), { apiKey: "k", speakersExpected: 2, timeoutMs: 5000 });
+  assert.equal(result.diarized, true);
+  assert.equal(result.provider, "assemblyai");
+  assert.equal(result.segments.length, 2);
+  assert.equal(result.segments[0].speaker, "A");
+  assert.equal(result.segments[0].end, 1.8); // ms -> s
+  assert.equal(result.durationSeconds, 4);
+  assert.ok(calls.some((c) => c.url.endsWith("/v2/upload")));
+});
+
+test("AssemblyAI maps a provider error status to a TranscriptionError", async () => {
+  globalThis.fetch = async (url) => {
+    if (String(url).endsWith("/v2/upload"))
+      return new Response(JSON.stringify({ upload_url: "https://cdn/a" }), { status: 200 });
+    if (String(url).endsWith("/v2/transcript"))
+      return new Response(JSON.stringify({ id: "t2", status: "queued" }), { status: 200 });
+    return new Response(JSON.stringify({ id: "t2", status: "error", error: "bad audio" }), { status: 200 });
+  };
+  await assert.rejects(
+    () => transcribeWithAssemblyAI(audioBlob(), { apiKey: "k", timeoutMs: 5000 }),
+    (e) => e instanceof TranscriptionError && e.provider === "assemblyai"
+  );
 });
 
 // ---------------------------------------------------------------------------
