@@ -35,7 +35,7 @@ const NAV_ITEMS = [
   { label: "Go to Settings", href: "/settings", icon: Settings },
 ] as const;
 
-function isEditableTarget(target: EventTarget | null): boolean {
+export function isEditableTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
   return (
     target.tagName === "INPUT" ||
