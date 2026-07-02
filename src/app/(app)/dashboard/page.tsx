@@ -722,7 +722,7 @@ function SeriesWidget({
             className="flex items-center gap-3 rounded-lg px-3 py-2.5 hover:bg-paper-2 transition-colors group min-w-0"
           >
             <Calendar className="size-4 text-ink-4 group-hover:text-accent transition-colors" />
-            <span className="flex-1 min-w-0 text-sm text-ink group-hover:text-accent transition-colors break-words">{series.name}</span>
+            <span className="flex-1 min-w-0 text-sm text-ink transition-colors break-words">{series.name}</span>
             {series.open_issues_count > 0 && (
               <span className="text-xs text-accent font-medium tabular-nums">
                 {series.open_issues_count} open
