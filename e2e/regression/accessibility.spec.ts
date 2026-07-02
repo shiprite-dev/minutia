@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { SERIES, ISSUES, waitForApp } from "./seed-data";
+import { expectNoCriticalA11y } from "./a11y-helper";
 
 test.describe("Semantic HTML landmarks and page titles", () => {
   test("dashboard has correct page title", async ({ page }) => {
@@ -99,5 +100,42 @@ test.describe("Semantic HTML landmarks and page titles", () => {
 
     const header = page.locator("header[aria-label='Page header']");
     await expect(header.locator(".size-7.rounded-full")).toHaveCount(0);
+  });
+});
+
+test.describe("Automated a11y gate (axe-core)", () => {
+  test("dashboard has no critical violations", async ({ page }) => {
+    await page.goto("/dashboard");
+    await waitForApp(page);
+
+    await expectNoCriticalA11y(page);
+  });
+
+  test("issue detail has no critical violations", async ({ page }) => {
+    await page.goto(`/issues/${ISSUES.migrateCI}`);
+    await waitForApp(page);
+
+    await expectNoCriticalA11y(page);
+  });
+
+  test("series list has no critical violations", async ({ page }) => {
+    await page.goto("/series");
+    await waitForApp(page);
+
+    await expectNoCriticalA11y(page);
+  });
+
+  test("series detail has no critical violations", async ({ page }) => {
+    await page.goto(`/series/${SERIES.platformStandup}`);
+    await waitForApp(page);
+
+    await expectNoCriticalA11y(page);
+  });
+
+  test("inbox has no critical violations", async ({ page }) => {
+    await page.goto("/inbox");
+    await waitForApp(page);
+
+    await expectNoCriticalA11y(page);
   });
 });

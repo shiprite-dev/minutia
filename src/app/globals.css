@@ -34,7 +34,7 @@
   --ink:          oklch(0.930 0.000 0);
   --ink-2:        oklch(0.750 0.000 0);
   --ink-3:        oklch(0.620 0.000 0);
-  --ink-4:        oklch(0.570 0.000 0);
+  --ink-4:        oklch(0.600 0.000 0); /* WCAG AA: 0.570 fell to 4.05:1 on paper-3; 0.600 clears 4.5:1 */
   --rule:         oklch(0.240 0.000 0);
   --rule-strong:  oklch(0.480 0.000 0);
   --accent:       oklch(0.660 0.200 35);
@@ -203,13 +203,42 @@
 
 @layer base {
   * {
-    @apply border-border outline-ring/50;
+    @apply border-border;
+  }
+  *:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
   }
   body {
     @apply bg-background text-foreground;
   }
   html {
     @apply font-sans;
+  }
+}
+
+/* Windows High Contrast Mode strips box-shadow, so shadow/ring-only
+   boundaries (cards, chips, popovers, dialogs) vanish; give them a real
+   border. Unlayered so it beats Tailwind's utilities layer. */
+@media (forced-colors: active) {
+  [data-slot="card"],
+  [data-slot="badge"],
+  [data-slot="input"],
+  [data-slot="textarea"],
+  [data-slot="select-trigger"],
+  [data-slot="dialog-content"],
+  [data-slot="alert-dialog-content"],
+  [data-slot="sheet-content"],
+  [data-slot="popover-content"],
+  [data-slot="dropdown-menu-content"],
+  [data-slot="select-content"],
+  [data-slot="command"] {
+    border: 1px solid CanvasText;
+  }
+
+  :focus-visible {
+    outline: 2px solid Highlight;
+    outline-offset: 2px;
   }
 }
 

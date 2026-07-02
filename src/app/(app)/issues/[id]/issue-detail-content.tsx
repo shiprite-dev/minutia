@@ -163,6 +163,7 @@ function InlineEditText({
           )}
           rows={3}
           placeholder={placeholder}
+          aria-label={placeholder}
         />
       );
     }
@@ -179,6 +180,7 @@ function InlineEditText({
           className
         )}
         placeholder={placeholder}
+        aria-label={placeholder}
       />
     );
   }

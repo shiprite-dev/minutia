@@ -1,6 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import NumberFlow from "@number-flow/react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -53,9 +54,10 @@ export default function AdminOverviewPage() {
               {isLoading || !data ? (
                 <Skeleton className="h-8 w-12" />
               ) : (
-                <span className="font-display text-3xl font-semibold tabular-nums text-ink">
-                  {data[kpi.key]}
-                </span>
+                <NumberFlow
+                  value={data[kpi.key]}
+                  className="font-display text-3xl font-semibold tabular-nums text-ink"
+                />
               )}
             </CardContent>
           </Card>

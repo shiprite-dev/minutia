@@ -10,8 +10,11 @@ test.describe("Data Integrity", () => {
       ".font-display.text-5xl.font-bold.text-ink"
     );
     await expect(heroNumber).toBeVisible();
-    const count = await heroNumber.textContent();
-    expect(Number(count)).toBeGreaterThanOrEqual(1);
+    // The hero count renders via NumberFlow (animated glyph spans), so read the
+    // plain "N open" summary text for the numeric assertion instead.
+    const openText = await page.getByText(/^\d+ open$/).first().textContent();
+    const count = Number((openText ?? "").replace(/\D/g, ""));
+    expect(count).toBeGreaterThanOrEqual(1);
   });
 
   test("series list shows 3 series from seed data", async ({ page }) => {
