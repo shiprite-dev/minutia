@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
+import { useConfirm } from "@/components/ui/confirm";
 import { useProfile } from "@/lib/hooks/use-profile";
 import {
   Card,
@@ -74,6 +76,7 @@ function roleMessageArticle(role: "admin" | "member") {
 }
 
 export function WorkspaceMembers() {
+  const confirm = useConfirm();
   const { data: profile } = useProfile();
   // has_full_access entitlement (resolves to true when feature gating is off,
   // the self-host default). A free, gated workspace stays solo: inviting is
@@ -199,6 +202,16 @@ export function WorkspaceMembers() {
 
   async function handleRemoveMember(member: OrgMember) {
     const email = memberEmail(member);
+    if (
+      !(await confirm({
+        title: "Remove member?",
+        description: `${email} will lose access to this workspace.`,
+        confirmLabel: "Remove",
+        danger: true,
+      }))
+    )
+      return;
+
     setMemberActionId(`remove:${member.user_id}`);
     setMemberMessage("");
 
@@ -210,8 +223,10 @@ export function WorkspaceMembers() {
     const data = await res.json().catch(() => ({}));
 
     if (!res.ok) {
+      const message = data.error || "Failed to remove member.";
       setMemberMessageState("error");
-      setMemberMessage(data.error || "Failed to remove member.");
+      setMemberMessage(message);
+      toast.error(message);
       setMemberActionId(null);
       return;
     }
@@ -222,7 +237,17 @@ export function WorkspaceMembers() {
     await refreshOrgAdmin();
   }
 
-  async function handleRevokeInvitation(invitationId: string) {
+  async function handleRevokeInvitation(invitationId: string, email: string) {
+    if (
+      !(await confirm({
+        title: "Revoke invitation?",
+        description: `The invite for ${email} will no longer work.`,
+        confirmLabel: "Revoke",
+        danger: true,
+      }))
+    )
+      return;
+
     setInvitationActionId(invitationId);
     setInviteMessage("");
 
@@ -234,8 +259,10 @@ export function WorkspaceMembers() {
     const data = await res.json().catch(() => ({}));
 
     if (!res.ok) {
+      const message = data.error || "Failed to revoke invitation.";
       setInviteState("error");
-      setInviteMessage(data.error || "Failed to revoke invitation.");
+      setInviteMessage(message);
+      toast.error(message);
       setInvitationActionId(null);
       return;
     }
@@ -430,7 +457,7 @@ export function WorkspaceMembers() {
                     size="icon-sm"
                     aria-label={`Revoke invitation for ${invite.email}`}
                     disabled={invitationActionId === invite.id}
-                    onClick={() => handleRevokeInvitation(invite.id)}
+                    onClick={() => handleRevokeInvitation(invite.id, invite.email)}
                   >
                     <Trash2 className="size-3.5" />
                   </Button>

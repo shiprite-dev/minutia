@@ -10,6 +10,7 @@ import {
   useSeriesParticipantRole,
   useSeriesRealtime,
   useUpdateSeries,
+  useDeleteSeries,
 } from "@/lib/hooks/use-series";
 import {
   useMeetings,
@@ -36,6 +37,7 @@ import {
 } from "@/components/ui/dialog";
 import { CADENCES, CADENCE_LABELS } from "@/lib/constants";
 import { createSeriesSchema, type CreateSeriesInput } from "@/lib/schemas";
+import { useConfirm } from "@/components/ui/confirm";
 import { ShareButton } from "@/components/minutia/share-button";
 import { RemindOwnersButton } from "@/components/minutia/remind-owners-button";
 import { CsvImportDialog } from "@/components/minutia/csv-import-dialog";
@@ -435,7 +437,10 @@ function SeriesSettingsDialog({
   onOpenChange: (open: boolean) => void;
   series: { id: string; name: string; description: string | null; cadence: Cadence; default_attendees: string[]; gcal_calendar_id: string | null; gcal_sync_enabled: boolean };
 }) {
+  const router = useRouter();
+  const confirm = useConfirm();
   const updateSeries = useUpdateSeries();
+  const deleteSeries = useDeleteSeries();
   const { data: gcalStatus } = useGoogleCalendarStatus();
   const { data: calendarList } = useCalendarList();
   const linkCalendar = useLinkCalendar();
@@ -462,6 +467,21 @@ function SeriesSettingsDialog({
   async function onSubmit(data: CreateSeriesInput) {
     await updateSeries.mutateAsync({ id: series.id, ...data });
     onOpenChange(false);
+  }
+
+  async function handleDeleteSeries() {
+    if (
+      !(await confirm({
+        title: "Delete this series?",
+        description: "All its meetings, issues, and decisions are permanently deleted.",
+        confirmLabel: "Delete series",
+        danger: true,
+      }))
+    )
+      return;
+    deleteSeries.mutate(series.id, {
+      onSuccess: () => router.push("/series"),
+    });
   }
 
   return (
@@ -588,6 +608,23 @@ function SeriesSettingsDialog({
             </Button>
           </DialogFooter>
         </form>
+
+        <div className="mt-2 space-y-2 border-t border-rule pt-4">
+          <p className="text-xs font-medium text-ink-3">Danger zone</p>
+          <Button
+            type="button"
+            variant="destructive"
+            size="sm"
+            onClick={handleDeleteSeries}
+            disabled={deleteSeries.isPending}
+            loading={deleteSeries.isPending}
+          >
+            Delete series
+          </Button>
+          <p className="text-[10px] text-ink-4">
+            Permanently deletes this series and all its meetings, issues, and decisions.
+          </p>
+        </div>
       </DialogContent>
     </Dialog>
   );

@@ -217,25 +217,22 @@ test.describe("Issue Detail", () => {
     ).toBeVisible();
   });
 
-  test("delete issue shows confirmation dialog", async ({ page }) => {
+  test("delete issue shows an undo toast instead of a confirm dialog", async ({
+    page,
+  }) => {
     await page.goto(url);
     await waitForApp(page);
 
     await page.getByRole("button", { name: "Delete issue" }).click();
-    await expect(
-      page.getByText("Permanently delete this issue?")
-    ).toBeVisible();
-    await expect(
-      page.getByRole("button", { name: "Yes, delete" })
-    ).toBeVisible();
-    await expect(
-      page.getByRole("button", { name: "Cancel" })
-    ).toBeVisible();
+    await expect(page).toHaveURL(/\/dashboard$/);
+    await expect(page.getByText("Issue deleted")).toBeVisible();
+    const undoButton = page.getByRole("button", { name: "Undo" });
+    await expect(undoButton).toBeVisible();
 
-    await page.getByRole("button", { name: "Cancel" }).click();
-    await expect(
-      page.getByText("Permanently delete this issue?")
-    ).not.toBeVisible();
+    // Undo before the toast auto-commits so the shared seeded issue survives
+    // for the rest of this suite.
+    await undoButton.click();
+    await expect(page.getByText("Issue deleted")).not.toBeVisible();
   });
 
   test("back control navigates to dashboard", async ({ page }) => {
@@ -405,8 +402,10 @@ test.describe("Issue Detail", () => {
         );
 
       await page.getByRole("button", { name: "Delete issue" }).click();
-      await page.getByRole("button", { name: "Yes, delete" }).click();
-      await expect(page).toHaveURL(/\/(?:dashboard)?$/);
+      await expect(page).toHaveURL(/\/dashboard$/);
+      await expect(page.getByText("Issue deleted")).toBeVisible();
+      // Dismiss the undo toast to force the actual server-side commit.
+      await page.getByRole("button", { name: "Close toast" }).click();
       await expect
         .poll(async () => getIssue(request, issue.id))
         .toBeUndefined();

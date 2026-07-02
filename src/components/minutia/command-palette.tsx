@@ -35,6 +35,15 @@ const NAV_ITEMS = [
   { label: "Go to Settings", href: "/settings", icon: Settings },
 ] as const;
 
+function isEditableTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  return (
+    target.tagName === "INPUT" ||
+    target.tagName === "TEXTAREA" ||
+    target.isContentEditable
+  );
+}
+
 export function CommandPalette() {
   const router = useRouter();
   const open = useUIStore((s) => s.commandPaletteOpen);
@@ -45,17 +54,22 @@ export function CommandPalette() {
   const { data: seriesList } = useSeries(open);
   const { data: decisions } = useDecisions(undefined, undefined, open);
 
-  // Cmd+K / Ctrl+K listener
+  // Cmd+K / Ctrl+K and "/" listener
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if (e.key === "k" && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
         toggleCommandPalette();
+        return;
+      }
+      if (e.key === "/" && !isEditableTarget(e.target)) {
+        e.preventDefault();
+        openCommandPalette();
       }
     }
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [toggleCommandPalette]);
+  }, [toggleCommandPalette, openCommandPalette]);
 
   const runCommand = useCallback(
     (command: () => void) => {
@@ -153,6 +167,15 @@ export function CommandPalette() {
               <CommandItem
                 key={d.id}
                 value={`decision ${d.title}`}
+                onSelect={() =>
+                  runCommand(() =>
+                    router.push(
+                      d.meeting_id
+                        ? `/series/${d.series_id}/meetings/${d.meeting_id}`
+                        : `/series/${d.series_id}`
+                    )
+                  )
+                }
               >
                 <span className="shrink-0 text-xs leading-none text-accent">&#9670;</span>
                 <span className="truncate">{d.title}</span>

@@ -7,6 +7,7 @@ import Link from "next/link";
 import {
   ArrowRight,
   Calendar,
+  Layers,
   Plus,
 } from "lucide-react";
 import {
@@ -24,6 +25,13 @@ import { IssueKey } from "@/components/minutia/issue-key";
 import { PrefetchIssueLink } from "@/components/minutia/prefetch-issue-link";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
+import {
+  Empty,
+  EmptyMedia,
+  EmptyTitle,
+  EmptyDescription,
+  EmptyContent,
+} from "@/components/ui/empty";
 import { HintTooltip } from "@/components/minutia/hint-tooltip";
 import { cn } from "@/lib/utils";
 import { formatShortDate, daysBetween } from "@/lib/date-utils";
@@ -952,6 +960,7 @@ function WidgetRenderer({
 // ---------------------------------------------------------------------------
 
 export default function Dashboard() {
+  const router = useRouter();
   const { data: issues, isLoading: issuesLoading } = useIssues();
   const { data: seriesList, isLoading: seriesLoading } = useSeries();
   const { data: meetings, isLoading: meetingsLoading } = useAllMeetings();
@@ -1001,16 +1010,38 @@ export default function Dashboard() {
   };
 
   const widgetIds = React.useMemo(() => widgets.map((w) => w.id), [widgets]);
+  const isFirstRun = !isLoading && (seriesList?.length ?? 0) === 0 && (issues?.length ?? 0) === 0;
 
   return (
     <div className="min-h-screen bg-paper" data-tour="oil-board">
       <UpgradeConfirmation />
       <div className="mx-auto max-w-6xl px-6 py-8">
-        <div className="flex items-center justify-end mb-5">
-          <AddWidgetButton />
-        </div>
+        {!isFirstRun && (
+          <div className="flex items-center justify-end mb-5">
+            <AddWidgetButton />
+          </div>
+        )}
         {isLoading ? (
           <DashboardSkeleton />
+        ) : isFirstRun ? (
+          <Empty className="mt-12">
+            <EmptyMedia>
+              <Layers />
+            </EmptyMedia>
+            <EmptyTitle>Every good log starts with one meeting.</EmptyTitle>
+            <EmptyDescription>
+              Create a series to start tracking outstanding issues across your
+              recurring meetings.
+            </EmptyDescription>
+            <EmptyContent>
+              <Button
+                onClick={() => router.push("/series")}
+                className="bg-accent text-white hover:bg-accent-hover"
+              >
+                Create your first series
+              </Button>
+            </EmptyContent>
+          </Empty>
         ) : (
           <WidgetCanvas widgetIds={widgetIds}>
             {widgets.map((w, i) => (
@@ -1024,7 +1055,7 @@ export default function Dashboard() {
             ))}
           </WidgetCanvas>
         )}
-        <QuickAddButton />
+        {!isFirstRun && <QuickAddButton />}
       </div>
     </div>
   );

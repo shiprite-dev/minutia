@@ -230,6 +230,11 @@ test.describe("Admin user management", () => {
     await workspace
       .getByRole("button", { name: `Revoke invitation for ${inviteEmail}` })
       .click();
+    // Revoking is now confirm-gated (Wave 1 safety): confirm the AlertDialog.
+    await page
+      .getByRole("alertdialog")
+      .getByRole("button", { name: "Revoke", exact: true })
+      .click();
     await expect(workspace.getByText("Invitation revoked.")).toBeVisible();
     await expect(workspace.getByText(inviteEmail!)).not.toBeVisible();
 
@@ -243,6 +248,11 @@ test.describe("Admin user management", () => {
 
     await workspace
       .getByRole("button", { name: `Remove ${memberEmail} from workspace` })
+      .click();
+    // Removing a member is now confirm-gated (Wave 1 safety): confirm the dialog.
+    await page
+      .getByRole("alertdialog")
+      .getByRole("button", { name: "Remove", exact: true })
       .click();
     await expect(workspace.getByText(`${memberEmail} was removed.`)).toBeVisible();
     await expect(

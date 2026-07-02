@@ -58,6 +58,15 @@ export async function resetSeedNotifications(request: APIRequestContext) {
   };
 
   const allIds = [...SEED_NOTIFICATION_UNREAD, ...SEED_NOTIFICATION_READ];
+
+  // Hermetic reset: delete any notifications created by other tests in this
+  // shard (assignments/status changes fire notify_* triggers). Without this the
+  // inbox unread count drifts above the seed baseline and count assertions fail.
+  await request.delete(
+    `${supabaseUrl}/rest/v1/notifications?id=not.in.(${allIds.join(",")})`,
+    { headers }
+  );
+
   await request.patch(
     `${supabaseUrl}/rest/v1/notifications?id=in.(${allIds.join(",")})`,
     { headers, data: { created_at: new Date().toISOString() } }

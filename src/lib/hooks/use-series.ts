@@ -7,8 +7,12 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
+import { applyOptimistic, patch } from "@/lib/optimistic";
+import { patchSeriesFields, isListCache } from "@/lib/optimistic-updates";
 import type { MeetingSeries, SeriesParticipantRole, SeriesWithMeetings } from "@/lib/types";
 import type { CreateSeriesInput } from "@/lib/schemas";
+
+type SeriesListRow = MeetingSeries & { open_issues_count: number };
 
 // ---------------------------------------------------------------------------
 // Query key factory
@@ -205,11 +209,13 @@ export function useUpdateSeries() {
   const supabase = createClient();
   const queryClient = useQueryClient();
 
-  return useMutation({
-    mutationFn: async ({
-      id,
-      ...input
-    }: Partial<CreateSeriesInput> & { id: string }) => {
+  return useMutation<
+    MeetingSeries,
+    Error,
+    Partial<CreateSeriesInput> & { id: string },
+    { rollback: () => void }
+  >({
+    mutationFn: async ({ id, ...input }) => {
       const { data, error } = await supabase
         .from("meeting_series")
         .update(input)
@@ -220,7 +226,21 @@ export function useUpdateSeries() {
       if (error) throw error;
       return data as MeetingSeries;
     },
-    onSuccess: (_data, variables) => {
+    onMutate: ({ id, ...input }) =>
+      applyOptimistic(queryClient, [
+        // List rows (array caches only, never the detail/role sub-caches).
+        patch<SeriesListRow[]>(
+          { queryKey: seriesKeys.all, predicate: isListCache },
+          patchSeriesFields(id, input as Partial<SeriesListRow>)
+        ),
+        // Detail cache, exact key so the participant-role sub-key is untouched.
+        patch<SeriesWithMeetings | null>(
+          { queryKey: seriesKeys.detail(id), exact: true },
+          (old) => (old ? { ...old, ...input } : old)
+        ),
+      ]),
+    onError: (_err, _vars, context) => context?.rollback(),
+    onSettled: (_data, _error, variables) => {
       queryClient.invalidateQueries({ queryKey: seriesKeys.all });
       queryClient.invalidateQueries({
         queryKey: seriesKeys.detail(variables.id),

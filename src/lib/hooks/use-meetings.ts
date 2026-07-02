@@ -7,6 +7,7 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
+import { isPendingDelete } from "@/lib/pending-delete";
 import type { Meeting } from "@/lib/types";
 import type { CreateMeetingInput } from "@/lib/schemas";
 import { issueKeys } from "./use-issues";
@@ -62,7 +63,15 @@ export function useMeeting(id: string) {
         .single();
 
       if (error) throw error;
-      return data as any;
+      // Hide grace-window-deleted issues so the 2s poll cannot resurrect a row
+      // the user just deleted while its Undo toast is still up.
+      const meeting = data as any;
+      return {
+        ...meeting,
+        issues: (meeting.issues ?? []).filter(
+          (issue: { id: string }) => !isPendingDelete(issue.id)
+        ),
+      };
     },
   });
 }
@@ -183,6 +192,9 @@ export function useMeetingRealtime(meetingId: string, seriesId: string) {
 
     const supabase = createClient();
     const refreshMeeting = () => {
+      // Skip a tick while any mutation is in flight so the poll cannot overwrite
+      // an optimistic write before it commits; the next tick (2s) reconciles.
+      if (queryClient.isMutating()) return;
       void queryClient.invalidateQueries({
         queryKey: meetingKeys.detail(meetingId),
       });

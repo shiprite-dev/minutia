@@ -6,6 +6,8 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
+import { applyOptimistic, patch } from "@/lib/optimistic";
+import { markRead, markAllRead } from "@/lib/optimistic-updates";
 import type { Notification } from "@/lib/types";
 
 export const notificationKeys = {
@@ -53,7 +55,7 @@ export function useMarkAsRead() {
   const supabase = createClient();
   const queryClient = useQueryClient();
 
-  return useMutation({
+  return useMutation<void, Error, string, { rollback: () => void }>({
     mutationFn: async (notificationId: string) => {
       const { error } = await supabase
         .from("notifications")
@@ -62,7 +64,28 @@ export function useMarkAsRead() {
 
       if (error) throw error;
     },
-    onSuccess: () => {
+    onMutate: (notificationId) => {
+      // exact: true throughout so the ["notifications"] list key does not also
+      // match the ["notifications","unread-count"] number cache under the same
+      // prefix (a list updater run against a number throws).
+      const wasUnread = queryClient
+        .getQueriesData<Notification[]>({ queryKey: notificationKeys.all, exact: true })
+        .some(([, data]) => data?.some((n) => n.id === notificationId && !n.read));
+      const patches = [
+        patch<Notification[]>(
+          { queryKey: notificationKeys.all, exact: true },
+          markRead(notificationId)
+        ),
+      ];
+      if (wasUnread) {
+        patches.push(
+          patch<number>({ queryKey: notificationKeys.unreadCount }, (n) => Math.max(0, n - 1))
+        );
+      }
+      return applyOptimistic(queryClient, patches);
+    },
+    onError: (_err, _vars, context) => context?.rollback(),
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: notificationKeys.all });
       queryClient.invalidateQueries({ queryKey: notificationKeys.unreadCount });
     },
@@ -73,7 +96,7 @@ export function useMarkAllAsRead() {
   const supabase = createClient();
   const queryClient = useQueryClient();
 
-  return useMutation({
+  return useMutation<void, Error, void, { rollback: () => void }>({
     mutationFn: async () => {
       const { error } = await supabase
         .from("notifications")
@@ -82,7 +105,16 @@ export function useMarkAllAsRead() {
 
       if (error) throw error;
     },
-    onSuccess: () => {
+    onMutate: () =>
+      applyOptimistic(queryClient, [
+        patch<Notification[]>(
+          { queryKey: notificationKeys.all, exact: true },
+          markAllRead()
+        ),
+        patch<number>({ queryKey: notificationKeys.unreadCount }, () => 0),
+      ]),
+    onError: (_err, _vars, context) => context?.rollback(),
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: notificationKeys.all });
       queryClient.invalidateQueries({ queryKey: notificationKeys.unreadCount });
     },

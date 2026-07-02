@@ -1,12 +1,15 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import {
   useQuery,
   useMutation,
   useQueryClient,
 } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { isFeatureGatingEnabled } from "@/lib/feature-access";
+import { isPendingDelete, clearPendingDelete } from "@/lib/pending-delete";
 import type {
   Issue,
   IssueWithUpdates,
@@ -84,11 +87,16 @@ export function useIssues(seriesId?: string, enabled = true) {
 
       const { data, error } = await query;
       if (error) throw error;
-      return (data ?? []).map((row: IssueListRow) => ({
-        ...row,
-        update_count: row.issue_updates?.[0]?.count ?? 0,
-        issue_updates: undefined,
-      })) as Issue[];
+      return (data ?? [])
+        // Hide issues in the grace-window delete state so the 2s meeting poll
+        // (which refetches this query) cannot resurrect a row the user just
+        // deleted while its Undo toast is still up. See src/lib/pending-delete.
+        .filter((row: IssueListRow) => !isPendingDelete(row.id))
+        .map((row: IssueListRow) => ({
+          ...row,
+          update_count: row.issue_updates?.[0]?.count ?? 0,
+          issue_updates: undefined,
+        })) as Issue[];
     },
   });
 }
@@ -215,21 +223,36 @@ export function useCreateIssue() {
 // ---------------------------------------------------------------------------
 // useUpdateIssueStatus - optimistic update + creates IssueUpdate record
 // ---------------------------------------------------------------------------
+const STATUS_LABEL: Record<string, string> = {
+  open: "open",
+  in_progress: "in progress",
+  pending: "pending",
+  resolved: "resolved",
+  dropped: "dropped",
+};
+
+type UpdateIssueStatusVars = {
+  issueId: string;
+  seriesId: string;
+  oldStatus: IssueStatus;
+  newStatus: IssueStatus;
+  note?: string;
+  meetingId?: string;
+  /** Set when this call is itself an Undo, so it does not spawn another toast. */
+  isUndo?: boolean;
+};
+
 export function useUpdateIssueStatus() {
   const supabase = createClient();
   const queryClient = useQueryClient();
+  // Latest `mutate` captured in a ref so the undo toast (fired from onSuccess,
+  // which cannot reference the mutation it lives in) can re-invoke it.
+  const mutateRef = useRef<((vars: UpdateIssueStatusVars) => void) | null>(null);
 
-  return useMutation<
+  const mutation = useMutation<
     Issue,
     Error,
-    {
-      issueId: string;
-      seriesId: string;
-      oldStatus: IssueStatus;
-      newStatus: IssueStatus;
-      note?: string;
-      meetingId?: string;
-    },
+    UpdateIssueStatusVars,
     {
       previousIssueLists: IssueListSnapshot;
       previousDetail: IssueWithUpdates | undefined;
@@ -325,6 +348,25 @@ export function useUpdateIssueStatus() {
         issueKeys.detail(variables.issueId),
         (old) => (old ? { ...old, ...data, updates: old.updates } : old)
       );
+
+      // Universal one-tap Undo for any status change. Suppressed on the undo's
+      // own success so undo-of-undo does not chain toasts.
+      if (!variables.isUndo) {
+        toast(`Marked ${STATUS_LABEL[variables.newStatus] ?? variables.newStatus}`, {
+          action: {
+            label: "Undo",
+            onClick: () =>
+              mutateRef.current?.({
+                issueId: variables.issueId,
+                seriesId: variables.seriesId,
+                oldStatus: variables.newStatus,
+                newStatus: variables.oldStatus,
+                meetingId: variables.meetingId,
+                isUndo: true,
+              }),
+          },
+        });
+      }
     },
 
     onSettled: (_data, _error, variables) => {
@@ -340,6 +382,13 @@ export function useUpdateIssueStatus() {
       }
     },
   });
+
+  // Keep the ref pointed at the latest (referentially stable) mutate so the
+  // undo toast can re-invoke it without referencing the mutation during render.
+  useEffect(() => {
+    mutateRef.current = mutation.mutate;
+  }, [mutation.mutate]);
+  return mutation;
 }
 
 // ---------------------------------------------------------------------------
@@ -349,18 +398,23 @@ export function useUpdateIssue() {
   const supabase = createClient();
   const queryClient = useQueryClient();
 
-  return useMutation({
-    mutationFn: async ({
-      issueId,
-      ...fields
-    }: {
+  return useMutation<
+    Issue,
+    Error,
+    {
       issueId: string;
       title?: string;
       description?: string | null;
       owner_name?: string | null;
       due_date?: string | null;
       priority?: string;
-    }) => {
+    },
+    {
+      previousIssueLists: IssueListSnapshot;
+      previousDetail: IssueWithUpdates | undefined;
+    }
+  >({
+    mutationFn: async ({ issueId, ...fields }) => {
       const { data, error } = await supabase
         .from("issues")
         .update(fields)
@@ -371,8 +425,51 @@ export function useUpdateIssue() {
       if (error) throw error;
       return data as Issue;
     },
+
+    onMutate: async ({ issueId, ...fields }) => {
+      await queryClient.cancelQueries({ queryKey: issueKeys.all });
+      await queryClient.cancelQueries({ queryKey: issueKeys.detail(issueId) });
+
+      const previousIssueLists = getIssueListSnapshots(queryClient);
+      const previousDetail = queryClient.getQueryData<IssueWithUpdates>(
+        issueKeys.detail(issueId)
+      );
+
+      updateCachedIssueLists(queryClient, (issue) =>
+        issue.id === issueId ? ({ ...issue, ...fields } as Issue) : issue
+      );
+      queryClient.setQueryData<IssueWithUpdates>(
+        issueKeys.detail(issueId),
+        (old) => (old ? ({ ...old, ...fields } as IssueWithUpdates) : old)
+      );
+
+      return { previousIssueLists, previousDetail };
+    },
+
+    onError: (_err, vars, context) => {
+      if (!context) return;
+      restoreIssueListSnapshots(queryClient, context.previousIssueLists);
+      queryClient.setQueryData(
+        issueKeys.detail(vars.issueId),
+        context.previousDetail
+      );
+    },
+
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: issueKeys.detail(data.id) });
+      updateCachedIssueLists(queryClient, (issue) =>
+        issue.id === data.id ? { ...issue, ...data } : issue
+      );
+      queryClient.setQueryData<IssueWithUpdates>(
+        issueKeys.detail(data.id),
+        (old) => (old ? { ...old, ...data, updates: old.updates } : old)
+      );
+    },
+
+    onSettled: (_data, _error, vars) => {
+      queryClient.invalidateQueries({
+        queryKey: issueKeys.detail(vars.issueId),
+        refetchType: "inactive",
+      });
       queryClient.invalidateQueries({ queryKey: issueKeys.all });
     },
   });
@@ -603,7 +700,12 @@ export function useDeleteIssue() {
 
       if (error) throw error;
     },
-    onSuccess: () => {
+    // The UI optimistically hides the row and parks its id in the pending-delete
+    // registry (grace window). Whether the server delete succeeds or fails, clear
+    // the id so the fetch-filter stops hiding it: on success the row is already
+    // gone; on error the row honestly returns and the global error toast fires.
+    onSettled: (_data, _error, issueId) => {
+      clearPendingDelete(issueId);
       queryClient.invalidateQueries({ queryKey: issueKeys.all });
     },
   });
