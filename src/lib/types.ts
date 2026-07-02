@@ -155,6 +155,14 @@ export interface GoogleCalendarStatus {
   googleEmail: string | null;
 }
 
+export interface TranscriptionSegmentRow {
+  speaker: string;
+  start: number;
+  end: number;
+  text: string;
+  confidence: number | null;
+}
+
 export interface Meeting {
   id: string;
   series_id: string;
@@ -170,6 +178,9 @@ export interface Meeting {
   ai_notes_model: string | null;
   ai_notes_prompt_version: string | null;
   transcript_raw: string | null;
+  transcript_segments: TranscriptionSegmentRow[] | null;
+  transcript_diarized: boolean;
+  speaker_map: Record<string, string | null> | null;
   audio_file_path: string | null;
   audio_duration_seconds: number | null;
   audio_file_size_bytes: number | null;
