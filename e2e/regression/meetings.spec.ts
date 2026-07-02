@@ -262,6 +262,7 @@ test.describe("Meeting Lifecycle", () => {
         .toBe(fixture.noteText);
 
       await page.getByRole("button", { name: "End meeting" }).click();
+      await page.getByRole("alertdialog").getByRole("button", { name: "End meeting" }).click();
 
       await expect(page.getByText("Meeting complete")).toBeVisible();
       await expect(
