@@ -31,6 +31,7 @@ import {
   arrayMove,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import NumberFlow from "@number-flow/react";
 import {
   useIssues,
   useUpdateIssueStatus,
@@ -186,9 +187,10 @@ function HeroWidget({
         {formatWeekday(new Date())}
       </p>
       <div className="flex flex-wrap items-baseline gap-x-4 gap-y-2 mb-2">
-        <span className="font-display text-5xl font-bold text-ink tabular-nums leading-none">
-          {openCount}
-        </span>
+        <NumberFlow
+          value={openCount}
+          className="font-display text-5xl font-bold text-ink tabular-nums leading-none"
+        />
         <div>
           <h2 className="font-display text-lg font-semibold text-ink leading-tight">
             Open items across your series
@@ -807,6 +809,7 @@ function IssueRow({
             {...attributes}
             {...listeners}
             aria-roledescription="sortable issue"
+            aria-label={`Drag to reorder ${issue.title}`}
             className="shrink-0 cursor-grab touch-none text-ink-4 opacity-0 transition-opacity group-hover:opacity-100 hover:text-ink"
           >
             <GripVertical className="size-4" />
