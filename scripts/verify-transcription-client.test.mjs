@@ -213,6 +213,44 @@ test("AssemblyAI maps a provider error status to a TranscriptionError", async ()
   );
 });
 
+test("AssemblyAI waits between polls and returns diarized segments once completed", async () => {
+  let pollCount = 0;
+  globalThis.fetch = async (url, init) => {
+    if (String(url).endsWith("/v2/upload"))
+      return new Response(JSON.stringify({ upload_url: "https://cdn/audio" }), { status: 200 });
+    if (String(url).endsWith("/v2/transcript") && init?.method === "POST")
+      return new Response(JSON.stringify({ id: "t3", status: "queued" }), { status: 200 });
+    pollCount += 1;
+    if (pollCount === 1) return new Response(JSON.stringify({ id: "t3", status: "processing" }), { status: 200 });
+    return new Response(JSON.stringify({
+      id: "t3", status: "completed", text: "Hi there.", audio_duration: 2,
+      utterances: [{ speaker: "A", start: 0, end: 2000, text: "Hi there.", confidence: 0.9 }],
+    }), { status: 200 });
+  };
+  const result = await transcribeWithAssemblyAI(audioBlob(), { apiKey: "k", pollIntervalMs: 1, timeoutMs: 5000 });
+  assert.equal(pollCount, 2, "must poll again after processing before completing");
+  assert.ok(result.segments.length >= 1);
+  assert.equal(result.diarized, true);
+});
+
+test("AssemblyAI turns a hung fetch into a timeout error, not an unbounded wait", async () => {
+  globalThis.fetch = (_url, init = {}) =>
+    new Promise((_resolve, reject) => {
+      init.signal?.addEventListener("abort", () =>
+        reject(Object.assign(new Error("aborted"), { name: "AbortError" }))
+      );
+    });
+  await assert.rejects(
+    transcribeWithAssemblyAI(audioBlob(), { apiKey: "k", timeoutMs: 20 }),
+    (err) => {
+      assert.ok(err instanceof TranscriptionError);
+      assert.equal(err.code, "timeout");
+      assert.equal(err.provider, "assemblyai");
+      return true;
+    }
+  );
+});
+
 // ---------------------------------------------------------------------------
 // Provider resolution + fallback chain
 // ---------------------------------------------------------------------------

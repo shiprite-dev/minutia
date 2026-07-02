@@ -25,15 +25,51 @@ interface AssemblyOptions {
   timeoutMs?: number;
   signal?: AbortSignal;
   baseUrl?: string;
+  pollIntervalMs?: number;
 }
 
+// Per-request timeout tied to the remaining time budget, matching shared.ts's
+// sendTranscription idiom: an internal AbortController that also forwards the
+// caller's signal, so no single fetch can hang past the deadline.
 async function aaiFetch(
   url: string,
   apiKey: string,
   init: RequestInit,
+  deadline: number,
   signal?: AbortSignal
 ): Promise<Response> {
-  const res = await fetch(url, { ...init, headers: { authorization: apiKey, ...init.headers }, signal });
+  const remaining = deadline - Date.now();
+  if (remaining <= 0) {
+    throw new TranscriptionError("timeout", "AssemblyAI job timed out after the time budget", {
+      provider: "assemblyai",
+    });
+  }
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), remaining);
+  const onAbort = () => controller.abort();
+  signal?.addEventListener("abort", onAbort);
+
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      ...init,
+      headers: { authorization: apiKey, ...init.headers },
+      signal: controller.signal,
+    });
+  } catch (error) {
+    if (error instanceof TranscriptionError) throw error;
+    const aborted = error instanceof Error && error.name === "AbortError";
+    throw new TranscriptionError(
+      aborted ? "timeout" : "provider_error",
+      aborted ? "AssemblyAI request timed out" : "AssemblyAI request failed",
+      { provider: "assemblyai", cause: error }
+    );
+  } finally {
+    clearTimeout(timer);
+    signal?.removeEventListener("abort", onAbort);
+  }
+
   if (!res.ok) {
     const detail = await res.text().catch(() => "");
     throw new TranscriptionError(
@@ -47,7 +83,14 @@ async function aaiFetch(
 
 export async function transcribeWithAssemblyAI(
   audio: Blob,
-  { apiKey, speakersExpected, timeoutMs = 120_000, signal, baseUrl = ASSEMBLYAI_BASE_URL }: AssemblyOptions
+  {
+    apiKey,
+    speakersExpected,
+    timeoutMs = 120_000,
+    signal,
+    baseUrl = ASSEMBLYAI_BASE_URL,
+    pollIntervalMs = POLL_INTERVAL_MS,
+  }: AssemblyOptions
 ): Promise<TranscriptionResult> {
   const deadline = Date.now() + timeoutMs;
 
@@ -55,6 +98,7 @@ export async function transcribeWithAssemblyAI(
     `${baseUrl}/v2/upload`,
     apiKey,
     { method: "POST", body: audio },
+    deadline,
     signal
   );
   const { upload_url } = (await uploadRes.json()) as { upload_url: string };
@@ -66,19 +110,23 @@ export async function transcribeWithAssemblyAI(
     `${baseUrl}/v2/transcript`,
     apiKey,
     { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) },
+    deadline,
     signal
   );
   const { id } = (await createRes.json()) as { id: string };
 
   // Poll until terminal. The internal deadline caps total time; the injected
-  // signal still cancels immediately.
+  // signal still cancels immediately. Each fetch also carries its own
+  // remaining-budget timeout (aaiFetch), so a single hung request can't
+  // block past the deadline; this between-iteration check is a cheap
+  // belt-and-suspenders guard on top of that.
   for (;;) {
     if (Date.now() > deadline) {
       throw new TranscriptionError("timeout", `AssemblyAI job timed out after ${timeoutMs}ms`, {
         provider: "assemblyai",
       });
     }
-    const pollRes = await aaiFetch(`${baseUrl}/v2/transcript/${id}`, apiKey, { method: "GET" }, signal);
+    const pollRes = await aaiFetch(`${baseUrl}/v2/transcript/${id}`, apiKey, { method: "GET" }, deadline, signal);
     const job = (await pollRes.json()) as {
       status: string;
       text?: string;
@@ -109,6 +157,6 @@ export async function transcribeWithAssemblyAI(
         diarized: segments.length > 0,
       };
     }
-    await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
+    await new Promise((r) => setTimeout(r, pollIntervalMs));
   }
 }
