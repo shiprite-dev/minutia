@@ -9,7 +9,7 @@
 // JSON) and a duration extractor.
 // ---------------------------------------------------------------------------
 
-export type TranscriptionProvider = "groq" | "openrouter" | "deepgram" | "local";
+export type TranscriptionProvider = "groq" | "openrouter" | "assemblyai" | "deepgram" | "local";
 
 export interface TranscriptionSegment {
   /** Provider speaker label, e.g. "A", "B", or "SPEAKER_00". */

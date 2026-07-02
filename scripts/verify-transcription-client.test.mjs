@@ -30,6 +30,7 @@ const {
   resolveTranscriptionProvider,
   getProviderChain,
   isTranscriptionConfigured,
+  isDiarizingProvider,
   transcribeAudio,
   TranscriptionError,
   MAX_TRANSCRIPTION_BYTES,
@@ -312,6 +313,36 @@ test("isTranscriptionConfigured reflects whether any usable provider key exists"
   // deepgram/local are not implemented, so they only count if OpenRouter can cover.
   assert.equal(isTranscriptionConfigured({ TRANSCRIPTION_PROVIDER: "local" }), false);
   assert.equal(isTranscriptionConfigured({ TRANSCRIPTION_PROVIDER: "local", OPENROUTER_API_KEY: "o" }), true);
+});
+
+test("assemblyai primary keeps groq/openrouter as fallback and reports diarizing", async () => {
+  const env = { TRANSCRIPTION_PROVIDER: "assemblyai", ASSEMBLYAI_API_KEY: "a", OPENROUTER_API_KEY: "o" };
+  assert.deepEqual(getProviderChain(env), ["assemblyai", "openrouter"]);
+  assert.equal(isDiarizingProvider(env), true);
+  assert.equal(isTranscriptionConfigured(env), true);
+});
+
+test("local provider is configured by URL, not a key, and is diarizing", async () => {
+  const env = { TRANSCRIPTION_PROVIDER: "local", TRANSCRIPTION_LOCAL_URL: "http://sidecar/transcribe" };
+  assert.equal(isTranscriptionConfigured(env), true);
+  assert.equal(isDiarizingProvider(env), true);
+  assert.deepEqual(getProviderChain(env), ["local"]);
+});
+
+test("groq primary is not diarizing", async () => {
+  assert.equal(isDiarizingProvider({ TRANSCRIPTION_PROVIDER: "groq", GROQ_API_KEY: "g" }), false);
+});
+
+test("transcribeAudio threads speakersExpected to the local sidecar as num_speakers", async () => {
+  const env = { TRANSCRIPTION_PROVIDER: "local", TRANSCRIPTION_LOCAL_URL: "http://sidecar/transcribe" };
+  let capturedForm;
+  globalThis.fetch = async (url, init) => {
+    capturedForm = init.body;
+    return okResponse({ text: "hi", segments: [{ speaker: "A", start: 0, end: 1, text: "hi" }] });
+  };
+  const result = await transcribeAudio(audioBlob(), { env, speakersExpected: 3 });
+  assert.equal(result.provider, "local");
+  assert.equal(capturedForm.get("num_speakers"), "3");
 });
 
 test("transcribeAudio falls back from a failing primary to OpenRouter", async () => {
