@@ -61,6 +61,7 @@
     "test:upgrade-config": "node --test scripts/verify-upgrade-config.test.mjs",
     "test:upsell": "node --test scripts/verify-upsell.test.mjs",
     "test:upgrade-confirmation": "node --test scripts/verify-upgrade-confirmation.test.mjs",
+    "test:date": "node --test scripts/verify-date.test.mjs",
     "test:reminders": "node --test scripts/verify-reminders.test.mjs",
     "test:email-sender": "node --test scripts/verify-email-sender.test.mjs",
     "test:cadence-contract": "node --test scripts/verify-cadence-contract.test.mjs",
