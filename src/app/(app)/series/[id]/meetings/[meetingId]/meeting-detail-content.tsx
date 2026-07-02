@@ -1727,7 +1727,7 @@ export function MeetingDetailContent({
 
               {aiSuggestions.length > 0 && (
                 <div className="divide-y divide-rule">
-                  {aiSuggestions.map((suggestion) => {
+                  {aiSuggestions.map((suggestion, i) => {
                     const isReviewed = suggestion.status !== "pending";
                     const relatedHref =
                       suggestion.related_issue_number != null
@@ -1737,7 +1737,12 @@ export function MeetingDetailContent({
                     // item, so their fields are read-only; only a new_item is editable.
                     const isContextual = suggestion.type !== "new_item";
                     return (
-                      <article key={suggestion.id} className="px-4 py-4">
+                      <article
+                        key={suggestion.id}
+                        data-suggestion-card
+                        className="materialize px-4 py-4"
+                        style={{ animationDelay: `${Math.min(i, 8) * 40}ms` }}
+                      >
                         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                           <div className="flex flex-wrap items-center gap-2">
                             <SuggestionContextBadge

@@ -237,6 +237,13 @@
   }
 }
 
+@keyframes materialize {
+  from { opacity: 0; filter: blur(4px); transform: translateY(4px); }
+  to   { opacity: 1; filter: blur(0);  transform: none; }
+}
+.materialize { animation: materialize 350ms ease-out both; }
+@media (prefers-reduced-motion: reduce) { .materialize { animation: none; } }
+
 @layer base {
   * {
     @apply border-border;
