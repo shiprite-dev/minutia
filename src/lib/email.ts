@@ -1,5 +1,11 @@
 import nodemailer from "nodemailer";
 import { getInstanceConfigMap } from "@/lib/instance-config";
+import {
+  resolveSenderFrom,
+  isDeliverableSender,
+  formatSender,
+  SENDER_NOT_CONFIGURED_MESSAGE,
+} from "@/lib/email-sender";
 
 export { escapeHtml } from "@/lib/escape-html";
 
@@ -59,17 +65,25 @@ export function createMailTransport(smtp: SmtpConfig) {
 
 export async function sendMail(message: MailMessage) {
   const apiKey = process.env.RESEND_API_KEY;
-  const from =
-    message.from ||
-    process.env.EMAIL_FROM ||
-    process.env.SMTP_ADMIN_EMAIL ||
-    "Minutia <noreply@localhost>";
   const testOutbox = process.env.MINUTIA_TEST_EMAIL_OUTBOX;
+
+  // Resolve the sender once, honoring the Admin -> Settings value (smtp_from)
+  // for BOTH the Resend and SMTP paths. Previously the Resend path consulted
+  // only env vars, so a UI-configured sender was ignored and delivery fell back
+  // to an invalid `noreply@localhost`, which providers reject.
+  const { smtp_from } = await getInstanceConfigMap(["smtp_from"]);
+  const resolved = resolveSenderFrom(
+    message.from,
+    smtp_from,
+    process.env.EMAIL_FROM,
+    process.env.SMTP_ADMIN_EMAIL
+  );
 
   if (testOutbox) {
     const { appendFile, mkdir } = await import("node:fs/promises");
     const { dirname } = await import("node:path");
 
+    const from = resolved ?? "Minutia <noreply@localhost>";
     await mkdir(dirname(testOutbox), { recursive: true });
     await appendFile(
       testOutbox,
@@ -79,6 +93,9 @@ export async function sendMail(message: MailMessage) {
   }
 
   if (apiKey) {
+    if (!isDeliverableSender(resolved)) {
+      throw new Error(SENDER_NOT_CONFIGURED_MESSAGE);
+    }
     const res = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: {
@@ -87,7 +104,7 @@ export async function sendMail(message: MailMessage) {
         "User-Agent": "minutia/0.2.0",
       },
       body: JSON.stringify({
-        from: from.includes("<") ? from : `Minutia <${from}>`,
+        from: formatSender(resolved!),
         to: message.to,
         subject: message.subject,
         html: message.html,
@@ -109,9 +126,14 @@ export async function sendMail(message: MailMessage) {
     throw new Error("Email is not configured. Set RESEND_API_KEY or SMTP settings.");
   }
 
+  const from = resolved ?? smtp.from;
+  if (!isDeliverableSender(from)) {
+    throw new Error(SENDER_NOT_CONFIGURED_MESSAGE);
+  }
+
   const transport = createMailTransport(smtp);
   await transport.sendMail({
-    from: message.from || `Minutia <${smtp.from}>`,
+    from: formatSender(from),
     to: message.to,
     replyTo: message.replyTo,
     subject: message.subject,

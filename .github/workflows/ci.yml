@@ -89,6 +89,9 @@ jobs:
       - name: Verify reminders core
         run: pnpm test:reminders
 
+      - name: Verify email sender resolution
+        run: pnpm test:email-sender
+
       - name: Verify admin health summarizer
         run: pnpm test:admin-health
 
