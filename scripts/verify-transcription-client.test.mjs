@@ -26,6 +26,7 @@ const {
   transcribeWithGroq,
   transcribeWithOpenRouter,
   transcribeWithAssemblyAI,
+  transcribeWithLocalSidecar,
   resolveTranscriptionProvider,
   getProviderChain,
   isTranscriptionConfigured,
@@ -249,6 +250,29 @@ test("AssemblyAI turns a hung fetch into a timeout error, not an unbounded wait"
       return true;
     }
   );
+});
+
+// ---------------------------------------------------------------------------
+// Local WhisperX + pyannote sidecar client (keyless self-host / dev lane)
+// ---------------------------------------------------------------------------
+
+test("local sidecar returns diarized segments from its HTTP contract", async () => {
+  globalThis.fetch = async (url, init) => {
+    assert.ok(String(url).endsWith("/transcribe"));
+    assert.equal(init.method, "POST");
+    return new Response(JSON.stringify({
+      text: "Hi this is Sarah. Morning.",
+      segments: [
+        { speaker: "SPEAKER_00", start: 0, end: 1.8, text: "Hi this is Sarah.", score: 0.9 },
+        { speaker: "SPEAKER_01", start: 1.8, end: 4, text: "Morning.", score: 0.88 },
+      ],
+    }), { status: 200 });
+  };
+  const result = await transcribeWithLocalSidecar(audioBlob(), { url: "http://sidecar:9000/transcribe", speakersExpected: 2 });
+  assert.equal(result.diarized, true);
+  assert.equal(result.provider, "local");
+  assert.equal(result.segments[1].speaker, "SPEAKER_01");
+  assert.equal(result.segments[0].confidence, 0.9);
 });
 
 // ---------------------------------------------------------------------------

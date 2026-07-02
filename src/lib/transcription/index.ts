@@ -27,6 +27,7 @@ export {
   ASSEMBLYAI_DEFAULT_MODEL,
   transcribeWithAssemblyAI,
 } from "./assemblyai";
+export { LOCAL_STT_DEFAULT_MODEL, transcribeWithLocalSidecar } from "./local-sidecar";
 export {
   MAX_TRANSCRIPTION_BYTES,
   needsChunking,
