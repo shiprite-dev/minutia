@@ -244,6 +244,7 @@ export function IssueDetailContent({ issueId }: IssueDetailContentProps) {
   const assignIssue = useAssignIssue();
   const [showUpdateForm, setShowUpdateForm] = React.useState(false);
   const [updateNote, setUpdateNote] = React.useState("");
+  const [dueOpen, setDueOpen] = React.useState(false);
   const updateInputRef = React.useRef<HTMLTextAreaElement>(null);
 
   const statusCycle: IssueStatus[] = ["open", "pending", "in_progress", "resolved"];
@@ -369,6 +370,7 @@ export function IssueDetailContent({ issueId }: IssueDetailContentProps) {
   function handleDueDateSelect(date: Date | undefined) {
     const val = date ? formatISODate(date) : null;
     handleFieldSave("due_date", val);
+    setDueOpen(false);
   }
 
   async function handleSubmitUpdate() {
@@ -472,7 +474,7 @@ export function IssueDetailContent({ issueId }: IssueDetailContentProps) {
           {/* Due date */}
           <div className="flex items-center gap-2 text-sm">
             <span className="text-ink-3 w-20 shrink-0">Due</span>
-            <Popover>
+            <Popover open={dueOpen} onOpenChange={setDueOpen}>
               <PopoverTrigger asChild>
                 <Button
                   variant="ghost"

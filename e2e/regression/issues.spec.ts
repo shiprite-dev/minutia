@@ -351,7 +351,9 @@ test.describe("Issue Detail", () => {
 
       await page.getByRole("button", { name: "Due date" }).click();
       await page.locator('[data-day="2026-06-15"] button').click();
-      await page.keyboard.press("Escape"); // close the calendar popover so it doesn't overlay the next control
+      // The due-date picker closes on select; wait for it to leave the DOM so it
+      // can't overlay the Priority control.
+      await expect(page.locator('[data-day="2026-06-15"]')).toBeHidden();
       await page.getByRole("combobox", { name: "Priority" }).click();
       await page.getByRole("option", { name: "Critical" }).click();
       await expect(page.locator('[aria-label="Priority: critical"]')).toBeVisible();
