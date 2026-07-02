@@ -43,6 +43,7 @@ export {
   type TranscriptionProvider,
   type TranscriptionResult,
   type TranscriptionErrorCode,
+  type TranscriptionSegment,
 } from "./shared";
 export {
   resolveSpeakerMap,
@@ -50,6 +51,7 @@ export {
   type SpeakerProposal,
   type SpeakerMapResult,
 } from "./diarization";
+export { assembleDiarizedTranscript, type DiarizedAssembly } from "./assemble";
 
 type Env = Record<string, string | undefined>;
 
@@ -102,6 +104,19 @@ export function isTranscriptionConfigured(env: Env = process.env): boolean {
 /** True when the resolved primary provider returns real speaker-labelled segments. */
 export function isDiarizingProvider(env: Env = process.env): boolean {
   return DIARIZING_PROVIDERS.has(resolveTranscriptionProvider(env));
+}
+
+/**
+ * True only when the resolved primary is a diarizing provider AND actually
+ * configured. isDiarizingProvider() alone is not enough to gate the no-chunk
+ * path: a diarizing primary with no credential still resolves as "diarizing"
+ * even though transcribeAudio() would silently run the fallback (which may
+ * not diarize), so an unchunked large file could be sent somewhere unable to
+ * handle it.
+ */
+export function isDiarizingProviderConfigured(env: Env = process.env): boolean {
+  const primary = resolveTranscriptionProvider(env);
+  return DIARIZING_PROVIDERS.has(primary) && providerConfigured(primary, env);
 }
 
 export interface TranscribeAudioOptions {

@@ -31,6 +31,7 @@ const {
   getProviderChain,
   isTranscriptionConfigured,
   isDiarizingProvider,
+  isDiarizingProviderConfigured,
   transcribeAudio,
   TranscriptionError,
   MAX_TRANSCRIPTION_BYTES,
@@ -331,6 +332,17 @@ test("local provider is configured by URL, not a key, and is diarizing", async (
 
 test("groq primary is not diarizing", async () => {
   assert.equal(isDiarizingProvider({ TRANSCRIPTION_PROVIDER: "groq", GROQ_API_KEY: "g" }), false);
+});
+
+test("isDiarizingProviderConfigured is false when the diarizing primary lacks its own credential, even with a fallback key", () => {
+  const env = { TRANSCRIPTION_PROVIDER: "assemblyai", OPENROUTER_API_KEY: "o" };
+  assert.equal(isDiarizingProvider(env), true, "resolved primary is still assemblyai");
+  assert.equal(isDiarizingProviderConfigured(env), false, "but assemblyai itself has no key configured");
+});
+
+test("isDiarizingProviderConfigured is true when the diarizing primary has its credential", () => {
+  const env = { TRANSCRIPTION_PROVIDER: "assemblyai", ASSEMBLYAI_API_KEY: "a" };
+  assert.equal(isDiarizingProviderConfigured(env), true);
 });
 
 test("transcribeAudio threads speakersExpected to the local sidecar as num_speakers", async () => {

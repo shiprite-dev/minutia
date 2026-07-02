@@ -10,11 +10,11 @@ const root = process.cwd();
 const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "minutia-diarization-"));
 const bundled = path.join(tempDir, "diarization.mjs");
 await esbuild.build({
-  entryPoints: ["src/lib/transcription/diarization.ts"],
+  entryPoints: ["src/lib/transcription/index.ts"],
   outfile: bundled, bundle: true, platform: "node", format: "esm",
   logLevel: "silent", absWorkingDir: root,
 });
-const { resolveSpeakerMap, flattenSegments } = await import(pathToFileURL(bundled).href);
+const { resolveSpeakerMap, flattenSegments, assembleDiarizedTranscript } = await import(pathToFileURL(bundled).href);
 
 const seg = (speaker, text, start = 0) => ({ speaker, text, start, end: start + 2, confidence: 0.9 });
 
@@ -65,4 +65,16 @@ test("flattenSegments renders mapped names and merges consecutive turns", () => 
 
 test("empty segments flatten to empty string", () => {
   assert.equal(flattenSegments([], {}), "");
+});
+
+test("assembleDiarizedTranscript resolves speakers and attributes transcript_raw", () => {
+  const segments = [
+    { speaker: "A", start: 0, end: 2, text: "Hi this is Sarah.", confidence: 0.9 },
+    { speaker: "B", start: 2, end: 4, text: "I'll take the deploy.", confidence: 0.9 },
+  ];
+  const out = assembleDiarizedTranscript(segments, ["Sarah Lee", "Mike Ross"]);
+  assert.equal(out.transcriptDiarized, true);
+  assert.equal(out.speakerMap.A, "Sarah Lee");
+  assert.match(out.transcriptRaw, /^Sarah Lee: Hi this is Sarah\./);
+  assert.equal(out.segments.length, 2);
 });

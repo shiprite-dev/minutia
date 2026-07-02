@@ -5,11 +5,14 @@ import { hasAiConfigured } from "@/lib/ai/config";
 import { generateMeetingSuggestions } from "@/lib/ai/suggestions";
 import { MEETING_AUDIO_BUCKET } from "@/lib/audio";
 import {
+  assembleDiarizedTranscript,
   chunkAudioBlob,
+  isDiarizingProviderConfigured,
   isTranscriptionConfigured,
   transcribeAudio,
   TranscriptionError,
   type TranscriptionErrorCode,
+  type TranscriptionSegment,
 } from "@/lib/transcription";
 
 // Transcription is provider-bound and can run for minutes on a long recording.
@@ -72,7 +75,9 @@ export async function POST(
   // the meeting and authorizes access in one query.
   const { data: meeting, error: meetingError } = await supabase
     .from("meetings")
-    .select("id, audio_file_path, audio_duration_seconds, transcription_status, transcription_started_at")
+    .select(
+      "id, audio_file_path, audio_duration_seconds, transcription_status, transcription_started_at, attendees, speaker_map"
+    )
     .eq("id", meetingId)
     .single();
 
@@ -154,26 +159,54 @@ export async function POST(
     }
 
     const mimeType = audioData.type || mimeFromPath(meeting.audio_file_path);
-    const chunks = await chunkAudioBlob(audioData, mimeType);
+    const attendees: string[] = meeting.attendees ?? [];
 
-    // All-or-nothing: a provider failure on any chunk fails the whole run (the
-    // catch below marks it 'failed'). Acceptable for v1; revisit with per-chunk
-    // retry or partial-save if failures on long, multi-chunk meetings show up.
-    const texts: string[] = [];
+    let transcript = "";
     let model = "";
     let provider = "";
     let durationSeconds: number | null = null;
-    for (const chunk of chunks) {
-      const result = await transcribeAudio(chunk, { fileName: `meeting-${meetingId}.webm`, mimeType });
-      texts.push(result.text.trim());
-      if (!model) {
-        model = result.model;
-        provider = result.provider;
-        durationSeconds = result.durationSeconds;
-      }
-    }
+    let segments: TranscriptionSegment[] | null = null;
+    let speakerMap: Record<string, string | null> | null = null;
+    let chunkCount = 1;
 
-    const transcript = texts.filter(Boolean).join("\n\n");
+    if (isDiarizingProviderConfigured()) {
+      // Diarization needs the whole recording in one pass: splitting it would
+      // sever speaker turns across chunk boundaries.
+      const result = await transcribeAudio(audioData, {
+        fileName: `meeting-${meetingId}.webm`,
+        mimeType,
+        speakersExpected: attendees.length || undefined,
+      });
+      model = result.model;
+      provider = result.provider;
+      durationSeconds = result.durationSeconds;
+      if (result.segments?.length) {
+        const assembled = assembleDiarizedTranscript(result.segments, attendees, meeting.speaker_map ?? undefined);
+        transcript = assembled.transcriptRaw;
+        segments = assembled.segments;
+        speakerMap = assembled.speakerMap;
+      } else {
+        transcript = result.text.trim();
+      }
+    } else {
+      const chunks = await chunkAudioBlob(audioData, mimeType);
+      chunkCount = chunks.length;
+
+      // All-or-nothing: a provider failure on any chunk fails the whole run (the
+      // catch below marks it 'failed'). Acceptable for v1; revisit with per-chunk
+      // retry or partial-save if failures on long, multi-chunk meetings show up.
+      const texts: string[] = [];
+      for (const chunk of chunks) {
+        const result = await transcribeAudio(chunk, { fileName: `meeting-${meetingId}.webm`, mimeType });
+        texts.push(result.text.trim());
+        if (!model) {
+          model = result.model;
+          provider = result.provider;
+          durationSeconds = result.durationSeconds;
+        }
+      }
+      transcript = texts.filter(Boolean).join("\n\n");
+    }
 
     const { error: updateError } = await supabase
       .from("meetings")
@@ -183,6 +216,7 @@ export async function POST(
         transcription_model: model,
         transcription_provider: provider,
         transcription_completed_at: new Date().toISOString(),
+        ...(segments ? { transcript_segments: segments, transcript_diarized: true, speaker_map: speakerMap } : {}),
         // Backfill duration from the provider only if the upload did not record it.
         ...(meeting.audio_duration_seconds == null && durationSeconds != null
           ? { audio_duration_seconds: Math.round(durationSeconds) }
@@ -218,7 +252,7 @@ export async function POST(
     return NextResponse.json({
       status: "completed",
       transcript_length: transcript.length,
-      chunks: chunks.length,
+      chunks: chunkCount,
       model,
       provider,
       request_id: requestId,
