@@ -282,9 +282,11 @@ test.describe("Issue Detail", () => {
     await page.goto(url);
     await waitForApp(page);
 
-    const select = page.locator("select").first();
-    await expect(select).toBeVisible();
-    await expect(select.locator("option")).toHaveCount(4);
+    const priorityCombobox = page.getByRole("combobox", { name: "Priority" });
+    await expect(priorityCombobox).toBeVisible();
+    await priorityCombobox.click();
+    await expect(page.getByRole("option")).toHaveCount(4);
+    await page.keyboard.press("Escape");
   });
 
   test("due date calendar trigger is interactive", async ({ page }) => {
@@ -349,7 +351,8 @@ test.describe("Issue Detail", () => {
 
       await page.getByRole("button", { name: "Due date" }).click();
       await page.locator('[data-day="2026-06-15"] button').click();
-      await page.locator("select").first().selectOption("critical");
+      await page.getByRole("combobox", { name: "Priority" }).click();
+      await page.getByRole("option", { name: "Critical" }).click();
       await expect(page.locator('[aria-label="Priority: critical"]')).toBeVisible();
 
       await page.getByRole("combobox", { name: "Status: Open" }).click();

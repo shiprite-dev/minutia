@@ -8,12 +8,6 @@ import { Icons } from "./icons";
 
 const pastels = ["var(--c-rose)", "var(--c-amber)", "var(--c-sage)", "var(--c-sky)"];
 
-const vibes = [
-  { k: "focused", label: "Focused", sub: "Calm, timed, heads-down" },
-  { k: "playful", label: "Playful", sub: "Sound on, looser timers" },
-  { k: "quick", label: "Quick & light", sub: "15 min, no discuss" },
-] as const;
-
 export interface CreateRetroProps {
   open: boolean;
   initialName?: string;
@@ -25,7 +19,6 @@ export interface CreateRetroProps {
 export function CreateRetro({ open, initialName, templates, onClose, onCreate }: CreateRetroProps) {
   const [name, setName] = React.useState(initialName || "");
   const [tpl, setTpl] = React.useState("ssc");
-  const [vibe, setVibe] = React.useState("focused");
 
   React.useEffect(() => { if (open) setName(initialName || ""); }, [open, initialName]);
   if (!open) return null;
@@ -70,21 +63,6 @@ export function CreateRetro({ open, initialName, templates, onClose, onCreate }:
                     </span>
                   ))}
                 </div>
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Vibe */}
-        <div style={{ fontFamily: "var(--font-sans)", fontSize: 12, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--studio-ink-3)", marginBottom: 10 }}>Vibe</div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 10, marginBottom: 32 }}>
-          {vibes.map((v) => {
-            const active = vibe === v.k;
-            return (
-              <button key={v.k} type="button" onClick={() => setVibe(v.k)} style={{ textAlign: "left", cursor: "pointer", padding: "12px 14px", borderRadius: "var(--r-control)",
-                background: active ? "var(--studio-surface)" : "transparent", border: "1px solid " + (active ? "var(--accent)" : "var(--studio-line-2)"), transition: "all var(--dur-fast) var(--ease-out)" }}>
-                <div style={{ fontFamily: "var(--font-sans)", fontSize: 14, fontWeight: 600, color: active ? "var(--studio-ink)" : "var(--studio-ink-2)" }}>{v.label}</div>
-                <div style={{ fontFamily: "var(--font-sans)", fontSize: 11.5, color: "var(--studio-ink-3)", marginTop: 2 }}>{v.sub}</div>
               </button>
             );
           })}
