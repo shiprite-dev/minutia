@@ -36,4 +36,28 @@ test.describe("companion Bearer auth", () => {
     const body = await response.json();
     expect(body).toHaveProperty("connected");
   });
+
+  test("api rejects a forged token that is structurally a valid JWT", async ({ request }) => {
+    const token = await seedAccessToken(request);
+    const [header, payload] = token.split(".");
+    const forgedSignature = Buffer.from("forged-signature").toString("base64url");
+    const forged = `${header}.${payload}.${forgedSignature}`;
+    const response = await request.get("/api/calendar/agenda", {
+      headers: { Authorization: `Bearer ${forged}` },
+    });
+    expect(response.status()).toBe(401);
+  });
+
+  test("api rejects a valid token with a tampered payload", async ({ request }) => {
+    const token = await seedAccessToken(request);
+    const [header, payload, signature] = token.split(".");
+    const decoded = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
+    decoded.sub = "00000000-0000-0000-0000-000000000000";
+    const tamperedPayload = Buffer.from(JSON.stringify(decoded)).toString("base64url");
+    const tampered = `${header}.${tamperedPayload}.${signature}`;
+    const response = await request.get("/api/calendar/agenda", {
+      headers: { Authorization: `Bearer ${tampered}` },
+    });
+    expect(response.status()).toBe(401);
+  });
 });

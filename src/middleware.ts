@@ -194,7 +194,11 @@ export async function middleware(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user && pathname.startsWith("/api/")) {
+  const hasAuthCookie = request.cookies
+    .getAll()
+    .some((cookie) => cookie.name.includes("-auth-token"));
+
+  if (pathname.startsWith("/api/") && !hasAuthCookie) {
     const bearer = bearerTokenFromHeader(request.headers.get("authorization"));
     if (bearer) {
       const { data } = await supabase.auth.getUser(bearer);
