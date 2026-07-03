@@ -11,8 +11,9 @@ test.describe("Inline Tasks", () => {
 
   test("renders inline task items with checkboxes", async ({ page }) => {
     await expect(
-      page.getByRole("heading", { name: /Items raised/ })
+      page.getByRole("heading", { name: "Tracked in the log" })
     ).toBeVisible();
+    await expect(page.getByText("Items raised").first()).toBeVisible();
 
     // Checkboxes should be present
     const checkboxes = page.getByRole("button", {

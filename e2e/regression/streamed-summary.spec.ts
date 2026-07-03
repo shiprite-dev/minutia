@@ -124,6 +124,67 @@ test("generates a recap that renders as flowing words and announces completion o
   await expect(announce).toHaveCount(1);
 });
 
+test("done recap shows a provenance line with the model and timings", async ({ page }) => {
+  await page.route(STREAM_URL, (route) =>
+    route.fulfill({
+      status: 200,
+      headers: {
+        "content-type": "text/event-stream",
+        "cache-control": "no-cache, no-transform",
+        "x-summary-model": "test-model-x",
+      },
+      body: sseBody(["Mike ", "Ross ", "owns ", "it."]),
+    })
+  );
+  await gotoMeeting(page);
+
+  await page.getByRole("button", { name: /generate recap/i }).click();
+  await expect(page.locator("[data-flowing-summary]").first()).toContainText(
+    "Mike Ross owns it."
+  );
+
+  const provenance = page.locator("[data-recap-provenance]");
+  await expect(provenance).toBeVisible();
+  await expect(provenance).toContainText("Summary ready");
+  await expect(provenance).toContainText("test-model-x");
+  await expect(provenance).toContainText("total");
+});
+
+test("R replays the recap and is ignored while typing in a field", async ({ page }) => {
+  let calls = 0;
+  await page.route(STREAM_URL, (route) => {
+    calls += 1;
+    return route.fulfill({
+      status: 200,
+      headers: {
+        "content-type": "text/event-stream",
+        "cache-control": "no-cache, no-transform",
+        "x-summary-model": "test-model-x",
+      },
+      body: sseBody(["Mike ", "Ross ", "owns ", "it."]),
+    });
+  });
+  await gotoMeeting(page);
+
+  await page.getByRole("button", { name: /generate recap/i }).click();
+  await expect(page.locator("[data-flowing-summary]").first()).toContainText(
+    "Mike Ross owns it."
+  );
+  expect(calls).toBe(1);
+
+  // R inside the notes field types the character; it must not replay.
+  const notes = page.getByPlaceholder("Meeting notes...");
+  await notes.click();
+  await page.keyboard.press("r");
+  await page.waitForTimeout(300);
+  expect(calls).toBe(1);
+
+  // R on the page body re-runs the recap stream.
+  await notes.blur();
+  await page.keyboard.press("r");
+  await expect.poll(() => calls, { timeout: 10_000 }).toBe(2);
+});
+
 test("Stop halts an in-flight recap without losing arrived text", async ({ page }) => {
   // A stream that never completes so the Stop control is meaningful.
   await page.route(STREAM_URL, async (route) => {

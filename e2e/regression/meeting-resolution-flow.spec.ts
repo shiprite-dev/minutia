@@ -86,7 +86,7 @@ test.describe("Meeting Issue Resolution Flow", () => {
       await waitForApp(page);
 
       await expect(
-        page.getByRole("heading", { name: /Resolved this meeting/ })
+        page.getByText("Resolved this meeting").first()
       ).toBeVisible({ timeout: 5000 });
 
       const resolvedSection = page.locator("section").filter({
@@ -132,7 +132,7 @@ test.describe("Meeting Issue Resolution Flow", () => {
       await waitForApp(page);
 
       await expect(
-        page.getByRole("heading", { name: /Resolved this meeting/ })
+        page.getByText("Resolved this meeting").first()
       ).toBeVisible({ timeout: 5000 });
 
       const issueRow = raisedIssueRow(page, issue.title);
@@ -191,7 +191,7 @@ test.describe("Meeting Issue Resolution Flow", () => {
       await waitForApp(page);
 
       await expect(
-        page.getByRole("heading", { name: /Resolved this meeting/ })
+        page.getByText("Resolved this meeting").first()
       ).toBeVisible({ timeout: 10000 });
       await expect(page.getByText(issue.title).first()).toBeVisible();
     } finally {
