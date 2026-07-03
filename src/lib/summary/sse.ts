@@ -9,14 +9,23 @@ export function formatSseFrame(word: string): string {
   return `data: ${JSON.stringify({ t: word })}\n\n`;
 }
 
-export function parseSseFrame(line: string): { word?: string; done?: boolean } {
+// A one-off meta frame naming the model powering the recap, emitted before the
+// words so the client can render provenance. Empty model yields no frame.
+export function formatSseMeta(model: string): string {
+  if (!model) return "";
+  return `data: ${JSON.stringify({ m: model })}\n\n`;
+}
+
+export function parseSseFrame(line: string): { word?: string; model?: string; done?: boolean } {
   const trimmed = line.trim();
   if (!trimmed.startsWith("data:")) return {};
   const data = trimmed.slice(5).trim();
   if (data === "[DONE]") return { done: true };
   try {
-    const parsed = JSON.parse(data) as { t?: unknown };
-    return typeof parsed.t === "string" ? { word: parsed.t } : {};
+    const parsed = JSON.parse(data) as { t?: unknown; m?: unknown };
+    if (typeof parsed.t === "string") return { word: parsed.t };
+    if (typeof parsed.m === "string" && parsed.m) return { model: parsed.m };
+    return {};
   } catch {
     return {};
   }
