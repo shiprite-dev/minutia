@@ -63,3 +63,25 @@ test("materializeClassName drops the class when reduced motion is requested", ()
   assert.equal(materializeClassName(false), "materialize");
   assert.equal(materializeClassName(true), "");
 });
+
+const { SUMMARY_SYSTEM_PROMPT, buildSummaryPrompt } = await bundle(
+  "src/lib/summary/prompt.ts", "prompt"
+);
+
+test("summary system prompt asks for prose, never JSON", () => {
+  assert.match(SUMMARY_SYSTEM_PROMPT, /prose|paragraph/i);
+  assert.doesNotMatch(SUMMARY_SYSTEM_PROMPT, /JSON/i);
+});
+
+test("buildSummaryPrompt embeds the meeting context and the transcript", () => {
+  const prompt = buildSummaryPrompt({
+    title: "Weekly Sync",
+    seriesName: "Platform",
+    attendees: ["Sarah Lee", "Mike Ross"],
+    transcript: "Mike Ross: I will take the migration review.",
+  });
+  assert.match(prompt, /Platform/);
+  assert.match(prompt, /Weekly Sync/);
+  assert.match(prompt, /Sarah Lee, Mike Ross/);
+  assert.match(prompt, /migration review/);
+});
