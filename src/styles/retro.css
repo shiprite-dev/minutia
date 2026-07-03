@@ -7,7 +7,7 @@
    ============================================================ */
 [data-retro] {
   --font-serif: var(--font-fraunces, Georgia, serif);
-  --font-sans:  var(--font-satoshi, system-ui, sans-serif);
+  --font-sans:  var(--font-hyperlegible, system-ui, sans-serif);
   --font-mono:  var(--font-jetbrains, ui-monospace, monospace);
 
   /* space (4px base) */

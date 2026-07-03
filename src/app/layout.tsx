@@ -4,9 +4,10 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { Providers } from "@/lib/providers";
 import "./globals.css";
 
-const satoshi = localFont({
-  src: "./fonts/Satoshi-Variable.woff2",
-  variable: "--font-satoshi",
+const hyperlegible = localFont({
+  src: "./fonts/AtkinsonHyperlegibleNext-Variable.woff2",
+  variable: "--font-hyperlegible",
+  weight: "200 800",
   display: "swap",
 });
 
@@ -53,7 +54,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${satoshi.variable} ${fraunces.variable} ${jetbrains.variable} h-full antialiased`}
+      className={`${hyperlegible.variable} ${fraunces.variable} ${jetbrains.variable} h-full antialiased`}
       suppressHydrationWarning
     >
       <body className="min-h-full flex flex-col">

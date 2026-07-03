@@ -96,7 +96,7 @@ test.describe("Typography: JetBrains Mono on metadata", () => {
 });
 
 test.describe("Typography: no Inter anywhere", () => {
-  test("body text uses Satoshi, not Inter", async ({ page }) => {
+  test("body text uses Atkinson Hyperlegible Next, not Inter", async ({ page }) => {
     await page.goto("/dashboard");
     await waitForApp(page);
 
@@ -105,7 +105,7 @@ test.describe("Typography: no Inter anywhere", () => {
       (el) => getComputedStyle(el).fontFamily
     );
     expect(fontFamily.toLowerCase()).not.toContain("inter");
-    expect(fontFamily.toLowerCase()).toContain("satoshi");
+    expect(fontFamily.toLowerCase()).toContain("hyperlegible");
   });
 });
 
