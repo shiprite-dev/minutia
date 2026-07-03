@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
+import { bearerTokenFromHeader } from "./bearer";
 import { getSupabaseAuthCookieName } from "./auth-cookie";
 import { getSupabaseServerUrl } from "./url";
 
@@ -7,11 +8,19 @@ export async function createClient() {
   const cookieStore = await cookies();
   const cookieName = getSupabaseAuthCookieName();
 
-  return createServerClient(
+  const hasAuthCookie = cookieStore
+    .getAll()
+    .some((cookie) => cookie.name.includes("-auth-token"));
+  const bearer = hasAuthCookie
+    ? null
+    : bearerTokenFromHeader((await headers()).get("authorization"));
+
+  const client = createServerClient(
     getSupabaseServerUrl(),
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookieOptions: cookieName ? { name: cookieName } : undefined,
+      global: bearer ? { headers: { Authorization: `Bearer ${bearer}` } } : undefined,
       cookies: {
         getAll() {
           return cookieStore.getAll();
@@ -29,4 +38,12 @@ export async function createClient() {
       },
     }
   );
+
+  if (bearer) {
+    const baseGetUser = client.auth.getUser.bind(client.auth);
+    client.auth.getUser = ((jwt?: string) =>
+      baseGetUser(jwt ?? bearer)) as typeof client.auth.getUser;
+  }
+
+  return client;
 }

@@ -57,7 +57,38 @@ export function shouldCutSegment(pendingBytes: number, msSinceLastCut: number): 
   );
 }
 
-/** Storage path for a meeting segment: `${meetingId}/seg-${seq}.webm`. */
-export function segmentStoragePath(meetingId: string, seq: number): string {
-  return `${meetingId}/seg-${seq}.webm`;
+/** Extensions a segment may use; the web recorder always cuts webm, the desktop companion uploads m4a. */
+export const SEGMENT_EXTENSIONS = ["webm", "m4a", "ogg", "mp3", "wav"] as const;
+export type SegmentExtension = (typeof SEGMENT_EXTENSIONS)[number];
+
+const SEGMENT_MIME: Record<SegmentExtension, string> = {
+  webm: "audio/webm",
+  m4a: "audio/mp4",
+  ogg: "audio/ogg",
+  mp3: "audio/mpeg",
+  wav: "audio/wav",
+};
+
+export function segmentMimeForExt(ext: SegmentExtension): string {
+  return SEGMENT_MIME[ext];
+}
+
+/** Storage path for a meeting segment: `${meetingId}/seg-${seq}.${ext}`. */
+export function segmentStoragePath(
+  meetingId: string,
+  seq: number,
+  ext: SegmentExtension = "webm"
+): string {
+  return `${meetingId}/seg-${seq}.${ext}`;
+}
+
+/** Validate a client-supplied segment path against the canonical shape. */
+export function parseSegmentPath(
+  meetingId: string,
+  seq: number,
+  path: unknown
+): { ext: SegmentExtension } | null {
+  if (typeof path !== "string") return null;
+  const ext = SEGMENT_EXTENSIONS.find((e) => path === segmentStoragePath(meetingId, seq, e));
+  return ext ? { ext } : null;
 }

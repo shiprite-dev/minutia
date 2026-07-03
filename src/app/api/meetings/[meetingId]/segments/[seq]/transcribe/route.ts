@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { requireAiAccess } from "@/lib/ai/access";
 import { MEETING_AUDIO_BUCKET } from "@/lib/audio";
-import { segmentStoragePath } from "@/lib/audio/segments";
+import { parseSegmentPath, segmentMimeForExt } from "@/lib/audio/segments";
 import {
   isTranscriptionConfigured,
   transcribeAudio,
@@ -55,9 +55,11 @@ export async function POST(
   } catch {
     path = undefined;
   }
-  if (path !== segmentStoragePath(meetingId, seq)) {
+  const parsed = parseSegmentPath(meetingId, seq, path);
+  if (!parsed) {
     return NextResponse.json({ error: "Invalid segment path.", request_id: requestId }, { status: 400 });
   }
+  const storagePath = path as string;
 
   const supabase = await createClient();
 
@@ -85,7 +87,7 @@ export async function POST(
   const { error: upsertError } = await supabase
     .from("meeting_audio_segments")
     .upsert(
-      { meeting_id: meetingId, seq, storage_path: path },
+      { meeting_id: meetingId, seq, storage_path: storagePath },
       { onConflict: "meeting_id,seq", ignoreDuplicates: true }
     );
 
@@ -134,7 +136,7 @@ export async function POST(
   try {
     const { data: audioData, error: downloadError } = await supabase.storage
       .from(MEETING_AUDIO_BUCKET)
-      .download(path);
+      .download(storagePath);
 
     if (downloadError || !audioData) {
       await markFailed("download_failed");
@@ -145,8 +147,8 @@ export async function POST(
     }
 
     const result = await transcribeAudio(audioData, {
-      fileName: `seg-${seq}.webm`,
-      mimeType: audioData.type || "audio/webm",
+      fileName: `seg-${seq}.${parsed.ext}`,
+      mimeType: audioData.type || segmentMimeForExt(parsed.ext),
       preferFast: true,
     });
     const transcript = result.text.trim();
