@@ -16,6 +16,7 @@ import {
   useApplyAiMeetingNotes,
   useUpdateMeetingNotes,
   useUpdateMeetingTranscript,
+  useUpdateSpeakerMap,
 } from "@/lib/hooks/use-meetings";
 import { useSeriesDetail, useSeriesParticipantRole } from "@/lib/hooks/use-series";
 import { useIssues, useCreateIssue, useUpdateIssueStatus, useUpdateIssue, useAssignIssue, issueKeys } from "@/lib/hooks/use-issues";
@@ -36,6 +37,7 @@ import { PrefetchIssueLink } from "@/components/minutia/prefetch-issue-link";
 import { StatusChip } from "@/components/minutia/status-chip";
 import { CategoryBadge } from "@/components/minutia/category-badge";
 import { SuggestionContextBadge } from "@/components/minutia/suggestion-context-badge";
+import { DiarizedTranscript } from "@/components/minutia/diarized-transcript";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
@@ -786,6 +788,7 @@ export function MeetingDetailContent({
   const [reviewingSuggestionId, setReviewingSuggestionId] = React.useState<string | null>(null);
   const updateNotes = useUpdateMeetingNotes();
   const updateTranscript = useUpdateMeetingTranscript();
+  const updateSpeakerMap = useUpdateSpeakerMap();
   const applyAiNotes = useApplyAiMeetingNotes();
   const timer = useLiveTimer(meeting?.status === "live" ? meeting.created_at : null);
   const recorder = useMeetingRecorder(meetingId);
@@ -883,6 +886,16 @@ export function MeetingDetailContent({
       }, 1000);
     },
     [meetingId, updateTranscript]
+  );
+
+  // Correct a diarized speaker: the route re-flattens transcript_raw and
+  // re-runs extraction server-side, then the mutation's onSuccess invalidates
+  // the meeting query so the corrected transcript and suggestions land here.
+  const patchSpeaker = React.useCallback(
+    (speaker: string, name: string | null) => {
+      updateSpeakerMap.mutate({ meetingId, speaker, attendee: name });
+    },
+    [meetingId, updateSpeakerMap]
   );
 
   React.useEffect(() => {
@@ -1714,7 +1727,7 @@ export function MeetingDetailContent({
 
               {aiSuggestions.length > 0 && (
                 <div className="divide-y divide-rule">
-                  {aiSuggestions.map((suggestion) => {
+                  {aiSuggestions.map((suggestion, i) => {
                     const isReviewed = suggestion.status !== "pending";
                     const relatedHref =
                       suggestion.related_issue_number != null
@@ -1724,7 +1737,12 @@ export function MeetingDetailContent({
                     // item, so their fields are read-only; only a new_item is editable.
                     const isContextual = suggestion.type !== "new_item";
                     return (
-                      <article key={suggestion.id} className="px-4 py-4">
+                      <article
+                        key={suggestion.id}
+                        data-suggestion-card
+                        className="materialize px-4 py-4"
+                        style={{ animationDelay: `${Math.min(i, 8) * 40}ms` }}
+                      >
                         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                           <div className="flex flex-wrap items-center gap-2">
                             <SuggestionContextBadge
@@ -1969,12 +1987,23 @@ export function MeetingDetailContent({
             Paste a meeting transcript to power AI notes and suggestions.
           </p>
           {transcriptOpen && (
-            <Textarea
-              value={transcript}
-              onChange={(e) => handleTranscriptChange(e.target.value)}
-              placeholder="Paste transcript..."
-              className="mt-3 min-h-[160px] font-sans text-sm"
-            />
+            meeting?.transcript_diarized && meeting.transcript_segments?.length ? (
+              <div className="mt-3">
+                <DiarizedTranscript
+                  segments={meeting.transcript_segments}
+                  speakerMap={meeting.speaker_map ?? undefined}
+                  canEdit={canManageMeeting}
+                  onRenameSpeaker={patchSpeaker}
+                />
+              </div>
+            ) : (
+              <Textarea
+                value={transcript}
+                onChange={(e) => handleTranscriptChange(e.target.value)}
+                placeholder="Paste transcript..."
+                className="mt-3 min-h-[160px] font-sans text-sm"
+              />
+            )
           )}
         </section>
       </div>
