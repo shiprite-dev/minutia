@@ -52,7 +52,17 @@ test("waits at least minIntervalMs between emitted words", async () => {
   const waits = [];
   const sleep = async (ms) => { waits.push(ms); };
   await collect(paceWords(scripted(["a b c "]), { minIntervalMs: 18, sleep }));
-  // Two gaps between three words; each pause is the configured minimum.
-  assert.equal(waits.length >= 2, true);
+  // Three words emitted, no sleep before the first: exactly two gaps.
+  assert.equal(waits.length, 2);
   assert.equal(waits.every((w) => w === 18), true);
+});
+
+test("whitespace-only leading delta preserves every character", async () => {
+  const words = await collect(paceWords(scripted(["  ", "foo bar"]), { sleep: noSleep }));
+  assert.equal(words.join(""), "  foo bar");
+});
+
+test("leading and internal whitespace round-trips losslessly", async () => {
+  const words = await collect(paceWords(scripted([" hello  world "]), { sleep: noSleep }));
+  assert.equal(words.join(""), " hello  world ");
 });

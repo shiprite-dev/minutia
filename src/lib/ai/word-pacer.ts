@@ -19,11 +19,12 @@ export async function* paceWords(
   const drain = async function* (): AsyncGenerator<string> {
     let match = buffer.match(WORD_WITH_TRAILING_WS);
     while (match) {
-      const word = match[0];
-      buffer = buffer.slice(word.length);
+      const end = match.index! + match[0].length;
+      const chunk = buffer.slice(0, end);
+      buffer = buffer.slice(end);
       if (emitted) await sleep(minIntervalMs);
       emitted = true;
-      yield word;
+      yield chunk;
       match = buffer.match(WORD_WITH_TRAILING_WS);
     }
   };
