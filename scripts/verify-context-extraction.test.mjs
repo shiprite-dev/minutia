@@ -332,3 +332,33 @@ test("transcribe route auto-triggers context-aware extraction", () => {
     "completing a transcription must trigger suggestion extraction"
   );
 });
+
+// ---------------------------------------------------------------------------
+// buildContextAwarePrompt: owner attribution from the diarized transcript.
+// Task 7 made transcript_raw an attributed "Name: text" transcript, so the
+// prompt (not generateMeetingSuggestions) is where self-assignment attribution
+// is taught. Bundle src/lib/ai/suggestions.ts (with the "@/" alias resolved,
+// same pattern as verify-ai-config.test.mjs) so the real prompt builder runs
+// in isolation; its Supabase/Next.js transitive deps only throw at call time.
+// ---------------------------------------------------------------------------
+const bundledSuggestions = path.join(tempDir, "suggestions.mjs");
+await esbuild.build({
+  entryPoints: ["src/lib/ai/suggestions.ts"],
+  outfile: bundledSuggestions,
+  bundle: true,
+  platform: "node",
+  format: "esm",
+  logLevel: "silent",
+  absWorkingDir: root,
+  alias: { "@": path.join(root, "src") },
+});
+const { buildContextAwarePrompt } = await import(pathToFileURL(bundledSuggestions).href);
+
+test("prompt teaches self-assignment attribution from speaker turns", () => {
+  const prompt = buildContextAwarePrompt({
+    title: "Weekly", seriesName: "Eng", attendees: ["Sarah Lee"],
+    notes: "", transcript: "Sarah Lee: I'll take the deploy.", contextBlock: "(none)",
+  });
+  assert.match(prompt, /self-assign/i);
+  assert.match(prompt, /first person/i);
+});

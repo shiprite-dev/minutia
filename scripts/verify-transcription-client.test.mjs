@@ -25,9 +25,13 @@ const {
   GROQ_DEFAULT_MODEL,
   transcribeWithGroq,
   transcribeWithOpenRouter,
+  transcribeWithAssemblyAI,
+  transcribeWithLocalSidecar,
   resolveTranscriptionProvider,
   getProviderChain,
   isTranscriptionConfigured,
+  isDiarizingProvider,
+  isDiarizingProviderConfigured,
   transcribeAudio,
   TranscriptionError,
   MAX_TRANSCRIPTION_BYTES,
@@ -67,6 +71,15 @@ function errResponse(status) {
 // Groq client
 // ---------------------------------------------------------------------------
 
+test("transcribeWithGroq result is non-diarized and backward compatible", async () => {
+  globalThis.fetch = async () =>
+    new Response(JSON.stringify({ text: "hello world", duration: 3 }), { status: 200 });
+  const result = await transcribeWithGroq(audioBlob(), { apiKey: "k" });
+  assert.equal(result.text, "hello world");
+  assert.equal(result.diarized, false);
+  assert.equal(result.segments, undefined);
+});
+
 test("transcribeWithGroq posts multipart audio to the OpenAI-compatible endpoint", async () => {
   const calls = fakeFetch(() => okResponse({ text: "hello world", duration: 12.5 }));
   const result = await transcribeWithGroq(audioBlob(64), { apiKey: "groq-key" });
@@ -86,6 +99,7 @@ test("transcribeWithGroq posts multipart audio to the OpenAI-compatible endpoint
     model: GROQ_DEFAULT_MODEL,
     provider: "groq",
     durationSeconds: 12.5,
+    diarized: false,
   });
 });
 
@@ -159,6 +173,111 @@ test("transcribeWithOpenRouter posts base64 JSON with attribution headers", asyn
 });
 
 // ---------------------------------------------------------------------------
+// AssemblyAI client (diarizing primary)
+// ---------------------------------------------------------------------------
+
+test("AssemblyAI uploads, polls, and returns diarized segments", async () => {
+  const calls = [];
+  globalThis.fetch = async (url, init) => {
+    calls.push({ url: String(url), method: init?.method });
+    if (String(url).endsWith("/v2/upload"))
+      return new Response(JSON.stringify({ upload_url: "https://cdn/audio" }), { status: 200 });
+    if (String(url).endsWith("/v2/transcript") && init?.method === "POST")
+      return new Response(JSON.stringify({ id: "t1", status: "queued" }), { status: 200 });
+    return new Response(JSON.stringify({
+      id: "t1", status: "completed", text: "Hi this is Sarah. Morning.", audio_duration: 4,
+      utterances: [
+        { speaker: "A", start: 0, end: 1800, text: "Hi this is Sarah.", confidence: 0.94 },
+        { speaker: "B", start: 1800, end: 4000, text: "Morning.", confidence: 0.9 },
+      ],
+    }), { status: 200 });
+  };
+  const result = await transcribeWithAssemblyAI(audioBlob(), { apiKey: "k", speakersExpected: 2, timeoutMs: 5000 });
+  assert.equal(result.diarized, true);
+  assert.equal(result.provider, "assemblyai");
+  assert.equal(result.segments.length, 2);
+  assert.equal(result.segments[0].speaker, "A");
+  assert.equal(result.segments[0].end, 1.8); // ms -> s
+  assert.equal(result.durationSeconds, 4);
+  assert.ok(calls.some((c) => c.url.endsWith("/v2/upload")));
+});
+
+test("AssemblyAI maps a provider error status to a TranscriptionError", async () => {
+  globalThis.fetch = async (url) => {
+    if (String(url).endsWith("/v2/upload"))
+      return new Response(JSON.stringify({ upload_url: "https://cdn/a" }), { status: 200 });
+    if (String(url).endsWith("/v2/transcript"))
+      return new Response(JSON.stringify({ id: "t2", status: "queued" }), { status: 200 });
+    return new Response(JSON.stringify({ id: "t2", status: "error", error: "bad audio" }), { status: 200 });
+  };
+  await assert.rejects(
+    () => transcribeWithAssemblyAI(audioBlob(), { apiKey: "k", timeoutMs: 5000 }),
+    (e) => e instanceof TranscriptionError && e.provider === "assemblyai"
+  );
+});
+
+test("AssemblyAI waits between polls and returns diarized segments once completed", async () => {
+  let pollCount = 0;
+  globalThis.fetch = async (url, init) => {
+    if (String(url).endsWith("/v2/upload"))
+      return new Response(JSON.stringify({ upload_url: "https://cdn/audio" }), { status: 200 });
+    if (String(url).endsWith("/v2/transcript") && init?.method === "POST")
+      return new Response(JSON.stringify({ id: "t3", status: "queued" }), { status: 200 });
+    pollCount += 1;
+    if (pollCount === 1) return new Response(JSON.stringify({ id: "t3", status: "processing" }), { status: 200 });
+    return new Response(JSON.stringify({
+      id: "t3", status: "completed", text: "Hi there.", audio_duration: 2,
+      utterances: [{ speaker: "A", start: 0, end: 2000, text: "Hi there.", confidence: 0.9 }],
+    }), { status: 200 });
+  };
+  const result = await transcribeWithAssemblyAI(audioBlob(), { apiKey: "k", pollIntervalMs: 1, timeoutMs: 5000 });
+  assert.equal(pollCount, 2, "must poll again after processing before completing");
+  assert.ok(result.segments.length >= 1);
+  assert.equal(result.diarized, true);
+});
+
+test("AssemblyAI turns a hung fetch into a timeout error, not an unbounded wait", async () => {
+  globalThis.fetch = (_url, init = {}) =>
+    new Promise((_resolve, reject) => {
+      init.signal?.addEventListener("abort", () =>
+        reject(Object.assign(new Error("aborted"), { name: "AbortError" }))
+      );
+    });
+  await assert.rejects(
+    transcribeWithAssemblyAI(audioBlob(), { apiKey: "k", timeoutMs: 20 }),
+    (err) => {
+      assert.ok(err instanceof TranscriptionError);
+      assert.equal(err.code, "timeout");
+      assert.equal(err.provider, "assemblyai");
+      return true;
+    }
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Local WhisperX + pyannote sidecar client (keyless self-host / dev lane)
+// ---------------------------------------------------------------------------
+
+test("local sidecar returns diarized segments from its HTTP contract", async () => {
+  globalThis.fetch = async (url, init) => {
+    assert.ok(String(url).endsWith("/transcribe"));
+    assert.equal(init.method, "POST");
+    return new Response(JSON.stringify({
+      text: "Hi this is Sarah. Morning.",
+      segments: [
+        { speaker: "SPEAKER_00", start: 0, end: 1.8, text: "Hi this is Sarah.", score: 0.9 },
+        { speaker: "SPEAKER_01", start: 1.8, end: 4, text: "Morning.", score: 0.88 },
+      ],
+    }), { status: 200 });
+  };
+  const result = await transcribeWithLocalSidecar(audioBlob(), { url: "http://sidecar:9000/transcribe", speakersExpected: 2 });
+  assert.equal(result.diarized, true);
+  assert.equal(result.provider, "local");
+  assert.equal(result.segments[1].speaker, "SPEAKER_01");
+  assert.equal(result.segments[0].confidence, 0.9);
+});
+
+// ---------------------------------------------------------------------------
 // Provider resolution + fallback chain
 // ---------------------------------------------------------------------------
 
@@ -195,6 +314,47 @@ test("isTranscriptionConfigured reflects whether any usable provider key exists"
   // deepgram/local are not implemented, so they only count if OpenRouter can cover.
   assert.equal(isTranscriptionConfigured({ TRANSCRIPTION_PROVIDER: "local" }), false);
   assert.equal(isTranscriptionConfigured({ TRANSCRIPTION_PROVIDER: "local", OPENROUTER_API_KEY: "o" }), true);
+});
+
+test("assemblyai primary keeps groq/openrouter as fallback and reports diarizing", async () => {
+  const env = { TRANSCRIPTION_PROVIDER: "assemblyai", ASSEMBLYAI_API_KEY: "a", OPENROUTER_API_KEY: "o" };
+  assert.deepEqual(getProviderChain(env), ["assemblyai", "openrouter"]);
+  assert.equal(isDiarizingProvider(env), true);
+  assert.equal(isTranscriptionConfigured(env), true);
+});
+
+test("local provider is configured by URL, not a key, and is diarizing", async () => {
+  const env = { TRANSCRIPTION_PROVIDER: "local", TRANSCRIPTION_LOCAL_URL: "http://sidecar/transcribe" };
+  assert.equal(isTranscriptionConfigured(env), true);
+  assert.equal(isDiarizingProvider(env), true);
+  assert.deepEqual(getProviderChain(env), ["local"]);
+});
+
+test("groq primary is not diarizing", async () => {
+  assert.equal(isDiarizingProvider({ TRANSCRIPTION_PROVIDER: "groq", GROQ_API_KEY: "g" }), false);
+});
+
+test("isDiarizingProviderConfigured is false when the diarizing primary lacks its own credential, even with a fallback key", () => {
+  const env = { TRANSCRIPTION_PROVIDER: "assemblyai", OPENROUTER_API_KEY: "o" };
+  assert.equal(isDiarizingProvider(env), true, "resolved primary is still assemblyai");
+  assert.equal(isDiarizingProviderConfigured(env), false, "but assemblyai itself has no key configured");
+});
+
+test("isDiarizingProviderConfigured is true when the diarizing primary has its credential", () => {
+  const env = { TRANSCRIPTION_PROVIDER: "assemblyai", ASSEMBLYAI_API_KEY: "a" };
+  assert.equal(isDiarizingProviderConfigured(env), true);
+});
+
+test("transcribeAudio threads speakersExpected to the local sidecar as num_speakers", async () => {
+  const env = { TRANSCRIPTION_PROVIDER: "local", TRANSCRIPTION_LOCAL_URL: "http://sidecar/transcribe" };
+  let capturedForm;
+  globalThis.fetch = async (url, init) => {
+    capturedForm = init.body;
+    return okResponse({ text: "hi", segments: [{ speaker: "A", start: 0, end: 1, text: "hi" }] });
+  };
+  const result = await transcribeAudio(audioBlob(), { env, speakersExpected: 3 });
+  assert.equal(result.provider, "local");
+  assert.equal(capturedForm.get("num_speakers"), "3");
 });
 
 test("transcribeAudio falls back from a failing primary to OpenRouter", async () => {

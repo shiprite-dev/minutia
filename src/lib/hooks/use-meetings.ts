@@ -438,6 +438,42 @@ export function useUpdateMeetingTranscript() {
 }
 
 // ---------------------------------------------------------------------------
+// useUpdateSpeakerMap - correct a diarized speaker; re-flattens transcript_raw
+// and re-runs AI extraction server-side, so this hits the API route rather
+// than writing the table directly (mirrors runTranscription's fetch pattern).
+// ---------------------------------------------------------------------------
+export function useUpdateSpeakerMap() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      meetingId,
+      speaker,
+      attendee,
+    }: {
+      meetingId: string;
+      speaker: string;
+      attendee: string | null;
+    }) => {
+      const response = await fetch(`/api/meetings/${meetingId}/speaker-map`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ speaker, attendee }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error ?? "Could not update the speaker.");
+      return payload as { speaker_map: Record<string, string | null>; transcript_raw: string };
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: meetingKeys.detail(variables.meetingId),
+      });
+    },
+    meta: { successMessage: "Speaker renamed." },
+  });
+}
+
+// ---------------------------------------------------------------------------
 // useApplyAiMeetingNotes - explicit apply from preview to visible notes
 // ---------------------------------------------------------------------------
 export function useApplyAiMeetingNotes() {

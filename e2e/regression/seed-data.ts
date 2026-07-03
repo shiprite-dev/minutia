@@ -4,6 +4,9 @@ export const SERIES = {
   platformStandup: "10000000-0000-0000-0000-000000000001",
   productReview: "10000000-0000-0000-0000-000000000002",
   incidentRetro: "10000000-0000-0000-0000-000000000003",
+  // Dedicated to the diarized transcript fixture; isolated so nothing else
+  // asserts a meeting/suggestion count against it.
+  diarizationQa: "10000000-0000-0000-0000-000000000004",
 };
 
 export const MEETINGS = {
@@ -14,6 +17,7 @@ export const MEETINGS = {
   productKickoff: "20000000-0000-0000-0000-000000000010",
   productSprint1: "20000000-0000-0000-0000-000000000011",
   retro: "20000000-0000-0000-0000-000000000020",
+  diarizedSync: "20000000-0000-0000-0000-000000000030",
 };
 
 export const ISSUES = {

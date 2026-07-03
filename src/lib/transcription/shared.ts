@@ -9,7 +9,18 @@
 // JSON) and a duration extractor.
 // ---------------------------------------------------------------------------
 
-export type TranscriptionProvider = "groq" | "openrouter" | "deepgram" | "local";
+export type TranscriptionProvider = "groq" | "openrouter" | "assemblyai" | "deepgram" | "local";
+
+export interface TranscriptionSegment {
+  /** Provider speaker label, e.g. "A", "B", or "SPEAKER_00". */
+  speaker: string;
+  /** Segment start/end in seconds from the recording start. */
+  start: number;
+  end: number;
+  text: string;
+  /** Provider confidence 0..1 when reported, else null. */
+  confidence: number | null;
+}
 
 export interface TranscriptionResult {
   /** The transcribed text. */
@@ -20,6 +31,10 @@ export interface TranscriptionResult {
   provider: TranscriptionProvider;
   /** Audio length in seconds when the provider reports it, else null. */
   durationSeconds: number | null;
+  /** Speaker-labelled segments when the provider diarizes, else omitted. */
+  segments?: TranscriptionSegment[];
+  /** True only when segments carry real speaker labels. */
+  diarized: boolean;
 }
 
 export type TranscriptionErrorCode =
@@ -142,5 +157,5 @@ export async function sendTranscription({
       ? record.duration
       : null;
 
-  return { text: record.text, model, provider, durationSeconds };
+  return { text: record.text, model, provider, durationSeconds, diarized: false };
 }
