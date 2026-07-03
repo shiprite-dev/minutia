@@ -37,6 +37,7 @@ import { PrefetchIssueLink } from "@/components/minutia/prefetch-issue-link";
 import { StatusChip } from "@/components/minutia/status-chip";
 import { CategoryBadge } from "@/components/minutia/category-badge";
 import { SuggestionContextBadge } from "@/components/minutia/suggestion-context-badge";
+import { FlowingSummary } from "@/components/minutia/flowing-summary";
 import { DiarizedTranscript } from "@/components/minutia/diarized-transcript";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -1632,6 +1633,10 @@ export function MeetingDetailContent({
           decisions={meetingDecisions}
           doneIssues={doneThisMeeting}
         />
+
+        {canManageMeeting && (
+          <FlowingSummary meetingId={meetingId} canGenerate={hasAccess} />
+        )}
 
         {canManageMeeting && (
         <section className="mb-8" aria-label="AI accountability review">
