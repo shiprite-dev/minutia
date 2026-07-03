@@ -3,7 +3,18 @@
 import * as React from "react";
 import type { RecordingState } from "@/lib/types";
 import { appendAudioChunk } from "@/lib/offline-buffer";
-import { isRecordingSupported, pickAudioMimeType } from "@/lib/audio";
+import {
+  audioContentType,
+  isRecordingSupported,
+  MEETING_AUDIO_BUCKET,
+  pickAudioMimeType,
+} from "@/lib/audio";
+import {
+  createSegmentPipeline,
+  type SegmentPipeline,
+  type SegmentPipelineStatus,
+} from "@/lib/audio/segment-pipeline";
+import { createClient } from "@/lib/supabase/client";
 
 export interface AudioRecordingResult {
   blob: Blob;
@@ -20,7 +31,14 @@ export interface MeetingRecorder {
   stop: () => Promise<AudioRecordingResult | null>;
   pause: () => void;
   resume: () => void;
+  fastLane: SegmentPipelineStatus;
 }
+
+const FAST_LANE_OFF: SegmentPipelineStatus = {
+  state: "off",
+  segmentsDone: 0,
+  segmentsTotal: 0,
+};
 
 const TICK_MS = 500;
 
@@ -37,6 +55,7 @@ export function useMeetingRecorder(meetingId: string): MeetingRecorder {
   const [durationSeconds, setDurationSeconds] = React.useState(0);
   const [error, setError] = React.useState<string | null>(null);
   const [isSupported, setIsSupported] = React.useState(true);
+  const [fastLane, setFastLane] = React.useState<SegmentPipelineStatus>(FAST_LANE_OFF);
 
   const recorderRef = React.useRef<MediaRecorder | null>(null);
   const mountedRef = React.useRef(true);
@@ -44,6 +63,10 @@ export function useMeetingRecorder(meetingId: string): MeetingRecorder {
   const chunksRef = React.useRef<Blob[]>([]);
   const seqRef = React.useRef(0);
   const mimeRef = React.useRef<string>("audio/webm");
+  const pipelineRef = React.useRef<SegmentPipeline | null>(null);
+  // Serializes async Blob->Uint8Array conversion so the pipeline sees chunks in
+  // capture order regardless of arrayBuffer() resolution timing.
+  const pushChainRef = React.useRef<Promise<void>>(Promise.resolve());
   const tickRef = React.useRef<ReturnType<typeof setInterval> | null>(null);
   const elapsedRef = React.useRef(0); // seconds accumulated across segments
   const segmentStartRef = React.useRef(0); // ms timestamp of current segment
@@ -108,9 +131,48 @@ export function useMeetingRecorder(meetingId: string): MeetingRecorder {
     seqRef.current = 0;
     elapsedRef.current = 0;
     mimeRef.current = mimeType;
+    pushChainRef.current = Promise.resolve();
     setDurationSeconds(0);
 
     const recorder = new MediaRecorder(stream, { mimeType });
+
+    // Fast lane: cut, upload, and transcribe WebM segments as the meeting runs
+    // so the recap can flow seconds after stop. Non-webm mimes degrade to `off`.
+    // Pipeline failures never break capture (all interaction runs through the
+    // push chain's catch or the pipeline's own retry/abandon logic).
+    const supabase = createClient();
+    const contentType = audioContentType(mimeType);
+    const pipeline = createSegmentPipeline(meetingId, mimeType, {
+      upload: async (path, bytes) => {
+        const { error: uploadError } = await supabase.storage
+          .from(MEETING_AUDIO_BUCKET)
+          .upload(path, new Blob([bytes as BlobPart], { type: contentType }), {
+            contentType,
+            upsert: true,
+          });
+        if (uploadError) throw uploadError;
+      },
+      transcribe: async (seq, path) => {
+        const res = await fetch(
+          `/api/meetings/${meetingId}/segments/${seq}/transcribe`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ path }),
+          }
+        );
+        return {
+          ok: res.ok,
+          disable: res.status === 503 || res.status === 402 || res.status === 403,
+        };
+      },
+      onStatus: (status) => {
+        if (mountedRef.current) setFastLane(status);
+      },
+    });
+    pipelineRef.current = pipeline;
+    setFastLane(pipeline.status());
+
     recorder.ondataavailable = (event) => {
       if (!event.data || event.data.size === 0) return;
       chunksRef.current.push(event.data);
@@ -118,6 +180,15 @@ export function useMeetingRecorder(meetingId: string): MeetingRecorder {
       void appendAudioChunk(meetingId, seqRef.current++, event.data).catch(
         () => undefined
       );
+      // Feed the fast lane in strict capture order: chain the async
+      // Blob->Uint8Array conversion so pushes never reorder or block capture.
+      const data = event.data;
+      pushChainRef.current = pushChainRef.current
+        .then(async () => {
+          const bytes = new Uint8Array(await data.arrayBuffer());
+          await pipeline.push(bytes);
+        })
+        .catch(() => undefined);
     };
     recorderRef.current = recorder;
     recorder.start(1000); // 1s timeslice -> steady IndexedDB flushes
@@ -161,6 +232,13 @@ export function useMeetingRecorder(meetingId: string): MeetingRecorder {
           setState("stopped");
           setDurationSeconds(durationSeconds);
         }
+        // Fire-and-forget: after the tail chunk has been pushed (chain drains),
+        // cut the final segment. Never delays the blob resolution below.
+        const pipeline = pipelineRef.current;
+        pipelineRef.current = null;
+        void pushChainRef.current
+          .then(() => pipeline?.flushFinal())
+          .catch(() => undefined);
         resolve(
           blob.size > 0 ? { blob, mimeType, durationSeconds } : null
         );
@@ -193,5 +271,6 @@ export function useMeetingRecorder(meetingId: string): MeetingRecorder {
     stop,
     pause,
     resume,
+    fastLane,
   };
 }

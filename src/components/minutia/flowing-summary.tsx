@@ -18,9 +18,11 @@ function Word({ text, animate }: { text: string; animate: boolean }) {
 export function FlowingSummary({
   meetingId,
   canGenerate,
+  autoStart,
 }: {
   meetingId: string;
   canGenerate: boolean;
+  autoStart?: boolean;
 }) {
   const [text, setText] = React.useState("");
   const [streaming, setStreaming] = React.useState(false);
@@ -80,6 +82,15 @@ export function FlowingSummary({
       setStreaming(false);
     }
   }, [meetingId, streaming]);
+
+  // Auto-start the recap once when the parent flips `autoStart` true (recording
+  // stopped and the fast-lane recap is ready). Ref-guarded to a single fire.
+  const autoFiredRef = React.useRef(false);
+  React.useEffect(() => {
+    if (!autoStart || autoFiredRef.current || !canGenerate || streaming || done) return;
+    autoFiredRef.current = true;
+    void start();
+  }, [autoStart, canGenerate, streaming, done, start]);
 
   const words = splitWords(text);
   const animate = streaming && !prefersReducedMotion;
