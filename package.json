@@ -48,6 +48,7 @@
     "test:ai-validate-url": "node --test scripts/verify-ai-validate-url.test.mjs",
     "test:ai-carryover": "node --test scripts/verify-carryover.test.mjs",
     "test:audio": "node --test scripts/verify-audio-capture.test.mjs",
+    "test:audio-segments": "node scripts/verify-audio-segments.test.mjs",
     "test:transcription": "node --test scripts/verify-transcription-client.test.mjs",
     "test:diarization": "node --test scripts/verify-diarization.test.mjs",
     "test:context-extraction": "node --test scripts/verify-context-extraction.test.mjs",
