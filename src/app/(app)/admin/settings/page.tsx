@@ -12,6 +12,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { resolveAudioRetention, type AudioRetention } from "@/lib/audio/retention";
 import { cn } from "@/lib/utils";
 import { aiFormFields } from "@/lib/ai/form";
 import { getAdminCapabilities, isManagedCloud } from "@/lib/admin/capabilities";
@@ -64,6 +72,11 @@ export default function AdminSettingsPage() {
   const [retroMessage, setRetroMessage] = useState("");
   const [retroMessageState, setRetroMessageState] = useState<"success" | "error">("success");
 
+  const [audioRetention, setAudioRetention] = useState<AudioRetention>("discard_after_transcript");
+  const [retentionSaving, setRetentionSaving] = useState(false);
+  const [retentionMessage, setRetentionMessage] = useState("");
+  const [retentionMessageState, setRetentionMessageState] = useState<"success" | "error">("success");
+
   const [testState, setTestState] = useState<"idle" | "sending">("idle");
   const [testMessage, setTestMessage] = useState("");
   const [testMessageState, setTestMessageState] = useState<"success" | "error">("success");
@@ -87,6 +100,7 @@ export default function AdminSettingsPage() {
         setSmtpPassConfigured(cfg.smtp_pass === "configured");
         setAiKeyConfigured(cfg.ai_api_key === "configured");
         setRetroEnabled(cfg.retro_enabled === "true");
+        setAudioRetention(resolveAudioRetention(cfg.audio_retention ?? null));
         setLoading(false);
       })
       .catch(() => {
@@ -185,6 +199,35 @@ export default function AdminSettingsPage() {
     } else {
       setRetroMessageState("success");
       setRetroMessage(next ? "Retro boards enabled." : "Retro boards disabled.");
+    }
+  }
+
+  async function handleRetentionChange(next: AudioRetention) {
+    const previous = audioRetention;
+    if (next === previous) return;
+    setAudioRetention(next);
+    setRetentionSaving(true);
+    setRetentionMessage("");
+
+    const res = await fetch("/api/admin/config", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ audio_retention: next }),
+    });
+    const data = await res.json().catch(() => ({}));
+
+    setRetentionSaving(false);
+    if (!res.ok) {
+      setAudioRetention(previous);
+      setRetentionMessageState("error");
+      setRetentionMessage(data.error || "Failed to update setting.");
+    } else {
+      setRetentionMessageState("success");
+      setRetentionMessage(
+        next === "discard_after_transcript"
+          ? "Audio will be discarded after transcription."
+          : "Audio will be kept forever."
+      );
     }
   }
 
@@ -601,6 +644,47 @@ export default function AdminSettingsPage() {
           </CardContent>
         </Card>
       )}
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Recording</CardTitle>
+          <CardDescription>How long raw meeting recordings are kept.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="audio_retention">Audio retention</Label>
+            <Select
+              value={audioRetention}
+              onValueChange={(v) => handleRetentionChange(v as AudioRetention)}
+              disabled={retentionSaving}
+            >
+              <SelectTrigger id="audio_retention" className="w-full sm:w-96">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="discard_after_transcript">
+                  Discard audio after transcription (recommended)
+                </SelectItem>
+                <SelectItem value="keep_forever">Keep audio forever</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-ink-3">
+              Raw recordings are the most sensitive artifact this instance stores. Discarding after
+              transcription keeps only the text.
+            </p>
+            {retentionMessage && (
+              <p
+                className={cn(
+                  "text-xs",
+                  retentionMessageState === "error" ? "text-danger" : "text-success"
+                )}
+              >
+                {retentionMessage}
+              </p>
+            )}
+          </div>
+        </CardContent>
+      </Card>
 
       <div className="flex flex-wrap items-center gap-3">
         <Button type="button" size="sm" disabled={saving} onClick={handleSave}>

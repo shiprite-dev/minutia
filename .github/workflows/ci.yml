@@ -116,6 +116,15 @@ jobs:
       - name: Verify optimistic cache + pending-delete core
         run: pnpm test:optimistic
 
+      - name: Audio segment contracts
+        run: pnpm test:audio-segments
+
+      - name: Fast-lane contracts
+        run: pnpm test:fast-lane
+
+      - name: Audio retention contracts
+        run: pnpm test:retention
+
       - name: Build (includes typecheck)
         run: pnpm build
         env:

@@ -6,6 +6,7 @@ import { streamAi } from "@/lib/ai/stream";
 import { paceWords } from "@/lib/ai/word-pacer";
 import { SUMMARY_SYSTEM_PROMPT, buildSummaryPrompt } from "@/lib/summary/prompt";
 import { formatSseFrame, SSE_DONE, SSE_HEARTBEAT } from "@/lib/summary/sse";
+import { assembleFastTranscript } from "@/lib/transcription/fast-lane";
 
 export const runtime = "nodejs";
 
@@ -35,11 +36,21 @@ export async function POST(
     return NextResponse.json({ error: "Meeting not found" }, { status: 404 });
   }
 
-  const transcript =
+  let transcript =
     meeting.transcript_raw?.trim() ||
     meeting.raw_notes_markdown?.trim() ||
     meeting.notes_markdown?.trim() ||
     "";
+
+  if (!transcript) {
+    const { data: segmentRows } = await supabase
+      .from("meeting_audio_segments")
+      .select("seq, status, transcript_text, storage_path")
+      .eq("meeting_id", meetingId)
+      .order("seq", { ascending: true });
+    transcript = assembleFastTranscript(segmentRows ?? []);
+  }
+
   if (!transcript) {
     return NextResponse.json(
       { error: "Add notes or a transcript before generating a recap." },

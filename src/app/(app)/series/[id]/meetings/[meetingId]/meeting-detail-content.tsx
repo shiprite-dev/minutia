@@ -795,6 +795,8 @@ export function MeetingDetailContent({
   const recorder = useMeetingRecorder(meetingId);
   const [savingRecording, setSavingRecording] = React.useState(false);
   const [transcribing, setTranscribing] = React.useState(false);
+  const [autoStartSummary, setAutoStartSummary] = React.useState(false);
+  const autoSummaryFiredRef = React.useRef(false);
 
   // Pending suggestions are the ones awaiting review; the count drives the
   // "Review AI suggestions (N)" badge so the auto-extracted items are visible
@@ -823,10 +825,18 @@ export function MeetingDetailContent({
   const runTranscription = React.useCallback(async () => {
     setTranscribing(true);
     try {
+      // Wait for the fast lane to settle so the tail segment's row is registered
+      // before the final pass decides whether to trust the segment rows. Only
+      // claim segment coverage when every segment actually completed.
+      const lane = await recorder.waitForFastLane(25000);
+      const body =
+        lane.state === "ready" && lane.segmentsTotal > 0
+          ? JSON.stringify({ expected_segments: lane.segmentsTotal })
+          : "{}";
       const response = await fetch(`/api/meetings/${meetingId}/transcribe`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: "{}",
+        body,
       });
       if (response.ok) {
         // The transcript text lands via the meeting realtime poll; pull the
@@ -839,7 +849,7 @@ export function MeetingDetailContent({
     } finally {
       setTranscribing(false);
     }
-  }, [meetingId, loadSuggestions]);
+  }, [meetingId, loadSuggestions, recorder.waitForFastLane]);
 
   // On open, surface suggestions already extracted for this meeting (typically
   // auto-generated when its recording was transcribed) so the facilitator sees
@@ -854,6 +864,18 @@ export function MeetingDetailContent({
     suggestionsLoadedRef.current = true;
     void loadSuggestions();
   }, [participantRole, hasAccess, meeting?.transcript_raw, meeting?.notes_markdown, loadSuggestions]);
+
+  // Auto-flow the recap the moment recording stops and the fast lane is ready
+  // (or the final transcript lands for non-webm browsers). Managers only, once.
+  React.useEffect(() => {
+    if (autoSummaryFiredRef.current) return;
+    const manages = participantRole === "owner" || participantRole === "facilitator";
+    if (!manages || !hasAccess) return;
+    if (recorder.state !== "stopped") return;
+    if (recorder.fastLane.state !== "ready" && !meeting?.transcript_raw) return;
+    autoSummaryFiredRef.current = true;
+    setAutoStartSummary(true);
+  }, [participantRole, hasAccess, recorder.state, recorder.fastLane.state, meeting?.transcript_raw]);
 
   React.useEffect(() => {
     if (meeting?.notes_markdown) setNotes(meeting.notes_markdown);
@@ -1282,6 +1304,18 @@ export function MeetingDetailContent({
                 />
               )}
 
+              {recorder.state === "stopped" &&
+                (recorder.fastLane.state === "finalizing" ||
+                  recorder.fastLane.state === "active") && (
+                  <p
+                    className="text-xs text-ink-3 flex items-center gap-1.5"
+                    role="status"
+                  >
+                    <Loader2 className="h-3 w-3 animate-spin" aria-hidden />
+                    Wrapping up the recap...
+                  </p>
+                )}
+
               {/* Attendee avatars */}
               {meeting.attendees && meeting.attendees.length > 0 && (
                 <div className="flex -space-x-1.5">
@@ -1635,7 +1669,16 @@ export function MeetingDetailContent({
         />
 
         {canManageMeeting && (
-          <FlowingSummary meetingId={meetingId} canGenerate={hasAccess} />
+          <FlowingSummary
+            meetingId={meetingId}
+            canGenerate={hasAccess}
+            autoStart={autoStartSummary}
+            preparing={
+              recorder.state === "stopped" &&
+              (recorder.fastLane.state === "active" ||
+                recorder.fastLane.state === "finalizing")
+            }
+          />
         )}
 
         {canManageMeeting && (
