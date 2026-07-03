@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 import { SERIES, MEETINGS, ISSUES, waitForApp } from "./seed-data";
 
 test.describe("Post-meeting summary", () => {
-  test("completed meeting shows summary card with metrics", async ({
+  test("completed meeting shows the editorial recap hero", async ({
     page,
   }) => {
     await page.goto(
@@ -10,28 +10,31 @@ test.describe("Post-meeting summary", () => {
     );
     await waitForApp(page);
 
-    await expect(page.getByText("Meeting complete")).toBeVisible();
-    await expect(page.getByText("Copy summary")).toBeVisible();
-    await expect(page.getByText("Carried", { exact: true }).first()).toBeVisible();
+    await expect(page.getByText("Meeting recap")).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Platform Standup #1" })
+    ).toBeVisible();
   });
 
-  test("summary card has copy button", async ({ page }) => {
+  test("completed meeting shows the tracked log section", async ({ page }) => {
     await page.goto(
       `/series/${SERIES.platformStandup}/meetings/${MEETINGS.standup1}`
     );
     await waitForApp(page);
 
-    const copyBtn = page.getByText("Copy summary");
-    await expect(copyBtn).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Tracked in the log" })
+    ).toBeVisible();
+    await expect(page.getByText("Items raised").first()).toBeVisible();
   });
 
-  test("upcoming meeting does not show summary card", async ({ page }) => {
+  test("upcoming meeting does not show the recap hero", async ({ page }) => {
     await page.goto(
       `/series/${SERIES.platformStandup}/meetings/${MEETINGS.standup4}`
     );
     await waitForApp(page);
 
-    await expect(page.getByText("Meeting complete")).not.toBeVisible();
+    await expect(page.getByText("Meeting recap")).not.toBeVisible();
   });
 });
 
@@ -95,7 +98,7 @@ test.describe("Decisions integration", () => {
     await waitForApp(page);
 
     await expect(
-      page.getByRole("heading", { name: /Items raised/ })
+      page.getByRole("heading", { name: "Tracked in the log" })
     ).toBeVisible();
   });
 

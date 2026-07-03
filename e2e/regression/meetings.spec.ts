@@ -148,10 +148,16 @@ test.describe("Meeting Detail (Completed)", () => {
 
     await expect(page.getByText(/April 8, 2026/i).first()).toBeVisible();
 
-    await expect(page.getByText("Alice").first()).toBeVisible();
-    await expect(page.getByText("Bob").first()).toBeVisible();
-    await expect(page.getByText("Carol").first()).toBeVisible();
+    // The hero eyebrow frames the completed view, and the meta row renders
+    // attendees as an avatar stack (name in the title attribute).
+    await expect(page.getByText("Meeting recap")).toBeVisible();
+    await expect(page.getByTitle("Alice").first()).toBeVisible();
+    await expect(page.getByTitle("Bob").first()).toBeVisible();
+    await expect(page.getByTitle("Carol").first()).toBeVisible();
 
+    await expect(
+      page.getByRole("heading", { name: "Tracked in the log" })
+    ).toBeVisible();
     await expect(page.getByText(/Items raised/i).first()).toBeVisible();
     await expect(page.getByText(/Decisions/i).first()).toBeVisible();
     await expect(page.getByText("Notes").first()).toBeVisible();
@@ -264,16 +270,13 @@ test.describe("Meeting Lifecycle", () => {
       await page.getByRole("button", { name: "End meeting" }).click();
       await page.getByRole("alertdialog").getByRole("button", { name: "End meeting" }).click();
 
-      await expect(page.getByText("Meeting complete")).toBeVisible();
+      await expect(page.getByText("Meeting recap")).toBeVisible();
       await expect(
-        page.getByRole("heading", { name: "Items raised (1)" })
+        page.getByRole("heading", { name: "Tracked in the log" })
       ).toBeVisible();
-      await expect(
-        page.getByRole("heading", { name: "Decisions (1)" })
-      ).toBeVisible();
-      await expect(
-        page.getByRole("heading", { name: "Resolved this meeting (1)" })
-      ).toBeVisible();
+      await expect(page.getByText("Items raised").first()).toBeVisible();
+      await expect(page.getByText("Decisions").first()).toBeVisible();
+      await expect(page.getByText("Resolved this meeting").first()).toBeVisible();
       await expect(page.getByText(fixture.actionTitle).first()).toBeVisible();
       await expect(page.getByText(fixture.decisionTitle).first()).toBeVisible();
       await expect(page.getByText(fixture.carriedTitle).first()).toBeVisible();
@@ -283,7 +286,7 @@ test.describe("Meeting Lifecycle", () => {
 
       await page.reload();
       await waitForApp(page);
-      await expect(page.getByText("Meeting complete")).toBeVisible();
+      await expect(page.getByText("Meeting recap")).toBeVisible();
       await expect(page.getByPlaceholder("Meeting notes...")).toHaveValue(
         fixture.noteText
       );
@@ -368,8 +371,8 @@ test.describe("Meeting Detail (Retro)", () => {
       page.getByRole("heading", { name: /Retro: API Outage/i })
     ).toBeVisible();
 
-    await expect(page.getByText("Frank").first()).toBeVisible();
-    await expect(page.getByText("Grace").first()).toBeVisible();
+    await expect(page.getByTitle("Frank").first()).toBeVisible();
+    await expect(page.getByTitle("Grace").first()).toBeVisible();
 
     await expect(page.getByText("Notes").first()).toBeVisible();
   });

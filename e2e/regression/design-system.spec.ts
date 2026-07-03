@@ -159,96 +159,35 @@ test.describe("Outstanding items collapse", () => {
   });
 });
 
-test.describe("Meeting summary card", () => {
-  test("completed meeting shows animated summary card", async ({ page }) => {
-    await page.goto(
-      `/series/${SERIES.platformStandup}/meetings/${MEETINGS.standup2}`
-    );
+test.describe("Completed meeting editorial hero", () => {
+  const url = `/series/${SERIES.platformStandup}/meetings/${MEETINGS.standup2}`;
+
+  test("renders the recap eyebrow and serif meeting title", async ({ page }) => {
+    await page.goto(url);
     await waitForApp(page);
 
-    const hasSummary = await page
-      .getByText("Meeting complete")
-      .isVisible()
-      .catch(() => false);
-
-    if (hasSummary) {
-      await expect(page.getByText("Raised", { exact: true }).first()).toBeVisible();
-      await expect(page.getByText("Decisions", { exact: true }).first()).toBeVisible();
-      await expect(page.getByText("Resolved", { exact: true }).first()).toBeVisible();
-      await expect(page.getByText("Carried", { exact: true }).first()).toBeVisible();
-    } else {
-      const itemsRaised = page.getByText("Items raised");
-      await expect(itemsRaised).toBeVisible();
-    }
+    await expect(page.getByText("Meeting recap")).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Platform Standup #2" })
+    ).toBeVisible();
   });
 
-  test("summary card shows contextual insight line when present", async ({
-    page,
-  }) => {
-    await page.goto(
-      `/series/${SERIES.platformStandup}/meetings/${MEETINGS.standup2}`
-    );
+  test("meta row renders the attendee avatar stack", async ({ page }) => {
+    await page.goto(url);
     await waitForApp(page);
 
-    const hasSummary = await page
-      .getByText("Meeting complete")
-      .isVisible()
-      .catch(() => false);
-
-    if (hasSummary) {
-      const insightPatterns = [
-        /clean slate/i,
-        /closed more than you opened/i,
-        /new items tracked/i,
-        /items captured/i,
-      ];
-
-      let foundInsight = false;
-      for (const pattern of insightPatterns) {
-        const match = page.getByText(pattern).first();
-        if (await match.isVisible().catch(() => false)) {
-          foundInsight = true;
-          break;
-        }
-      }
-      expect(foundInsight).toBe(true);
-    }
+    await expect(page.getByTitle("Alice").first()).toBeVisible();
+    await expect(page.getByTitle("Bob").first()).toBeVisible();
   });
 
-  test("summary card has accent hairline at top", async ({ page }) => {
-    await page.goto(
-      `/series/${SERIES.platformStandup}/meetings/${MEETINGS.standup2}`
-    );
+  test("renders the numbered tracked-in-the-log section", async ({ page }) => {
+    await page.goto(url);
     await waitForApp(page);
 
-    const hasSummary = await page
-      .getByText("Meeting complete")
-      .isVisible()
-      .catch(() => false);
-
-    if (hasSummary) {
-      const hairline = page.locator(".bg-accent").first();
-      await expect(hairline).toBeVisible();
-    }
-  });
-
-  test("copy summary button morphs to copied state", async ({ page }) => {
-    await page.goto(
-      `/series/${SERIES.platformStandup}/meetings/${MEETINGS.standup2}`
-    );
-    await waitForApp(page);
-
-    await page
-      .context()
-      .grantPermissions(["clipboard-read", "clipboard-write"]);
-
-    const copyBtn = page.getByText("Copy summary").first();
-    const hasCopyBtn = await copyBtn.isVisible().catch(() => false);
-
-    if (hasCopyBtn) {
-      await copyBtn.click();
-      await expect(page.getByText("Copied").first()).toBeVisible();
-    }
+    await expect(
+      page.getByRole("heading", { name: "Tracked in the log" })
+    ).toBeVisible();
+    await expect(page.getByText("Items raised").first()).toBeVisible();
   });
 });
 
