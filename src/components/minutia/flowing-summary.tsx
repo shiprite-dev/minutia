@@ -19,10 +19,12 @@ export function FlowingSummary({
   meetingId,
   canGenerate,
   autoStart,
+  preparing,
 }: {
   meetingId: string;
   canGenerate: boolean;
   autoStart?: boolean;
+  preparing?: boolean;
 }) {
   const [text, setText] = React.useState("");
   const [streaming, setStreaming] = React.useState(false);
@@ -105,6 +107,7 @@ export function FlowingSummary({
 
   const words = splitWords(text);
   const animate = streaming && !prefersReducedMotion;
+  const showPreparing = !!preparing && !streaming && !done && !text;
 
   return (
     <section className="mb-8" aria-label="Meeting recap">
@@ -115,6 +118,15 @@ export function FlowingSummary({
             <span className="inline-flex items-center gap-1.5 text-xs text-ink-3">
               <Sparkles className="size-3.5 animate-pulse" aria-hidden="true" />
               Generating recap
+            </span>
+          )}
+          {showPreparing && (
+            <span
+              className="inline-flex items-center gap-1.5 text-xs text-ink-3"
+              role="status"
+            >
+              <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
+              Wrapping up the recap...
             </span>
           )}
         </div>
@@ -129,7 +141,7 @@ export function FlowingSummary({
             variant="outline"
             size="sm"
             onClick={start}
-            disabled={!canGenerate}
+            disabled={!canGenerate || showPreparing}
           >
             {done ? <Loader2 className="size-3.5" /> : <Sparkles className="size-3.5" />}
             {done ? "Regenerate recap" : "Generate recap"}

@@ -1669,7 +1669,16 @@ export function MeetingDetailContent({
         />
 
         {canManageMeeting && (
-          <FlowingSummary meetingId={meetingId} canGenerate={hasAccess} autoStart={autoStartSummary} />
+          <FlowingSummary
+            meetingId={meetingId}
+            canGenerate={hasAccess}
+            autoStart={autoStartSummary}
+            preparing={
+              recorder.state === "stopped" &&
+              (recorder.fastLane.state === "active" ||
+                recorder.fastLane.state === "finalizing")
+            }
+          />
         )}
 
         {canManageMeeting && (

@@ -220,7 +220,7 @@ export async function POST(
       // full-file chunking when no segments exist or a gap cannot be recovered.
       const { data: segmentRows, error: segmentsError } = await supabase
         .from("meeting_audio_segments")
-        .select("seq, status, transcript_text, storage_path")
+        .select("seq, status, transcript_text, storage_path, model, provider")
         .eq("meeting_id", meetingId)
         .order("seq", { ascending: true });
 
@@ -311,6 +311,18 @@ export async function POST(
           transcript = assembleFastTranscript(updatedRows);
           chunkCount = updatedRows.length;
           resumed = true;
+
+          // When every segment was already completed the retry loop never ran, so
+          // model/provider are still blank. Seed them from the first pre-transcribed
+          // segment that recorded them so the meeting is not stamped with an empty
+          // provider/model on the fast-lane happy path.
+          if (!model) {
+            const seed = updatedRows.find((r) => r.model);
+            if (seed) {
+              model = seed.model ?? "";
+              provider = seed.provider ?? "";
+            }
+          }
         } else {
           console.error("[transcribe] segment resume incomplete, falling back to full-file chunking", {
             meetingId,
@@ -397,11 +409,30 @@ export async function POST(
           const { error } = await supabase.storage.from(MEETING_AUDIO_BUCKET).remove(paths);
           if (error) throw error;
         }
-        await supabase
+        const { error: meetingNullError } = await supabase
           .from("meetings")
           .update({ audio_file_path: null, audio_file_size_bytes: null })
           .eq("id", meetingId);
-        await supabase.from("meeting_audio_segments").delete().eq("meeting_id", meetingId);
+        if (meetingNullError) {
+          console.error("[transcribe] retention discard failed", {
+            meetingId,
+            requestId,
+            step: "meetings-null-update",
+            error: meetingNullError.message,
+          });
+        }
+        const { error: segmentsDeleteError } = await supabase
+          .from("meeting_audio_segments")
+          .delete()
+          .eq("meeting_id", meetingId);
+        if (segmentsDeleteError) {
+          console.error("[transcribe] retention discard failed", {
+            meetingId,
+            requestId,
+            step: "segments-delete",
+            error: segmentsDeleteError.message,
+          });
+        }
         audioDiscarded = true;
       }
     } catch (retentionError) {

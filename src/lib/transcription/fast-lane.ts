@@ -14,6 +14,8 @@ export interface SegmentRow {
   status: string;
   transcript_text: string | null;
   storage_path: string;
+  model?: string | null;
+  provider?: string | null;
 }
 
 /** A row is usable transcript when it completed AND carries non-empty trimmed text. */

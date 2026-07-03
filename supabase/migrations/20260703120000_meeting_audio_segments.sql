@@ -17,6 +17,8 @@ CREATE TABLE IF NOT EXISTS public.meeting_audio_segments (
   status          text        NOT NULL DEFAULT 'uploaded'
     CHECK (status IN ('uploaded', 'processing', 'completed', 'failed')),
   transcript_text text,
+  model           text,
+  provider        text,
   error_code      text,
   size_bytes      bigint,
   created_at      timestamptz NOT NULL DEFAULT now(),

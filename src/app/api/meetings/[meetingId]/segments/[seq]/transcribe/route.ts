@@ -156,6 +156,8 @@ export async function POST(
       .update({
         status: "completed",
         transcript_text: transcript,
+        model: result.model,
+        provider: result.provider,
         error_code: null,
         size_bytes: audioData.size,
         updated_at: new Date().toISOString(),
