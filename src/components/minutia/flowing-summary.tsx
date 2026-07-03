@@ -28,6 +28,7 @@ export function FlowingSummary({
   const [streaming, setStreaming] = React.useState(false);
   const [done, setDone] = React.useState(false);
   const controllerRef = React.useRef<AbortController | null>(null);
+  const autoFiredRef = React.useRef(false);
 
   const prefersReducedMotion =
     typeof window !== "undefined" &&
@@ -39,7 +40,18 @@ export function FlowingSummary({
     setStreaming(false);
   }, []);
 
-  React.useEffect(() => () => controllerRef.current?.abort(), []);
+  // An unmount-cleanup abort (StrictMode mounts twice in dev) must not consume
+  // the single auto-start; a user-clicked Stop never unmounts, so it stays latched.
+  React.useEffect(
+    () => () => {
+      if (controllerRef.current) {
+        controllerRef.current.abort();
+        controllerRef.current = null;
+        autoFiredRef.current = false;
+      }
+    },
+    []
+  );
 
   const start = React.useCallback(async () => {
     if (streaming) return;
@@ -85,7 +97,6 @@ export function FlowingSummary({
 
   // Auto-start the recap once when the parent flips `autoStart` true (recording
   // stopped and the fast-lane recap is ready). Ref-guarded to a single fire.
-  const autoFiredRef = React.useRef(false);
   React.useEffect(() => {
     if (!autoStart || autoFiredRef.current || !canGenerate || streaming || done) return;
     autoFiredRef.current = true;
