@@ -220,6 +220,7 @@ export async function middleware(request: NextRequest) {
     "/api/invite-requests",
     "/api/password-reset-requests",
     "/api/calendar/webhook",
+    "/api/instance-meta",
     "/retro",
     "/api/retro",
   ];
