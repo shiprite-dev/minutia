@@ -141,7 +141,7 @@ export async function middleware(request: NextRequest) {
   }
 
   // Setup guard: redirect to /setup if instance hasn't been configured
-  const setupExemptPaths = ["/setup", "/api/setup", "/api/admin", "/api/calendar/webhook", "/retro", "/api/retro"];
+  const setupExemptPaths = ["/setup", "/api/setup", "/api/admin", "/api/calendar/webhook", "/api/instance-meta", "/retro", "/api/retro"];
   const isSetupExempt = setupExemptPaths.some((p) => pathname.startsWith(p));
 
   if (!isSetupExempt) {
