@@ -72,6 +72,7 @@
     "test:admin-capabilities": "node --test scripts/verify-admin-capabilities.test.mjs",
     "test:admin-config-capabilities": "node --test scripts/verify-admin-config-capabilities.test.mjs",
     "test:admin-health": "node --test scripts/verify-admin-health.test.mjs",
+    "test:retention": "node scripts/verify-retention.test.mjs",
     "test:retro": "node --test scripts/verify-retro-contracts.test.mjs",
     "test:proxy": "node --test scripts/verify-proxy-trust.test.mjs",
     "test:csv": "node --test scripts/verify-csv-injection.test.mjs",

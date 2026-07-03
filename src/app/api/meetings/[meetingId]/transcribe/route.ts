@@ -15,6 +15,8 @@ import {
   type TranscriptionSegment,
 } from "@/lib/transcription";
 import { assembleFastTranscript, planSegmentResume, type SegmentRow } from "@/lib/transcription/fast-lane";
+import { getInstanceConfigMap } from "@/lib/instance-config";
+import { resolveAudioRetention, shouldDiscardAudio } from "@/lib/audio/retention";
 
 // Transcription is provider-bound and can run for minutes on a long recording.
 export const runtime = "nodejs";
@@ -343,12 +345,44 @@ export async function POST(
       }
     }
 
+    // Audio retention: with a transcript durably saved, discard the raw
+    // recording when the instance policy says so (the default). Best-effort:
+    // the deletion runs with the caller's RLS client, so a facilitator-triggered
+    // run may lack owner-scoped storage delete rights. A failure here must never
+    // fail the response; the transcript is already the source of truth.
+    let audioDiscarded = false;
+    try {
+      const configMap = await getInstanceConfigMap(["audio_retention"]);
+      const retention = resolveAudioRetention(configMap.audio_retention ?? null);
+      if (shouldDiscardAudio(retention, "completed")) {
+        const { data: objects } = await supabase.storage.from(MEETING_AUDIO_BUCKET).list(meetingId);
+        const paths = (objects ?? []).map((o) => `${meetingId}/${o.name}`);
+        if (paths.length) {
+          const { error } = await supabase.storage.from(MEETING_AUDIO_BUCKET).remove(paths);
+          if (error) throw error;
+        }
+        await supabase
+          .from("meetings")
+          .update({ audio_file_path: null, audio_file_size_bytes: null })
+          .eq("id", meetingId);
+        await supabase.from("meeting_audio_segments").delete().eq("meeting_id", meetingId);
+        audioDiscarded = true;
+      }
+    } catch (retentionError) {
+      console.error("[transcribe] retention discard failed", {
+        meetingId,
+        requestId,
+        error: retentionError instanceof Error ? retentionError.message : String(retentionError),
+      });
+    }
+
     return NextResponse.json({
       status: "completed",
       transcript_length: transcript.length,
       chunks: chunkCount,
       model,
       provider,
+      audio_discarded: audioDiscarded,
       request_id: requestId,
     });
   } catch (error) {
