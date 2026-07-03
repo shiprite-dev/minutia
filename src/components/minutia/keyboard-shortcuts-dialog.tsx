@@ -46,6 +46,10 @@ const SHORTCUT_GROUPS: ShortcutGroup[] = [
     ],
   },
   {
+    title: "Completed Meeting",
+    shortcuts: [{ keys: ["R"], label: "Replay the recap" }],
+  },
+  {
     title: "Live Capture",
     shortcuts: [
       { keys: ["A", "Space"], label: "Set category: Action" },

@@ -48,237 +48,11 @@ import { RemindOwnersButton } from "@/components/minutia/remind-owners-button";
 import { CarryoverBriefingPanel } from "@/components/minutia/carryover-briefing-panel";
 import { AiUnavailableNotice } from "@/components/minutia/ai-unavailable-notice";
 import { useAiAccess } from "@/lib/hooks/use-ai-access";
-import { ArrowLeft, Square, Play, Check, X, Copy, CheckCheck, Sparkles, Loader2, ListChecks, FileText, CheckSquare, Gavel, AlertTriangle, Ban, RotateCcw, HelpCircle, ChevronDown } from "lucide-react";
+import { ArrowLeft, Square, Play, Check, X, Sparkles, Loader2, ListChecks, FileText, CheckSquare, Gavel, AlertTriangle, Ban, RotateCcw, HelpCircle, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatShortDate } from "@/lib/date-utils";
 import type { IssueCategory, IssueStatus, Issue, Decision, Meeting, MeetingAiSuggestion } from "@/lib/types";
 import Link from "next/link";
-
-// ---------------------------------------------------------------------------
-// Post-meeting summary card
-// ---------------------------------------------------------------------------
-
-function AnimatedNumber({ value, delay = 0 }: { value: number; delay?: number }) {
-  const [display, setDisplay] = React.useState(0);
-
-  React.useEffect(() => {
-    if (value === 0) return;
-    const timeout = setTimeout(() => {
-      const duration = 600;
-      const start = performance.now();
-      function tick(now: number) {
-        const elapsed = now - start;
-        const progress = Math.min(elapsed / duration, 1);
-        const eased = 1 - Math.pow(1 - progress, 3);
-        setDisplay(Math.round(eased * value));
-        if (progress < 1) requestAnimationFrame(tick);
-      }
-      requestAnimationFrame(tick);
-    }, delay);
-    return () => clearTimeout(timeout);
-  }, [value, delay]);
-
-  return <>{display}</>;
-}
-
-function getInsightLine(raisedCount: number, decisionsCount: number, resolvedCount: number, stillOpenCount: number): string | null {
-  const total = raisedCount + decisionsCount;
-  if (total === 0) return null;
-
-  if (resolvedCount > 0 && stillOpenCount === 0) {
-    return "Clean slate. Every item accounted for.";
-  }
-  if (resolvedCount > raisedCount && resolvedCount > 0) {
-    return `You closed more than you opened. Net progress: ${resolvedCount - raisedCount} items cleared.`;
-  }
-  if (stillOpenCount > 0 && raisedCount > 0) {
-    return `${raisedCount} new items tracked. ${stillOpenCount} carried forward with accountability.`;
-  }
-  if (raisedCount > 0 && decisionsCount > 0) {
-    return `${raisedCount} items captured, ${decisionsCount} decisions logged. Nothing lost.`;
-  }
-  if (raisedCount > 0) {
-    return `${raisedCount} items captured. Each one tracked until resolved.`;
-  }
-  return null;
-}
-
-function MeetingSummaryCard({
-  meeting,
-  seriesName,
-  raisedCount,
-  decisionsCount,
-  resolvedCount,
-  stillOpenCount,
-  raisedIssues,
-  decisions,
-  doneIssues,
-}: {
-  meeting: Meeting;
-  seriesName: string;
-  raisedCount: number;
-  decisionsCount: number;
-  resolvedCount: number;
-  stillOpenCount: number;
-  raisedIssues: Issue[];
-  decisions: Decision[];
-  doneIssues: Issue[];
-}) {
-  const [copied, setCopied] = React.useState(false);
-
-  const summaryText = React.useMemo(() => {
-    const lines: string[] = [];
-    lines.push(`${meeting.title} - ${seriesName}`);
-    lines.push(formatMeetingDate(meeting.date));
-    if (meeting.attendees?.length) {
-      lines.push(`Attendees: ${meeting.attendees.join(", ")}`);
-    }
-    lines.push("");
-    lines.push(`Items raised: ${raisedCount}`);
-    if (raisedIssues.length > 0) {
-      for (const issue of raisedIssues) {
-        lines.push(`  - ${issue.title} [${issue.category}]`);
-      }
-    }
-    lines.push("");
-    lines.push(`Decisions made: ${decisionsCount}`);
-    if (decisions.length > 0) {
-      for (const d of decisions) {
-        lines.push(`  - ${d.title}`);
-      }
-    }
-    if (resolvedCount > 0) {
-      lines.push("");
-      lines.push(`Resolved/dropped this meeting: ${resolvedCount}`);
-      for (const issue of doneIssues) {
-        lines.push(`  - ${issue.title} [${issue.status}]`);
-      }
-    }
-    if (stillOpenCount > 0) {
-      lines.push("");
-      lines.push(`Still open (carried): ${stillOpenCount}`);
-    }
-    return lines.join("\n");
-  }, [meeting, seriesName, raisedCount, decisionsCount, resolvedCount, stillOpenCount, raisedIssues, decisions, doneIssues]);
-
-  async function handleCopy() {
-    try {
-      await navigator.clipboard.writeText(summaryText);
-    } catch {
-      // Clipboard API unavailable (e.g. headless browser)
-    }
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  }
-
-  const insightLine = getInsightLine(raisedCount, decisionsCount, resolvedCount, stillOpenCount);
-  const totalTracked = raisedCount + decisionsCount + resolvedCount;
-
-  const stats = [
-    { label: "Raised", value: raisedCount, color: "text-ink" },
-    { label: "Decisions", value: decisionsCount, color: "text-ink" },
-    { label: "Resolved", value: resolvedCount, color: "text-success" },
-    { label: "Carried", value: stillOpenCount, color: stillOpenCount > 0 ? "text-warn" : "text-ink" },
-  ];
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: -12 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4, ease: [0.2, 0.8, 0.2, 1] }}
-      className="mb-8 rounded-xl border-2 border-accent/20 bg-paper-2 p-6 relative overflow-hidden"
-    >
-      <div className="absolute top-0 left-0 right-0 h-[2px] bg-accent" />
-
-      <div className="flex items-center justify-between mb-5">
-        <div>
-          <h2 className="font-display text-lg font-semibold text-ink">
-            Meeting complete
-          </h2>
-          <p className="text-xs font-mono text-ink-4 mt-0.5">
-            {formatMeetingDate(meeting.date)}
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={handleCopy}
-          className="inline-flex items-center gap-1.5 text-xs text-ink-3 hover:text-ink transition-colors overflow-hidden rounded-md px-2.5 py-1.5 border border-rule hover:border-rule-strong"
-        >
-          <AnimatePresence mode="wait" initial={false}>
-            {copied ? (
-              <motion.span
-                key="copied"
-                initial={{ opacity: 0, scale: 0.8 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.8 }}
-                transition={{ duration: 0.16 }}
-                className="inline-flex items-center gap-1.5"
-              >
-                <CheckCheck className="size-3.5 text-success" />
-                Copied
-              </motion.span>
-            ) : (
-              <motion.span
-                key="copy"
-                initial={{ opacity: 0, scale: 0.8 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.8 }}
-                transition={{ duration: 0.16 }}
-                className="inline-flex items-center gap-1.5"
-              >
-                <Copy className="size-3.5" />
-                Copy summary
-              </motion.span>
-            )}
-          </AnimatePresence>
-        </button>
-      </div>
-
-      <div className="grid grid-cols-4 gap-4 mb-5">
-        {stats.map((stat, i) => (
-          <motion.div
-            key={stat.label}
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3, delay: 0.15 + i * 0.08 }}
-            className="text-center"
-          >
-            <p className={cn("font-display text-3xl font-bold tabular-nums", stat.color)}>
-              <AnimatedNumber value={stat.value} delay={200 + i * 80} />
-            </p>
-            <p className="text-[11px] text-ink-3 mt-1 tracking-wide uppercase">
-              {stat.label}
-            </p>
-          </motion.div>
-        ))}
-      </div>
-
-      {insightLine && (
-        <motion.p
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.5, delay: 0.8 }}
-          className="text-sm text-ink-2 text-center py-3 border-t border-rule"
-        >
-          {insightLine}
-        </motion.p>
-      )}
-
-      {totalTracked > 0 && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.4, delay: 1.1 }}
-          className="text-center pt-2"
-        >
-          <p className="text-[11px] text-ink-4">
-            In a spreadsheet, {totalTracked === 1 ? "this item" : `these ${totalTracked} items`} would be copy-pasted into cells and forgotten by next meeting.
-          </p>
-        </motion.div>
-      )}
-    </motion.div>
-  );
-}
 
 interface MeetingDetailContentProps {
   seriesId: string;
@@ -737,6 +511,89 @@ function CapturedItem({
 }
 
 // ---------------------------------------------------------------------------
+// Completed-view editorial helpers
+// ---------------------------------------------------------------------------
+
+// A numbered section heading: mono ordinal + serif title + hairline rule.
+// `number` is omitted when the recap (implicit 01) is absent, so the numbering
+// degrades to plain headings rather than lying about section order.
+function SectionHeading({
+  number,
+  title,
+  className,
+}: {
+  number?: string;
+  title: string;
+  className?: string;
+}) {
+  return (
+    <div className={cn("mb-4 flex items-baseline gap-3", className)}>
+      {number && (
+        <span className="font-mono text-sm font-medium tabular-nums text-accent">
+          {number}
+        </span>
+      )}
+      <h2 className="font-display text-xl font-semibold text-ink">{title}</h2>
+      <div className="ml-1 flex-1 self-center border-t border-rule" />
+    </div>
+  );
+}
+
+// A mono-caps eyebrow used for the sub-groups inside "Tracked in the log".
+function LogGroupLabel({ label, count }: { label: string; count: number }) {
+  return (
+    <div className="mb-2 flex items-center gap-2">
+      <span className="font-mono text-[11px] font-medium uppercase tracking-wider text-ink-4">
+        {label}
+      </span>
+      <span className="font-mono text-[11px] tabular-nums text-ink-4">{count}</span>
+    </div>
+  );
+}
+
+// Green-accented decision card (3px left border) matching the log card anatomy.
+function DecisionCard({ decision }: { decision: Decision }) {
+  return (
+    <div className="rounded-md border border-rule border-l-[3px] border-l-success bg-card px-4 py-3 shadow-[var(--shadow-raised)]">
+      <p className="font-mono text-[10px] font-medium uppercase tracking-wider text-success">
+        Decision
+      </p>
+      <p className="mt-1 text-sm font-medium text-ink">{decision.title}</p>
+      {decision.rationale && (
+        <p className="mt-1 text-xs text-ink-2">{decision.rationale}</p>
+      )}
+      {decision.made_by && (
+        <p className="mt-1 text-xs font-mono text-ink-4">by {decision.made_by}</p>
+      )}
+    </div>
+  );
+}
+
+// "Diarized · N speakers" chip, green-dot tinted, shown when the transcript is
+// speaker-attributed. Distinct speaker count comes from the segment rows.
+function DiarizedChip({ speakerCount }: { speakerCount: number }) {
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-full bg-success/10 px-2.5 py-1 text-[11px] font-medium text-success">
+      <span className="size-1.5 rounded-full bg-success" aria-hidden="true" />
+      Diarized · {speakerCount} {speakerCount === 1 ? "speaker" : "speakers"}
+    </span>
+  );
+}
+
+// Whole minutes for the meta row, from recorded audio or the live span. Null
+// when neither is known, so the meta row omits it rather than showing "0 min".
+function meetingDurationMinutes(meeting: Meeting): number | null {
+  if (meeting.audio_duration_seconds && meeting.audio_duration_seconds > 0) {
+    return Math.max(1, Math.round(meeting.audio_duration_seconds / 60));
+  }
+  if (meeting.completed_at && meeting.created_at) {
+    const ms = new Date(meeting.completed_at).getTime() - new Date(meeting.created_at).getTime();
+    if (ms > 30_000) return Math.max(1, Math.round(ms / 60_000));
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------------------
 // Main component
 // ---------------------------------------------------------------------------
 
@@ -797,6 +654,10 @@ export function MeetingDetailContent({
   const [transcribing, setTranscribing] = React.useState(false);
   const [autoStartSummary, setAutoStartSummary] = React.useState(false);
   const autoSummaryFiredRef = React.useRef(false);
+  // Bumping this nonce re-runs the recap stream; driven by the footer "Replay
+  // recap" button and the R shortcut on the completed view.
+  const [replayNonce, setReplayNonce] = React.useState(0);
+  const replayRecap = React.useCallback(() => setReplayNonce((n) => n + 1), []);
 
   // Pending suggestions are the ones awaiting review; the count drives the
   // "Review AI suggestions (N)" badge so the auto-extracted items are visible
@@ -927,6 +788,27 @@ export function MeetingDetailContent({
       if (saveTranscriptTimerRef.current) clearTimeout(saveTranscriptTimerRef.current);
     };
   }, []);
+
+  // R replays the recap on the completed view (managers with AI access only).
+  // Guarded against typing contexts and modifier chords so it never hijacks a
+  // keystroke meant for a field or a browser shortcut.
+  const canReplayRecap =
+    meeting?.status === "completed" &&
+    (participantRole === "owner" || participantRole === "facilitator") &&
+    hasAccess;
+  React.useEffect(() => {
+    if (!canReplayRecap) return;
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key.toLowerCase() !== "r" || e.metaKey || e.ctrlKey || e.altKey) return;
+      const tag = (e.target as HTMLElement | null)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      if ((e.target as HTMLElement | null)?.isContentEditable) return;
+      e.preventDefault();
+      replayRecap();
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [canReplayRecap, replayRecap]);
 
   if (meetingLoading) {
     return (
@@ -1607,32 +1489,34 @@ export function MeetingDetailContent({
   // =========================================================================
   // COMPLETED MODE
   // =========================================================================
+  const attendees = meeting.attendees ?? [];
+  const durationMinutes = meetingDurationMinutes(meeting);
+  const diarizedSpeakerCount =
+    meeting.transcript_diarized && meeting.transcript_segments?.length
+      ? new Set(meeting.transcript_segments.map((s) => s.speaker)).size
+      : 0;
+  // Numbers appear only when the implicit "01" recap is present (managers with a
+  // recap); otherwise headings degrade to unnumbered per the design constraint.
+  const logNumber = canManageMeeting ? "02" : undefined;
+  const transcriptNumber = canManageMeeting ? "03" : undefined;
+
   return (
     <div className="min-h-full bg-paper">
       <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6 lg:px-8">
-        <div className="flex items-center gap-3 mb-6">
+        {/* Top row: back to series, centered breadcrumb, record actions */}
+        <div className="mb-8 flex items-center gap-3">
           <Link
             href={`/series/${seriesId}`}
-            className="text-ink-3 hover:text-ink transition-colors"
+            className="text-ink-3 transition-colors hover:text-ink"
+            aria-label="Back to series"
           >
             <ArrowLeft className="size-5" />
           </Link>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-ink-2">{series?.name}</span>
-              {meetingSequence && (
-                <span className="text-xs font-mono text-ink-4">
-                  M-{meetingSequence}
-                </span>
-              )}
-            </div>
-            <h1 className="font-display text-xl font-semibold text-ink mt-1">
-              {meeting.title}
-            </h1>
-            <p className="text-xs font-mono text-ink-4 mt-1">
-              {formatMeetingDate(meeting.date)}
-            </p>
-          </div>
+          <p className="flex-1 truncate text-center font-mono text-[11px] uppercase tracking-[0.18em] text-ink-4">
+            {series?.name}
+            {series?.name && " / "}
+            {formatShortDate(meeting.date)}
+          </p>
           <div className="flex items-center gap-2">
             <SendMeetingNotesButton
               meetingId={meetingId}
@@ -1643,36 +1527,56 @@ export function MeetingDetailContent({
           </div>
         </div>
 
-        {meeting.attendees && meeting.attendees.length > 0 && (
-          <div className="flex flex-wrap gap-2 mb-6">
-            {meeting.attendees.map((attendee) => (
-              <span
-                key={attendee}
-                className="text-xs bg-paper-2 text-ink-2 px-2.5 py-1 rounded-full"
-              >
-                {attendee}
-              </span>
-            ))}
+        {/* Hero */}
+        <header className="mb-10">
+          <p className="font-mono text-[11px] font-medium uppercase tracking-[0.18em] text-accent">
+            Meeting recap
+          </p>
+          <h1 className="mt-2 font-display text-4xl font-semibold leading-[1.1] tracking-tight text-ink">
+            {meeting.title}
+          </h1>
+          <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-ink-3">
+            <span className="font-mono text-xs tabular-nums text-ink-4">
+              {formatMeetingDate(meeting.date)}
+            </span>
+            {durationMinutes && (
+              <>
+                <span className="text-ink-4" aria-hidden="true">·</span>
+                <span className="font-mono text-xs tabular-nums text-ink-4">
+                  {durationMinutes} min
+                </span>
+              </>
+            )}
+            {attendees.length > 0 && (
+              <>
+                <span className="text-ink-4" aria-hidden="true">·</span>
+                <span className="flex -space-x-1.5">
+                  {attendees.slice(0, 5).map((name) => (
+                    <AttendeeAvatar key={name} name={name} />
+                  ))}
+                  {attendees.length > 5 && (
+                    <span className="inline-flex size-7 items-center justify-center rounded-full bg-paper-2 text-[10px] font-medium text-ink-3 ring-2 ring-paper">
+                      +{attendees.length - 5}
+                    </span>
+                  )}
+                </span>
+              </>
+            )}
+            {diarizedSpeakerCount > 0 && (
+              <>
+                <span className="text-ink-4" aria-hidden="true">·</span>
+                <DiarizedChip speakerCount={diarizedSpeakerCount} />
+              </>
+            )}
           </div>
-        )}
-
-        <MeetingSummaryCard
-          meeting={meeting}
-          seriesName={series?.name ?? ""}
-          raisedCount={raisedInThisMeeting.length}
-          decisionsCount={meetingDecisions.length}
-          resolvedCount={doneThisMeeting.length}
-          stillOpenCount={carriedIssues.length}
-          raisedIssues={raisedInThisMeeting}
-          decisions={meetingDecisions}
-          doneIssues={doneThisMeeting}
-        />
+        </header>
 
         {canManageMeeting && (
           <FlowingSummary
             meetingId={meetingId}
             canGenerate={hasAccess}
             autoStart={autoStartSummary}
+            replayNonce={replayNonce}
             preparing={
               recorder.state === "stopped" &&
               (recorder.fastLane.state === "active" ||
@@ -1905,71 +1809,46 @@ export function MeetingDetailContent({
         </section>
         )}
 
-        <section className="mb-8">
-          <h2 className="font-display text-lg font-medium text-ink mb-4">
-            Items raised ({raisedInThisMeeting.length})
-          </h2>
-          <InlineTaskList
-            issues={raisedInThisMeeting}
-            attendees={meeting.attendees ?? series?.default_attendees ?? []}
-            onStatusChange={handleStatusChange}
-            onTitleChange={handleTitleChange}
-            onAssigneeChange={handleAssigneeChange}
-            onAddItem={handleInlineAdd}
-          />
-        </section>
+        <div className="mb-10">
+          <SectionHeading number={logNumber} title="Tracked in the log" />
+          <div className="space-y-6">
+            <section aria-label="Items raised">
+              <LogGroupLabel label="Items raised" count={raisedInThisMeeting.length} />
+              <InlineTaskList
+                issues={raisedInThisMeeting}
+                attendees={meeting.attendees ?? series?.default_attendees ?? []}
+                onStatusChange={handleStatusChange}
+                onTitleChange={handleTitleChange}
+                onAssigneeChange={handleAssigneeChange}
+                onAddItem={handleInlineAdd}
+              />
+            </section>
 
-        {doneThisMeeting.length > 0 && (
-          <section className="mb-8">
-            <h2 className="font-display text-lg font-medium text-ink mb-4">
-              Resolved this meeting ({doneThisMeeting.length})
-            </h2>
-            <InlineTaskList
-              issues={doneThisMeeting}
-              attendees={meeting.attendees ?? series?.default_attendees ?? []}
-              onStatusChange={handleStatusChange}
-              onTitleChange={handleTitleChange}
-              onAssigneeChange={handleAssigneeChange}
-            />
-          </section>
-        )}
+            {doneThisMeeting.length > 0 && (
+              <section aria-label="Resolved this meeting">
+                <LogGroupLabel label="Resolved this meeting" count={doneThisMeeting.length} />
+                <InlineTaskList
+                  issues={doneThisMeeting}
+                  attendees={meeting.attendees ?? series?.default_attendees ?? []}
+                  onStatusChange={handleStatusChange}
+                  onTitleChange={handleTitleChange}
+                  onAssigneeChange={handleAssigneeChange}
+                />
+              </section>
+            )}
 
-        {meetingDecisions.length > 0 && (
-          <section className="mb-8">
-            <h2 className="font-display text-lg font-medium text-ink mb-4">
-              Decisions ({meetingDecisions.length})
-            </h2>
-            <div className="space-y-3">
-              {meetingDecisions.map((decision) => (
-                <div
-                  key={decision.id}
-                  className="bg-card rounded-md p-4 shadow-[var(--shadow-raised)]"
-                >
-                  <div className="flex items-start gap-2">
-                    <span className="text-ink-3 shrink-0" aria-hidden="true">
-                      ◆
-                    </span>
-                    <div>
-                      <p className="text-sm font-medium text-ink">
-                        {decision.title}
-                      </p>
-                      {decision.rationale && (
-                        <p className="text-xs text-ink-2 mt-1">
-                          {decision.rationale}
-                        </p>
-                      )}
-                      {decision.made_by && (
-                        <p className="text-xs text-ink-3 mt-1">
-                          by {decision.made_by}
-                        </p>
-                      )}
-                    </div>
-                  </div>
+            {meetingDecisions.length > 0 && (
+              <section aria-label="Decisions">
+                <LogGroupLabel label="Decisions" count={meetingDecisions.length} />
+                <div className="space-y-3">
+                  {meetingDecisions.map((decision) => (
+                    <DecisionCard key={decision.id} decision={decision} />
+                  ))}
                 </div>
-              ))}
-            </div>
-          </section>
-        )}
+              </section>
+            )}
+          </div>
+        </div>
 
         <section>
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
@@ -2014,24 +1893,30 @@ export function MeetingDetailContent({
             className="min-h-[120px] font-sans text-sm"
           />
         </section>
-        <section className="mt-8">
+        <section className="mt-10">
           <button
             type="button"
             onClick={() => setTranscriptOpen((open) => !open)}
-            className="flex w-full items-center justify-between text-left"
+            className="flex w-full items-baseline gap-3 text-left"
             aria-expanded={transcriptOpen}
           >
-            <div className="flex items-center gap-2">
-              <h2 className="font-display text-lg font-medium text-ink">Transcript</h2>
-              {transcript.trim() && (
-                <span className="text-xs text-ink-4">{transcript.length} chars</span>
-              )}
-            </div>
+            {transcriptNumber && (
+              <span className="font-mono text-sm font-medium tabular-nums text-accent">
+                {transcriptNumber}
+              </span>
+            )}
+            <span className="font-display text-xl font-semibold text-ink">Transcript</span>
+            {transcript.trim() && (
+              <span className="font-mono text-[11px] tabular-nums text-ink-4">
+                {transcript.length} chars
+              </span>
+            )}
+            <span className="flex-1 self-center border-t border-rule" />
             <ChevronDown
-              className={`size-4 text-ink-3 transition-transform ${transcriptOpen ? "rotate-180" : ""}`}
+              className={`size-4 shrink-0 self-center text-ink-3 transition-transform ${transcriptOpen ? "rotate-180" : ""}`}
             />
           </button>
-          <p className="mt-1 text-xs text-ink-4">
+          <p className="mt-2 text-xs text-ink-4">
             Paste a meeting transcript to power AI notes and suggestions.
           </p>
           {transcriptOpen && (
@@ -2054,6 +1939,23 @@ export function MeetingDetailContent({
             )
           )}
         </section>
+
+        {canManageMeeting && (
+          <footer className="mt-12 flex flex-col items-center gap-4 border-t border-rule pt-8 text-center">
+            <p className="max-w-md font-mono text-[11px] leading-relaxed text-ink-4">
+              Replay the recap to watch it land the way your team will - press R or the button.
+            </p>
+            <Button
+              type="button"
+              onClick={replayRecap}
+              disabled={!hasAccess}
+              className="bg-accent text-white hover:bg-accent-hover"
+            >
+              <RotateCcw className="size-3.5" />
+              Replay recap
+            </Button>
+          </footer>
+        )}
       </div>
       {aiPreview && (
         <div className="fixed inset-0 z-[90] bg-ink/25 px-4 py-6 backdrop-blur-sm sm:px-6">
