@@ -76,6 +76,7 @@
     "test:calendar-draft": "node --test scripts/verify-calendar-draft.test.mjs",
     "test:errors": "node --test scripts/verify-humanize-error.test.mjs",
     "test:optimistic": "node --test scripts/verify-optimistic.test.mjs",
+    "test:summary-flow": "node --test scripts/verify-summary-flow.test.mjs",
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed",
     "test:e2e:ui": "playwright test --ui",
