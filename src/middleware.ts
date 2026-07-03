@@ -4,6 +4,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getSupabaseAuthCookieName } from "@/lib/supabase/auth-cookie";
 import { getSupabaseServerUrl } from "@/lib/supabase/url";
 import { getClientIp } from "@/lib/trusted-proxy";
+import { bearerTokenFromHeader } from "@/lib/supabase/bearer";
 
 const SECURITY_HEADERS: Record<string, string> = {
   "X-Frame-Options": "DENY",
@@ -189,9 +190,17 @@ export async function middleware(request: NextRequest) {
     }
   );
 
-  const {
+  let {
     data: { user },
   } = await supabase.auth.getUser();
+
+  if (!user && pathname.startsWith("/api/")) {
+    const bearer = bearerTokenFromHeader(request.headers.get("authorization"));
+    if (bearer) {
+      const { data } = await supabase.auth.getUser(bearer);
+      user = data.user;
+    }
+  }
 
   const publicPaths = [
     "/",
