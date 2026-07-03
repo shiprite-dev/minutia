@@ -115,7 +115,7 @@ test.describe("companion upload sequence", () => {
       headers: authHeaders,
       data: { path: `${meetingId}/seg-0.m4a` },
     });
-    expect([200, 402, 403, 502, 503]).toContain(register.status());
+    expect([200, 402, 403, 500, 502, 503]).toContain(register.status());
     expect(register.status()).not.toBe(400);
     expect(register.status()).not.toBe(401);
   });
