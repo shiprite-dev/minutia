@@ -172,6 +172,8 @@ export async function POST(
     if (isDiarizingProviderConfigured()) {
       // Diarization needs the whole recording in one pass: splitting it would
       // sever speaker turns across chunk boundaries.
+      // If the diarizing primary fails, the OpenRouter fallback receives this same
+      // un-chunked blob and may reject very large recordings (best-effort).
       const result = await transcribeAudio(audioData, {
         fileName: `meeting-${meetingId}.webm`,
         mimeType,
@@ -216,7 +218,9 @@ export async function POST(
         transcription_model: model,
         transcription_provider: provider,
         transcription_completed_at: new Date().toISOString(),
-        ...(segments ? { transcript_segments: segments, transcript_diarized: true, speaker_map: speakerMap } : {}),
+        transcript_segments: segments,
+        transcript_diarized: !!segments,
+        speaker_map: speakerMap,
         // Backfill duration from the provider only if the upload did not record it.
         ...(meeting.audio_duration_seconds == null && durationSeconds != null
           ? { audio_duration_seconds: Math.round(durationSeconds) }
