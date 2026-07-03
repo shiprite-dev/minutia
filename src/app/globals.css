@@ -214,7 +214,7 @@
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
 
-  --font-sans:    var(--font-satoshi, system-ui, sans-serif);
+  --font-sans:    var(--font-hyperlegible, system-ui, sans-serif);
   --font-display: var(--font-fraunces, Georgia, serif);
   --font-mono:    var(--font-jetbrains, ui-monospace, monospace);
   --font-heading: var(--font-fraunces, Georgia, serif);
