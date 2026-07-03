@@ -147,7 +147,7 @@ The current tour is a lightweight checklist inside onboarding, not a persistent 
 
 Minutia works with zero AI, recording, or calendar; the data model is AI-ready and every AI feature is opt-in.
 
-- **Meeting transcription** - browser audio capture, auto-transcribed with Whisper (via Groq or any OpenAI-compatible provider).
+- **Meeting transcription** - browser audio capture, auto-transcribed with Whisper (via Groq or any OpenAI-compatible provider). Recordings upload in segments during the meeting for fast transcription and crash resilience. By default the raw audio is discarded once transcription completes and only the transcript is kept; an admin can change this to keep audio forever in Admin > Settings > Recording.
 - **Context-aware action items** - extraction that reasons over the full series history to deduplicate, detect resolutions, and flag duplicates, rather than summarizing one meeting in isolation.
 - **Note enhancement and carryover briefings** - clean up freeform notes and surface what carries into the next meeting.
 

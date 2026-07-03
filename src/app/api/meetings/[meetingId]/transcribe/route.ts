@@ -14,6 +14,14 @@ import {
   type TranscriptionErrorCode,
   type TranscriptionSegment,
 } from "@/lib/transcription";
+import {
+  assembleFastTranscript,
+  planSegmentResume,
+  segmentsCoverExpected,
+  type SegmentRow,
+} from "@/lib/transcription/fast-lane";
+import { getInstanceConfigMap } from "@/lib/instance-config";
+import { resolveAudioRetention, shouldDiscardAudio } from "@/lib/audio/retention";
 
 // Transcription is provider-bound and can run for minutes on a long recording.
 export const runtime = "nodejs";
@@ -57,11 +65,26 @@ function statusForCode(code: TranscriptionErrorCode): number {
 }
 
 export async function POST(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ meetingId: string }> }
 ) {
   const requestId = crypto.randomUUID();
   const { meetingId } = await params;
+
+  // The client reports how many segments the fast lane produced. The segment
+  // resume path may only run when the persisted rows exactly cover that count,
+  // so a tail segment whose row has not registered yet can never truncate the
+  // transcript. Legacy callers send {} => expectedSegments null => full file.
+  let body: Record<string, unknown> = {};
+  try {
+    body = (await request.json()) as Record<string, unknown>;
+  } catch {
+    body = {};
+  }
+  const expectedSegments =
+    Number.isInteger(body.expected_segments) && (body.expected_segments as number) >= 1
+      ? (body.expected_segments as number)
+      : null;
 
   const aiDenied = await requireAiAccess();
   if (aiDenied) {
@@ -191,23 +214,140 @@ export async function POST(
         transcript = result.text.trim();
       }
     } else {
-      const chunks = await chunkAudioBlob(audioData, mimeType);
-      chunkCount = chunks.length;
+      // Resumable final pass: when the fast lane already transcribed segments,
+      // reuse the completed texts and only re-transcribe the gaps, so a provider
+      // hiccup on one segment never re-runs the whole recording. Falls back to
+      // full-file chunking when no segments exist or a gap cannot be recovered.
+      const { data: segmentRows, error: segmentsError } = await supabase
+        .from("meeting_audio_segments")
+        .select("seq, status, transcript_text, storage_path, model, provider")
+        .eq("meeting_id", meetingId)
+        .order("seq", { ascending: true });
 
-      // All-or-nothing: a provider failure on any chunk fails the whole run (the
-      // catch below marks it 'failed'). Acceptable for v1; revisit with per-chunk
-      // retry or partial-save if failures on long, multi-chunk meetings show up.
-      const texts: string[] = [];
-      for (const chunk of chunks) {
-        const result = await transcribeAudio(chunk, { fileName: `meeting-${meetingId}.webm`, mimeType });
-        texts.push(result.text.trim());
-        if (!model) {
-          model = result.model;
-          provider = result.provider;
-          durationSeconds = result.durationSeconds;
+      // A query error means we cannot trust the segment view: fall through to the
+      // full-file path rather than fail the run.
+      const rows: SegmentRow[] = segmentsError ? [] : (segmentRows ?? []);
+      const plan = planSegmentResume(rows);
+      let resumed = false;
+
+      // Only trust the segment rows when they exactly cover the count the client
+      // reported at stop: the tail row must be registered and the seqs must be a
+      // contiguous 0..n-1 range. Otherwise use the safe full-file path.
+      if (plan.usable && segmentsCoverExpected(rows, expectedSegments)) {
+        const recovered: SegmentRow[] = [];
+        const missing: number[] = [];
+        const nowIso = () => new Date().toISOString();
+
+        for (const row of plan.retry) {
+          // Claim the segment before touching it so this final pass never
+          // transcribes a seq concurrently with the per-segment route. A held
+          // claim (or a claim error) means another worker owns it: treat the
+          // seq as a gap and fall back to the full-file path.
+          const { data: claimed, error: claimError } = await supabase.rpc("claim_segment_transcription", {
+            p_meeting_id: meetingId,
+            p_seq: row.seq,
+          });
+          if (claimError || claimed !== true) {
+            missing.push(row.seq);
+            continue;
+          }
+
+          const { data: segData, error: segDownloadError } = await supabase.storage
+            .from(MEETING_AUDIO_BUCKET)
+            .download(row.storage_path);
+
+          if (segDownloadError || !segData) {
+            await supabase
+              .from("meeting_audio_segments")
+              .update({ status: "failed", error_code: "download_failed", updated_at: nowIso() })
+              .eq("meeting_id", meetingId)
+              .eq("seq", row.seq);
+            missing.push(row.seq);
+            continue;
+          }
+
+          try {
+            const result = await transcribeAudio(segData, {
+              fileName: `seg-${row.seq}.webm`,
+              mimeType: segData.type || "audio/webm",
+            });
+            const text = result.text.trim();
+            await supabase
+              .from("meeting_audio_segments")
+              .update({
+                status: "completed",
+                transcript_text: text,
+                error_code: null,
+                size_bytes: segData.size,
+                updated_at: nowIso(),
+              })
+              .eq("meeting_id", meetingId)
+              .eq("seq", row.seq);
+            if (!model) {
+              model = result.model;
+              provider = result.provider;
+              durationSeconds = result.durationSeconds;
+            }
+            if (text) {
+              recovered.push({ ...row, status: "completed", transcript_text: text });
+            } else {
+              missing.push(row.seq);
+            }
+          } catch (segError) {
+            const code = segError instanceof TranscriptionError ? segError.code : "provider_error";
+            await supabase
+              .from("meeting_audio_segments")
+              .update({ status: "failed", error_code: code, updated_at: nowIso() })
+              .eq("meeting_id", meetingId)
+              .eq("seq", row.seq);
+            missing.push(row.seq);
+          }
+        }
+
+        if (missing.length === 0) {
+          // Every original segment now carries usable text: stitch the recap from
+          // segment texts without re-transcribing the already-completed ones.
+          const updatedRows = [...plan.completed, ...recovered];
+          transcript = assembleFastTranscript(updatedRows);
+          chunkCount = updatedRows.length;
+          resumed = true;
+
+          // When every segment was already completed the retry loop never ran, so
+          // model/provider are still blank. Seed them from the first pre-transcribed
+          // segment that recorded them so the meeting is not stamped with an empty
+          // provider/model on the fast-lane happy path.
+          if (!model) {
+            const seed = updatedRows.find((r) => r.model);
+            if (seed) {
+              model = seed.model ?? "";
+              provider = seed.provider ?? "";
+            }
+          }
+        } else {
+          console.error("[transcribe] segment resume incomplete, falling back to full-file chunking", {
+            meetingId,
+            requestId,
+            missing,
+          });
         }
       }
-      transcript = texts.filter(Boolean).join("\n\n");
+
+      if (!resumed) {
+        const chunks = await chunkAudioBlob(audioData, mimeType);
+        chunkCount = chunks.length;
+
+        const texts: string[] = [];
+        for (const chunk of chunks) {
+          const result = await transcribeAudio(chunk, { fileName: `meeting-${meetingId}.webm`, mimeType });
+          texts.push(result.text.trim());
+          if (!model) {
+            model = result.model;
+            provider = result.provider;
+            durationSeconds = result.durationSeconds;
+          }
+        }
+        transcript = texts.filter(Boolean).join("\n\n");
+      }
     }
 
     const { error: updateError } = await supabase
@@ -253,12 +393,63 @@ export async function POST(
       }
     }
 
+    // Audio retention: with a transcript durably saved, discard the raw
+    // recording when the instance policy says so (the default). Best-effort:
+    // the deletion runs with the caller's RLS client, so a facilitator-triggered
+    // run may lack owner-scoped storage delete rights. A failure here must never
+    // fail the response; the transcript is already the source of truth.
+    let audioDiscarded = false;
+    try {
+      const configMap = await getInstanceConfigMap(["audio_retention"]);
+      const retention = resolveAudioRetention(configMap.audio_retention ?? null);
+      if (shouldDiscardAudio(retention, "completed")) {
+        const { data: objects } = await supabase.storage.from(MEETING_AUDIO_BUCKET).list(meetingId);
+        const paths = (objects ?? []).map((o) => `${meetingId}/${o.name}`);
+        if (paths.length) {
+          const { error } = await supabase.storage.from(MEETING_AUDIO_BUCKET).remove(paths);
+          if (error) throw error;
+        }
+        const { error: meetingNullError } = await supabase
+          .from("meetings")
+          .update({ audio_file_path: null, audio_file_size_bytes: null })
+          .eq("id", meetingId);
+        if (meetingNullError) {
+          console.error("[transcribe] retention discard failed", {
+            meetingId,
+            requestId,
+            step: "meetings-null-update",
+            error: meetingNullError.message,
+          });
+        }
+        const { error: segmentsDeleteError } = await supabase
+          .from("meeting_audio_segments")
+          .delete()
+          .eq("meeting_id", meetingId);
+        if (segmentsDeleteError) {
+          console.error("[transcribe] retention discard failed", {
+            meetingId,
+            requestId,
+            step: "segments-delete",
+            error: segmentsDeleteError.message,
+          });
+        }
+        audioDiscarded = true;
+      }
+    } catch (retentionError) {
+      console.error("[transcribe] retention discard failed", {
+        meetingId,
+        requestId,
+        error: retentionError instanceof Error ? retentionError.message : String(retentionError),
+      });
+    }
+
     return NextResponse.json({
       status: "completed",
       transcript_length: transcript.length,
       chunks: chunkCount,
       model,
       provider,
+      audio_discarded: audioDiscarded,
       request_id: requestId,
     });
   } catch (error) {

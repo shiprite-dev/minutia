@@ -18,14 +18,19 @@ function Word({ text, animate }: { text: string; animate: boolean }) {
 export function FlowingSummary({
   meetingId,
   canGenerate,
+  autoStart,
+  preparing,
 }: {
   meetingId: string;
   canGenerate: boolean;
+  autoStart?: boolean;
+  preparing?: boolean;
 }) {
   const [text, setText] = React.useState("");
   const [streaming, setStreaming] = React.useState(false);
   const [done, setDone] = React.useState(false);
   const controllerRef = React.useRef<AbortController | null>(null);
+  const autoFiredRef = React.useRef(false);
 
   const prefersReducedMotion =
     typeof window !== "undefined" &&
@@ -37,7 +42,18 @@ export function FlowingSummary({
     setStreaming(false);
   }, []);
 
-  React.useEffect(() => () => controllerRef.current?.abort(), []);
+  // An unmount-cleanup abort (StrictMode mounts twice in dev) must not consume
+  // the single auto-start; a user-clicked Stop never unmounts, so it stays latched.
+  React.useEffect(
+    () => () => {
+      if (controllerRef.current) {
+        controllerRef.current.abort();
+        controllerRef.current = null;
+        autoFiredRef.current = false;
+      }
+    },
+    []
+  );
 
   const start = React.useCallback(async () => {
     if (streaming) return;
@@ -81,8 +97,17 @@ export function FlowingSummary({
     }
   }, [meetingId, streaming]);
 
+  // Auto-start the recap once when the parent flips `autoStart` true (recording
+  // stopped and the fast-lane recap is ready). Ref-guarded to a single fire.
+  React.useEffect(() => {
+    if (!autoStart || autoFiredRef.current || !canGenerate || streaming || done) return;
+    autoFiredRef.current = true;
+    void start();
+  }, [autoStart, canGenerate, streaming, done, start]);
+
   const words = splitWords(text);
   const animate = streaming && !prefersReducedMotion;
+  const showPreparing = !!preparing && !streaming && !done && !text;
 
   return (
     <section className="mb-8" aria-label="Meeting recap">
@@ -93,6 +118,15 @@ export function FlowingSummary({
             <span className="inline-flex items-center gap-1.5 text-xs text-ink-3">
               <Sparkles className="size-3.5 animate-pulse" aria-hidden="true" />
               Generating recap
+            </span>
+          )}
+          {showPreparing && (
+            <span
+              className="inline-flex items-center gap-1.5 text-xs text-ink-3"
+              role="status"
+            >
+              <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
+              Wrapping up the recap...
             </span>
           )}
         </div>
@@ -107,7 +141,7 @@ export function FlowingSummary({
             variant="outline"
             size="sm"
             onClick={start}
-            disabled={!canGenerate}
+            disabled={!canGenerate || showPreparing}
           >
             {done ? <Loader2 className="size-3.5" /> : <Sparkles className="size-3.5" />}
             {done ? "Regenerate recap" : "Generate recap"}

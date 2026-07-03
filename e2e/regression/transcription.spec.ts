@@ -213,6 +213,24 @@ test.describe("Transcription pipeline", () => {
       expect(rows[0].transcription_status).toBe("completed");
       expect(rows[0].transcription_provider).toBeTruthy();
       expect(rows[0].transcription_completed_at).not.toBeNull();
+
+      // Retention default (audio_retention unset) discards the raw recording once
+      // the transcript is durably saved: the response flags it, the meeting row
+      // drops its audio pointer, and no objects remain under the meeting prefix.
+      expect(payload.audio_discarded).toBe(true);
+      const retained = await rest(
+        request,
+        `meetings?id=eq.${fixture.meetingId}&select=audio_file_path,audio_file_size_bytes`
+      );
+      expect(retained[0].audio_file_path).toBeNull();
+      expect(retained[0].audio_file_size_bytes).toBeNull();
+
+      const listing = await request.post(
+        `${SUPABASE_URL}/storage/v1/object/list/meeting-audio`,
+        { headers: serviceHeaders(), data: { prefix: `${fixture.meetingId}/`, limit: 100 } }
+      );
+      expect(listing.ok()).toBeTruthy();
+      expect(await listing.json()).toHaveLength(0);
     } finally {
       await request
         .delete(`${SUPABASE_URL}/storage/v1/object/meeting-audio/${audioPath}`, {

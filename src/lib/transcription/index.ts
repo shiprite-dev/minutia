@@ -96,6 +96,21 @@ export function getProviderChain(env: Env = process.env): TranscriptionProvider[
   return chain;
 }
 
+/**
+ * Reorder an attempt list to prefer fast, non-diarizing providers (groq,
+ * openrouter). Diarizing a short WebM segment is pointless and burns the
+ * expensive diarizing provider, so the per-segment fast lane calls this to skip
+ * assemblyai/local. When no non-diarizing provider is configured the original
+ * chain is returned unchanged so the lane still has something to run.
+ */
+export function orderChainPreferFast(
+  chain: TranscriptionProvider[],
+  env: Env = process.env
+): TranscriptionProvider[] {
+  const fast = (["groq", "openrouter"] as TranscriptionProvider[]).filter((p) => providerConfigured(p, env));
+  return fast.length > 0 ? fast : chain;
+}
+
 /** True when at least one implemented provider in the chain has its credential configured. */
 export function isTranscriptionConfigured(env: Env = process.env): boolean {
   return getProviderChain(env).some((p) => IMPLEMENTED_PROVIDERS.has(p) && providerConfigured(p, env));
@@ -127,6 +142,8 @@ export interface TranscribeAudioOptions {
   speakersExpected?: number;
   timeoutMs?: number;
   signal?: AbortSignal;
+  /** Prefer fast, non-diarizing providers (used by the per-segment fast lane). */
+  preferFast?: boolean;
   /** Inject an env for tests; defaults to process.env. */
   env?: Env;
 }
@@ -184,8 +201,10 @@ export async function transcribeAudio(
     throw new TranscriptionError("provider_not_configured", "No transcription provider is configured");
   }
 
+  const chain = options.preferFast ? orderChainPreferFast(getProviderChain(env), env) : getProviderChain(env);
+
   let firstError: unknown;
-  for (const provider of getProviderChain(env)) {
+  for (const provider of chain) {
     if (!IMPLEMENTED_PROVIDERS.has(provider)) continue;
     const credential = provider === "local" ? localSidecarUrl(env) : providerApiKey(provider, env);
     if (!credential) continue;
