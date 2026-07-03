@@ -90,21 +90,16 @@ test.describe("Copy button morph confirmation", () => {
     }
   });
 
-  test("meeting summary copy button shows 'Copied' on click", async ({
-    page,
-    context,
-  }) => {
-    await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  test("completed meeting footer offers the recap replay", async ({ page }) => {
     await page.goto(
       `/series/${SERIES.platformStandup}/meetings/${MEETINGS.standup1}`
     );
     await waitForApp(page);
 
-    const copyBtn = page.getByText("Copy summary");
-    if (await copyBtn.isVisible().catch(() => false)) {
-      await copyBtn.click();
-      await expect(page.getByText("Copied")).toBeVisible({ timeout: 3000 });
-    }
+    await expect(page.getByText(/Replay the recap/)).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Replay recap" })
+    ).toBeVisible();
   });
 });
 

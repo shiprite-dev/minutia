@@ -799,7 +799,7 @@ export function MeetingDetailContent({
   React.useEffect(() => {
     if (!canReplayRecap) return;
     function onKeyDown(e: KeyboardEvent) {
-      if (e.key.toLowerCase() !== "r" || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.key.toLowerCase() !== "r" || e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
       const tag = (e.target as HTMLElement | null)?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
       if ((e.target as HTMLElement | null)?.isContentEditable) return;
