@@ -32,6 +32,13 @@ export interface MeetingRecorder {
   pause: () => void;
   resume: () => void;
   fastLane: SegmentPipelineStatus;
+  /**
+   * Resolve once the fast lane reaches a terminal state ("ready" | "failed" |
+   * "off"), or with the current status after `timeoutMs`. Resolves immediately
+   * when already terminal. Lets the final transcribe wait for the tail segment
+   * to register before it decides whether to trust the segment rows.
+   */
+  waitForFastLane: (timeoutMs: number) => Promise<SegmentPipelineStatus>;
 }
 
 const FAST_LANE_OFF: SegmentPipelineStatus = {
@@ -41,6 +48,11 @@ const FAST_LANE_OFF: SegmentPipelineStatus = {
 };
 
 const TICK_MS = 500;
+
+/** The fast lane has settled: its segment rows will not change further. */
+function isTerminalFastLane(status: SegmentPipelineStatus): boolean {
+  return status.state === "ready" || status.state === "failed" || status.state === "off";
+}
 
 /**
  * wraps MediaRecorder for live meeting capture.
@@ -64,6 +76,8 @@ export function useMeetingRecorder(meetingId: string): MeetingRecorder {
   const seqRef = React.useRef(0);
   const mimeRef = React.useRef<string>("audio/webm");
   const pipelineRef = React.useRef<SegmentPipeline | null>(null);
+  const fastLaneRef = React.useRef<SegmentPipelineStatus>(FAST_LANE_OFF);
+  const fastLaneWaitersRef = React.useRef<Array<(status: SegmentPipelineStatus) => void>>([]);
   // Serializes async Blob->Uint8Array conversion so the pipeline sees chunks in
   // capture order regardless of arrayBuffer() resolution timing.
   const pushChainRef = React.useRef<Promise<void>>(Promise.resolve());
@@ -167,10 +181,17 @@ export function useMeetingRecorder(meetingId: string): MeetingRecorder {
         };
       },
       onStatus: (status) => {
+        fastLaneRef.current = status;
         if (mountedRef.current) setFastLane(status);
+        if (isTerminalFastLane(status)) {
+          const waiters = fastLaneWaitersRef.current;
+          fastLaneWaitersRef.current = [];
+          waiters.forEach((resolve) => resolve(status));
+        }
       },
     });
     pipelineRef.current = pipeline;
+    fastLaneRef.current = pipeline.status();
     setFastLane(pipeline.status());
 
     recorder.ondataavailable = (event) => {
@@ -247,6 +268,30 @@ export function useMeetingRecorder(meetingId: string): MeetingRecorder {
     });
   }, [accrueElapsed, stopTicking, teardownStream]);
 
+  const waitForFastLane = React.useCallback(
+    (timeoutMs: number): Promise<SegmentPipelineStatus> => {
+      const current = fastLaneRef.current;
+      if (isTerminalFastLane(current)) return Promise.resolve(current);
+      return new Promise((resolve) => {
+        let settled = false;
+        const waiter = (status: SegmentPipelineStatus) => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timer);
+          resolve(status);
+        };
+        const timer = setTimeout(() => {
+          if (settled) return;
+          settled = true;
+          fastLaneWaitersRef.current = fastLaneWaitersRef.current.filter((w) => w !== waiter);
+          resolve(fastLaneRef.current);
+        }, timeoutMs);
+        fastLaneWaitersRef.current.push(waiter);
+      });
+    },
+    []
+  );
+
   // Cleanup on unmount: stop the mic, never leave a hot stream behind, and
   // suppress any in-flight onstop setState now that we are unmounting.
   React.useEffect(() => {
@@ -272,5 +317,6 @@ export function useMeetingRecorder(meetingId: string): MeetingRecorder {
     pause,
     resume,
     fastLane,
+    waitForFastLane,
   };
 }

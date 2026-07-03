@@ -147,6 +147,7 @@ export async function POST(
     const result = await transcribeAudio(audioData, {
       fileName: `seg-${seq}.webm`,
       mimeType: audioData.type || "audio/webm",
+      preferFast: true,
     });
     const transcript = result.text.trim();
 

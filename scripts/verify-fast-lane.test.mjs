@@ -19,7 +19,9 @@ await esbuild.build({
   logLevel: "silent",
   absWorkingDir: root,
 });
-const { assembleFastTranscript, planSegmentResume } = await import(pathToFileURL(bundled).href);
+const { assembleFastTranscript, planSegmentResume, segmentsCoverExpected } = await import(
+  pathToFileURL(bundled).href
+);
 
 const row = (seq, status, transcript_text) => ({
   seq,
@@ -87,4 +89,29 @@ test("planSegmentResume single failed row is usable and queued for retry", () =>
   assert.equal(plan.usable, true);
   assert.deepEqual(plan.retry.map((r) => r.seq), [0]);
   assert.deepEqual(plan.completed, []);
+});
+
+test("segmentsCoverExpected is false when expected is null (legacy caller)", () => {
+  assert.equal(segmentsCoverExpected([row(0, "completed", "a")], null), false);
+});
+
+test("segmentsCoverExpected is true for an exact contiguous 0..n-1 cover", () => {
+  const rows = [row(2, "completed", "c"), row(0, "completed", "a"), row(1, "failed", null)];
+  assert.equal(segmentsCoverExpected(rows, 3), true);
+});
+
+test("segmentsCoverExpected is false on a count mismatch", () => {
+  const rows = [row(0, "completed", "a"), row(1, "completed", "b")];
+  assert.equal(segmentsCoverExpected(rows, 3), false);
+  assert.equal(segmentsCoverExpected(rows, 1), false);
+});
+
+test("segmentsCoverExpected is false when a seq is missing (hole)", () => {
+  const rows = [row(0, "completed", "a"), row(2, "completed", "c")];
+  assert.equal(segmentsCoverExpected(rows, 2), false);
+});
+
+test("segmentsCoverExpected is false on a duplicate seq", () => {
+  const rows = [row(0, "completed", "a"), row(0, "completed", "dup")];
+  assert.equal(segmentsCoverExpected(rows, 2), false);
 });

@@ -29,6 +29,7 @@ const {
   transcribeWithLocalSidecar,
   resolveTranscriptionProvider,
   getProviderChain,
+  orderChainPreferFast,
   isTranscriptionConfigured,
   isDiarizingProvider,
   isDiarizingProviderConfigured,
@@ -305,6 +306,34 @@ test("getProviderChain puts the configured provider first and adds OpenRouter as
     getProviderChain({ TRANSCRIPTION_PROVIDER: "openrouter", OPENROUTER_API_KEY: "o" }),
     ["openrouter"]
   );
+});
+
+test("orderChainPreferFast puts a configured non-diarizing provider first, dropping the diarizing primary", () => {
+  const env = { TRANSCRIPTION_PROVIDER: "assemblyai", ASSEMBLYAI_API_KEY: "a", GROQ_API_KEY: "g" };
+  assert.deepEqual(orderChainPreferFast(getProviderChain(env), env), ["groq"]);
+});
+
+test("orderChainPreferFast keeps the diarizing provider when no fast provider is configured", () => {
+  const env = { TRANSCRIPTION_PROVIDER: "assemblyai", ASSEMBLYAI_API_KEY: "a" };
+  assert.deepEqual(orderChainPreferFast(getProviderChain(env), env), ["assemblyai"]);
+});
+
+test("orderChainPreferFast leaves a fast primary chain unchanged", () => {
+  const env = { TRANSCRIPTION_PROVIDER: "groq", GROQ_API_KEY: "g", OPENROUTER_API_KEY: "o" };
+  assert.deepEqual(orderChainPreferFast(getProviderChain(env), env), ["groq", "openrouter"]);
+});
+
+test("transcribeAudio with preferFast skips the diarizing primary for a fast provider", async () => {
+  const env = { TRANSCRIPTION_PROVIDER: "assemblyai", ASSEMBLYAI_API_KEY: "a", GROQ_API_KEY: "g" };
+  const calls = fakeFetch((url) =>
+    url.includes("groq.com")
+      ? okResponse({ text: "fast lane", usage: { seconds: 1 } })
+      : errResponse(500)
+  );
+  const result = await transcribeAudio(audioBlob(), { env, preferFast: true });
+  assert.equal(result.provider, "groq");
+  assert.equal(result.text, "fast lane");
+  assert.equal(calls.length, 1, "only groq was tried; assemblyai never hit");
 });
 
 test("isTranscriptionConfigured reflects whether any usable provider key exists", () => {

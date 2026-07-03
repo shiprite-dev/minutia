@@ -14,7 +14,12 @@ import {
   type TranscriptionErrorCode,
   type TranscriptionSegment,
 } from "@/lib/transcription";
-import { assembleFastTranscript, planSegmentResume, type SegmentRow } from "@/lib/transcription/fast-lane";
+import {
+  assembleFastTranscript,
+  planSegmentResume,
+  segmentsCoverExpected,
+  type SegmentRow,
+} from "@/lib/transcription/fast-lane";
 import { getInstanceConfigMap } from "@/lib/instance-config";
 import { resolveAudioRetention, shouldDiscardAudio } from "@/lib/audio/retention";
 
@@ -60,11 +65,26 @@ function statusForCode(code: TranscriptionErrorCode): number {
 }
 
 export async function POST(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ meetingId: string }> }
 ) {
   const requestId = crypto.randomUUID();
   const { meetingId } = await params;
+
+  // The client reports how many segments the fast lane produced. The segment
+  // resume path may only run when the persisted rows exactly cover that count,
+  // so a tail segment whose row has not registered yet can never truncate the
+  // transcript. Legacy callers send {} => expectedSegments null => full file.
+  let body: Record<string, unknown> = {};
+  try {
+    body = (await request.json()) as Record<string, unknown>;
+  } catch {
+    body = {};
+  }
+  const expectedSegments =
+    Number.isInteger(body.expected_segments) && (body.expected_segments as number) >= 1
+      ? (body.expected_segments as number)
+      : null;
 
   const aiDenied = await requireAiAccess();
   if (aiDenied) {
@@ -210,12 +230,28 @@ export async function POST(
       const plan = planSegmentResume(rows);
       let resumed = false;
 
-      if (plan.usable) {
+      // Only trust the segment rows when they exactly cover the count the client
+      // reported at stop: the tail row must be registered and the seqs must be a
+      // contiguous 0..n-1 range. Otherwise use the safe full-file path.
+      if (plan.usable && segmentsCoverExpected(rows, expectedSegments)) {
         const recovered: SegmentRow[] = [];
         const missing: number[] = [];
         const nowIso = () => new Date().toISOString();
 
         for (const row of plan.retry) {
+          // Claim the segment before touching it so this final pass never
+          // transcribes a seq concurrently with the per-segment route. A held
+          // claim (or a claim error) means another worker owns it: treat the
+          // seq as a gap and fall back to the full-file path.
+          const { data: claimed, error: claimError } = await supabase.rpc("claim_segment_transcription", {
+            p_meeting_id: meetingId,
+            p_seq: row.seq,
+          });
+          if (claimError || claimed !== true) {
+            missing.push(row.seq);
+            continue;
+          }
+
           const { data: segData, error: segDownloadError } = await supabase.storage
             .from(MEETING_AUDIO_BUCKET)
             .download(row.storage_path);

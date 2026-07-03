@@ -52,3 +52,17 @@ export function planSegmentResume(rows: SegmentRow[]): {
   const usable = rows.length > 0 && completed.length + retry.length > 0;
   return { retry, completed, usable };
 }
+
+/**
+ * True only when the persisted segment rows exactly cover the segment count the
+ * client reported at stop (`expected`): the row count matches AND the seqs are
+ * exactly the contiguous range 0..expected-1. Guards the resume path against a
+ * tail segment that has not registered its row yet, a hole, or a duplicate seq.
+ * Returns false when `expected` is null (legacy callers) so those fall back to
+ * the safe full-file path.
+ */
+export function segmentsCoverExpected(rows: SegmentRow[], expected: number | null): boolean {
+  if (expected === null || rows.length !== expected) return false;
+  const seqs = rows.map((row) => row.seq).sort((a, b) => a - b);
+  return seqs.every((seq, index) => seq === index);
+}
