@@ -14,6 +14,7 @@ import {
   type TranscriptionErrorCode,
   type TranscriptionSegment,
 } from "@/lib/transcription";
+import { assembleFastTranscript, planSegmentResume, type SegmentRow } from "@/lib/transcription/fast-lane";
 
 // Transcription is provider-bound and can run for minutes on a long recording.
 export const runtime = "nodejs";
@@ -191,23 +192,112 @@ export async function POST(
         transcript = result.text.trim();
       }
     } else {
-      const chunks = await chunkAudioBlob(audioData, mimeType);
-      chunkCount = chunks.length;
+      // Resumable final pass: when the fast lane already transcribed segments,
+      // reuse the completed texts and only re-transcribe the gaps, so a provider
+      // hiccup on one segment never re-runs the whole recording. Falls back to
+      // full-file chunking when no segments exist or a gap cannot be recovered.
+      const { data: segmentRows, error: segmentsError } = await supabase
+        .from("meeting_audio_segments")
+        .select("seq, status, transcript_text, storage_path")
+        .eq("meeting_id", meetingId)
+        .order("seq", { ascending: true });
 
-      // All-or-nothing: a provider failure on any chunk fails the whole run (the
-      // catch below marks it 'failed'). Acceptable for v1; revisit with per-chunk
-      // retry or partial-save if failures on long, multi-chunk meetings show up.
-      const texts: string[] = [];
-      for (const chunk of chunks) {
-        const result = await transcribeAudio(chunk, { fileName: `meeting-${meetingId}.webm`, mimeType });
-        texts.push(result.text.trim());
-        if (!model) {
-          model = result.model;
-          provider = result.provider;
-          durationSeconds = result.durationSeconds;
+      // A query error means we cannot trust the segment view: fall through to the
+      // full-file path rather than fail the run.
+      const rows: SegmentRow[] = segmentsError ? [] : (segmentRows ?? []);
+      const plan = planSegmentResume(rows);
+      let resumed = false;
+
+      if (plan.usable) {
+        const recovered: SegmentRow[] = [];
+        const missing: number[] = [];
+        const nowIso = () => new Date().toISOString();
+
+        for (const row of plan.retry) {
+          const { data: segData, error: segDownloadError } = await supabase.storage
+            .from(MEETING_AUDIO_BUCKET)
+            .download(row.storage_path);
+
+          if (segDownloadError || !segData) {
+            await supabase
+              .from("meeting_audio_segments")
+              .update({ status: "failed", error_code: "download_failed", updated_at: nowIso() })
+              .eq("meeting_id", meetingId)
+              .eq("seq", row.seq);
+            missing.push(row.seq);
+            continue;
+          }
+
+          try {
+            const result = await transcribeAudio(segData, {
+              fileName: `seg-${row.seq}.webm`,
+              mimeType: segData.type || "audio/webm",
+            });
+            const text = result.text.trim();
+            await supabase
+              .from("meeting_audio_segments")
+              .update({
+                status: "completed",
+                transcript_text: text,
+                error_code: null,
+                size_bytes: segData.size,
+                updated_at: nowIso(),
+              })
+              .eq("meeting_id", meetingId)
+              .eq("seq", row.seq);
+            if (!model) {
+              model = result.model;
+              provider = result.provider;
+              durationSeconds = result.durationSeconds;
+            }
+            if (text) {
+              recovered.push({ ...row, status: "completed", transcript_text: text });
+            } else {
+              missing.push(row.seq);
+            }
+          } catch (segError) {
+            const code = segError instanceof TranscriptionError ? segError.code : "provider_error";
+            await supabase
+              .from("meeting_audio_segments")
+              .update({ status: "failed", error_code: code, updated_at: nowIso() })
+              .eq("meeting_id", meetingId)
+              .eq("seq", row.seq);
+            missing.push(row.seq);
+          }
+        }
+
+        if (missing.length === 0) {
+          // Every original segment now carries usable text: stitch the recap from
+          // segment texts without re-transcribing the already-completed ones.
+          const updatedRows = [...plan.completed, ...recovered];
+          transcript = assembleFastTranscript(updatedRows);
+          chunkCount = updatedRows.length;
+          resumed = true;
+        } else {
+          console.error("[transcribe] segment resume incomplete, falling back to full-file chunking", {
+            meetingId,
+            requestId,
+            missing,
+          });
         }
       }
-      transcript = texts.filter(Boolean).join("\n\n");
+
+      if (!resumed) {
+        const chunks = await chunkAudioBlob(audioData, mimeType);
+        chunkCount = chunks.length;
+
+        const texts: string[] = [];
+        for (const chunk of chunks) {
+          const result = await transcribeAudio(chunk, { fileName: `meeting-${meetingId}.webm`, mimeType });
+          texts.push(result.text.trim());
+          if (!model) {
+            model = result.model;
+            provider = result.provider;
+            durationSeconds = result.durationSeconds;
+          }
+        }
+        transcript = texts.filter(Boolean).join("\n\n");
+      }
     }
 
     const { error: updateError } = await supabase
