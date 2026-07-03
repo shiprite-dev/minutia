@@ -125,6 +125,9 @@ jobs:
       - name: Audio retention contracts
         run: pnpm test:retention
 
+      - name: Companion ingest contracts
+        run: pnpm test:companion-ingest
+
       - name: Build (includes typecheck)
         run: pnpm build
         env:

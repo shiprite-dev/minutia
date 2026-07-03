@@ -4,6 +4,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getSupabaseAuthCookieName } from "@/lib/supabase/auth-cookie";
 import { getSupabaseServerUrl } from "@/lib/supabase/url";
 import { getClientIp } from "@/lib/trusted-proxy";
+import { bearerTokenFromHeader } from "@/lib/supabase/bearer";
 
 const SECURITY_HEADERS: Record<string, string> = {
   "X-Frame-Options": "DENY",
@@ -140,7 +141,7 @@ export async function middleware(request: NextRequest) {
   }
 
   // Setup guard: redirect to /setup if instance hasn't been configured
-  const setupExemptPaths = ["/setup", "/api/setup", "/api/admin", "/api/calendar/webhook", "/retro", "/api/retro"];
+  const setupExemptPaths = ["/setup", "/api/setup", "/api/admin", "/api/calendar/webhook", "/api/instance-meta", "/retro", "/api/retro"];
   const isSetupExempt = setupExemptPaths.some((p) => pathname.startsWith(p));
 
   if (!isSetupExempt) {
@@ -189,9 +190,21 @@ export async function middleware(request: NextRequest) {
     }
   );
 
-  const {
+  let {
     data: { user },
   } = await supabase.auth.getUser();
+
+  const hasAuthCookie = request.cookies
+    .getAll()
+    .some((cookie) => cookie.name.includes("-auth-token"));
+
+  if (pathname.startsWith("/api/") && !hasAuthCookie) {
+    const bearer = bearerTokenFromHeader(request.headers.get("authorization"));
+    if (bearer) {
+      const { data } = await supabase.auth.getUser(bearer);
+      user = data.user;
+    }
+  }
 
   const publicPaths = [
     "/",
@@ -207,6 +220,7 @@ export async function middleware(request: NextRequest) {
     "/api/invite-requests",
     "/api/password-reset-requests",
     "/api/calendar/webhook",
+    "/api/instance-meta",
     "/retro",
     "/api/retro",
   ];

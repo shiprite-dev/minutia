@@ -82,6 +82,7 @@
     "test:optimistic": "node --test scripts/verify-optimistic.test.mjs",
     "test:summary-flow": "node --test scripts/verify-summary-flow.test.mjs",
     "test:word-pacer": "node --test scripts/verify-word-pacer.test.mjs",
+    "test:companion-ingest": "node --test scripts/verify-companion-ingest.test.mjs",
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed",
     "test:e2e:ui": "playwright test --ui",
