@@ -195,7 +195,7 @@ test.describe("Segmented fast-lane capture", () => {
         .getByRole("alertdialog")
         .getByRole("button", { name: "End meeting" })
         .click();
-      await expect(page.getByText("Meeting complete")).toBeVisible({ timeout: 30_000 });
+      await expect(page.getByText("Meeting recap")).toBeVisible({ timeout: 30_000 });
 
       // The seg-0 transcribe POST fired the moment recording stopped; the recap
       // region is now mounted, so let the segment finish and the fast lane turn

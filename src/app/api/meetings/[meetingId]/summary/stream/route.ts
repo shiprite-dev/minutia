@@ -1,11 +1,11 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { requireAiAccess } from "@/lib/ai/access";
-import { hasAiConfigured } from "@/lib/ai/config";
+import { getAiConfig } from "@/lib/ai/config";
 import { streamAi } from "@/lib/ai/stream";
 import { paceWords } from "@/lib/ai/word-pacer";
 import { SUMMARY_SYSTEM_PROMPT, buildSummaryPrompt } from "@/lib/summary/prompt";
-import { formatSseFrame, SSE_DONE, SSE_HEARTBEAT } from "@/lib/summary/sse";
+import { formatSseFrame, formatSseMeta, SSE_DONE, SSE_HEARTBEAT } from "@/lib/summary/sse";
 import { assembleFastTranscript } from "@/lib/transcription/fast-lane";
 
 export const runtime = "nodejs";
@@ -19,9 +19,11 @@ export async function POST(
   const aiDenied = await requireAiAccess();
   if (aiDenied) return aiDenied;
 
-  if (!(await hasAiConfigured())) {
+  const aiConfig = await getAiConfig();
+  if (!aiConfig) {
     return NextResponse.json({ error: "AI recap is not configured." }, { status: 503 });
   }
+  const model = aiConfig.model;
 
   const supabase = await createClient();
   const { data: meeting, error } = await supabase
@@ -72,6 +74,7 @@ export async function POST(
   const stream = new ReadableStream({
     async start(controller) {
       controller.enqueue(encoder.encode(SSE_HEARTBEAT));
+      controller.enqueue(encoder.encode(formatSseMeta(model)));
       try {
         const deltas = streamAi({
           system: SUMMARY_SYSTEM_PROMPT,
@@ -100,6 +103,7 @@ export async function POST(
       "Cache-Control": "no-cache, no-transform",
       Connection: "keep-alive",
       "X-Accel-Buffering": "no",
+      "x-summary-model": model,
     },
   });
 }

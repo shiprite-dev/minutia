@@ -180,7 +180,7 @@ test.describe("Transcription pipeline", () => {
       await page.waitForTimeout(3000);
       await page.getByRole("button", { name: "End meeting" }).click();
       await page.getByRole("alertdialog").getByRole("button", { name: "End meeting" }).click();
-      await expect(page.getByText("Meeting complete")).toBeVisible({ timeout: 30_000 });
+      await expect(page.getByText("Meeting recap")).toBeVisible({ timeout: 30_000 });
 
       await expect
         .poll(

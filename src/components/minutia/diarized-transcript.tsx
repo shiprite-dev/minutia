@@ -40,6 +40,7 @@ function displayName(label: string, speakerMap?: Record<string, string | null>):
 interface Turn {
   speaker: string;
   text: string;
+  start: number;
 }
 
 /** Merge consecutive same-speaker segments into one visual turn (read as a conversation, not a segment dump). */
@@ -52,10 +53,18 @@ function mergeTurns(segments: TranscriptionSegmentRow[]): Turn[] {
     if (last && last.speaker === s.speaker) {
       last.text += ` ${text}`;
     } else {
-      turns.push({ speaker: s.speaker, text });
+      turns.push({ speaker: s.speaker, text, start: s.start });
     }
   }
   return turns;
+}
+
+/** mm:ss timestamp for a turn's first segment. */
+function formatTimestamp(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds < 0) return "0:00";
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60);
+  return `${m}:${String(s).padStart(2, "0")}`;
 }
 
 function SpeakerChip({
@@ -153,22 +162,30 @@ export function DiarizedTranscript({
   const turns = React.useMemo(() => mergeTurns(segments), [segments]);
 
   return (
-    <ol className="animate-in fade-in space-y-2.5 duration-300">
+    <ol className="animate-in fade-in space-y-4 duration-300">
       {turns.map((turn, i) => {
         const colorClass = colorForSpeaker(turn.speaker, order);
         const name = displayName(turn.speaker, speakerMap);
         return (
-          <li key={i} className="flex items-start gap-2 text-sm leading-relaxed">
-            {canEdit && onRenameSpeaker ? (
-              <SpeakerChip
-                label={turn.speaker}
-                name={name}
-                colorClass={colorClass}
-                onRename={(next) => onRenameSpeaker(turn.speaker, next)}
-              />
-            ) : (
-              <span className={cn(CHIP_BASE, colorClass)}>{name}</span>
-            )}
+          <li
+            key={i}
+            className="grid grid-cols-[7rem_1fr] items-start gap-x-3 gap-y-1 text-sm leading-relaxed sm:grid-cols-[9rem_1fr]"
+          >
+            <div className="flex flex-col items-start gap-1">
+              {canEdit && onRenameSpeaker ? (
+                <SpeakerChip
+                  label={turn.speaker}
+                  name={name}
+                  colorClass={colorClass}
+                  onRename={(next) => onRenameSpeaker(turn.speaker, next)}
+                />
+              ) : (
+                <span className={cn(CHIP_BASE, colorClass)}>{name}</span>
+              )}
+              <span className="pl-1 font-mono text-[10px] tabular-nums text-ink-4">
+                {formatTimestamp(turn.start)}
+              </span>
+            </div>
             <span className="mt-0.5 text-ink-2">{turn.text}</span>
           </li>
         );
