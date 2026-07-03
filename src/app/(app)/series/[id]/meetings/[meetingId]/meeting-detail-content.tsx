@@ -1499,6 +1499,9 @@ export function MeetingDetailContent({
   // recap); otherwise headings degrade to unnumbered per the design constraint.
   const logNumber = canManageMeeting ? "02" : undefined;
   const transcriptNumber = canManageMeeting ? "03" : undefined;
+  const hasDiarizedTranscript = !!(
+    meeting?.transcript_diarized && meeting.transcript_segments?.length
+  );
 
   return (
     <div className="min-h-full bg-paper">
@@ -1906,7 +1909,7 @@ export function MeetingDetailContent({
               </span>
             )}
             <span className="font-display text-xl font-semibold text-ink">Transcript</span>
-            {transcript.trim() && (
+            {!hasDiarizedTranscript && transcript.trim() && (
               <span className="font-mono text-[11px] tabular-nums text-ink-4">
                 {transcript.length} chars
               </span>
@@ -1916,14 +1919,16 @@ export function MeetingDetailContent({
               className={`size-4 shrink-0 self-center text-ink-3 transition-transform ${transcriptOpen ? "rotate-180" : ""}`}
             />
           </button>
-          <p className="mt-2 text-xs text-ink-4">
-            Paste a meeting transcript to power AI notes and suggestions.
-          </p>
+          {!hasDiarizedTranscript && !transcript.trim() && (
+            <p className="mt-2 text-xs text-ink-4">
+              Paste a meeting transcript to power AI notes and suggestions.
+            </p>
+          )}
           {transcriptOpen && (
-            meeting?.transcript_diarized && meeting.transcript_segments?.length ? (
+            hasDiarizedTranscript ? (
               <div className="mt-3">
                 <DiarizedTranscript
-                  segments={meeting.transcript_segments}
+                  segments={meeting?.transcript_segments ?? []}
                   speakerMap={meeting.speaker_map ?? undefined}
                   canEdit={canManageMeeting}
                   onRenameSpeaker={patchSpeaker}
