@@ -153,6 +153,10 @@ Minutia works with zero AI, recording, or calendar; the data model is AI-ready a
 
 Self-hosters bring their own key: set `OPENROUTER_API_KEY` (or an OpenAI-compatible key) in your environment to enable AI, or leave it unset to run fully AI-free.
 
+## Desktop companion (macOS)
+
+[Minutia Desktop](https://github.com/shiprite-dev/minutia-desktop) is a native menu bar app that records meetings straight from your Mac: native mic + system audio capture (no bot joining the call), live segment upload so the recap starts flowing within seconds of hanging up, automatic detection of meetings already in progress, and action items extracted straight into the OIL. Until it first connects, live meetings show a "For the best experience..." card prompting the install; connecting is a one-click browser authorization back to your instance, no separate account or password entry in the app.
+
 ## Roadmap
 
 ### Planned
