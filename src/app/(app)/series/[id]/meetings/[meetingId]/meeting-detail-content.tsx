@@ -19,6 +19,8 @@ import {
   useUpdateSpeakerMap,
 } from "@/lib/hooks/use-meetings";
 import { useSeriesDetail, useSeriesParticipantRole } from "@/lib/hooks/use-series";
+import { useProfile } from "@/lib/hooks/use-profile";
+import { CompanionInstallPrompt } from "@/components/minutia/companion-install-prompt";
 import { useIssues, useCreateIssue, useUpdateIssueStatus, useUpdateIssue, useAssignIssue, issueKeys } from "@/lib/hooks/use-issues";
 import { useCreateDecision, decisionKeys } from "@/lib/hooks/use-decisions";
 import { SyncIndicator } from "@/components/minutia/sync-indicator";
@@ -606,6 +608,7 @@ export function MeetingDetailContent({
   const { data: meeting, isLoading: meetingLoading } = useMeeting(meetingId);
   const { data: series } = useSeriesDetail(seriesId);
   const { data: participantRole } = useSeriesParticipantRole(seriesId);
+  const { data: profile } = useProfile();
   const { data: seriesIssues } = useIssues(seriesId);
 
   // MIN-121: resolve an OIL number to its issue link so a context badge
@@ -1226,6 +1229,9 @@ export function MeetingDetailContent({
             </div>
           </div>
         </div>
+
+        {/* Companion app install nudge */}
+        <CompanionInstallPrompt lastSeenAt={profile?.companion_last_seen_at} />
 
         {/* Two-column layout */}
         <div className="mx-auto max-w-7xl px-6 py-6 flex gap-6">
