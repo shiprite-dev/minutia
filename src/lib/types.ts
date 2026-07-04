@@ -29,6 +29,7 @@ export interface Profile {
   has_completed_onboarding: boolean;
   current_organization_id: string | null;
   has_full_access: boolean;
+  companion_last_seen_at: string | null;
   created_at: Date;
   updated_at: Date;
 }
