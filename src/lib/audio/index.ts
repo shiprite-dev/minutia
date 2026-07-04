@@ -94,6 +94,28 @@ export function formatRecordingDuration(totalSeconds: number): string {
     : `${pad(minutes)}:${pad(seconds)}`;
 }
 
+/**
+ * Turn a getUserMedia failure into a specific, actionable message. The DOMException
+ * `name` distinguishes a real permission denial from a device that is missing or held
+ * by another app, so we never tell a user "access denied" when they already granted it.
+ */
+export function micErrorMessage(err: unknown): string {
+  const name = err instanceof Error ? err.name : "";
+  switch (name) {
+    case "NotAllowedError":
+    case "SecurityError":
+      return "Microphone access was denied. Allow it for this site in your browser, then press Record again.";
+    case "NotReadableError":
+    case "AbortError":
+      return "Your microphone is in use by another app. Close it (Zoom, the Minutia companion, another tab), then press Record again.";
+    case "NotFoundError":
+    case "OverconstrainedError":
+      return "No microphone was found. Connect one, then press Record again.";
+    default:
+      return "Could not start the microphone. Check your browser's microphone settings and try again.";
+  }
+}
+
 export interface UploadMeetingAudioParams {
   meetingId: string;
   blob: Blob;

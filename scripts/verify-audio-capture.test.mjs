@@ -29,6 +29,7 @@ const {
   audioStoragePath,
   formatRecordingDuration,
   uploadMeetingAudio,
+  micErrorMessage,
 } = await import(pathToFileURL(bundled).href);
 
 function read(rel) {
@@ -329,4 +330,29 @@ test("live meeting view wires the recorder, indicator, and upload-on-end", () =>
 test("seed user has full access so gated capture is reachable in E2E", () => {
   const seed = read("supabase/seed.sql");
   assert.ok(seed.includes("has_full_access"), "seed must set has_full_access for the test user");
+});
+
+test("micErrorMessage distinguishes denial from busy, missing, and unknown", () => {
+  const denied = micErrorMessage(Object.assign(new Error("x"), { name: "NotAllowedError" }));
+  assert.match(denied, /denied/i, "NotAllowedError must read as a permission denial");
+
+  const busy = micErrorMessage(Object.assign(new Error("x"), { name: "NotReadableError" }));
+  assert.match(busy, /in use by another app/i, "NotReadableError must say the device is busy");
+  assert.doesNotMatch(busy, /denied/i, "a busy device must not be reported as denied");
+
+  const missing = micErrorMessage(Object.assign(new Error("x"), { name: "NotFoundError" }));
+  assert.match(missing, /no microphone/i, "NotFoundError must say no microphone was found");
+
+  const unknown = micErrorMessage(new Error("boom"));
+  assert.match(unknown, /could not start the microphone/i, "unknown errors get a generic retry message");
+  assert.doesNotMatch(unknown, /denied/i, "an unknown failure must not be reported as denied");
+});
+
+test("recorder hook uses micErrorMessage, not a hardcoded denial string", () => {
+  const hook = read("src/lib/hooks/use-meeting-recorder.ts");
+  assert.ok(hook.includes("micErrorMessage(err)"), "hook must classify the getUserMedia error");
+  assert.ok(
+    !hook.includes('"Microphone access was denied."'),
+    "hook must not hardcode the denial message for every failure"
+  );
 });

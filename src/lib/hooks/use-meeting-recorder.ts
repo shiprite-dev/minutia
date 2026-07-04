@@ -7,6 +7,7 @@ import {
   audioContentType,
   isRecordingSupported,
   MEETING_AUDIO_BUCKET,
+  micErrorMessage,
   pickAudioMimeType,
 } from "@/lib/audio";
 import {
@@ -134,8 +135,8 @@ export function useMeetingRecorder(meetingId: string): MeetingRecorder {
     let stream: MediaStream;
     try {
       stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    } catch {
-      setError("Microphone access was denied.");
+    } catch (err) {
+      setError(micErrorMessage(err));
       setState("idle");
       return;
     }
