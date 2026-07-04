@@ -356,3 +356,13 @@ test("recorder hook uses micErrorMessage, not a hardcoded denial string", () => 
     "hook must not hardcode the denial message for every failure"
   );
 });
+
+test("meeting-audio allow-list admits the macOS companion's m4a mime", () => {
+  // supabase-swift uploads .m4a as "audio/x-m4a" (from the extension, overriding
+  // an explicit audio/mp4), so the bucket must accept it or every companion
+  // upload 415s. Regression guard for the live-caught storage rejection.
+  assert.ok(
+    migrations.includes("audio/x-m4a"),
+    "meeting-audio allow-list must include audio/x-m4a for companion uploads"
+  );
+});
