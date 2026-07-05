@@ -128,6 +128,9 @@ jobs:
       - name: Companion ingest contracts
         run: pnpm test:companion-ingest
 
+      - name: Self-host migration wiring
+        run: pnpm test:self-host
+
       - name: Build (includes typecheck)
         run: pnpm build
         env:

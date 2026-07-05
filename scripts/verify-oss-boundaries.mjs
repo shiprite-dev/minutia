@@ -1,4 +1,5 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { execSync } from "node:child_process";
 import assert from "node:assert/strict";
 
 // Self-host integrity check.
@@ -123,6 +124,30 @@ for (const file of [...sourceFiles("src"), ...sourceFiles("e2e")]) {
       `${m[1]}/minutia`,
       CANONICAL_REPO,
       `${file} links github.com/${m[1]}/minutia; canonical repo is github.com/${CANONICAL_REPO}`
+    );
+  }
+}
+
+// No private sibling-repo names or internal architecture terms may leak into
+// the public tree. This check was added because a private repo name once slipped
+// into a committed migration comment: the integrity checks above assert what
+// SHOULD exist but never scanned for what MUST NOT. Scan every tracked text file.
+const forbiddenLeaks = [
+  [/minutia-(?:ops|cloud|hosted|gtm)\b/i, "a private sibling-repo name"],
+  [/control[\s-]plane/i, "the internal 'control plane' architecture term"],
+];
+const scanExtensions = /\.(tsx?|mjs|js|sql|md|ya?ml|sh|css)$/;
+const selfPath = "scripts/verify-oss-boundaries.mjs";
+const trackedFiles = execSync("git ls-files", { encoding: "utf8" })
+  .split("\n")
+  .filter((f) => f && f !== selfPath && scanExtensions.test(f));
+for (const file of trackedFiles) {
+  if (!existsSync(file)) continue;
+  const contents = readFileSync(file, "utf8");
+  for (const [pattern, label] of forbiddenLeaks) {
+    assert.ok(
+      !pattern.test(contents),
+      `${file} leaks ${label}; keep private-repo details out of the public repo`,
     );
   }
 }

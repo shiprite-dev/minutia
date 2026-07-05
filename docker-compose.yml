@@ -23,6 +23,8 @@ services:
         NEXT_PUBLIC_ENABLE_MAGIC_LINK: ${NEXT_PUBLIC_ENABLE_MAGIC_LINK:-false}
         NEXT_PUBLIC_ENABLE_GOOGLE_AUTH: ${NEXT_PUBLIC_ENABLE_GOOGLE_AUTH:-false}
         NEXT_PUBLIC_ENABLE_GUEST_LOGIN: ${NEXT_PUBLIC_ENABLE_GUEST_LOGIN:-false}
+        NEXT_PUBLIC_FEATURE_GATING: ${NEXT_PUBLIC_FEATURE_GATING:-false}
+        NEXT_PUBLIC_MANAGED_CLOUD: ${NEXT_PUBLIC_MANAGED_CLOUD:-false}
     restart: unless-stopped
     ports:
       - "${WEB_BIND:-0.0.0.0}:${WEB_PORT:-3000}:3000"
@@ -59,6 +61,8 @@ services:
     depends_on:
       supabase-kong:
         condition: service_healthy
+      supabase-migrate:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:3000/setup"]
       interval: 30s
@@ -272,6 +276,34 @@ services:
       resources:
         limits:
           memory: 1G
+
+  # ---- Minutia: apply the app schema (one-shot) ----
+  # Runs after GoTrue has created the auth schema (auth.users), which the app
+  # migrations reference, then exits. Idempotent: it records applied versions
+  # and skips them, so it also applies new migrations on every later `up`.
+  # minutia-web waits for this to finish before serving, so a fresh
+  # `docker compose up -d` yields a fully migrated, working database.
+  supabase-migrate:
+    image: supabase/postgres:15.6.1.143
+    restart: "no"
+    depends_on:
+      supabase-auth:
+        condition: service_healthy
+      supabase-storage:
+        condition: service_healthy
+    environment:
+      PGHOST: supabase-db
+      PGPASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_USER: postgres
+      POSTGRES_DB: ${POSTGRES_DB:-minutia}
+    volumes:
+      - ./scripts/run-self-host-migrations.sh:/run-migrations.sh:ro
+      - ./supabase/migrations:/migrations:ro
+    entrypoint: ["bash", "/run-migrations.sh"]
+    deploy:
+      resources:
+        limits:
+          memory: 256M
 
 volumes:
   db-data:
