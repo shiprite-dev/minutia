@@ -10,8 +10,8 @@
 --     absent / 'false' (default) -> single-workspace self-host
 --     'true'                     -> multi-workspace, public self-serve signup
 --
--- The hosted deploy (minutia-ops "Deploy Minutia VPS", hosted_mode=true) sets
--- instance_config.hosted_mode='true'; this repo ships the neutral default
+-- A hosted deployment sets instance_config.hosted_mode='true'; this repo ships
+-- the neutral default
 -- (absent = single-workspace). Mirrors the retro_enabled / feature-gating seams.
 -- NOTE: 'hosted_mode' is the existing deploy contract key; this seam is its
 -- first consumer (it was previously written but unread).
