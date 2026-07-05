@@ -5,7 +5,7 @@ Thank you for your interest in contributing to Minutia. This guide covers everyt
 ## Prerequisites
 
 - Node.js 22+
-- pnpm 9+
+- pnpm 10+
 - Docker (for local Supabase database)
 - Supabase CLI (optional, for migration management)
 

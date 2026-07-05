@@ -283,7 +283,7 @@ test.describe("Organization RBAC and workspace routes", () => {
   test("multi-workspace mode allows additional workspaces and self-serve signup", async ({
     request,
   }) => {
-    // The hosted control plane flips this flag; self-host leaves it off. With it
+    // A hosted deployment flips this flag; self-host leaves it off. With it
     // on, the single-workspace guard lifts and uninvited signups self-provision.
     const secondOrgId = crypto.randomUUID();
     const selfEmail = `self-signup-${Date.now()}@example.com`;

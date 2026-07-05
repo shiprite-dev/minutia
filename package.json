@@ -40,6 +40,7 @@
     "lint": "eslint",
     "deploy:env": "node scripts/generate-self-host-env.mjs",
     "test:oss-boundaries": "node scripts/verify-oss-boundaries.mjs",
+    "test:self-host": "node --test scripts/verify-self-host-migrations.test.mjs",
     "test:runtime-config": "node --test scripts/verify-runtime-config.test.mjs",
     "test:query-contracts": "node scripts/verify-query-contracts.mjs",
     "test:ci-workflows": "node scripts/verify-ci-playwright-shards.mjs",

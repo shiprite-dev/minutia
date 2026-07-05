@@ -84,6 +84,8 @@ Connect Google Calendar for read-only calendar sync, manage your profile, choose
 
 ### Self-Hosted (free forever)
 
+Requires **Docker and Docker Compose v2** (Docker Desktop 4.x, or Docker Engine 24+ with the Compose plugin). Nothing else to install.
+
 ```bash
 git clone https://github.com/shiprite-dev/minutia.git
 cd minutia
@@ -91,11 +93,19 @@ pnpm deploy:env
 docker compose up -d
 ```
 
+The first `docker compose up -d` applies the full database schema automatically before the app starts serving, so on a fresh box give it a minute. Watch progress with `docker compose logs -f supabase-migrate`; it exits when the database is ready.
+
 Open [http://localhost:3000/setup](http://localhost:3000/setup). Enter the `MINUTIA_SETUP_TOKEN` written to `.env`, create the first admin account, optionally seed demo data, then sign in.
 
-For a real domain, generate env with explicit public URLs: `pnpm deploy:env -- --site-url https://minutia.example.com --api-url https://api.example.com`.
+For a real domain, generate env with explicit public URLs: `pnpm deploy:env -- --site-url https://minutia.example.com --api-url https://api.example.com`. By default the app and API gateway bind to `127.0.0.1` (nothing is exposed to the network); to serve a domain, run a TLS-terminating reverse proxy in front of the app and set `WEB_BIND` and `KONG_BIND` to `0.0.0.0` in `.env` so the proxy can reach the containers.
 
 Self-hosted Minutia uses one workspace per instance. The first admin manages that workspace and invites additional users from Settings. Public signup is disabled by default; if you explicitly enable it, new users join the existing workspace as members.
+
+**Back up your data.** Everything lives in two named Docker volumes: `minutia-db-data` (Postgres) and `minutia-storage-data` (uploaded audio). Snapshot the database anytime with:
+
+```bash
+docker exec minutia-supabase-db-1 pg_dump -U postgres minutia > minutia-backup.sql
+```
 
 ### Development
 
@@ -122,6 +132,12 @@ Minutia has two onboarding layers:
 - **User onboarding** is per user. Any signed-in user with `profiles.has_completed_onboarding = false` sees the three-step onboarding wizard: confirm display name, optionally create a first meeting series, then review a quick product tour. Completing or skipping it updates only that user's profile.
 
 The current tour is a lightweight checklist inside onboarding, not a persistent guided overlay. Keyboard shortcuts remain available from `?` after onboarding.
+
+### Troubleshooting
+
+- **`/setup` reports a database error on a fresh install** - the schema is still being applied. Watch the one-time migration step with `docker compose logs -f supabase-migrate` (it exits when done), then reload.
+- **Port already in use** - another process holds `3000` or `8000`. Set `WEB_PORT` / `KONG_HTTP_PORT` in `.env` and re-run `docker compose up -d`.
+- **App loads but new accounts can't sign in** - email is optional; without SMTP configured, set `ENABLE_EMAIL_AUTOCONFIRM=true` in `.env` so accounts are confirmed without an email round-trip.
 
 ## Who Is This For?
 
@@ -153,9 +169,15 @@ Minutia works with zero AI, recording, or calendar; the data model is AI-ready a
 
 Self-hosters bring their own key: set `OPENROUTER_API_KEY` (or an OpenAI-compatible key) in your environment to enable AI, or leave it unset to run fully AI-free.
 
-## Desktop companion (macOS)
+## Capture the meeting, no bot in the room
 
-[Minutia Desktop](https://github.com/shiprite-dev/minutia-desktop) is a native menu bar app that records meetings straight from your Mac: native mic + system audio capture (no bot joining the call), live segment upload so the recap starts flowing within seconds of hanging up, automatic detection of meetings already in progress, and action items extracted straight into the OIL. Until it first connects, live meetings show a "For the best experience..." card prompting the install; connecting is a one-click browser authorization back to your instance, no separate account or password entry in the app.
+Some conversations you want captured word for word. [Minutia Desktop](https://github.com/shiprite-dev/minutia-desktop) is a native macOS menu bar app that records the meeting the moment it starts, your microphone and the room's system audio both, whether you're on Zoom, Teams, Meet, or sitting across a table. Nothing joins the call: no recording bot in the participant list, no extra service in the middle of your conversation.
+
+It notices when a call begins and offers to record with a single click. Audio uploads while you're still talking, so your recap is already writing itself seconds after you say goodbye, and the commitments people made land straight in your Outstanding Issues Log, each with an owner and a due date.
+
+Pairing takes one click from the browser: no separate account, no password to type into yet another app. And because you self-host, the recording never leaves your infrastructure. It's discarded the instant it's transcribed, unless you choose to keep it.
+
+**[Get Minutia Desktop](https://github.com/shiprite-dev/minutia-desktop)** (macOS, free and open source)
 
 ## Roadmap
 
