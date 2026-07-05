@@ -29,7 +29,7 @@ export const metadata: Metadata = {
     template: "%s | Minutia",
   },
   description:
-    "The open-source meeting memory system. Track outstanding issues, decisions, and action items across recurring meetings.",
+    "The open-source Outstanding Issues Log for recurring meetings. Track outstanding issues, decisions, and action items across every meeting.",
   icons: {
     icon: { url: "/icon.svg", type: "image/svg+xml" },
     apple: "/icon.svg",
