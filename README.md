@@ -84,16 +84,22 @@ Connect Google Calendar for read-only calendar sync, manage your profile, choose
 
 ### Self-Hosted (free forever)
 
-Requires **Docker and Docker Compose v2** (Docker Desktop 4.x, or Docker Engine 24+ with the Compose plugin). Nothing else to install.
+Requires **Docker and Docker Compose v2** (Docker Desktop 4.x, or Docker Engine 24+ with the Compose plugin).
 
 ```bash
 git clone https://github.com/shiprite-dev/minutia.git
 cd minutia
-pnpm deploy:env
+pnpm deploy:env          # or: node scripts/generate-self-host-env.mjs
 docker compose up -d
 ```
 
-The first `docker compose up -d` applies the full database schema automatically before the app starts serving, so on a fresh box give it a minute. Watch progress with `docker compose logs -f supabase-migrate`; it exits when the database is ready.
+`deploy:env` writes a `.env` with freshly generated secrets and a one-time setup token. It runs on Node or pnpm; if you have neither, generate it with Docker instead:
+
+```bash
+docker run --rm -v "$PWD":/app -w /app node:22-alpine node scripts/generate-self-host-env.mjs
+```
+
+`docker compose up -d` builds and serves the production app (`node server.js`). The first run also applies the full database schema before the app starts serving, so on a fresh box give it a minute. Watch progress with `docker compose logs -f supabase-migrate`; it exits when the database is ready.
 
 Open [http://localhost:3000/setup](http://localhost:3000/setup). Enter the `MINUTIA_SETUP_TOKEN` written to `.env`, create the first admin account, optionally seed demo data, then sign in.
 
@@ -120,6 +126,12 @@ npx supabase start
 
 # Start dev server
 pnpm dev
+```
+
+Prefer to run everything in Docker with hot reload? Load the opt-in dev overlay on top of the production stack (it swaps the web container to the Next.js dev server with a source mount and exposes Postgres on the host):
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up
 ```
 
 For local development, visit `/setup` first when `instance_config.setup_completed` is false. In production, setup is protected by `MINUTIA_SETUP_TOKEN`.

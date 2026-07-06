@@ -1,13 +1,15 @@
 # =============================================================================
-# Development overrides for Minutia
+# Development overrides for Minutia (OPT-IN, not auto-loaded)
 #
-# This file is automatically loaded by `docker compose up` alongside
-# docker-compose.yml. It adds:
-#   - Source volume mount for Next.js hot reload
-#   - Direct Postgres port access for database tools
+# The default `docker compose up -d` runs the production build (node server.js).
+# Load these dev overrides explicitly to get hot reload instead:
 #
-# To run production-only (without these overrides):
-#   docker compose -f docker-compose.yml up -d
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+#
+# They swap the web container to the Next.js dev server with a source mount and
+# expose Postgres on the host for database tools. Never use them in production:
+# the dev server is slower, and the exposed Postgres port is unauthenticated
+# beyond its password.
 # =============================================================================
 
 services:
