@@ -10,12 +10,14 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const compose = readFileSync(join(root, "docker-compose.yml"), "utf8");
+const kongTemplate = readFileSync(join(root, "docker", "kong.yml"), "utf8");
+const migrateScript = readFileSync(join(root, "scripts", "run-self-host-migrations.sh"), "utf8");
 
 // Slice a top-level (2-space indented) service block out of the compose file.
 function serviceBlock(name) {
@@ -63,5 +65,81 @@ test("web waits for migrations to finish before it serves", () => {
     block,
     /supabase-migrate:\s*\n\s*condition:\s*service_completed_successfully/,
     "minutia-web must depend on supabase-migrate: service_completed_successfully",
+  );
+});
+
+// The default `docker compose up -d` must run the PRODUCTION build. A dev overlay
+// named docker-compose.override.yml auto-loads and silently swaps the web app to
+// `pnpm dev` (Next.js dev server) built from the `deps` stage, and exposes Postgres
+// to the host. The dev overlay must be opt-in (docker-compose.dev.yml), never the
+// auto-loaded override.
+test("no auto-loaded dev override; the dev overlay is opt-in", () => {
+  assert.ok(
+    !existsSync(join(root, "docker-compose.override.yml")),
+    "docker-compose.override.yml auto-loads on `docker compose up` and forces dev mode; rename it to docker-compose.dev.yml (opt-in)",
+  );
+  const dev = join(root, "docker-compose.dev.yml");
+  assert.ok(existsSync(dev), "docker-compose.dev.yml (opt-in dev overlay) is missing");
+  assert.match(readFileSync(dev, "utf8"), /pnpm.*dev|next dev/, "the dev overlay should be the one that runs the dev server");
+});
+
+test("the default web service builds and serves production, not the dev server", () => {
+  const block = serviceBlock("minutia-web");
+  assert.doesNotMatch(block, /target:\s*deps/, "minutia-web must not build the deps-only stage by default");
+  assert.doesNotMatch(block, /command:\s*\[?\s*["']?pnpm/, "minutia-web must not override the command to pnpm dev by default");
+});
+
+// Kong's declarative config is a template with ${ANON_KEY}/${SERVICE_ROLE_KEY}
+// placeholders. Nothing but the container entrypoint substitutes them; if that is
+// dropped, key-auth registers the literal placeholders and every API call (auth,
+// REST, storage) fails with "Invalid authentication credentials".
+test("kong substitutes the real API keys into its config at startup", () => {
+  const block = serviceBlock("supabase-kong");
+  assert.ok(block, "supabase-kong service is missing from docker-compose.yml");
+  assert.match(block, /entrypoint:/, "supabase-kong needs an entrypoint that substitutes the key template");
+  assert.match(block, /cat\s+\/home\/kong\/template\.yml/, "supabase-kong entrypoint must render the mounted key template");
+  assert.match(block, /KONG_DECLARATIVE_CONFIG:\s*\/home\/kong\/kong\.yml/, "KONG_DECLARATIVE_CONFIG must point at the rendered file");
+  assert.match(block, /ANON_KEY:\s*\$\{ANON_KEY\}/, "supabase-kong must receive ANON_KEY so the template can expand it");
+  assert.match(block, /SERVICE_ROLE_KEY:\s*\$\{SERVICE_ROLE_KEY\}/, "supabase-kong must receive SERVICE_ROLE_KEY");
+});
+
+test("kong.yml is a placeholder template safe for shell substitution", () => {
+  assert.match(kongTemplate, /\$\{ANON_KEY\}/, "kong.yml must keep the ${ANON_KEY} placeholder");
+  assert.match(kongTemplate, /\$\{SERVICE_ROLE_KEY\}/, "kong.yml must keep the ${SERVICE_ROLE_KEY} placeholder");
+  assert.ok(!kongTemplate.includes('"'), 'kong.yml must not contain double quotes (they break the eval "echo ..." substitution)');
+});
+
+// The self-host psql migrate path does not inherit Supabase's platform default
+// privileges, so without them most tables are unreachable by the API roles (42501
+// permission denied) and setup fails on a fresh box. They must be set BEFORE the
+// migration loop (matching the platform) so each migration's own hardening REVOKE
+// (profiles role columns, retro facilitator-token helpers) stays the final word. A
+// blanket GRANT ... ON ALL after the loop silently re-opens those holes.
+test("migrate script default-grants the API roles before migrations, preserving hardening", () => {
+  assert.match(
+    migrateScript,
+    /ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO anon, authenticated, service_role/,
+    "must set default table privileges for the API roles",
+  );
+  assert.match(
+    migrateScript,
+    /ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT EXECUTE ON FUNCTIONS TO anon, authenticated, service_role/,
+    "must set default function privileges for the API roles",
+  );
+  assert.match(
+    migrateScript,
+    /minutia_migrations ENABLE ROW LEVEL SECURITY/,
+    "the internal ledger must be default-deny",
+  );
+  const defaultPrivIdx = migrateScript.indexOf("ALTER DEFAULT PRIVILEGES");
+  const loopIdx = migrateScript.indexOf("for f in /migrations");
+  assert.ok(
+    defaultPrivIdx !== -1 && loopIdx !== -1 && defaultPrivIdx < loopIdx,
+    "ALTER DEFAULT PRIVILEGES must run BEFORE the migration loop, or hardening REVOKEs get clobbered",
+  );
+  assert.doesNotMatch(
+    migrateScript,
+    /GRANT (ALL|EXECUTE) ON ALL (TABLES|FUNCTIONS) IN SCHEMA public/,
+    "must not blanket-GRANT ON ALL after migrations; it re-opens hardening REVOKEs (role escalation, token leak)",
   );
 });
