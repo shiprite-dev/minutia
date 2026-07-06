@@ -13,6 +13,26 @@ CREATE TABLE IF NOT EXISTS public.minutia_migrations (
   version text PRIMARY KEY,
   applied_at timestamptz NOT NULL DEFAULT now()
 );
+-- Internal ledger: created before the default privileges below, so it is never
+-- granted to the API roles; RLS-on/no-policy keeps it default-deny either way.
+ALTER TABLE public.minutia_migrations ENABLE ROW LEVEL SECURITY;
+
+-- Self-host only: grant the API roles PostgREST SET ROLEs into (anon, authenticated,
+-- service_role) so migration-created tables are reachable; without this most tables
+-- return 42501 permission denied and setup fails. docker/init/00000_supabase_roles.sh
+-- sets the same defaults at cluster init, BUT ALTER DEFAULT PRIVILEGES is keyed to the
+-- role that creates the object, and these migrations run as POSTGRES_USER (a different
+-- role than init's), so init's defaults do not cover them -- observed as only a handful
+-- of the app tables being granted. Re-assert the defaults for POSTGRES_USER here.
+-- It MUST run before the migration loop, never as a blanket GRANT ... ON ALL after it:
+-- setting defaults up front lets each migration's own REVOKE stay the final word (the
+-- profiles role-column lockdown, the retro facilitator-token helpers). Row access stays
+-- governed by RLS, enabled on every table; service_role bypasses RLS by design.
+-- (ON ROUTINES in init == ON FUNCTIONS here for EXECUTE; not a divergence.)
+GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO anon, authenticated, service_role;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO anon, authenticated, service_role;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT EXECUTE ON FUNCTIONS TO anon, authenticated, service_role;
 SQL
 
 for f in /migrations/*.sql; do

@@ -7,8 +7,9 @@
 #   2. docker compose up -d
 #   3. Open http://localhost:3000/setup
 #
-# For development, the docker-compose.override.yml adds hot reload
-# and exposes Postgres directly.
+# This is the production stack: `docker compose up -d` runs the built app.
+# For hot-reload development, add the opt-in overlay:
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up
 # =============================================================================
 
 services:
@@ -78,18 +79,28 @@ services:
   supabase-kong:
     image: kong:2.8.1
     restart: unless-stopped
+    # The declarative config is a template with ${ANON_KEY}/${SERVICE_ROLE_KEY}
+    # placeholders. Substitute the real generated keys into it at startup, then
+    # boot Kong; otherwise key-auth registers the literal placeholders and rejects
+    # every API request (auth, REST, storage) with "Invalid authentication credentials".
+    entrypoint:
+      - bash
+      - -c
+      - 'eval "echo \"$$(cat /home/kong/template.yml)\"" > /home/kong/kong.yml && /docker-entrypoint.sh kong docker-start'
     ports:
       - "${KONG_BIND:-0.0.0.0}:${KONG_HTTP_PORT:-8000}:8000/tcp"
     environment:
       KONG_DATABASE: "off"
-      KONG_DECLARATIVE_CONFIG: /var/lib/kong/kong.yml
+      KONG_DECLARATIVE_CONFIG: /home/kong/kong.yml
       KONG_DNS_ORDER: LAST,A,CNAME
       KONG_PLUGINS: request-transformer,cors,key-auth,acl
       KONG_NGINX_WORKER_PROCESSES: 2
       KONG_NGINX_PROXY_PROXY_BUFFER_SIZE: 160k
       KONG_NGINX_PROXY_PROXY_BUFFERS: 64 160k
+      ANON_KEY: ${ANON_KEY}
+      SERVICE_ROLE_KEY: ${SERVICE_ROLE_KEY}
     volumes:
-      - ${KONG_CONFIG:-./docker/kong.yml}:/var/lib/kong/kong.yml:ro
+      - ${KONG_CONFIG:-./docker/kong.yml}:/home/kong/template.yml:ro
     depends_on:
       supabase-auth:
         condition: service_healthy
