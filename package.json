@@ -76,6 +76,7 @@
     "test:retention": "node scripts/verify-retention.test.mjs",
     "test:retro": "node --test scripts/verify-retro-contracts.test.mjs",
     "test:proxy": "node --test scripts/verify-proxy-trust.test.mjs",
+    "test:rate-limit": "node --test scripts/verify-rate-limit.test.mjs",
     "test:csv": "node --test scripts/verify-csv-injection.test.mjs",
     "test:calendar-draft": "node --test scripts/verify-calendar-draft.test.mjs",
     "test:errors": "node --test scripts/verify-humanize-error.test.mjs",
