@@ -110,6 +110,9 @@ jobs:
       - name: Verify trusted proxy IP resolution
         run: pnpm test:proxy
 
+      - name: Verify auth rate-limit budgets
+        run: pnpm test:rate-limit
+
       - name: Verify humanized error contract
         run: pnpm test:errors
 

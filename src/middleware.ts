@@ -4,6 +4,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getSupabaseAuthCookieName } from "@/lib/supabase/auth-cookie";
 import { getSupabaseServerUrl } from "@/lib/supabase/url";
 import { getClientIp } from "@/lib/trusted-proxy";
+import { authRateBudget, isRateLimited } from "@/lib/rate-limit";
 import { bearerTokenFromHeader } from "@/lib/supabase/bearer";
 
 const SECURITY_HEADERS: Record<string, string> = {
@@ -66,21 +67,6 @@ async function isSetupCompleted(): Promise<boolean> {
   }
 }
 
-const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
-
-function isRateLimited(ip: string, limit: number, windowMs: number): boolean {
-  const now = Date.now();
-  const entry = rateLimitMap.get(ip);
-
-  if (!entry || now > entry.resetAt) {
-    rateLimitMap.set(ip, { count: 1, resetAt: now + windowMs });
-    return false;
-  }
-
-  entry.count++;
-  return entry.count > limit;
-}
-
 function applySecurityHeaders(response: NextResponse): NextResponse {
   for (const [key, value] of Object.entries(SECURITY_HEADERS)) {
     response.headers.set(key, value);
@@ -126,18 +112,16 @@ export async function middleware(request: NextRequest) {
     }
   }
 
+  const authBudget = authRateBudget(
+    pathname,
+    request.method,
+    process.env.NODE_ENV === "production"
+  );
   if (
-    pathname === "/login" ||
-    pathname === "/signup" ||
-    pathname === "/accept-invite" ||
-    pathname === "/auth/callback" ||
-    pathname === "/reset-password"
+    authBudget &&
+    isRateLimited(`${authBudget.bucket}:${ip}`, authBudget.limit, 60_000)
   ) {
-    // Use a higher limit in development to avoid blocking parallel test workers.
-    const authRateLimit = process.env.NODE_ENV === "production" ? 10 : 200;
-    if (isRateLimited(`auth:${ip}`, authRateLimit, 60_000)) {
-      return new NextResponse("Too Many Requests", { status: 429 });
-    }
+    return new NextResponse("Too Many Requests", { status: 429 });
   }
 
   // Setup guard: redirect to /setup if instance hasn't been configured
