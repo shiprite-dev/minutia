@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
-import { absoluteAppUrl } from "@/lib/app-url";
+import { absoluteAppUrl, toPublicActionLink } from "@/lib/app-url";
 import { escapeHtml, sendMail } from "@/lib/email";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 
@@ -88,13 +88,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  const resetUrl = data.properties?.action_link;
-  if (!resetUrl) {
+  const rawLink = data.properties?.action_link;
+  if (!rawLink) {
     return NextResponse.json(
       { error: "Failed to create password reset link" },
       { status: 500 }
     );
   }
+  const resetUrl = toPublicActionLink(rawLink);
 
   const escapedResetUrl = escapeHtml(resetUrl);
   try {

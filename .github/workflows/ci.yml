@@ -92,6 +92,9 @@ jobs:
       - name: Verify email sender resolution
         run: pnpm test:email-sender
 
+      - name: Verify auth action link rewriting
+        run: pnpm test:auth-links
+
       - name: Verify local date formatting
         run: pnpm test:date
 
