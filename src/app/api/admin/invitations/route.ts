@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
-import { absoluteAppUrl } from "@/lib/app-url";
+import { absoluteAppUrl, toPublicActionLink } from "@/lib/app-url";
 import { sendMail } from "@/lib/email";
 import {
   buildExistingUserOrganizationInviteEmail,
@@ -215,10 +215,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: memberError.message }, { status: 500 });
     }
 
-    const acceptUrl = data.properties?.action_link;
-    if (!acceptUrl) {
+    const rawInviteLink = data.properties?.action_link;
+    if (!rawInviteLink) {
       return NextResponse.json({ error: "Failed to generate invite link" }, { status: 500 });
     }
+    const acceptUrl = toPublicActionLink(rawInviteLink);
 
     const emailMessage = buildNewUserOrganizationInviteEmail({
       organizationName: organization.name,
