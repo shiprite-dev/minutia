@@ -47,6 +47,9 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+# hermetic authz gate — regenerated on every run
+scripts/authz/artifacts/
+
 # internal project management (not for public repo)
 .claude/
 .codex/

@@ -169,6 +169,7 @@ test.describe("Organization RBAC and workspace routes", () => {
           data: { email: invitedEmail, role: "member" },
         });
         expect(res.ok()).toBeTruthy();
+        expect(await res.json()).toMatchObject({ invited: true, delivery: "email" });
 
         const membershipRes = await request.get(
           `${SUPABASE_URL}/rest/v1/organization_members?organization_id=eq.${orgId}&user_id=eq.${invitedUserId}&select=role`,
@@ -433,18 +434,38 @@ test.describe("Organization RBAC and workspace routes", () => {
     expect(res.ok()).toBeFalsy();
   });
 
-  test("admin users page exposes workspace invite UI to organization admins", async ({
+  test("organization admin reaches /admin/users but is kept out of instance admin pages", async ({
     page,
     request,
   }) => {
+    // profiles.role stays "user" (beforeEach); org membership is admin. Workspace
+    // administration is open to org admins; instance administration is not.
     const orgId = await getCurrentOrgId(request);
     await upsertMembership(request, orgId, TEST_USER_ID, "admin");
+
+    await page.goto("/admin/users");
+    await expect(page.getByText("Workspace access")).toBeVisible();
+    await expect(page.getByPlaceholder("teammate@company.com")).toBeVisible();
+
+    // The instance-admin pages redirect an org admin to the page they can use.
+    await page.goto("/admin");
+    await page.waitForURL(/\/admin\/users$/, { timeout: 10000 });
+    await page.goto("/admin/settings");
+    await page.waitForURL(/\/admin\/users$/, { timeout: 10000 });
+  });
+
+  test("instance admin sees every admin section", async ({ page, request }) => {
+    const orgId = await getCurrentOrgId(request);
+    await upsertMembership(request, orgId, TEST_USER_ID, "member");
     await setGlobalRole(request, "admin");
 
     try {
-      await page.goto("/admin/users");
-      await expect(page.getByText("Workspace access")).toBeVisible();
-      await expect(page.getByPlaceholder("teammate@company.com")).toBeVisible();
+      await page.goto("/admin");
+      const adminNav = page.getByRole("navigation", { name: "Admin sections" });
+      await expect(adminNav.getByRole("link", { name: "Overview" })).toBeVisible();
+      await expect(adminNav.getByRole("link", { name: "Settings" })).toBeVisible();
+      await expect(adminNav.getByRole("link", { name: "Users" })).toBeVisible();
+      await expect(adminNav.getByRole("link", { name: "Health" })).toBeVisible();
     } finally {
       await setGlobalRole(request, "user");
     }

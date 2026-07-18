@@ -5,21 +5,22 @@ import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 
 const ADMIN_TABS = [
-  { label: "Overview", href: "/admin" },
-  { label: "Settings", href: "/admin/settings" },
-  { label: "Users", href: "/admin/users" },
-  { label: "Health", href: "/admin/health" },
+  { label: "Overview", href: "/admin", instanceOnly: true },
+  { label: "Settings", href: "/admin/settings", instanceOnly: true },
+  { label: "Users", href: "/admin/users", instanceOnly: false },
+  { label: "Health", href: "/admin/health", instanceOnly: true },
 ] as const;
 
-export function AdminNav() {
+export function AdminNav({ instanceAdmin }: { instanceAdmin: boolean }) {
   const pathname = usePathname();
+  const tabs = ADMIN_TABS.filter((tab) => instanceAdmin || !tab.instanceOnly);
 
   return (
     <nav
       aria-label="Admin sections"
       className="flex items-center gap-1 border-b border-rule"
     >
-      {ADMIN_TABS.map((tab) => {
+      {tabs.map((tab) => {
         const active =
           tab.href === "/admin"
             ? pathname === "/admin"

@@ -18,7 +18,7 @@ export async function requireCurrentOrgAdmin(): Promise<OrgAdminResult> {
   const serviceClient = createServiceRoleClient();
   const { data: profile } = await serviceClient
     .from("profiles")
-    .select("current_organization_id")
+    .select("current_organization_id, role")
     .eq("id", user.id)
     .single();
 
@@ -34,7 +34,8 @@ export async function requireCurrentOrgAdmin(): Promise<OrgAdminResult> {
     .eq("user_id", user.id)
     .single();
 
-  if (membership?.role !== "admin") {
+  const isInstanceAdmin = profile?.role === "admin";
+  if (membership?.role !== "admin" && !isInstanceAdmin) {
     return { authorized: false, status: 403, error: "Organization admin access required" };
   }
 
