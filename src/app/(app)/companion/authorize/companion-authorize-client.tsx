@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { buildCompanionAuthCallbackUrl } from "@/lib/companion-links";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -36,9 +37,7 @@ export function CompanionAuthorizeClient() {
         return;
       }
       const { token_hash } = (await res.json()) as { token_hash: string };
-      const url = `minutia://auth-callback?token_hash=${encodeURIComponent(
-        token_hash
-      )}`;
+      const url = buildCompanionAuthCallbackUrl(token_hash);
       setCallbackUrl(url);
       setStatus("done");
       // Hand off to the desktop app's registered URL scheme. If no handler is

@@ -9,6 +9,7 @@ import {
 } from "@/lib/instance-config";
 import { getAdminCapabilities } from "@/lib/admin/capabilities";
 import { rejectedConfigKeys } from "@/lib/admin/config-capabilities";
+import { isDiarizingProviderConfigured } from "@/lib/transcription";
 
 export async function GET(request: NextRequest) {
   const auth = await requireAdmin(request);
@@ -30,6 +31,12 @@ export async function GET(request: NextRequest) {
   for (const row of data ?? []) {
     config[row.key] = displayInstanceConfigValue(row);
   }
+
+  // Env-derived, read-only: lets the settings UI flag when transcripts will not
+  // carry speaker labels. Not an instance_config key, so PUT never round-trips it.
+  config.diarization_configured = isDiarizingProviderConfigured(process.env)
+    ? "true"
+    : "false";
 
   return NextResponse.json(config);
 }

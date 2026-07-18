@@ -200,6 +200,15 @@ Minutia works with zero AI, recording, or calendar; the data model is AI-ready a
 
 Self-hosters bring their own key: set `OPENROUTER_API_KEY` (or an OpenAI-compatible key) in your environment to enable AI, or leave it unset to run fully AI-free.
 
+### Speaker diarization
+
+Speaker labels ("who said what") need a diarizing transcription provider. Groq and OpenAI-compatible Whisper transcribe accurately but return unlabeled text; only two providers diarize:
+
+- **AssemblyAI** - set `ASSEMBLYAI_API_KEY` and `TRANSCRIPTION_PROVIDER=assemblyai`.
+- **Local WhisperX sidecar** - run the sidecar and point `TRANSCRIPTION_LOCAL_URL` at it, with `TRANSCRIPTION_PROVIDER=local`, to keep audio on your own infrastructure.
+
+With neither configured, transcripts are produced without speaker labels. Admin > Health shows the current transcription mode ("diarization on" or "transcription only").
+
 ## Capture the meeting, no bot in the room
 
 Some conversations you want captured word for word. [Minutia Desktop](https://github.com/shiprite-dev/minutia-desktop) is a native macOS menu bar app that records the meeting the moment it starts, your microphone and the room's system audio both, whether you're on Zoom, Teams, Meet, or sitting across a table. Nothing joins the call: no recording bot in the participant list, no extra service in the middle of your conversation.
