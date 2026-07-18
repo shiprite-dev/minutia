@@ -110,14 +110,14 @@ Self-hosted Minutia uses one workspace per instance. The first admin manages tha
 **Back up your data.** Everything lives in two named Docker volumes: `minutia-db-data` (Postgres) and `minutia-storage-data` (uploaded audio). Snapshot the database anytime with:
 
 ```bash
-docker exec minutia-supabase-db-1 pg_dump -U postgres minutia > minutia-backup.sql
+docker compose exec -T supabase-db pg_dump -U postgres minutia > minutia-backup.sql
 ```
 
 **Restore from a backup.** The dump above is plain SQL, so restore it with `psql`. Restore into an empty database (stop the app and recreate the `minutia-db-data` volume, or point at a fresh box) so the load does not collide with existing rows:
 
 ```bash
 docker compose up -d supabase-db
-cat minutia-backup.sql | docker exec -i minutia-supabase-db-1 psql -U postgres -d minutia
+cat minutia-backup.sql | docker compose exec -T supabase-db psql -U postgres -d minutia
 docker compose up -d
 ```
 

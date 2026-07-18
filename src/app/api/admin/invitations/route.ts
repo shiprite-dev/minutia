@@ -170,7 +170,7 @@ export async function POST(request: NextRequest) {
   let emailMessage: Omit<MailMessage, "to">;
 
   if (existingProfile?.id) {
-    acceptUrl = absoluteAppUrl(request.url, "/");
+    acceptUrl = absoluteAppUrl(request.url, "/settings");
     emailMessage = buildExistingUserOrganizationInviteEmail({
       organizationName: organization.name,
       role,
