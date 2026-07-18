@@ -1,17 +1,21 @@
 "use client";
 
 import * as React from "react";
-import { motion, AnimatePresence } from "motion/react";
-import { ChevronDown } from "lucide-react";
+import { motion, AnimatePresence, useReducedMotion } from "motion/react";
+import { Check, ChevronDown } from "lucide-react";
 import { useIssues, useUpdateIssueStatus } from "@/lib/hooks/use-issues";
 import { useSeries } from "@/lib/hooks/use-series";
 import { useProfile } from "@/lib/hooks/use-profile";
 import { PRIORITY_CONFIG } from "@/lib/constants";
-import { IssueCard, EmptyState } from "@/components/minutia";
+import { EmptyState } from "@/components/minutia";
+import { IssueKey } from "@/components/minutia/issue-key";
+import { PrefetchIssueLink } from "@/components/minutia/prefetch-issue-link";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { Issue, IssueStatus } from "@/lib/types";
+import type { Issue } from "@/lib/types";
 import { isOverdue } from "@/lib/issue-utils";
 import { isMyActionIssue } from "@/lib/my-actions";
+import { formatShortDate } from "@/lib/date-utils";
+import { cn } from "@/lib/utils";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -83,6 +87,93 @@ function Section({
 }
 
 // ---------------------------------------------------------------------------
+// Compact action row with one-click complete
+// ---------------------------------------------------------------------------
+
+function ActionRow({
+  issue,
+  seriesName,
+  done,
+  index,
+  onComplete,
+}: {
+  issue: Issue;
+  seriesName?: string;
+  done: boolean;
+  index: number;
+  onComplete: (issue: Issue) => void;
+}) {
+  const prefersReduced = useReducedMotion();
+  const [marked, setMarked] = React.useState(false);
+  const checked = done || marked;
+  const overdue = isOverdue(issue);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, x: -16 }}
+      animate={{ opacity: 1, x: 0 }}
+      transition={{ delay: index * 0.04, duration: 0.28, ease: [0.2, 0.8, 0.2, 1] }}
+      className="group flex h-12 items-center gap-3 rounded-lg px-3 transition-colors hover:bg-paper-2"
+    >
+      <button
+        type="button"
+        aria-label={done ? "Completed" : "Mark done"}
+        disabled={done}
+        onClick={() => {
+          if (done) return;
+          setMarked(true);
+          onComplete(issue);
+        }}
+        className={cn(
+          "flex size-5 shrink-0 items-center justify-center rounded-full border-2 outline-none transition-colors",
+          "focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-paper",
+          checked
+            ? "border-success bg-success text-white"
+            : "border-rule-strong text-transparent hover:border-accent hover:text-accent"
+        )}
+      >
+        <motion.span
+          initial={prefersReduced ? false : { scale: checked ? 1 : 0.4, opacity: checked ? 1 : 0 }}
+          animate={{ scale: checked ? 1 : 0.4, opacity: checked ? 1 : 1 }}
+          transition={{ duration: prefersReduced ? 0 : 0.2, ease: "easeOut" }}
+        >
+          <Check className="size-3" strokeWidth={3} />
+        </motion.span>
+      </button>
+
+      <PrefetchIssueLink
+        issueId={issue.id}
+        className={cn(
+          "min-w-0 flex-1 truncate text-sm transition-colors",
+          checked ? "text-ink-4 line-through" : "text-ink group-hover:text-accent"
+        )}
+      >
+        {issue.title}
+      </PrefetchIssueLink>
+
+      <div className="flex shrink-0 items-center gap-2.5 text-xs">
+        <IssueKey issue={issue} className="h-5 px-1.5 text-[10px]" />
+        {seriesName && (
+          <span className="hidden max-w-[140px] truncate text-ink-4 sm:inline">
+            {seriesName}
+          </span>
+        )}
+        {issue.due_date && (
+          <span
+            className={cn(
+              "font-mono tabular-nums",
+              overdue && !checked ? "text-accent font-medium" : "text-ink-4"
+            )}
+          >
+            {overdue && !checked ? "Overdue" : formatShortDate(issue.due_date)}
+          </span>
+        )}
+      </div>
+    </motion.div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Loading skeleton
 // ---------------------------------------------------------------------------
 
@@ -109,10 +200,6 @@ export default function MyActionsPage() {
   const { data: seriesList, isLoading: seriesLoading } = useSeries();
   const { data: profile, isLoading: profileLoading } = useProfile();
   const updateStatus = useUpdateIssueStatus();
-
-  const [expandedIssueId, setExpandedIssueId] = React.useState<string | null>(
-    null,
-  );
 
   // Build series name map
   const seriesMap = React.useMemo(() => {
@@ -165,55 +252,28 @@ export default function MyActionsPage() {
   );
 
   // Handlers
-  function handleStatusChange(issueId: string, newStatus: IssueStatus) {
-    const issue = myIssues.find((i) => i.id === issueId);
-    if (!issue) return;
+  function handleComplete(issue: Issue) {
     updateStatus.mutate({
-      issueId,
+      issueId: issue.id,
       seriesId: issue.series_id,
       oldStatus: issue.status,
-      newStatus,
+      newStatus: "resolved",
     });
-  }
-
-  function handleExpand(issueId: string) {
-    setExpandedIssueId((prev) => (prev === issueId ? null : issueId));
   }
 
   const isLoading = issuesLoading || seriesLoading || profileLoading;
   const isEmpty = !isLoading && myIssues.length === 0;
 
-  // Render helper for an issue card with series tag and stagger animation
-  function renderIssueCard(issue: Issue, globalIndex: number) {
-    const seriesName = seriesMap.get(issue.series_id);
-
+  function renderActionRow(issue: Issue, globalIndex: number, done: boolean) {
     return (
-      <motion.div
+      <ActionRow
         key={issue.id}
-        initial={{ opacity: 0, x: -20 }}
-        animate={{ opacity: 1, x: 0 }}
-        transition={{
-          delay: globalIndex * 0.06,
-          duration: 0.32,
-          ease: [0.2, 0.8, 0.2, 1],
-        }}
-      >
-        <div>
-          {seriesName && (
-            <div className="mb-1 ml-1">
-              <span className="inline-flex items-center rounded-full bg-paper-2 border border-rule px-2 py-0.5 text-[10px] font-medium text-ink-3">
-                {seriesName}
-              </span>
-            </div>
-          )}
-          <IssueCard
-            issue={issue}
-            onStatusChange={handleStatusChange}
-            onExpand={handleExpand}
-            expanded={expandedIssueId === issue.id}
-          />
-        </div>
-      </motion.div>
+        issue={issue}
+        seriesName={seriesMap.get(issue.series_id)}
+        done={done}
+        index={globalIndex}
+        onComplete={handleComplete}
+      />
     );
   }
 
@@ -265,9 +325,9 @@ export default function MyActionsPage() {
                 defaultOpen={true}
                 staggerOffset={0}
               >
-                <div className="space-y-3">
+                <div className="space-y-0.5">
                   {needsAttention.map((issue, index) =>
-                    renderIssueCard(issue, index),
+                    renderActionRow(issue, index, false),
                   )}
                 </div>
               </Section>
@@ -281,9 +341,9 @@ export default function MyActionsPage() {
                 defaultOpen={true}
                 staggerOffset={needsAttention.length}
               >
-                <div className="space-y-3">
+                <div className="space-y-0.5">
                   {pending.map((issue, index) =>
-                    renderIssueCard(issue, needsAttention.length + index),
+                    renderActionRow(issue, needsAttention.length + index, false),
                   )}
                 </div>
               </Section>
@@ -297,11 +357,12 @@ export default function MyActionsPage() {
                 defaultOpen={false}
                 staggerOffset={needsAttention.length + pending.length}
               >
-                <div className="space-y-3">
+                <div className="space-y-0.5">
                   {completed.map((issue, index) =>
-                    renderIssueCard(
+                    renderActionRow(
                       issue,
                       needsAttention.length + pending.length + index,
+                      true,
                     ),
                   )}
                 </div>
