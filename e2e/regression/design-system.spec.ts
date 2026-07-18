@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { SERIES, MEETINGS, ISSUES, waitForApp } from "./seed-data";
+import { groupBySeries } from "./dashboard-helpers";
 
 test.describe("Typography: Fraunces on headings", () => {
   test("app header title uses font-display", async ({ page }) => {
@@ -115,6 +116,7 @@ test.describe("Outstanding items collapse", () => {
   test("series with >3 items shows expand button", async ({ page }) => {
     await page.goto("/dashboard");
     await waitForApp(page);
+    await groupBySeries(page);
 
     const moreButton = page.getByRole("button", { name: /\+\d+ more/ });
     await expect(moreButton).toBeVisible({ timeout: 10000 });
@@ -123,6 +125,7 @@ test.describe("Outstanding items collapse", () => {
   test("clicking expand shows all items", async ({ page }) => {
     await page.goto("/dashboard");
     await waitForApp(page);
+    await groupBySeries(page);
 
     const moreButton = page.getByRole("button", { name: /\+\d+ more/ }).first();
     await expect(moreButton).toBeVisible({ timeout: 10000 });
@@ -135,6 +138,7 @@ test.describe("Outstanding items collapse", () => {
   test("clicking show less collapses back", async ({ page }) => {
     await page.goto("/dashboard");
     await waitForApp(page);
+    await groupBySeries(page);
 
     const moreButton = page.getByRole("button", { name: /\+\d+ more/ }).first();
     await expect(moreButton).toBeVisible({ timeout: 10000 });
@@ -151,6 +155,7 @@ test.describe("Outstanding items collapse", () => {
     await page.goto("/dashboard");
     await waitForApp(page);
 
+    await groupBySeries(page);
     const viewSeriesLink = page.getByText("View series").first();
     await expect(viewSeriesLink).toBeVisible({ timeout: 10000 });
     await viewSeriesLink.click();
@@ -197,7 +202,7 @@ test.describe("Empty states", () => {
     await waitForApp(page);
 
     const emptyState = page.getByText("You owe nobody anything right now.");
-    const firstAction = page.locator("article").first();
+    const firstAction = page.getByRole("button", { name: "Mark done" }).first();
 
     await Promise.race([
       emptyState.waitFor({ state: "visible" }).catch(() => undefined),

@@ -34,6 +34,7 @@ import { CaptureInput } from "@/components/minutia/capture-input";
 import { InlineTaskList } from "@/components/minutia/inline-task-list";
 import { IssueCard } from "@/components/minutia/issue-card";
 import { BriefCard } from "@/components/minutia/brief-card";
+import { DecisionCard } from "@/components/minutia/decision-card";
 import { CalendarDraftNotice } from "@/components/minutia/calendar-draft-notice";
 import { PrefetchIssueLink } from "@/components/minutia/prefetch-issue-link";
 import { StatusChip } from "@/components/minutia/status-chip";
@@ -549,24 +550,6 @@ function LogGroupLabel({ label, count }: { label: string; count: number }) {
         {label}
       </span>
       <span className="font-mono text-[11px] tabular-nums text-ink-4">{count}</span>
-    </div>
-  );
-}
-
-// Green-accented decision card (3px left border) matching the log card anatomy.
-function DecisionCard({ decision }: { decision: Decision }) {
-  return (
-    <div className="rounded-md border border-rule border-l-[3px] border-l-success bg-card px-4 py-3 shadow-[var(--shadow-raised)]">
-      <p className="font-mono text-[10px] font-medium uppercase tracking-wider text-success">
-        Decision
-      </p>
-      <p className="mt-1 text-sm font-medium text-ink">{decision.title}</p>
-      {decision.rationale && (
-        <p className="mt-1 text-xs text-ink-2">{decision.rationale}</p>
-      )}
-      {decision.made_by && (
-        <p className="mt-1 text-xs font-mono text-ink-4">by {decision.made_by}</p>
-      )}
     </div>
   );
 }
@@ -1431,10 +1414,9 @@ export function MeetingDetailContent({
                 {meeting.title}
               </h1>
             </div>
-            <Button
+            <Button variant="accent"
               onClick={handleStartMeeting}
               disabled={startOrJoinMeeting.isPending}
-              className="bg-accent text-white hover:bg-accent-hover"
             >
               <Play className="size-4" />
               {liveMeetingInSeries ? "Join live meeting" : "Start meeting"}
@@ -1674,12 +1656,11 @@ export function MeetingDetailContent({
               {!loadingSuggestions && aiSuggestions.length === 0 && (
                 <div className="flex flex-col items-start gap-3 px-4 py-5 text-sm text-ink-3">
                   <p>No AI suggestions yet for this meeting.</p>
-                  <Button
+                  <Button variant="accent"
                     type="button"
                     size="sm"
                     onClick={generateSuggestions}
                     disabled={!notes.trim() && !transcript.trim()}
-                    className="bg-accent text-white hover:bg-accent-hover"
                   >
                     <Sparkles className="size-3.5" />
                     Generate suggestions
@@ -1791,12 +1772,11 @@ export function MeetingDetailContent({
                                 Reject suggestion
                               </Button>
                               {suggestion.type !== "duplicate_warning" && (
-                                <Button
+                                <Button variant="accent"
                                   type="button"
                                   size="sm"
                                   onClick={() => handleSuggestionReview(suggestion, "accept")}
                                   disabled={reviewingSuggestionId === suggestion.id || !suggestion.title.trim()}
-                                  className="bg-accent text-white hover:bg-accent-hover"
                                 >
                                   {reviewingSuggestionId === suggestion.id ? (
                                     <Loader2 className="size-3.5 animate-spin" />
@@ -1957,11 +1937,10 @@ export function MeetingDetailContent({
             <p className="max-w-md font-mono text-[11px] leading-relaxed text-ink-4">
               Replay the recap to watch it land the way your team will - press R or the button.
             </p>
-            <Button
+            <Button variant="accent"
               type="button"
               onClick={replayRecap}
               disabled={!hasAccess}
-              className="bg-accent text-white hover:bg-accent-hover"
             >
               <RotateCcw className="size-3.5" />
               Replay recap
@@ -2085,11 +2064,10 @@ export function MeetingDetailContent({
                 >
                   Cancel
                 </Button>
-                <Button
+                <Button variant="accent"
                   type="button"
                   onClick={handleApplyAiNotes}
                   disabled={applyAiNotes.isPending}
-                  className="bg-accent text-white hover:bg-accent-hover"
                 >
                   {applyAiNotes.isPending ? (
                     <Loader2 className="size-3.5 animate-spin" />

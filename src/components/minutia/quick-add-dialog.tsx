@@ -248,7 +248,7 @@ export function QuickAddDialog() {
             >
               Cancel
             </Button>
-            <Button type="submit" size="sm" disabled={createIssue.isPending}>
+            <Button type="submit" variant="accent" size="sm" disabled={createIssue.isPending}>
               {createIssue.isPending ? "Adding..." : "Add issue"}
             </Button>
           </div>

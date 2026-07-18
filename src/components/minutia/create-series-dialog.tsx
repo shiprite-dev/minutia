@@ -158,10 +158,10 @@ export function CreateSeriesDialog({
           </div>
 
           <div className="border-t border-rule pt-6 flex justify-end">
-            <Button
+            <Button variant="accent"
               type="submit"
               disabled={createSeries.isPending}
-              className="bg-accent text-white hover:bg-accent-hover px-6 h-10"
+              className="px-6 h-10"
             >
               {createSeries.isPending && (
                 <Loader2 className="size-3.5 animate-spin" />

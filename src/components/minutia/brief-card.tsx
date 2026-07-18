@@ -225,25 +225,21 @@ export function BriefCard({
         {/* Send / Copy buttons */}
         <div className="mt-5 pt-4 border-t border-rule flex items-center gap-2">
           <Button
-            variant="default"
+            variant="accent"
             size="sm"
             onClick={handleEmailBrief}
             disabled={sending}
-            className="bg-accent text-white hover:bg-accent-hover"
             data-testid="send-brief-btn"
           >
             <Send className="size-3.5" data-icon="inline-start" />
             {sending ? "Sending..." : "Email brief"}
           </Button>
           <Button
-            variant={emailUnavailable ? "default" : "ghost"}
+            variant={emailUnavailable ? "accent" : "ghost"}
             size="sm"
             onClick={handleCopyBrief}
             data-testid="copy-brief-btn"
-            className={cn(
-              "relative overflow-hidden",
-              emailUnavailable && "bg-accent text-white hover:bg-accent-hover"
-            )}
+            className="relative overflow-hidden"
           >
             <AnimatePresence mode="wait" initial={false}>
               {copied ? (

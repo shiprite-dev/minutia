@@ -256,10 +256,9 @@ export function SeriesDetailContent({ seriesId }: SeriesDetailContentProps) {
                   </Button>
                 </>
               )}
-              <Button
+              <Button variant="accent"
                 onClick={handleStartMeeting}
                 disabled={startingMeeting}
-                className="bg-accent text-white hover:bg-accent-hover"
                 size="sm"
               >
                 {startingMeeting ? (
@@ -318,11 +317,11 @@ export function SeriesDetailContent({ seriesId }: SeriesDetailContentProps) {
               placeholder="Ask about decisions, owners, stale risks, or follow-ups..."
               className="min-h-[72px] flex-1 text-sm"
             />
-            <Button
+            <Button variant="accent"
               type="button"
               onClick={handleAskSeries}
               disabled={!hasAccess || askingSeries || !askQuestion.trim()}
-              className="bg-accent text-white hover:bg-accent-hover sm:self-start"
+              className="sm:self-start"
             >
               {askingSeries ? (
                 <Loader2 className="size-3.5 animate-spin" />
@@ -617,10 +616,9 @@ function SeriesSettingsDialog({
           </div>
 
           <DialogFooter>
-            <Button
+            <Button variant="accent"
               type="submit"
               disabled={updateSeries.isPending}
-              className="bg-accent text-white hover:bg-accent-hover"
             >
               {updateSeries.isPending && (
                 <Loader2 className="size-3.5 animate-spin" />

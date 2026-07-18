@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { CategoryBadge } from "@/components/minutia/category-badge";
 import { MinutiaMeetingStatusIcon } from "@/components/minutia/minutia-icons";
 import { PrefetchIssueLink } from "@/components/minutia/prefetch-issue-link";
+import { DecisionCard } from "@/components/minutia/decision-card";
 import { useUIStore } from "@/lib/stores/ui-store";
 import type { Meeting, Issue, Decision } from "@/lib/types";
 
@@ -214,15 +215,9 @@ function MeetingSection({
                   <p className="text-[10px] font-mono uppercase tracking-wider text-ink-4 mb-2">
                     Decisions ({meeting.decisions.length})
                   </p>
-                  <div className="space-y-1">
+                  <div className="space-y-0.5">
                     {meeting.decisions.map((decision) => (
-                      <div
-                        key={decision.id}
-                        className="flex items-start gap-2 py-1.5 px-2 -mx-2"
-                      >
-                        <span className="text-accent mt-0.5 text-xs">◆</span>
-                        <span className="text-sm text-ink">{decision.title}</span>
-                      </div>
+                      <DecisionCard key={decision.id} decision={decision} compact />
                     ))}
                   </div>
                 </div>

@@ -320,10 +320,10 @@ function StepWelcome({
         />
       </div>
 
-      <Button
+      <Button variant="accent"
         onClick={onNext}
         disabled={!name.trim() || isPending}
-        className="w-full h-11 rounded-xl bg-accent text-white hover:bg-accent-hover"
+        className="w-full h-11 rounded-xl"
       >
         Continue
         <ArrowRight className="size-4 ml-1" />
@@ -426,10 +426,10 @@ function StepCreateSeries({
         >
           Skip for now
         </Button>
-        <Button
+        <Button variant="accent"
           onClick={onNext}
           disabled={!seriesName.trim() || isPending}
-          className="flex-1 h-11 rounded-xl bg-accent text-white hover:bg-accent-hover"
+          className="flex-1 h-11 rounded-xl"
         >
           {isPending ? "Creating..." : "Create series"}
           {!isPending && <ArrowRight className="size-4 ml-1" />}
@@ -514,10 +514,10 @@ function StepTour({
         ))}
       </div>
 
-      <Button
+      <Button variant="accent"
         onClick={onComplete}
         disabled={isPending}
-        className="w-full h-11 rounded-xl bg-accent text-white hover:bg-accent-hover"
+        className="w-full h-11 rounded-xl"
       >
         {isPending ? "Getting ready..." : "Start tracking"}
         {!isPending && <Sparkles className="size-4 ml-1" />}
