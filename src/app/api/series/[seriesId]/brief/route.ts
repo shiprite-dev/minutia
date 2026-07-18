@@ -169,7 +169,7 @@ export async function POST(
     if (sent === 0 && isEmailUnconfigured(message)) {
       return NextResponse.json({ error: "email_unconfigured", guestUrl }, { status: 409 });
     }
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: message, sent, guestUrl }, { status: 500 });
   }
 
   return NextResponse.json({ sent, guestUrl });
