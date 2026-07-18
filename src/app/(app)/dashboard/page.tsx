@@ -470,7 +470,7 @@ function OutstandingWidget({
     return () => window.removeEventListener("keydown", handleKey);
   }, [flatIssues, focusedIdx, router, activeId]);
 
-  React.useEffect(() => { setFocusedIdx(-1); }, [filter, ownerFilter, query, bySeries]);
+  React.useEffect(() => { setFocusedIdx(-1); }, [filter, ownerFilter, query, bySeries, expandedSeries]);
 
   // Capture phase so "/" focuses in-board search before the ⌘K palette's
   // bubble-phase listener sees it (the two stay distinct surfaces).

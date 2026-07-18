@@ -99,7 +99,7 @@ function ActionRow({
   seriesName?: string;
   done: boolean;
   index: number;
-  onComplete: (issue: Issue) => void;
+  onComplete: (issue: Issue, opts: { onError: () => void }) => void;
 }) {
   const prefersReduced = useReducedMotion();
   const [marked, setMarked] = React.useState(false);
@@ -116,11 +116,11 @@ function ActionRow({
       <button
         type="button"
         aria-label={done ? "Completed" : "Mark done"}
-        disabled={done}
+        disabled={checked}
         onClick={() => {
-          if (done) return;
+          if (checked) return;
           setMarked(true);
-          onComplete(issue);
+          onComplete(issue, { onError: () => setMarked(false) });
         }}
         className={cn(
           "flex size-5 shrink-0 items-center justify-center rounded-full border-2 outline-none transition-colors",
@@ -250,13 +250,16 @@ export default function MyActionsPage() {
   );
 
   // Handlers
-  function handleComplete(issue: Issue) {
-    updateStatus.mutate({
-      issueId: issue.id,
-      seriesId: issue.series_id,
-      oldStatus: issue.status,
-      newStatus: "resolved",
-    });
+  function handleComplete(issue: Issue, opts: { onError: () => void }) {
+    updateStatus.mutate(
+      {
+        issueId: issue.id,
+        seriesId: issue.series_id,
+        oldStatus: issue.status,
+        newStatus: "resolved",
+      },
+      { onError: opts.onError }
+    );
   }
 
   const isLoading = issuesLoading || seriesLoading || profileLoading;
