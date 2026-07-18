@@ -132,6 +132,7 @@ export const deferredRoutes = {
   "/api/meetings/[meetingId]/suggestions": "getUser + userManagesSeries/canRemind guard; POST/series-scoped write, deferred to Playwright",
   "/api/meetings/[meetingId]/suggestions/[suggestionId]": "getUser + userManagesSeries/canRemind guard; POST/series-scoped write, deferred to Playwright",
   "/api/series/[seriesId]/ask": "getUser + userManagesSeries/canRemind guard; POST/series-scoped write, deferred to Playwright",
+  "/api/series/[seriesId]/brief": "getUser + owner/facilitator guard; POST/series-scoped write, deferred to Playwright (e2e/send-brief.spec.ts)",
   "/api/series/[seriesId]/remind": "getUser + userManagesSeries/canRemind guard; POST/series-scoped write, deferred to Playwright",
 
   // --- API: requireSetupToken bootstrap family ------------------------------
