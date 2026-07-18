@@ -21,6 +21,7 @@ import {
 import { useSeriesDetail, useSeriesParticipantRole } from "@/lib/hooks/use-series";
 import { useProfile } from "@/lib/hooks/use-profile";
 import { CompanionInstallPrompt } from "@/components/minutia/companion-install-prompt";
+import { buildCompanionRecordUrl, isMacPlatform } from "@/lib/companion-links";
 import { useIssues, useCreateIssue, useUpdateIssueStatus, useUpdateIssue, useAssignIssue, issueKeys } from "@/lib/hooks/use-issues";
 import { useCreateDecision, decisionKeys } from "@/lib/hooks/use-decisions";
 import { SyncIndicator } from "@/components/minutia/sync-indicator";
@@ -50,7 +51,7 @@ import { RemindOwnersButton } from "@/components/minutia/remind-owners-button";
 import { CarryoverBriefingPanel } from "@/components/minutia/carryover-briefing-panel";
 import { AiUnavailableNotice } from "@/components/minutia/ai-unavailable-notice";
 import { useAiAccess } from "@/lib/hooks/use-ai-access";
-import { ArrowLeft, Square, Play, Check, X, Sparkles, Loader2, ListChecks, FileText, CheckSquare, Gavel, AlertTriangle, Ban, RotateCcw, HelpCircle, ChevronDown } from "lucide-react";
+import { ArrowLeft, Square, Play, Check, X, Sparkles, Loader2, ListChecks, FileText, CheckSquare, Gavel, AlertTriangle, Ban, RotateCcw, HelpCircle, ChevronDown, Radio } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatShortDate } from "@/lib/date-utils";
 import type { IssueCategory, IssueStatus, Issue, Decision, Meeting, MeetingAiSuggestion } from "@/lib/types";
@@ -862,6 +863,18 @@ export function MeetingDetailContent({
   const canManageMeeting =
     participantRole === "owner" || participantRole === "facilitator";
 
+  // Hand-off to the desktop companion is offered only when a companion has checked
+  // in for this user and the browser is on macOS (the only companion platform).
+  const companionKnown = Boolean(profile?.companion_last_seen_at);
+  const isMacClient =
+    typeof navigator !== "undefined" &&
+    isMacPlatform(
+      (navigator as Navigator & { userAgentData?: { platform?: string } })
+        .userAgentData,
+      navigator.userAgent
+    );
+  const canOfferCompanionRecord = companionKnown && isMacClient;
+
   const activePresenceLabel =
     presenceUsers.length > 0
       ? presenceUsers
@@ -980,9 +993,34 @@ export function MeetingDetailContent({
 
   async function handleStartMeeting() {
     const liveMeeting = await startOrJoinMeeting.mutateAsync(seriesId);
+    nudgeCompanionRecord(liveMeeting.id);
     if (liveMeeting.id !== meetingId) {
       router.push(`/series/${seriesId}/meetings/${liveMeeting.id}`);
     }
+  }
+
+  // After the starter's own action, ask a known macOS companion to record. Fires
+  // at most once per meeting per browser session; no dialog, no blocking. A
+  // registered scheme handler consumes the hidden-anchor click; if none exists
+  // the click is a harmless no-op.
+  function nudgeCompanionRecord(id: string) {
+    if (!canOfferCompanionRecord || typeof window === "undefined") return;
+    const key = `minutia.record-nudge.${id}`;
+    if (sessionStorage.getItem(key)) return;
+    let url: string;
+    try {
+      url = buildCompanionRecordUrl(id);
+    } catch {
+      return;
+    }
+    sessionStorage.setItem(key, "1");
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.style.display = "none";
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    toast("Asking the companion to record");
   }
 
   function handleTitleChange(issueId: string, title: string) {
@@ -1176,17 +1214,28 @@ export function MeetingDetailContent({
 
               {/* Audio capture (meeting managers only) */}
               {canManageMeeting && hasAccess && (
-                <RecordingIndicator
-                  state={recorder.state}
-                  durationSeconds={recorder.durationSeconds}
-                  isSupported={recorder.isSupported}
-                  error={recorder.error}
-                  uploading={savingRecording}
-                  onStart={recorder.start}
-                  onStop={handleStopRecording}
-                  onPause={recorder.pause}
-                  onResume={recorder.resume}
-                />
+                <div className="flex items-center gap-2">
+                  <RecordingIndicator
+                    state={recorder.state}
+                    durationSeconds={recorder.durationSeconds}
+                    isSupported={recorder.isSupported}
+                    error={recorder.error}
+                    uploading={savingRecording}
+                    onStart={recorder.start}
+                    onStop={handleStopRecording}
+                    onPause={recorder.pause}
+                    onResume={recorder.resume}
+                  />
+                  {canOfferCompanionRecord && recorder.state === "idle" && (
+                    <a
+                      href={buildCompanionRecordUrl(meeting.id)}
+                      className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-rule px-2.5 text-xs font-medium text-ink-2 hover:bg-paper-2 hover:text-ink"
+                    >
+                      <Radio className="size-3.5" aria-hidden />
+                      Record with companion
+                    </a>
+                  )}
+                </div>
               )}
 
               {recorder.state === "stopped" &&
