@@ -241,7 +241,7 @@ function LoginForm() {
             minutia
           </h1>
           <p className="mt-2 font-sans text-sm text-ink-3">
-            The open-source meeting memory system.
+            The open-source Outstanding Issues Log for recurring meetings.
           </p>
         </div>
 

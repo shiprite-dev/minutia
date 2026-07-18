@@ -1299,7 +1299,13 @@ export default function Dashboard() {
       <UpgradeConfirmation />
       <div className="mx-auto max-w-6xl px-6 py-8">
         {!isFirstRun && (
-          <div className="flex items-center justify-end mb-5">
+          <div className="flex items-start justify-between gap-4 mb-6">
+            <div>
+              <h1 className="font-display text-2xl font-semibold text-ink">OIL Board</h1>
+              <p className="mt-1 text-sm text-ink-3">
+                Outstanding Issues Log. Everything still open across your meetings.
+              </p>
+            </div>
             <AddWidgetButton />
           </div>
         )}
