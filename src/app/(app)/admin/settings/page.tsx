@@ -313,6 +313,7 @@ export default function AdminSettingsPage() {
     (form.ai_provider as "openai-compatible" | "anthropic" | null) ??
     "openai-compatible";
   const visibleAiFields = aiFormFields(activeProvider || "openai-compatible");
+  const diarizationConfigured = form.diarization_configured === "true";
 
   const showFeatureFlags =
     caps.retroToggle || caps.slackWebhook || caps.reminderWebhook || caps.promptLinks;
@@ -520,6 +521,21 @@ export default function AdminSettingsPage() {
                 </div>
               )}
             </div>
+            {aiKeyConfigured && !diarizationConfigured && (
+              <p className="rounded-lg border border-rule bg-paper-2 px-3 py-2 text-xs text-ink-3">
+                Speaker labels are off. Transcripts will not identify who spoke.
+                Configure AssemblyAI or a local WhisperX sidecar to enable
+                diarization.{" "}
+                <a
+                  href="https://github.com/shiprite-dev/minutia#speaker-diarization"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="font-medium text-ink-2 underline hover:text-ink"
+                >
+                  Learn more
+                </a>
+              </p>
+            )}
             <div className="flex flex-wrap items-center gap-3">
               <Button
                 type="button"

@@ -19,7 +19,9 @@ await esbuild.build({
   logLevel: "silent",
   absWorkingDir: root,
 });
-const { configStatus, overallHealth } = await import(pathToFileURL(bundled).href);
+const { configStatus, overallHealth, transcriptionProbe } = await import(
+  pathToFileURL(bundled).href
+);
 
 test("configStatus maps presence to ok/unconfigured", () => {
   assert.equal(configStatus("smtp.example.com"), "ok");
@@ -78,4 +80,39 @@ test("overallHealth is down when any probe reports down", () => {
 
 test("overallHealth handles empty input as ok", () => {
   assert.equal(overallHealth([]), "ok");
+});
+
+test("transcriptionProbe is unconfigured when no provider is set up", () => {
+  assert.deepEqual(transcriptionProbe(false, false), {
+    service: "transcription",
+    status: "unconfigured",
+  });
+  // Diarizing can never be true without being configured, but guard the shape.
+  assert.equal(transcriptionProbe(false, true).status, "unconfigured");
+});
+
+test("transcriptionProbe is ok with a diarization-on note when diarizing", () => {
+  assert.deepEqual(transcriptionProbe(true, true), {
+    service: "transcription",
+    status: "ok",
+    detail: "diarization on",
+  });
+});
+
+test("transcriptionProbe is degraded (not down) when transcription cannot diarize", () => {
+  assert.deepEqual(transcriptionProbe(true, false), {
+    service: "transcription",
+    status: "degraded",
+    detail: "transcription only",
+  });
+});
+
+test("a degraded transcription probe keeps overall health amber, not red", () => {
+  assert.equal(
+    overallHealth([
+      { service: "database", status: "ok" },
+      transcriptionProbe(true, false),
+    ]),
+    "degraded"
+  );
 });
