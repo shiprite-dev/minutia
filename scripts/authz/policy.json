@@ -99,8 +99,13 @@
     },
     "guard:admin-layout": {
       "kind": "guard",
-      "note": "server-component role gate: (app)/admin/layout.tsx redirect('/') unless profiles.role==='admin'. Only globalAdmin passes; reached='returned element'.",
-      "expect": { "loggedOut": "redirect:/", "member": "redirect:/", "orgAdmin": "redirect:/", "globalAdmin": "pass", "crossTenant": "redirect:/", "proMember": "redirect:/" }
+      "note": "server-component gate: (app)/admin/layout.tsx redirect('/') unless the caller is an instance admin (profiles.role==='admin') OR an org admin of their current org. This gates workspace administration (/admin/users), open to both kinds. globalAdmin (instance) and orgAdmin (org A admin) pass; plain member/pro and cross-tenant redirect.",
+      "expect": { "loggedOut": "redirect:/", "member": "redirect:/", "orgAdmin": "pass", "globalAdmin": "pass", "crossTenant": "redirect:/", "proMember": "redirect:/" }
+    },
+    "guard:admin-instance": {
+      "kind": "guard",
+      "note": "server-component gate: (app)/admin/(instance)/layout.tsx wraps instance administration (Overview/Settings/Health). Only instance admins pass; an org admin is redirected to the workspace page they can use (/admin/users); everyone else to /.",
+      "expect": { "loggedOut": "redirect:/", "member": "redirect:/", "orgAdmin": "redirect:/admin/users", "globalAdmin": "pass", "crossTenant": "redirect:/", "proMember": "redirect:/" }
     },
     "endpoint:GET /api/admin/config": {
       "kind": "endpoint",

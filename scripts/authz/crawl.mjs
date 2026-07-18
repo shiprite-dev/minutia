@@ -22,11 +22,12 @@ export async function crawl({ scenario, policy, manifest }) {
   // scenario holds setup_completed constant ('true'), so a stale cache is
   // correct. A setup-incomplete scenario would need a fresh bundle per probe.
   const mw = await bundleMiddleware();
-  const guardNode = manifest.find((n) => n.kind === "guard");
-  const guardModule = guardNode ? await bundleServerComponent(guardNode.module) : null;
+  const guardModules = new Map();
   const endpointModules = new Map();
   for (const node of manifest) {
-    if (node.kind === "endpoint") {
+    if (node.kind === "guard") {
+      guardModules.set(node.id, await bundleServerComponent(node.module));
+    } else if (node.kind === "endpoint") {
       endpointModules.set(node.id, await bundleServerComponent(node.module));
     }
   }
@@ -42,7 +43,7 @@ export async function crawl({ scenario, policy, manifest }) {
       if (node.kind === "screen") {
         verdict = await probeScreen(node.url, identity, mw);
       } else if (node.kind === "guard") {
-        verdict = await probeGuard(identity, guardModule);
+        verdict = await probeGuard(identity, guardModules.get(node.id));
       } else {
         verdict = await probeEndpoint(
           identity,
