@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
-import { absoluteAppUrl } from "@/lib/app-url";
+import { absoluteAppUrl, toPublicActionLink } from "@/lib/app-url";
 import { sendMail } from "@/lib/email";
 import {
   buildExistingUserOrganizationInviteEmail,
@@ -10,6 +10,8 @@ import { rejectCrossOrigin } from "@/lib/request-origin";
 import { requireCurrentOrgAdmin } from "@/lib/supabase/org-auth";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { isMemberInviteAllowed } from "@/lib/feature-access";
+import { inviteDelivery } from "@/lib/invitations";
+import type { MailMessage } from "@/lib/email";
 
 const INVITE_UPGRADE_REQUIRED =
   "Inviting teammates requires an upgraded workspace.";
@@ -164,17 +166,15 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Failed to load organization" }, { status: 500 });
   }
 
+  let acceptUrl: string;
+  let emailMessage: Omit<MailMessage, "to">;
+
   if (existingProfile?.id) {
-    const appUrl = absoluteAppUrl(request.url, "/");
-    const emailMessage = buildExistingUserOrganizationInviteEmail({
+    acceptUrl = absoluteAppUrl(request.url, "/settings");
+    emailMessage = buildExistingUserOrganizationInviteEmail({
       organizationName: organization.name,
       role,
-      appUrl,
-    });
-
-    await sendMail({
-      to: email,
-      ...emailMessage,
+      appUrl: acceptUrl,
     });
   } else {
     const redirectTo = absoluteAppUrl(request.url, "/accept-invite");
@@ -215,25 +215,35 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: memberError.message }, { status: 500 });
     }
 
-    const acceptUrl = data.properties?.action_link;
-    if (!acceptUrl) {
+    const rawInviteLink = data.properties?.action_link;
+    if (!rawInviteLink) {
       return NextResponse.json({ error: "Failed to generate invite link" }, { status: 500 });
     }
+    acceptUrl = toPublicActionLink(rawInviteLink);
 
-    const emailMessage = buildNewUserOrganizationInviteEmail({
+    emailMessage = buildNewUserOrganizationInviteEmail({
       organizationName: organization.name,
       role,
       invitedEmail: email,
       acceptUrl,
     });
-
-    await sendMail({
-      to: email,
-      ...emailMessage,
-    });
   }
 
-  return NextResponse.json({ invited: true });
+  // The invite is already provisioned at this point. Email delivery is best-effort:
+  // when it fails (e.g. no SMTP/Resend on a fresh self-host), hand the admin the
+  // accept link to share directly rather than 500ing over a half-sent invite.
+  let emailError: unknown = null;
+  try {
+    await sendMail({ to: email, ...emailMessage });
+  } catch (error) {
+    emailError = error;
+  }
+
+  const delivery = inviteDelivery({ emailError, acceptUrl });
+  if (!delivery.invited) {
+    return NextResponse.json({ error: delivery.error }, { status: 500 });
+  }
+  return NextResponse.json(delivery);
 }
 
 export async function DELETE(request: NextRequest) {

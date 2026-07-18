@@ -99,6 +99,9 @@ test("digest contains every issue title and the Sent via Minutia branding", () =
   }
   assert.ok(MINUTIA_BRANDING.toLowerCase().includes("minutia"));
   assert.ok(digest.subject.includes("Weekly Sync"));
+  // html now rides the shared branded layout
+  assert.ok(/^<!doctype html>/i.test(digest.html), "html uses the shared layout");
+  assert.ok(digest.html.includes("prefers-color-scheme: dark"), "carries dark block");
 });
 
 test("per-owner email targets one owner and carries branding", () => {

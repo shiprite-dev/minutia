@@ -282,10 +282,10 @@ export function SeriesDetailContent({ seriesId }: SeriesDetailContentProps) {
         {showBrief && (
           <div className="mb-8">
             <BriefCard
+              seriesId={seriesId}
               seriesName={series.name}
               nextMeetingDate={nextMeeting ? new Date(nextMeeting.date) : undefined}
               pendingIssues={openIssues.slice(0, 5)}
-              attendees={series.default_attendees ?? []}
             />
           </div>
         )}

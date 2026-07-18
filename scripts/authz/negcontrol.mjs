@@ -24,17 +24,18 @@ const UCROSS = "40000000-0000-4000-8000-000000000004"; // org B member (scenario
 
 const controls = [
   {
-    name: "A: neuter the admin role guard (real src/app/(app)/admin/layout.tsx)",
+    name: "A: neuter the admin entry guard (real src/app/(app)/admin/layout.tsx)",
     file: "src/app/(app)/admin/layout.tsx",
-    find: 'if (profile?.role !== "admin") redirect("/");',
+    find: 'if (!access.instanceAdmin && !access.orgAdmin) redirect("/");',
     replace: 'if (false) redirect("/");',
     expect(violations) {
-      // Non-admins that were redirected now reach the admin layout -> leaks.
+      // Callers that are neither instance nor org admin now reach the admin
+      // layout -> leaks. orgAdmin legitimately passes now, so it is not expected.
       const leaks = violations.filter(
         (v) => v.type === "reachability-leak" && v.node === "guard:admin-layout"
       );
       const identities = new Set(leaks.map((v) => v.identity));
-      const wanted = ["member", "orgAdmin", "crossTenant", "proMember"];
+      const wanted = ["member", "crossTenant", "proMember"];
       const missing = wanted.filter((i) => !identities.has(i));
       if (leaks.length === 0) return "no reachability-leak on guard:admin-layout";
       if (missing.length) return `missing leak for: ${missing.join(", ")}`;

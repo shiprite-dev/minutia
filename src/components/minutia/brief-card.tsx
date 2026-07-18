@@ -2,17 +2,18 @@
 
 import * as React from "react";
 import { motion, AnimatePresence } from "motion/react";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import type { Issue } from "@/lib/types";
-import { Send, Copy, Check, Mail } from "lucide-react";
+import { Send, Copy, Check } from "lucide-react";
 import { isDateOverdue } from "@/lib/date-utils";
 
 interface BriefCardProps {
+  seriesId: string;
   seriesName: string;
   nextMeetingDate?: Date;
   pendingIssues: Issue[];
-  attendees?: string[];
 }
 
 function formatTimeUntil(date: Date): string {
@@ -80,46 +81,62 @@ function generateBriefText(
 }
 
 export function BriefCard({
+  seriesId,
   seriesName,
   nextMeetingDate,
   pendingIssues,
-  attendees = [],
 }: BriefCardProps) {
   const [copied, setCopied] = React.useState(false);
-  const [sent, setSent] = React.useState(false);
-  const mailtoRef = React.useRef<HTMLAnchorElement>(null);
+  const [sending, setSending] = React.useState(false);
+  const [emailUnavailable, setEmailUnavailable] = React.useState(false);
+  const [notice, setNotice] = React.useState<string | null>(null);
 
   const briefText = React.useMemo(
     () => generateBriefText(seriesName, pendingIssues, nextMeetingDate),
     [seriesName, pendingIssues, nextMeetingDate]
   );
 
-  const subject = `Pre-Meeting Brief: ${seriesName}`;
-  const emailAttendees = attendees.filter((a) => a.includes("@"));
-  const hasEmails = emailAttendees.length > 0;
-
-  const mailtoHref = hasEmails
-    ? `mailto:${emailAttendees.join(",")}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(briefText)}`
-    : undefined;
-
-  async function handleSendBrief() {
+  async function handleEmailBrief() {
+    setSending(true);
+    setNotice(null);
     try {
-      await navigator.clipboard.writeText(briefText);
+      const res = await fetch(`/api/series/${seriesId}/brief`, { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+
+      if (res.ok) {
+        const n = data.sent ?? 0;
+        setEmailUnavailable(false);
+        toast(`Brief sent to ${n} attendee${n === 1 ? "" : "s"}`);
+      } else if (res.status === 422) {
+        setNotice("No attendee emails on this series. Add emails to the attendees to send.");
+      } else if (res.status === 409) {
+        setEmailUnavailable(true);
+        setNotice("Email is not configured on this instance. Copy the brief to share it.");
+      } else if (typeof data.sent === "number" && data.sent > 0) {
+        setNotice(`Sent to ${data.sent} before failing. Copy the brief to reach the rest.`);
+      } else {
+        setNotice(data.error ? String(data.error) : "Could not send the brief.");
+      }
     } catch {
-      // Clipboard API unavailable (e.g. headless browser)
+      setNotice("Could not send the brief.");
+    } finally {
+      setSending(false);
     }
-
-    if (hasEmails && mailtoRef.current) {
-      mailtoRef.current.click();
-    }
-
-    setSent(true);
-    setTimeout(() => setSent(false), 3000);
   }
 
   async function handleCopyBrief() {
+    let text = briefText;
     try {
-      await navigator.clipboard.writeText(briefText);
+      const res = await fetch(`/api/series/${seriesId}/brief?dry=1`, { method: "POST" });
+      if (res.ok) {
+        const { guestUrl } = await res.json();
+        if (guestUrl) text = `${briefText}\n\nSee the live log: ${guestUrl}`;
+      }
+    } catch {
+      // Fall back to the base brief text if the link cannot be resolved.
+    }
+    try {
+      await navigator.clipboard.writeText(text);
     } catch {
       // Clipboard API unavailable (e.g. headless browser)
     }
@@ -194,39 +211,31 @@ export function BriefCard({
           <p className="text-sm text-ink-3">No pending issues.</p>
         )}
 
+        {/* Notice */}
+        {notice && (
+          <p
+            className="mt-4 text-xs text-ink-3"
+            role="status"
+            data-testid="brief-notice"
+          >
+            {notice}
+          </p>
+        )}
+
         {/* Send / Copy buttons */}
         <div className="mt-5 pt-4 border-t border-rule flex items-center gap-2">
-          {mailtoHref && (
-            <a
-              ref={mailtoRef}
-              href={mailtoHref}
-              className="hidden"
-              aria-hidden="true"
-              tabIndex={-1}
-            />
-          )}
-          <Button variant="accent"
+          <Button
+            variant="accent"
             size="sm"
-            onClick={handleSendBrief}
+            onClick={handleEmailBrief}
+            disabled={sending}
             data-testid="send-brief-btn"
           >
-            {sent ? (
-              <Check className="size-3.5" data-icon="inline-start" />
-            ) : hasEmails ? (
-              <Send className="size-3.5" data-icon="inline-start" />
-            ) : (
-              <Mail className="size-3.5" data-icon="inline-start" />
-            )}
-            {sent
-              ? hasEmails
-                ? "Opened in mail app"
-                : "Brief copied!"
-              : hasEmails
-                ? "Send brief to attendees"
-                : "Copy brief to send"}
+            <Send className="size-3.5" data-icon="inline-start" />
+            {sending ? "Sending..." : "Email brief"}
           </Button>
           <Button
-            variant="ghost"
+            variant={emailUnavailable ? "accent" : "ghost"}
             size="sm"
             onClick={handleCopyBrief}
             data-testid="copy-brief-btn"

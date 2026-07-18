@@ -33,8 +33,9 @@ export const manifest = [
   { id: "screen:/companion/authorize", kind: "screen", url: "/companion/authorize" },
   { id: "screen:/invite-requests/review", kind: "screen", url: "/invite-requests/review" },
 
-  // --- Guard (server-component role gate) ----------------------------------
+  // --- Guards (server-component role gates) --------------------------------
   { id: "guard:admin-layout", kind: "guard", module: "src/app/(app)/admin/layout.tsx" },
+  { id: "guard:admin-instance", kind: "guard", module: "src/app/(app)/admin/(instance)/layout.tsx" },
 
   // --- Endpoints (route handlers; probed middleware-first, then handler) ----
   {
@@ -87,11 +88,11 @@ export const manifest = [
 // classification — and that every key here still exists on disk (no rot).
 export const deferredRoutes = {
   // --- PAGE routes (client shells under (app)/admin/layout; authz IS the
-  // executed guard:admin-layout role gate) --------------------------------
-  "/admin": "client shell under (app)/admin/layout; authz = guard:admin-layout (executed)",
-  "/admin/health": "client shell under (app)/admin/layout; authz = guard:admin-layout (executed)",
-  "/admin/settings": "client shell under (app)/admin/layout; authz = guard:admin-layout (executed)",
-  "/admin/users": "client shell under (app)/admin/layout; authz = guard:admin-layout (executed)",
+  // executed guard:admin-layout + guard:admin-instance role gates) ---------
+  "/admin": "client shell; instance-only, under (instance) group; authz = guard:admin-instance (executed)",
+  "/admin/health": "client shell; instance-only, under (instance) group; authz = guard:admin-instance (executed)",
+  "/admin/settings": "client shell; instance-only, under (instance) group; authz = guard:admin-instance (executed)",
+  "/admin/users": "client shell; workspace admin, under (app)/admin/layout; authz = guard:admin-layout (executed)",
 
   // --- API: requireAdmin family (verified via executed GET config+overview) --
   "/api/admin/ai-test": "requireAdmin; family executed via GET config+overview; POST/side-effecting or duplicate-guard route deferred",
@@ -131,6 +132,7 @@ export const deferredRoutes = {
   "/api/meetings/[meetingId]/suggestions": "getUser + userManagesSeries/canRemind guard; POST/series-scoped write, deferred to Playwright",
   "/api/meetings/[meetingId]/suggestions/[suggestionId]": "getUser + userManagesSeries/canRemind guard; POST/series-scoped write, deferred to Playwright",
   "/api/series/[seriesId]/ask": "getUser + userManagesSeries/canRemind guard; POST/series-scoped write, deferred to Playwright",
+  "/api/series/[seriesId]/brief": "getUser + owner/facilitator guard; POST/series-scoped write, deferred to Playwright (e2e/send-brief.spec.ts)",
   "/api/series/[seriesId]/remind": "getUser + userManagesSeries/canRemind guard; POST/series-scoped write, deferred to Playwright",
 
   // --- API: requireSetupToken bootstrap family ------------------------------
