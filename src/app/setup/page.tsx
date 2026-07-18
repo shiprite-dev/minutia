@@ -489,10 +489,10 @@ function StepEnvironment({
         <Button variant="ghost" onClick={onRetry} disabled={loading} className="text-ink-3">
           Re-check
         </Button>
-        <Button
+        <Button variant="accent"
           onClick={onNext}
           disabled={!ready}
-          className="flex-1 h-11 rounded-xl bg-accent text-white hover:bg-accent-hover"
+          className="flex-1 h-11 rounded-xl"
         >
           Continue
           <ArrowRight className="size-4 ml-1" />
@@ -653,10 +653,10 @@ function StepCreateAdmin({
             </div>
           )}
 
-          <Button
+          <Button variant="accent"
             onClick={onSubmit}
             disabled={!formValid || creating}
-            className="w-full h-11 rounded-xl bg-accent text-white hover:bg-accent-hover"
+            className="w-full h-11 rounded-xl"
           >
             {creating ? (
               <>
@@ -797,10 +797,10 @@ function StepConfigure({
         <Button variant="ghost" onClick={onSkip} className="text-ink-3">
           Skip for now
         </Button>
-        <Button
+        <Button variant="accent"
           onClick={onNext}
           disabled={saving}
-          className="flex-1 h-11 rounded-xl bg-accent text-white hover:bg-accent-hover"
+          className="flex-1 h-11 rounded-xl"
         >
           {saving ? (
             <>
@@ -941,10 +941,10 @@ function StepAi({
         <Button variant="ghost" onClick={onSkip} className="text-ink-3">
           Skip for now
         </Button>
-        <Button
+        <Button variant="accent"
           onClick={handleSave}
           disabled={saving}
-          className="flex-1 h-11 rounded-xl bg-accent text-white hover:bg-accent-hover"
+          className="flex-1 h-11 rounded-xl"
         >
           {saving ? (
             <>
@@ -1042,10 +1042,10 @@ function StepReady({
         ))}
       </div>
 
-      <Button
+      <Button variant="accent"
         onClick={onComplete}
         disabled={completing}
-        className="w-full h-11 rounded-xl bg-accent text-white hover:bg-accent-hover"
+        className="w-full h-11 rounded-xl"
       >
         {completing ? (
           <>

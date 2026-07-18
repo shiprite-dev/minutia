@@ -7,7 +7,6 @@ export { IssueKey } from "./issue-key";
 export { BriefCard } from "./brief-card";
 export { TimelineNode } from "./timeline-node";
 export { CaptureInput } from "./capture-input";
-export { FilterBar } from "./filter-bar";
 export { EmptyState } from "./empty-state";
 export { SyncIndicator } from "./sync-indicator";
 export { CreateSeriesDialog } from "./create-series-dialog";

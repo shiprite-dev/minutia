@@ -187,6 +187,29 @@ export function CommandPalette() {
           </CommandGroup>
         )}
       </CommandList>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-rule px-3 py-2 text-[11px] text-ink-4">
+        <PaletteHint keys={["↑", "↓"]} label="Navigate" />
+        <PaletteHint keys={["↵"]} label="Open" />
+        <PaletteHint keys={["Esc"]} label="Close" />
+      </div>
     </CommandDialog>
+  );
+}
+
+function PaletteHint({ keys, label }: { keys: string[]; label: string }) {
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <span className="inline-flex items-center gap-0.5">
+        {keys.map((k) => (
+          <kbd
+            key={k}
+            className="inline-flex h-5 min-w-[20px] items-center justify-center rounded border border-rule bg-paper-2 px-1 font-mono text-[10px] font-medium text-ink-3"
+          >
+            {k}
+          </kbd>
+        ))}
+      </span>
+      {label}
+    </span>
   );
 }

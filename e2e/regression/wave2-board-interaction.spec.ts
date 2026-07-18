@@ -3,6 +3,7 @@ import { SERIES, waitForApp } from "./seed-data";
 import {
   expandOutstandingPreview,
   gotoDashboard,
+  groupBySeries,
   HAS_SERVICE_ROLE,
   issueRow,
   outstandingWidget,
@@ -68,6 +69,7 @@ test.describe("Wave 2: OIL board drag-to-reorder", () => {
 
     try {
       await gotoDashboard(page);
+      await groupBySeries(page);
       await expandOutstandingPreview(page);
 
       const section = seriesSection(page, "Platform Team Standup");
@@ -113,6 +115,7 @@ test.describe("Wave 2: OIL board drag-to-reorder", () => {
       await page.reload({ waitUntil: "domcontentloaded" });
       await waitForApp(page);
       await expect(outstandingWidget(page)).toBeVisible();
+      await groupBySeries(page);
       await expandOutstandingPreview(page);
       const sectionAfterReload = seriesSection(page, "Platform Team Standup");
       await expect.poll(() => rowTitles(sectionAfterReload)).toEqual(expectedOrder);
@@ -175,6 +178,7 @@ test.describe("Wave 2: OIL board owner filter and search", () => {
 test.describe("Wave 2: OIL board drag gating", () => {
   test("drag handles are hidden while a filter or search narrows the board", async ({ page }) => {
     await gotoDashboard(page);
+    await groupBySeries(page);
     await expandOutstandingPreview(page);
 
     const grips = outstandingWidget(page).locator('[aria-roledescription="sortable issue"]');
