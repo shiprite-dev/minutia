@@ -1,0 +1,151 @@
+{
+  "$comment": "HAND-AUDITED authorization policy for minutia, default-deny. Each node lists the expected middleware/guard/handler outcome PER identity. checkPolicy compares the observed authz matrix against this exactly: any deviation (a screen reachable by an identity it should redirect, a handler that 200s where it should 401/403, or a tenant-scoped handler that returns another org's rows) is a violation. Adding a route forces a conscious edit here (a node absent from policy but present in the crawl fails closed). Outcomes: pass | redirect:/x | 401 | 403. This is the authz TRUTH, audited against src/middleware.ts + the server-component guards + the API handler guards, NOT snapshotted from a run.",
+  "identities": ["loggedOut", "member", "orgAdmin", "globalAdmin", "crossTenant", "proMember"],
+  "orgOf": {
+    "member": "orgA",
+    "orgAdmin": "orgA",
+    "globalAdmin": "orgA",
+    "proMember": "orgA",
+    "crossTenant": "orgB"
+  },
+  "nodes": {
+    "screen:/": {
+      "kind": "screen",
+      "note": "public marketing; middleware redirects authed users to /dashboard",
+      "expect": { "loggedOut": "pass", "member": "redirect:/dashboard", "orgAdmin": "redirect:/dashboard", "globalAdmin": "redirect:/dashboard", "crossTenant": "redirect:/dashboard", "proMember": "redirect:/dashboard" }
+    },
+    "screen:/login": {
+      "kind": "screen",
+      "note": "public; authed users bounced to /dashboard",
+      "expect": { "loggedOut": "pass", "member": "redirect:/dashboard", "orgAdmin": "redirect:/dashboard", "globalAdmin": "redirect:/dashboard", "crossTenant": "redirect:/dashboard", "proMember": "redirect:/dashboard" }
+    },
+    "screen:/signup": {
+      "kind": "screen",
+      "note": "public signup disabled on self-host default (ENABLE_PUBLIC_SIGNUP!=true) -> redirect /login for everyone, before auth",
+      "expect": { "loggedOut": "redirect:/login", "member": "redirect:/login", "orgAdmin": "redirect:/login", "globalAdmin": "redirect:/login", "crossTenant": "redirect:/login", "proMember": "redirect:/login" }
+    },
+    "screen:/reset-password": {
+      "kind": "screen",
+      "expect": { "loggedOut": "pass", "member": "pass", "orgAdmin": "pass", "globalAdmin": "pass", "crossTenant": "pass", "proMember": "pass" }
+    },
+    "screen:/accept-invite": {
+      "kind": "screen",
+      "expect": { "loggedOut": "pass", "member": "pass", "orgAdmin": "pass", "globalAdmin": "pass", "crossTenant": "pass", "proMember": "pass" }
+    },
+    "screen:/setup": {
+      "kind": "screen",
+      "note": "setup-exempt public bootstrap route",
+      "expect": { "loggedOut": "pass", "member": "pass", "orgAdmin": "pass", "globalAdmin": "pass", "crossTenant": "pass", "proMember": "pass" }
+    },
+    "screen:/retro": {
+      "kind": "screen",
+      "note": "public retro landing (token/config gated inside, not by middleware auth)",
+      "expect": { "loggedOut": "pass", "member": "pass", "orgAdmin": "pass", "globalAdmin": "pass", "crossTenant": "pass", "proMember": "pass" }
+    },
+    "screen:/retro/:token": {
+      "kind": "screen",
+      "expect": { "loggedOut": "pass", "member": "pass", "orgAdmin": "pass", "globalAdmin": "pass", "crossTenant": "pass", "proMember": "pass" }
+    },
+    "screen:/share/:token": {
+      "kind": "screen",
+      "note": "public guest-share view",
+      "expect": { "loggedOut": "pass", "member": "pass", "orgAdmin": "pass", "globalAdmin": "pass", "crossTenant": "pass", "proMember": "pass" }
+    },
+    "screen:/~offline": {
+      "kind": "screen",
+      "note": "PWA offline fallback (Serwist). NOT in middleware publicPaths, so logged-out online navigation redirects to /login. This is correct: when actually offline the service worker serves it from precache and middleware never runs; the page is contentless. The gate corrected an over-broad hand-audit here (initially assumed public like the other Serwist routes).",
+      "expect": { "loggedOut": "redirect:/login", "member": "pass", "orgAdmin": "pass", "globalAdmin": "pass", "crossTenant": "pass", "proMember": "pass" }
+    },
+    "screen:/dashboard": {
+      "kind": "screen",
+      "expect": { "loggedOut": "redirect:/login", "member": "pass", "orgAdmin": "pass", "globalAdmin": "pass", "crossTenant": "pass", "proMember": "pass" }
+    },
+    "screen:/inbox": {
+      "kind": "screen",
+      "expect": { "loggedOut": "redirect:/login", "member": "pass", "orgAdmin": "pass", "globalAdmin": "pass", "crossTenant": "pass", "proMember": "pass" }
+    },
+    "screen:/actions": {
+      "kind": "screen",
+      "expect": { "loggedOut": "redirect:/login", "member": "pass", "orgAdmin": "pass", "globalAdmin": "pass", "crossTenant": "pass", "proMember": "pass" }
+    },
+    "screen:/settings": {
+      "kind": "screen",
+      "expect": { "loggedOut": "redirect:/login", "member": "pass", "orgAdmin": "pass", "globalAdmin": "pass", "crossTenant": "pass", "proMember": "pass" }
+    },
+    "screen:/series": {
+      "kind": "screen",
+      "expect": { "loggedOut": "redirect:/login", "member": "pass", "orgAdmin": "pass", "globalAdmin": "pass", "crossTenant": "pass", "proMember": "pass" }
+    },
+    "screen:/series/:id": {
+      "kind": "screen",
+      "expect": { "loggedOut": "redirect:/login", "member": "pass", "orgAdmin": "pass", "globalAdmin": "pass", "crossTenant": "pass", "proMember": "pass" }
+    },
+    "screen:/series/:id/meetings/:meetingId": {
+      "kind": "screen",
+      "expect": { "loggedOut": "redirect:/login", "member": "pass", "orgAdmin": "pass", "globalAdmin": "pass", "crossTenant": "pass", "proMember": "pass" }
+    },
+    "screen:/issues/:id": {
+      "kind": "screen",
+      "expect": { "loggedOut": "redirect:/login", "member": "pass", "orgAdmin": "pass", "globalAdmin": "pass", "crossTenant": "pass", "proMember": "pass" }
+    },
+    "screen:/companion/authorize": {
+      "kind": "screen",
+      "expect": { "loggedOut": "redirect:/login", "member": "pass", "orgAdmin": "pass", "globalAdmin": "pass", "crossTenant": "pass", "proMember": "pass" }
+    },
+    "screen:/invite-requests/review": {
+      "kind": "screen",
+      "note": "middleware requires auth; page itself redirects unauth to /login (defense in depth). At middleware grain: loggedOut bounced.",
+      "expect": { "loggedOut": "redirect:/login", "member": "pass", "orgAdmin": "pass", "globalAdmin": "pass", "crossTenant": "pass", "proMember": "pass" }
+    },
+    "guard:admin-layout": {
+      "kind": "guard",
+      "note": "server-component gate: (app)/admin/layout.tsx redirect('/') unless the caller is an instance admin (profiles.role==='admin') OR an org admin of their current org. This gates workspace administration (/admin/users), open to both kinds. globalAdmin (instance) and orgAdmin (org A admin) pass; plain member/pro and cross-tenant redirect.",
+      "expect": { "loggedOut": "redirect:/", "member": "redirect:/", "orgAdmin": "pass", "globalAdmin": "pass", "crossTenant": "redirect:/", "proMember": "redirect:/" }
+    },
+    "guard:admin-instance": {
+      "kind": "guard",
+      "note": "server-component gate: (app)/admin/(instance)/layout.tsx wraps instance administration (Overview/Settings/Health). Only instance admins pass; an org admin is redirected to the workspace page they can use (/admin/users); everyone else to /.",
+      "expect": { "loggedOut": "redirect:/", "member": "redirect:/", "orgAdmin": "redirect:/admin/users", "globalAdmin": "pass", "crossTenant": "redirect:/", "proMember": "redirect:/" }
+    },
+    "endpoint:GET /api/admin/config": {
+      "kind": "endpoint",
+      "guardFamily": "requireAdmin",
+      "note": "/api/admin is a middleware public path (bootstrap); requireAdmin gates. loggedOut->401(handler), non-global-admin->403, globalAdmin->pass.",
+      "expect": { "loggedOut": "401", "member": "403", "orgAdmin": "403", "globalAdmin": "pass", "crossTenant": "403", "proMember": "403" }
+    },
+    "endpoint:GET /api/admin/overview": {
+      "kind": "endpoint",
+      "guardFamily": "requireAdmin",
+      "expect": { "loggedOut": "401", "member": "403", "orgAdmin": "403", "globalAdmin": "pass", "crossTenant": "403", "proMember": "403" }
+    },
+    "endpoint:GET /api/admin/invitations": {
+      "kind": "endpoint",
+      "guardFamily": "requireCurrentOrgAdmin",
+      "tenantScoped": [
+        { "bodyPath": "members", "idField": "user_id", "entity": "organization_members", "entityMatchField": "user_id" },
+        { "bodyPath": "invitations", "idField": "id", "entity": "organization_invitations", "entityMatchField": "id" }
+      ],
+      "note": "org-admin gate on caller.current_org. orgAdmin+globalAdmin (both org A admins) pass and see ONLY org A invitations; member/pro (org A non-admin)->403; crossTenant (org B member, not admin)->403; loggedOut->401.",
+      "expect": { "loggedOut": "401", "member": "403", "orgAdmin": "pass", "globalAdmin": "pass", "crossTenant": "403", "proMember": "403" }
+    },
+    "endpoint:GET /api/workspace/members": {
+      "kind": "endpoint",
+      "guardFamily": "getUser",
+      "tenantScoped": [
+        { "bodyPath": "members", "idField": "id", "entity": "organization_members", "entityMatchField": "user_id" }
+      ],
+      "note": "any authed user reaches; response scoped to caller.current_org via app-code .eq('organization_id',...). loggedOut bounced 401 at middleware (/api/workspace not public). Each identity sees ONLY its own org's members; crossTenant sees org B only.",
+      "expect": { "loggedOut": "401", "member": "pass", "orgAdmin": "pass", "globalAdmin": "pass", "crossTenant": "pass", "proMember": "pass" }
+    },
+    "endpoint:GET /api/setup/status": {
+      "kind": "endpoint",
+      "guardFamily": "public",
+      "expect": { "loggedOut": "pass", "member": "pass", "orgAdmin": "pass", "globalAdmin": "pass", "crossTenant": "pass", "proMember": "pass" }
+    },
+    "endpoint:GET /api/instance-meta": {
+      "kind": "endpoint",
+      "guardFamily": "public",
+      "expect": { "loggedOut": "pass", "member": "pass", "orgAdmin": "pass", "globalAdmin": "pass", "crossTenant": "pass", "proMember": "pass" }
+    }
+  }
+}

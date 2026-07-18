@@ -137,6 +137,9 @@ jobs:
       - name: Self-host migration wiring
         run: pnpm test:self-host
 
+      - name: Hermetic authorization gate
+        run: pnpm test:authz
+
       - name: Build (includes typecheck)
         run: pnpm build
         env:

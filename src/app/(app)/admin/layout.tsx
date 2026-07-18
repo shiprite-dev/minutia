@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { resolveAdminAccess } from "@/lib/supabase/admin-access";
 import { AdminNav } from "@/components/minutia/admin-nav";
 
 export const metadata: Metadata = {
@@ -12,20 +12,9 @@ export default async function AdminLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) redirect("/");
-
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("id", user.id)
-    .single();
-
-  if (profile?.role !== "admin") redirect("/");
+  const access = await resolveAdminAccess();
+  if (!access) redirect("/");
+  if (!access.instanceAdmin && !access.orgAdmin) redirect("/");
 
   return (
     <div className="flex flex-1 flex-col gap-6 p-4 lg:p-6">
@@ -34,7 +23,7 @@ export default async function AdminLayout({
           <h1 className="font-display text-2xl font-semibold tracking-tight text-ink">
             Admin
           </h1>
-          <AdminNav />
+          <AdminNav instanceAdmin={access.instanceAdmin} />
         </div>
         {children}
       </div>

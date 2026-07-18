@@ -30,7 +30,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { UserPlus, Users, Mail, UserMinus, Trash2, Sparkles } from "lucide-react";
+import { UserPlus, Users, Mail, UserMinus, Trash2, Sparkles, Copy, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { shouldPromptSeatBilling } from "@/lib/billing/seat-billing";
 import { useAiAccess, useUpsellNoticeUrl } from "@/lib/hooks/use-ai-access";
@@ -96,6 +96,8 @@ export function WorkspaceMembers() {
   const [inviteRole, setInviteRole] = useState<"member" | "admin">("member");
   const [inviteState, setInviteState] = useState<"idle" | "loading" | "sent" | "error">("idle");
   const [inviteMessage, setInviteMessage] = useState("");
+  const [inviteLink, setInviteLink] = useState("");
+  const [linkCopied, setLinkCopied] = useState(false);
   const [pendingInvite, setPendingInvite] = useState(false);
   const [memberActionId, setMemberActionId] = useState<string | null>(null);
   const [memberMessage, setMemberMessage] = useState("");
@@ -146,6 +148,8 @@ export function WorkspaceMembers() {
   async function submitInvite() {
     setInviteState("loading");
     setInviteMessage("");
+    setInviteLink("");
+    setLinkCopied(false);
 
     const res = await fetch("/api/admin/invitations", {
       method: "POST",
@@ -161,9 +165,24 @@ export function WorkspaceMembers() {
     }
 
     setInviteState("sent");
-    setInviteMessage("Invitation sent.");
     setInviteEmail("");
+    if (data.delivery === "link" && data.acceptUrl) {
+      setInviteLink(data.acceptUrl);
+      setInviteMessage("");
+    } else {
+      setInviteMessage("Invitation sent.");
+    }
     await refreshOrgAdmin();
+  }
+
+  async function copyInviteLink() {
+    try {
+      await navigator.clipboard.writeText(inviteLink);
+    } catch {
+      // Clipboard API unavailable (e.g. headless browser)
+    }
+    setLinkCopied(true);
+    setTimeout(() => setLinkCopied(false), 2000);
   }
 
   async function handleInvite(e: React.FormEvent) {
@@ -335,6 +354,32 @@ export function WorkspaceMembers() {
               <p className={cn("text-xs", inviteState === "error" ? "text-danger" : "text-success")}>
                 {inviteMessage}
               </p>
+            )}
+            {inviteLink && (
+              <div className="space-y-2 rounded-xl border border-dashed border-border/60 bg-muted/30 p-4">
+                <p className="text-xs text-ink-3">
+                  Email isn&apos;t configured on this instance. Share this invite link directly:
+                </p>
+                <div className="flex items-center gap-2">
+                  <Input
+                    readOnly
+                    aria-label="Invite link"
+                    value={inviteLink}
+                    onFocus={(e) => e.currentTarget.select()}
+                    className="font-mono text-xs"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="shrink-0"
+                    onClick={copyInviteLink}
+                  >
+                    {linkCopied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+                    {linkCopied ? "Copied" : "Copy"}
+                  </Button>
+                </div>
+              </div>
             )}
           </>
         ) : (
