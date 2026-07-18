@@ -1146,7 +1146,7 @@ function QuickAddButton() {
         data-tour="quick-add"
         aria-label="Quick add issue"
         onClick={() => openQuickAddDialog()}
-        className="fixed bottom-6 right-6 z-50 flex items-center justify-center size-12 rounded-full bg-accent text-white shadow-lg transition-colors hover:bg-accent-hover"
+        className="fixed bottom-[calc(1.5rem+env(safe-area-inset-bottom))] right-[calc(1.5rem+env(safe-area-inset-right))] z-50 flex items-center justify-center size-12 rounded-full bg-accent text-white shadow-lg transition-colors hover:bg-accent-hover"
         whileTap={{ scale: 0.9 }}
       >
         <Plus className="size-5" />
