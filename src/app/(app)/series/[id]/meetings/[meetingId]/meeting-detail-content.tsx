@@ -1456,6 +1456,7 @@ export function MeetingDetailContent({
 
           <div className="mb-6">
             <BriefCard
+              seriesId={seriesId}
               seriesName={series?.name ?? ""}
               nextMeetingDate={new Date(meeting.date)}
               pendingIssues={briefIssues.slice(0, 10)}

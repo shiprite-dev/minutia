@@ -1,4 +1,5 @@
 import { escapeHtml } from "@/lib/escape-html";
+import { renderEmailLayout } from "@/lib/email-layout";
 import type { Issue } from "@/lib/types";
 import type { OwnerReminder, ReminderContext } from "./gather";
 
@@ -51,22 +52,30 @@ function renderText(owners: OwnerReminder[], ctx: ReminderContext): string {
 }
 
 function renderHtml(owners: OwnerReminder[], ctx: ReminderContext): string {
-  const parts = [
-    `<h1>Open items in ${escapeHtml(ctx.seriesName)}</h1>`,
-    `<p>${escapeHtml(leadLine(owners, ctx))}</p>`,
-  ];
-  for (const owner of owners) {
-    parts.push(`<h2>${escapeHtml(ownerLabel(owner))}</h2>`);
-    parts.push("<ul>");
-    for (const issue of owner.issues) {
-      parts.push(`<li>${escapeHtml(issue.title)} (#${issue.issue_number})</li>`);
-    }
-    parts.push("</ul>");
-  }
-  parts.push(
-    `<p>${escapeHtml(MINUTIA_BRANDING)} - <a href="${escapeHtml(ctx.appUrl)}">${escapeHtml(ctx.appUrl)}</a></p>`
-  );
-  return parts.join("\n");
+  const sections = owners
+    .map((owner) => {
+      const items = owner.issues
+        .map(
+          (issue) =>
+            `<li style="margin:0 0 5px;color:#171717;font-size:15px;line-height:22px;" class="m-ink">${escapeHtml(issue.title)} (#${issue.issue_number})</li>`
+        )
+        .join("");
+      return `
+        <div style="margin-top:20px;">
+          <p style="margin:0 0 6px;color:#6b665f;font-size:11px;font-weight:700;line-height:16px;text-transform:uppercase;letter-spacing:.08em;" class="m-muted">${escapeHtml(ownerLabel(owner))}</p>
+          <ul style="margin:0;padding-left:18px;">${items}</ul>
+        </div>`;
+    })
+    .join("");
+
+  return renderEmailLayout({
+    preheader: leadLine(owners, ctx),
+    heading: `Open items in ${ctx.seriesName}`,
+    intro: leadLine(owners, ctx),
+    bodyHtml: sections,
+    cta: { label: "Open in Minutia", href: ctx.appUrl },
+    footerUrl: ctx.appUrl,
+  });
 }
 
 export function formatReminderDigest(owners: OwnerReminder[], ctx: ReminderContext) {

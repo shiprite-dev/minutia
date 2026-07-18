@@ -2,6 +2,7 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { ownerMatchesRecipient } from "@/lib/brief";
 import { CATEGORY_CONFIG, STATUS_CONFIG } from "@/lib/constants";
 import { IssueKey } from "@/components/minutia/issue-key";
 import { MinutiaCategoryIcon } from "@/components/minutia/minutia-icons";
@@ -340,23 +341,52 @@ function MeetingShareView({
 // Series share view
 // ---------------------------------------------------------------------------
 
+function SeriesIssueRow({ issue }: { issue: Issue }) {
+  return (
+    <div className="flex items-center gap-3 bg-card border border-rule rounded-md px-4 py-3">
+      <span
+        className={`inline-block size-1.5 rounded-full shrink-0 ${priorityDotColor[issue.priority]}`}
+        aria-label={`Priority: ${issue.priority}`}
+      />
+      <span className="text-sm text-ink flex-1 min-w-0 truncate">
+        {issue.title}
+      </span>
+      <span className="inline-flex items-center gap-1 text-xs text-ink-3 shrink-0">
+        <MinutiaCategoryIcon category={issue.category} className="size-3.5 text-ink" />
+        {CATEGORY_CONFIG[issue.category].label}
+      </span>
+      <span className="text-xs text-ink-3 shrink-0">
+        {STATUS_CONFIG[issue.status].label}
+      </span>
+    </div>
+  );
+}
+
 function SeriesShareView({
   series,
   meetings,
   openIssuesCount,
   openIssues,
   share,
+  youEmail,
 }: {
   series: MeetingSeries;
   meetings: Meeting[];
   openIssuesCount: number;
   openIssues: Issue[];
   share: GuestShare;
+  youEmail?: string;
 }) {
   const sortedMeetings = [...meetings].sort(
     (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
   );
   const recentMeetings = sortedMeetings.slice(0, 10);
+
+  const myItems = youEmail
+    ? openIssues.filter((issue) =>
+        ownerMatchesRecipient(youEmail, { ownerName: issue.owner_name })
+      )
+    : [];
 
   return (
     <ShareLayout expiresAt={share.expires_at}>
@@ -376,6 +406,24 @@ function SeriesShareView({
         )}
       </div>
 
+      {/* Your pending items (guest deep-link) */}
+      {youEmail && (
+        <section className="mb-8 rounded-lg border border-accent/30 bg-accent-soft/40 p-4 sm:p-5">
+          <SectionHeading count={myItems.length}>Your pending items</SectionHeading>
+          {myItems.length === 0 ? (
+            <p className="mt-3 text-sm text-ink-3">
+              Nothing is waiting on you right now. Nice.
+            </p>
+          ) : (
+            <div className="mt-4 space-y-2">
+              {myItems.map((issue) => (
+                <SeriesIssueRow key={issue.id} issue={issue} />
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+
       {/* Open Issues */}
       <section className="mb-8">
         <SectionHeading count={openIssuesCount}>Open issues</SectionHeading>
@@ -384,25 +432,7 @@ function SeriesShareView({
         ) : (
           <div className="mt-4 space-y-2">
             {openIssues.map((issue) => (
-              <div
-                key={issue.id}
-                className="flex items-center gap-3 bg-card border border-rule rounded-md px-4 py-3"
-              >
-                <span
-                  className={`inline-block size-1.5 rounded-full shrink-0 ${priorityDotColor[issue.priority]}`}
-                  aria-label={`Priority: ${issue.priority}`}
-                />
-                <span className="text-sm text-ink flex-1 min-w-0 truncate">
-                  {issue.title}
-                </span>
-                <span className="inline-flex items-center gap-1 text-xs text-ink-3 shrink-0">
-                  <MinutiaCategoryIcon category={issue.category} className="size-3.5 text-ink" />
-                  {CATEGORY_CONFIG[issue.category].label}
-                </span>
-                <span className="text-xs text-ink-3 shrink-0">
-                  {STATUS_CONFIG[issue.status].label}
-                </span>
-              </div>
+              <SeriesIssueRow key={issue.id} issue={issue} />
             ))}
           </div>
         )}
@@ -642,10 +672,14 @@ export async function generateMetadata({
 
 export default async function GuestSharePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ token: string }>;
+  searchParams: Promise<{ you?: string }>;
 }) {
   const { token } = await params;
+  const { you } = await searchParams;
+  const youEmail = you?.includes("@") ? you : undefined;
   const supabase = await createClient();
 
   // 0. If the visitor is a registered user, create a notification and redirect to inbox
@@ -760,6 +794,7 @@ export default async function GuestSharePage({
         openIssuesCount={payload.open_issues_count ?? 0}
         openIssues={payload.open_issues ?? []}
         share={guestShare}
+        youEmail={youEmail}
       />
     );
   }
