@@ -36,6 +36,17 @@ async function setSeedUserRole(
   expect(res.ok()).toBeTruthy();
 }
 
+async function setSeedMembershipRole(
+  request: APIRequestContext,
+  role: "admin" | "member"
+) {
+  const res = await request.patch(
+    `${SUPABASE_URL}/rest/v1/organization_members?user_id=eq.${TEST_USER_ID}`,
+    { headers: supabaseHeaders(), data: { role } }
+  );
+  expect(res.ok()).toBeTruthy();
+}
+
 let originalRole = "user";
 
 test.beforeAll(async ({ request }) => {
@@ -98,15 +109,18 @@ test.describe("Admin panel UI", () => {
     await expect(dbRow).toContainText(/ok/i);
   });
 
-  test("org admin without the instance role lands on workspace users", async ({
+  test("plain member is redirected away from /admin", async ({
     request,
     page,
   }) => {
     await setSeedUserRole(request, "user");
-
-    await page.goto("/admin");
-    await page.waitForURL((url) => url.pathname === "/admin/users");
-    await page.goto("/admin/settings");
-    await page.waitForURL((url) => url.pathname === "/admin/users");
+    await setSeedMembershipRole(request, "member");
+    try {
+      await page.goto("/admin");
+      await page.waitForURL((url) => !url.pathname.startsWith("/admin"));
+      expect(new URL(page.url()).pathname).not.toContain("/admin");
+    } finally {
+      await setSeedMembershipRole(request, "admin");
+    }
   });
 });
