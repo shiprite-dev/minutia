@@ -205,11 +205,9 @@ export function BriefCard({
               tabIndex={-1}
             />
           )}
-          <Button
-            variant="default"
+          <Button variant="accent"
             size="sm"
             onClick={handleSendBrief}
-            className="bg-accent text-white hover:bg-accent-hover"
             data-testid="send-brief-btn"
           >
             {sent ? (

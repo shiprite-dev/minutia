@@ -340,8 +340,9 @@ function LoginForm() {
 
               <Button
                 type="submit"
+                variant="accent"
                 disabled={formState === "loading" || !canSignIn}
-                className="h-10 w-full rounded-[12px] bg-accent font-sans font-medium text-white hover:bg-accent-hover disabled:opacity-40"
+                className="h-10 w-full rounded-[12px] font-sans font-medium"
               >
                 {formState === "loading" ? (
                   <span className="flex items-center gap-2">

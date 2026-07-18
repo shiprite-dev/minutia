@@ -339,7 +339,7 @@ function NextMeetingWidget({
       )}
       <div className="flex items-center gap-3">
         <Link href={`/series/${nextSeries.id}`} className="w-full">
-          <Button className="w-full bg-ink text-paper hover:bg-ink-2 h-10">
+          <Button variant="accent" className="w-full h-10">
             Open series
             <ArrowRight className="size-3.5 ml-1.5" />
           </Button>
@@ -1316,9 +1316,8 @@ export default function Dashboard() {
               recurring meetings.
             </EmptyDescription>
             <EmptyContent>
-              <Button
+              <Button variant="accent"
                 onClick={() => router.push("/series")}
-                className="bg-accent text-white hover:bg-accent-hover"
               >
                 Create your first series
               </Button>

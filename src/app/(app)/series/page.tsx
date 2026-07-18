@@ -49,9 +49,8 @@ export default function SeriesListPage() {
           <h1 className="font-display text-2xl font-semibold text-ink">
             Series
           </h1>
-          <Button
+          <Button variant="accent"
             onClick={() => setDialogOpen(true)}
-            className="bg-accent text-white hover:bg-accent-hover"
           >
             <Plus className="size-4" data-icon="inline-start" />
             Create series

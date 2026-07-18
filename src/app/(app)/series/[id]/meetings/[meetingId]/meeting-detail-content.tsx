@@ -1414,10 +1414,9 @@ export function MeetingDetailContent({
                 {meeting.title}
               </h1>
             </div>
-            <Button
+            <Button variant="accent"
               onClick={handleStartMeeting}
               disabled={startOrJoinMeeting.isPending}
-              className="bg-accent text-white hover:bg-accent-hover"
             >
               <Play className="size-4" />
               {liveMeetingInSeries ? "Join live meeting" : "Start meeting"}
@@ -1656,12 +1655,11 @@ export function MeetingDetailContent({
               {!loadingSuggestions && aiSuggestions.length === 0 && (
                 <div className="flex flex-col items-start gap-3 px-4 py-5 text-sm text-ink-3">
                   <p>No AI suggestions yet for this meeting.</p>
-                  <Button
+                  <Button variant="accent"
                     type="button"
                     size="sm"
                     onClick={generateSuggestions}
                     disabled={!notes.trim() && !transcript.trim()}
-                    className="bg-accent text-white hover:bg-accent-hover"
                   >
                     <Sparkles className="size-3.5" />
                     Generate suggestions
@@ -1773,12 +1771,11 @@ export function MeetingDetailContent({
                                 Reject suggestion
                               </Button>
                               {suggestion.type !== "duplicate_warning" && (
-                                <Button
+                                <Button variant="accent"
                                   type="button"
                                   size="sm"
                                   onClick={() => handleSuggestionReview(suggestion, "accept")}
                                   disabled={reviewingSuggestionId === suggestion.id || !suggestion.title.trim()}
-                                  className="bg-accent text-white hover:bg-accent-hover"
                                 >
                                   {reviewingSuggestionId === suggestion.id ? (
                                     <Loader2 className="size-3.5 animate-spin" />
@@ -1939,11 +1936,10 @@ export function MeetingDetailContent({
             <p className="max-w-md font-mono text-[11px] leading-relaxed text-ink-4">
               Replay the recap to watch it land the way your team will - press R or the button.
             </p>
-            <Button
+            <Button variant="accent"
               type="button"
               onClick={replayRecap}
               disabled={!hasAccess}
-              className="bg-accent text-white hover:bg-accent-hover"
             >
               <RotateCcw className="size-3.5" />
               Replay recap
@@ -2067,11 +2063,10 @@ export function MeetingDetailContent({
                 >
                   Cancel
                 </Button>
-                <Button
+                <Button variant="accent"
                   type="button"
                   onClick={handleApplyAiNotes}
                   disabled={applyAiNotes.isPending}
-                  className="bg-accent text-white hover:bg-accent-hover"
                 >
                   {applyAiNotes.isPending ? (
                     <Loader2 className="size-3.5 animate-spin" />
