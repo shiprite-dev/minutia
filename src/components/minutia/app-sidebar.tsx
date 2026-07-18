@@ -192,7 +192,7 @@ export function AppSidebar({ profile, organizations }: AppSidebarProps) {
           </div>
         )}
         <SidebarMenu className="mb-2">
-          {profile?.role === "admin" && (
+          {(profile?.role === "admin" || currentOrganization?.role === "admin") && (
             <SidebarMenuItem>
               <SidebarMenuButton
                 asChild
