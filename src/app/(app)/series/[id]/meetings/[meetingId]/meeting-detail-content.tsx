@@ -34,6 +34,7 @@ import { CaptureInput } from "@/components/minutia/capture-input";
 import { InlineTaskList } from "@/components/minutia/inline-task-list";
 import { IssueCard } from "@/components/minutia/issue-card";
 import { BriefCard } from "@/components/minutia/brief-card";
+import { DecisionCard } from "@/components/minutia/decision-card";
 import { CalendarDraftNotice } from "@/components/minutia/calendar-draft-notice";
 import { PrefetchIssueLink } from "@/components/minutia/prefetch-issue-link";
 import { StatusChip } from "@/components/minutia/status-chip";
@@ -549,24 +550,6 @@ function LogGroupLabel({ label, count }: { label: string; count: number }) {
         {label}
       </span>
       <span className="font-mono text-[11px] tabular-nums text-ink-4">{count}</span>
-    </div>
-  );
-}
-
-// Green-accented decision card (3px left border) matching the log card anatomy.
-function DecisionCard({ decision }: { decision: Decision }) {
-  return (
-    <div className="rounded-md border border-rule border-l-[3px] border-l-success bg-card px-4 py-3 shadow-[var(--shadow-raised)]">
-      <p className="font-mono text-[10px] font-medium uppercase tracking-wider text-success">
-        Decision
-      </p>
-      <p className="mt-1 text-sm font-medium text-ink">{decision.title}</p>
-      {decision.rationale && (
-        <p className="mt-1 text-xs text-ink-2">{decision.rationale}</p>
-      )}
-      {decision.made_by && (
-        <p className="mt-1 text-xs font-mono text-ink-4">by {decision.made_by}</p>
-      )}
     </div>
   );
 }
