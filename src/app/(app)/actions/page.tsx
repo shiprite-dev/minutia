@@ -39,7 +39,6 @@ interface SectionProps {
   count: number;
   defaultOpen?: boolean;
   children: React.ReactNode;
-  staggerOffset: number;
 }
 
 function Section({
@@ -47,7 +46,6 @@ function Section({
   count,
   defaultOpen = true,
   children,
-  staggerOffset,
 }: SectionProps) {
   const [open, setOpen] = React.useState(defaultOpen);
 
@@ -323,7 +321,6 @@ export default function MyActionsPage() {
                 title="Needs attention"
                 count={needsAttention.length}
                 defaultOpen={true}
-                staggerOffset={0}
               >
                 <div className="space-y-0.5">
                   {needsAttention.map((issue, index) =>
@@ -339,7 +336,6 @@ export default function MyActionsPage() {
                 title="Pending"
                 count={pending.length}
                 defaultOpen={true}
-                staggerOffset={needsAttention.length}
               >
                 <div className="space-y-0.5">
                   {pending.map((issue, index) =>
@@ -355,7 +351,6 @@ export default function MyActionsPage() {
                 title="Completed"
                 count={completed.length}
                 defaultOpen={false}
-                staggerOffset={needsAttention.length + pending.length}
               >
                 <div className="space-y-0.5">
                   {completed.map((issue, index) =>
