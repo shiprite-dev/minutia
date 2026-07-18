@@ -4,8 +4,13 @@ import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { getInstanceConfigMap } from "@/lib/instance-config";
 import { getSmtpConfig } from "@/lib/email";
 import {
+  isTranscriptionConfigured,
+  isDiarizingProviderConfigured,
+} from "@/lib/transcription";
+import {
   configStatus,
   overallHealth,
+  transcriptionProbe,
   type ServiceProbe,
 } from "@/lib/admin/health";
 
@@ -46,6 +51,13 @@ export async function GET(request: NextRequest) {
 
   const aiConfig = await getInstanceConfigMap(["ai_api_key"]);
   probes.push({ service: "ai", status: configStatus(aiConfig.ai_api_key) });
+
+  probes.push(
+    transcriptionProbe(
+      isTranscriptionConfigured(process.env),
+      isDiarizingProviderConfigured(process.env)
+    )
+  );
 
   return NextResponse.json({ overall: overallHealth(probes), services: probes });
 }

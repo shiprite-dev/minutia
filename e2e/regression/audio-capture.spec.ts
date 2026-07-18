@@ -83,6 +83,59 @@ async function createLiveMeetingFixture(request: APIRequestContext) {
   return { seriesId, meetingId };
 }
 
+async function setCompanionLastSeen(
+  request: APIRequestContext,
+  value: string | null
+) {
+  await rest(request, `profiles?id=eq.${TEST_USER_ID}`, {
+    method: "PATCH",
+    headers: serviceHeaders("return=minimal"),
+    data: { companion_last_seen_at: value },
+  });
+}
+
+const MAC_UA =
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 " +
+  "(KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36";
+
+test.describe("Companion record hand-off", () => {
+  test.use({ userAgent: MAC_UA });
+
+  test("offers a lowercase minutia://record deep link to a mac manager with a known companion", async ({
+    page,
+    request,
+  }) => {
+    test.skip(!HAS_SERVICE_ROLE, "Requires service role for isolated fixtures");
+
+    const fixture = await createLiveMeetingFixture(request);
+    await setCompanionLastSeen(request, new Date().toISOString());
+    // The primary platform check reads navigator.userAgentData; force macOS so the
+    // feature-detect resolves the same way it would on a real Mac browser.
+    await page.addInitScript(() => {
+      Object.defineProperty(navigator, "userAgentData", {
+        configurable: true,
+        get: () => ({ platform: "macOS" }),
+      });
+    });
+
+    try {
+      await page.goto(`/series/${fixture.seriesId}/meetings/${fixture.meetingId}`);
+      await waitForApp(page);
+      await expect(page.getByText("Live").first()).toBeVisible();
+
+      const link = page.getByRole("link", { name: "Record with companion" });
+      await expect(link).toBeVisible();
+      await expect(link).toHaveAttribute(
+        "href",
+        `minutia://record?meeting_id=${fixture.meetingId.toLowerCase()}`
+      );
+    } finally {
+      await setCompanionLastSeen(request, null);
+      await deleteSeries(request, fixture.seriesId);
+    }
+  });
+});
+
 test.describe("Meeting audio capture", () => {
   test("records during live capture and uploads audio on meeting end", async ({
     page,
