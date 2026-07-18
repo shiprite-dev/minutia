@@ -169,6 +169,7 @@ test.describe("Organization RBAC and workspace routes", () => {
           data: { email: invitedEmail, role: "member" },
         });
         expect(res.ok()).toBeTruthy();
+        expect(await res.json()).toMatchObject({ invited: true, delivery: "email" });
 
         const membershipRes = await request.get(
           `${SUPABASE_URL}/rest/v1/organization_members?organization_id=eq.${orgId}&user_id=eq.${invitedUserId}&select=role`,

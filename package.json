@@ -68,6 +68,7 @@
     "test:upgrade-confirmation": "node --test scripts/verify-upgrade-confirmation.test.mjs",
     "test:date": "node --test scripts/verify-date.test.mjs",
     "test:reminders": "node --test scripts/verify-reminders.test.mjs",
+    "test:invitations": "node --test scripts/verify-invitations.test.mjs",
     "test:email-sender": "node --test scripts/verify-email-sender.test.mjs",
     "test:auth-links": "node --test scripts/verify-auth-links.test.mjs",
     "test:cadence-contract": "node --test scripts/verify-cadence-contract.test.mjs",
