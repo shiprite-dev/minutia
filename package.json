@@ -69,6 +69,7 @@
     "test:reminders": "node --test scripts/verify-reminders.test.mjs",
     "test:email-sender": "node --test scripts/verify-email-sender.test.mjs",
     "test:auth-links": "node --test scripts/verify-auth-links.test.mjs",
+    "test:companion-links": "node --test scripts/verify-companion-links.test.mjs",
     "test:cadence-contract": "node --test scripts/verify-cadence-contract.test.mjs",
     "test:seat-billing": "node --test scripts/verify-seat-billing.test.mjs",
     "test:admin-capabilities": "node --test scripts/verify-admin-capabilities.test.mjs",
