@@ -26,8 +26,8 @@ export function ownerMatchesRecipient(
   const recipient = recipientEmail.trim().toLowerCase();
   if (!recipient.includes("@")) return false;
 
-  if (owner.ownerEmail && owner.ownerEmail.trim().toLowerCase() === recipient) {
-    return true;
+  if (owner.ownerEmail) {
+    return owner.ownerEmail.trim().toLowerCase() === recipient;
   }
 
   if (!owner.ownerName) return false;

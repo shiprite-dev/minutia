@@ -64,6 +64,14 @@ test("matcher: email equality and name-token heuristic, no false positives", () 
   );
   // "Al" must not match "alice"
   assert.equal(ownerMatchesRecipient("alice@example.com", { ownerName: "Al" }), false);
+  // a known owner email is definitive: no name fallback for a different recipient
+  assert.equal(
+    ownerMatchesRecipient("bob.smith@example.com", {
+      ownerName: "Bob",
+      ownerEmail: "bob@example.com",
+    }),
+    false
+  );
   // unrelated owner
   assert.equal(ownerMatchesRecipient("alice@example.com", { ownerName: "Test User" }), false);
   // not an email

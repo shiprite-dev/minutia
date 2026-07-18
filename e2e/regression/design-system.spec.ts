@@ -287,7 +287,7 @@ test.describe("Brief card", () => {
     await waitForApp(page);
 
     await expect(page.getByText("Brief", { exact: true }).first()).toBeVisible();
-    await expect(page.getByText("Copy brief to send")).toBeVisible();
+    await expect(page.getByTestId("send-brief-btn")).toBeVisible();
     await expect(page.getByTestId("copy-brief-btn")).toBeVisible();
   });
 

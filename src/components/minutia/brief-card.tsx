@@ -112,6 +112,8 @@ export function BriefCard({
       } else if (res.status === 409) {
         setEmailUnavailable(true);
         setNotice("Email is not configured on this instance. Copy the brief to share it.");
+      } else if (typeof data.sent === "number" && data.sent > 0) {
+        setNotice(`Sent to ${data.sent} before failing. Copy the brief to reach the rest.`);
       } else {
         setNotice(data.error ? String(data.error) : "Could not send the brief.");
       }
