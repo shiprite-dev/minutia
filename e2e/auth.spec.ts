@@ -8,7 +8,7 @@ test.describe("Authentication", () => {
 
     await expect(page.getByRole("heading", { name: "minutia" })).toBeVisible();
     await expect(
-      page.getByText("The open-source meeting memory system."),
+      page.getByText("The open-source Outstanding Issues Log for recurring meetings."),
     ).toBeVisible();
     await expect(page.getByLabel("Email address")).toBeVisible();
     await expect(page.getByLabel("Password")).toBeVisible();

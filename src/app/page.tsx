@@ -3,7 +3,7 @@ import Link from "next/link";
 import { ArrowRight, Check } from "lucide-react";
 
 export const metadata: Metadata = {
-  title: "Minutia — The open-source meeting memory system",
+  title: "Minutia: the open-source Outstanding Issues Log",
   description:
     "Stop losing track of meeting outcomes. Minutia is the open-source Outstanding Issues Log for recurring meetings.",
 };
@@ -37,7 +37,7 @@ export default function LandingPage() {
       {/* ─── Hero ─── */}
       <section className="mx-auto max-w-3xl px-6 pt-24 pb-20 text-center sm:pt-32 sm:pb-28">
         <p className="text-xs font-mono uppercase tracking-wider text-accent mb-5">
-          The open-source meeting memory system
+          The open-source Outstanding Issues Log for recurring meetings
         </p>
         <h1 className="font-display text-4xl font-bold leading-tight tracking-tight text-ink sm:text-6xl">
           Stop losing track of meeting outcomes.
@@ -87,7 +87,7 @@ export default function LandingPage() {
       <section className="border-t border-rule">
         <div className="mx-auto max-w-3xl px-6 py-20 text-center">
           <h2 className="font-display text-2xl font-semibold text-ink sm:text-3xl">
-            Ready to own your meeting memory?
+            Ready to close the loop on every meeting?
           </h2>
           <p className="mt-4 text-ink-2">
             Free and open source. Self-host in minutes and own your data.
@@ -111,7 +111,7 @@ export default function LandingPage() {
             Minutia
           </span>
           <p className="text-xs text-ink-4">
-            Open-source meeting memory. Run it yourself.
+            The open-source Outstanding Issues Log. Run it yourself.
           </p>
         </div>
       </footer>

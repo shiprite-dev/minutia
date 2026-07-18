@@ -48,6 +48,13 @@ export async function openWidgetPicker(page: Page) {
   await expect(page.getByText("Widgets", { exact: true })).toBeVisible();
 }
 
+export async function groupBySeries(page: Page) {
+  const toggle = outstandingWidget(page).getByRole("button", { name: "By series" });
+  await expect(toggle).toBeVisible();
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-pressed", "true");
+}
+
 export async function expandOutstandingPreview(page: Page) {
   const more = outstandingWidget(page).getByRole("button", { name: /^\+\d+ more$/ }).first();
   if (!(await more.isVisible().catch(() => false))) return more;

@@ -197,10 +197,9 @@ export function FirstRunTour({ userId }: { userId: string }) {
                   It shows where dashboard panels, issues, series, meetings, and shortcuts live before your first real meeting.
                 </p>
                 <div className="mt-3 flex flex-wrap gap-2">
-                  <Button
+                  <Button variant="accent"
                     size="sm"
                     onClick={startTour}
-                    className="bg-accent text-white hover:bg-accent-hover"
                   >
                     Start tour
                     <ArrowRight className="size-3.5" />

@@ -27,7 +27,7 @@ export default function ShareError({
           {error.message}
         </pre>
       )}
-      <Button onClick={reset} className="bg-accent text-white hover:bg-accent-hover">
+      <Button variant="accent" onClick={reset} >
         <RotateCcw className="size-3.5 mr-1.5" />
         Try again
       </Button>

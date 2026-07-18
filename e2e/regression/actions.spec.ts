@@ -515,6 +515,55 @@ test.describe("My Actions Page", () => {
     }
   });
 
+  test("marking a row done moves it to Completed and persists after reload", async ({
+    page,
+    request,
+  }) => {
+    test.skip(!SERVICE_KEY, "Requires Supabase service role for isolated issues");
+
+    await withIssues(
+      request,
+      [
+        {
+          title: `One-click complete ${Date.now()}`,
+          overrides: { category: "action", owner_user_id: TEST_USER_ID },
+        },
+      ],
+      async ([issue]) => {
+        await page.goto("/actions");
+        await waitForApp(page);
+
+        const row = page
+          .locator("div")
+          .filter({ hasText: issue.title })
+          .filter({ has: page.getByRole("button", { name: "Mark done" }) })
+          .last();
+        await expect(row).toBeVisible();
+        await row.getByRole("button", { name: "Mark done" }).click();
+
+        // It leaves the active sections for the (collapsed) Completed section.
+        await expect(page.getByText(issue.title)).not.toBeVisible();
+        await page
+          .locator("button")
+          .filter({ hasText: "Completed" })
+          .first()
+          .click();
+        await expect(page.getByText(issue.title)).toBeVisible();
+
+        // The resolution persists after a reload.
+        await page.reload();
+        await waitForApp(page);
+        await expect(page.getByText(issue.title)).not.toBeVisible();
+        await page
+          .locator("button")
+          .filter({ hasText: "Completed" })
+          .first()
+          .click();
+        await expect(page.getByText(issue.title)).toBeVisible();
+      }
+    );
+  });
+
   test("series tag overlays are visible on issue cards", async ({ page, request }) => {
     test.skip(!SERVICE_KEY, "Requires Supabase service role for isolated issues");
 

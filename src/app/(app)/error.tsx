@@ -37,7 +37,7 @@ export default function AppError({
         </pre>
       )}
       <div className="flex items-center gap-3">
-        <Button onClick={handleRetry} className="bg-accent text-white hover:bg-accent-hover">
+        <Button variant="accent" onClick={handleRetry} >
           <RotateCcw className="size-3.5 mr-1.5" />
           Try again
         </Button>

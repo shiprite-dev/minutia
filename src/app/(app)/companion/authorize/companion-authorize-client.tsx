@@ -84,10 +84,10 @@ export function CompanionAuthorizeClient() {
           </CardContent>
         ) : (
           <CardFooter className="gap-3">
-            <Button
+            <Button variant="accent"
               onClick={handleApprove}
               disabled={status === "authorizing"}
-              className="h-9 bg-accent text-white hover:bg-accent-hover"
+              className="h-9"
             >
               {status === "authorizing" ? "Authorizing..." : "Approve"}
             </Button>

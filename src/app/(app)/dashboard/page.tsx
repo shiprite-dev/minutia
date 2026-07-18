@@ -40,7 +40,7 @@ import {
 import { useSeries } from "@/lib/hooks/use-series";
 import { useAllMeetings } from "@/lib/hooks/use-meetings";
 import { useDecisions } from "@/lib/hooks/use-decisions";
-import { CADENCE_LABELS, STATUS_CONFIG } from "@/lib/constants";
+import { CADENCE_LABELS, STATUS_CONFIG, PRIORITY_CONFIG } from "@/lib/constants";
 import { StatusChip } from "@/components/minutia/status-chip";
 import { CategoryBadge } from "@/components/minutia/category-badge";
 import { MinutiaCadenceIcon } from "@/components/minutia/minutia-icons";
@@ -122,6 +122,24 @@ function ageGroup(days: number): string {
 
 function ownerKeyOf(issue: Issue): string | null {
   return issue.owner_user_id ?? issue.owner_name ?? null;
+}
+
+// Flat-list order: overdue first (most overdue first), then priority
+// (critical > high > medium > low), then oldest.
+function outstandingListSort(a: Issue, b: Issue): number {
+  const aOver = isOverdue(a);
+  const bOver = isOverdue(b);
+  if (aOver !== bOver) return aOver ? -1 : 1;
+  if (aOver && bOver) {
+    const ad = a.due_date ? new Date(a.due_date).getTime() : 0;
+    const bd = b.due_date ? new Date(b.due_date).getTime() : 0;
+    if (ad !== bd) return ad - bd;
+  }
+  const pd =
+    (PRIORITY_CONFIG[a.priority]?.order ?? 99) -
+    (PRIORITY_CONFIG[b.priority]?.order ?? 99);
+  if (pd !== 0) return pd;
+  return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
 }
 
 function matchesQuery(issue: Issue, query: string): boolean {
@@ -339,7 +357,7 @@ function NextMeetingWidget({
       )}
       <div className="flex items-center gap-3">
         <Link href={`/series/${nextSeries.id}`} className="w-full">
-          <Button className="w-full bg-ink text-paper hover:bg-ink-2 h-10">
+          <Button variant="accent" className="w-full h-10">
             Open series
             <ArrowRight className="size-3.5 ml-1.5" />
           </Button>
@@ -369,6 +387,9 @@ function OutstandingWidget({
   onStatusChange: (issueId: string, oldStatus: IssueStatus, newStatus: IssueStatus, seriesId: string) => void;
 }) {
   const router = useRouter();
+  const groupBy = useUIStore((s) => s.groupBy);
+  const setGroupBy = useUIStore((s) => s.setGroupBy);
+  const bySeries = groupBy === "series";
   const [filter, setFilter] = React.useState<"all" | "open" | "pending" | "overdue">("all");
   const [focusedIdx, setFocusedIdx] = React.useState(-1);
   const [expandedSeries, setExpandedSeries] = React.useState<Set<string>>(new Set());
@@ -385,9 +406,10 @@ function OutstandingWidget({
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
-  // Dragging while a subset of issues is filtered out would rewrite hidden
-  // rows' positions, so reordering is only offered on the full, unfiltered view.
-  const dragEnabled = filter === "all" && !ownerFilter && !query;
+  // Reordering rewrites positions within a series, so it is only offered in the
+  // by-series view on the full, unfiltered set (a filtered subset would rewrite
+  // hidden rows' positions).
+  const dragEnabled = bySeries && filter === "all" && !ownerFilter && !query;
 
   const issueById = React.useMemo(() => {
     const map = new Map<string, Issue>();
@@ -414,6 +436,7 @@ function OutstandingWidget({
   }
 
   const flatIssues = React.useMemo(() => {
+    if (!bySeries) return filtered.slice().sort(outstandingListSort);
     const result: Issue[] = [];
     for (const series of seriesList) {
       const seriesIssues = (grouped.get(series.id) ?? []).slice().sort(byManualOrder);
@@ -423,7 +446,7 @@ function OutstandingWidget({
       result.push(...visible);
     }
     return result;
-  }, [filtered, seriesList, expandedSeries]);
+  }, [filtered, seriesList, expandedSeries, bySeries]);
 
   React.useEffect(() => {
     function handleKey(e: KeyboardEvent) {
@@ -447,7 +470,7 @@ function OutstandingWidget({
     return () => window.removeEventListener("keydown", handleKey);
   }, [flatIssues, focusedIdx, router, activeId]);
 
-  React.useEffect(() => { setFocusedIdx(-1); }, [filter, ownerFilter, query]);
+  React.useEffect(() => { setFocusedIdx(-1); }, [filter, ownerFilter, query, bySeries, expandedSeries]);
 
   // Capture phase so "/" focuses in-board search before the ⌘K palette's
   // bubble-phase listener sees it (the two stay distinct surfaces).
@@ -525,6 +548,15 @@ function OutstandingWidget({
     { key: "overdue" as const, label: "Overdue" },
   ];
 
+  const viewModes = [
+    { key: "none" as const, label: "List" },
+    { key: "series" as const, label: "By series" },
+  ];
+
+  const emptyGroupCount = seriesList.filter(
+    (s) => (grouped.get(s.id)?.length ?? 0) === 0
+  ).length;
+
   return (
     <WidgetShell id={id} index={widgetIndex}>
       <DndContext
@@ -537,25 +569,51 @@ function OutstandingWidget({
       >
         <div className="flex flex-wrap items-start justify-between gap-2 mb-3">
           <h3 className="font-display text-lg font-semibold text-ink">Outstanding items</h3>
-          <div className="flex items-center gap-1 overflow-x-auto" role="tablist" aria-label="Filter outstanding items">
-            {filters.map((f) => (
-              <button
-                key={f.key}
-                type="button"
-                role="tab"
-                aria-selected={filter === f.key}
-                onClick={() => setFilter(f.key)}
-                className={cn(
-                  "rounded-full px-3 py-1 text-xs font-medium transition-colors outline-none",
-                  "focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-paper",
-                  filter === f.key
-                    ? "bg-ink text-paper"
-                    : "bg-paper-2 text-ink-3 hover:text-ink-2"
-                )}
-              >
-                {f.label}
-              </button>
-            ))}
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-1 overflow-x-auto" role="tablist" aria-label="Filter outstanding items">
+              {filters.map((f) => (
+                <button
+                  key={f.key}
+                  type="button"
+                  role="tab"
+                  aria-selected={filter === f.key}
+                  onClick={() => setFilter(f.key)}
+                  className={cn(
+                    "rounded-full px-3 py-1 text-xs font-medium transition-colors outline-none",
+                    "focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-paper",
+                    filter === f.key
+                      ? "bg-ink text-paper"
+                      : "bg-paper-2 text-ink-3 hover:text-ink-2"
+                  )}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+            <div
+              role="group"
+              aria-label="Group outstanding items"
+              className="inline-flex shrink-0 items-center rounded-full bg-paper-2 p-0.5"
+            >
+              {viewModes.map((m) => {
+                const active = (groupBy === "series") === (m.key === "series");
+                return (
+                  <button
+                    key={m.key}
+                    type="button"
+                    aria-pressed={active}
+                    onClick={() => setGroupBy(m.key)}
+                    className={cn(
+                      "rounded-full px-3 py-1 text-xs font-medium transition-colors outline-none",
+                      "focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-paper",
+                      active ? "bg-ink text-paper" : "text-ink-3 hover:text-ink-2"
+                    )}
+                  >
+                    {m.label}
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
         <input
@@ -573,7 +631,6 @@ function OutstandingWidget({
           aria-label="Filter issues"
           className="mb-2 w-full max-w-[240px] rounded-md border border-rule bg-paper px-2.5 py-1.5 text-xs text-ink placeholder:text-ink-4 outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-paper"
         />
-        <p className="text-xs text-ink-4 mb-2">Grouped by series</p>
         <AnimatePresence>
           {(ownerFilter || query) && (
             <motion.div
@@ -637,15 +694,16 @@ function OutstandingWidget({
               Clear filters
             </Button>
           </div>
-        ) : (
+        ) : bySeries ? (
           <div className="divide-y divide-rule">
             {seriesList.map((series) => {
               const seriesIssues = (grouped.get(series.id) ?? []).slice().sort(byManualOrder);
-              if (
-                seriesIssues.length === 0 &&
-                (filter !== "all" || ownerFilter || query)
-              )
-                return null;
+              if (seriesIssues.length === 0) return null;
+
+              const isExpanded = expandedSeries.has(series.id);
+              const visible = isExpanded ? seriesIssues : seriesIssues.slice(0, PREVIEW_COUNT);
+              const hiddenCount = seriesIssues.length - PREVIEW_COUNT;
+              const groupSortedIds = seriesIssues.map((i) => i.id);
 
               return (
                 <div key={series.id} className="py-5 first:pt-0 last:pb-0">
@@ -665,76 +723,88 @@ function OutstandingWidget({
                     </span>
                   </div>
 
-                  {seriesIssues.length === 0 ? (
-                    <p className="text-xs text-ink-4 pl-5 mb-2">No matching items</p>
-                  ) : (() => {
-                    const isExpanded = expandedSeries.has(series.id);
-                    const visible = isExpanded ? seriesIssues : seriesIssues.slice(0, PREVIEW_COUNT);
-                    const hiddenCount = seriesIssues.length - PREVIEW_COUNT;
-                    const groupSortedIds = seriesIssues.map((i) => i.id);
-
-                    return (
-                      <div className="space-y-1.5">
-                        <SortableContext items={groupSortedIds} strategy={verticalListSortingStrategy}>
-                          {visible.map((issue, idx) => {
-                            const globalIdx = flatIssues.indexOf(issue);
-                            return (
-                              <IssueRow
-                                key={issue.id}
-                                issue={issue}
-                                index={idx}
-                                focused={globalIdx === focusedIdx}
-                                onStatusChange={onStatusChange}
-                                draggable={dragEnabled}
-                                highlightQuery={deferredQuery}
-                                activeOwnerKey={ownerFilter?.key ?? null}
-                                onOwnerClick={handleOwnerClick}
-                              />
-                            );
+                  <div className="space-y-1.5">
+                    <SortableContext items={groupSortedIds} strategy={verticalListSortingStrategy}>
+                      {visible.map((issue, idx) => {
+                        const globalIdx = flatIssues.indexOf(issue);
+                        return (
+                          <IssueRow
+                            key={issue.id}
+                            issue={issue}
+                            index={idx}
+                            focused={globalIdx === focusedIdx}
+                            onStatusChange={onStatusChange}
+                            draggable={dragEnabled}
+                            highlightQuery={deferredQuery}
+                            activeOwnerKey={ownerFilter?.key ?? null}
+                            onOwnerClick={handleOwnerClick}
+                          />
+                        );
+                      })}
+                    </SortableContext>
+                    {hiddenCount > 0 && !isExpanded && (
+                      <div className="flex items-center gap-3 pl-3 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => setExpandedSeries((prev) => {
+                            const next = new Set(prev);
+                            next.add(series.id);
+                            return next;
                           })}
-                        </SortableContext>
-                        {hiddenCount > 0 && !isExpanded && (
-                          <div className="flex items-center gap-3 pl-3 pt-1">
-                            <button
-                              type="button"
-                              onClick={() => setExpandedSeries((prev) => {
-                                const next = new Set(prev);
-                                next.add(series.id);
-                                return next;
-                              })}
-                              className="text-xs font-medium text-ink-3 hover:text-accent transition-colors cursor-pointer"
-                            >
-                              +{hiddenCount} more
-                            </button>
-                            <span className="text-ink-4">·</span>
-                            <Link
-                              href={`/series/${series.id}`}
-                              className="text-xs font-medium text-ink-3 hover:text-accent transition-colors"
-                            >
-                              View series
-                            </Link>
-                          </div>
-                        )}
-                        {isExpanded && hiddenCount > 0 && (
-                          <button
-                            type="button"
-                            onClick={() => setExpandedSeries((prev) => {
-                              const next = new Set(prev);
-                              next.delete(series.id);
-                              return next;
-                            })}
-                            className="text-xs font-medium text-ink-3 hover:text-accent transition-colors pl-3 pt-1 cursor-pointer"
-                          >
-                            Show less
-                          </button>
-                        )}
+                          className="text-xs font-medium text-ink-3 hover:text-accent transition-colors cursor-pointer"
+                        >
+                          +{hiddenCount} more
+                        </button>
+                        <span className="text-ink-4">·</span>
+                        <Link
+                          href={`/series/${series.id}`}
+                          className="text-xs font-medium text-ink-3 hover:text-accent transition-colors"
+                        >
+                          View series
+                        </Link>
                       </div>
-                    );
-                  })()}
+                    )}
+                    {isExpanded && hiddenCount > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setExpandedSeries((prev) => {
+                          const next = new Set(prev);
+                          next.delete(series.id);
+                          return next;
+                        })}
+                        className="text-xs font-medium text-ink-3 hover:text-accent transition-colors pl-3 pt-1 cursor-pointer"
+                      >
+                        Show less
+                      </button>
+                    )}
+                  </div>
                 </div>
               );
             })}
+            {emptyGroupCount > 0 && (
+              <p className="pt-4 text-xs text-ink-4">
+                {emptyGroupCount} series with nothing outstanding
+              </p>
+            )}
           </div>
+        ) : (
+          <SortableContext items={flatIssues.map((i) => i.id)} strategy={verticalListSortingStrategy}>
+            <div className="space-y-1.5">
+              {flatIssues.map((issue, idx) => (
+                <IssueRow
+                  key={issue.id}
+                  issue={issue}
+                  index={idx}
+                  focused={idx === focusedIdx}
+                  onStatusChange={onStatusChange}
+                  draggable={false}
+                  highlightQuery={deferredQuery}
+                  activeOwnerKey={ownerFilter?.key ?? null}
+                  onOwnerClick={handleOwnerClick}
+                />
+              ))}
+            </div>
+          </SortableContext>
         )}
 
         <DragOverlay>
@@ -1076,7 +1146,7 @@ function QuickAddButton() {
         data-tour="quick-add"
         aria-label="Quick add issue"
         onClick={() => openQuickAddDialog()}
-        className="fixed bottom-6 right-6 z-50 flex items-center justify-center size-12 rounded-full bg-accent text-white shadow-lg transition-colors hover:bg-accent-hover"
+        className="fixed bottom-[calc(1.5rem+env(safe-area-inset-bottom))] right-[calc(1.5rem+env(safe-area-inset-right))] z-50 flex items-center justify-center size-12 rounded-full bg-accent text-white shadow-lg transition-colors hover:bg-accent-hover"
         whileTap={{ scale: 0.9 }}
       >
         <Plus className="size-5" />
@@ -1299,7 +1369,13 @@ export default function Dashboard() {
       <UpgradeConfirmation />
       <div className="mx-auto max-w-6xl px-6 py-8">
         {!isFirstRun && (
-          <div className="flex items-center justify-end mb-5">
+          <div className="flex items-start justify-between gap-4 mb-6">
+            <div>
+              <h1 className="font-display text-2xl font-semibold text-ink">OIL Board</h1>
+              <p className="mt-1 text-sm text-ink-3">
+                Outstanding Issues Log. Everything still open across your meetings.
+              </p>
+            </div>
             <AddWidgetButton />
           </div>
         )}
@@ -1316,9 +1392,8 @@ export default function Dashboard() {
               recurring meetings.
             </EmptyDescription>
             <EmptyContent>
-              <Button
+              <Button variant="accent"
                 onClick={() => router.push("/series")}
-                className="bg-accent text-white hover:bg-accent-hover"
               >
                 Create your first series
               </Button>

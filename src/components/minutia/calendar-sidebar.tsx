@@ -476,7 +476,7 @@ function CalendarEventDetail({
         <div className="flex flex-col gap-2">
           <Button
             type="button"
-            className="bg-accent text-white hover:bg-accent-hover"
+            variant="accent"
             disabled={!isLive && isStarting}
             onClick={() => onStart(event)}
           >

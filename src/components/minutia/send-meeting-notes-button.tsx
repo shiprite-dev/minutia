@@ -121,10 +121,9 @@ export function SendMeetingNotesButton({ meetingId, attendees }: Props) {
           <Button variant="ghost" onClick={() => setOpen(false)}>
             Close
           </Button>
-          <Button
+          <Button variant="accent"
             onClick={sendNotes}
             disabled={!canSend}
-            className="bg-accent text-white hover:bg-accent-hover"
           >
             {isSending ? <Loader2 className="size-4 animate-spin" /> : <Mail className="size-4" />}
             Send

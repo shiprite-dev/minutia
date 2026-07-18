@@ -4,6 +4,7 @@ import {
   deleteIssue,
   expandOutstandingPreview,
   gotoDashboard,
+  groupBySeries,
   HAS_SERVICE_ROLE,
   issueRow,
   outstandingWidget,
@@ -67,13 +68,33 @@ test.describe("OIL Board Dashboard", () => {
     await expect(page.getByText("Resolved").first()).toBeVisible();
   });
 
-  test("outstanding items section displays grouped issues", async ({
+  test("outstanding board defaults to a flat list and toggles to by-series", async ({
     page,
   }) => {
     await gotoDashboard(page);
 
     await expect(page.getByText("Outstanding items")).toBeVisible();
-    await expect(page.getByText("Grouped by series")).toBeVisible();
+    await expect(
+      outstandingWidget(page).getByRole("button", { name: "List" })
+    ).toHaveAttribute("aria-pressed", "true");
+
+    // Flat list shows open items directly, with no series group headers.
+    await expect(
+      issueRow(page, "Migrate CI from Jenkins to GitHub Actions")
+    ).toBeVisible({ timeout: 10000 });
+    await expect(outstandingWidget(page).locator("div.py-5")).toHaveCount(0);
+
+    await groupBySeries(page);
+    await expect(outstandingWidget(page).locator("div.py-5").first()).toBeVisible();
+  });
+
+  test("by-series view displays grouped issues", async ({
+    page,
+  }) => {
+    await gotoDashboard(page);
+
+    await expect(page.getByText("Outstanding items")).toBeVisible();
+    await groupBySeries(page);
 
     await expandOutstandingPreview(page);
 
@@ -154,6 +175,7 @@ test.describe("OIL Board Dashboard", () => {
 
   test("outstanding preview expands and collapses hidden rows", async ({ page }) => {
     await gotoDashboard(page);
+    await groupBySeries(page);
 
     await expect(issueRow(page, "Update API rate limiting config")).not.toBeVisible();
     await expandOutstandingPreview(page);
