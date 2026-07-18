@@ -70,6 +70,8 @@
     "test:reminders": "node --test scripts/verify-reminders.test.mjs",
     "test:invitations": "node --test scripts/verify-invitations.test.mjs",
     "test:email-sender": "node --test scripts/verify-email-sender.test.mjs",
+    "test:email-layout": "node --test scripts/verify-email-layout.test.mjs",
+    "test:brief": "node --test scripts/verify-brief.test.mjs",
     "test:auth-links": "node --test scripts/verify-auth-links.test.mjs",
     "test:cadence-contract": "node --test scripts/verify-cadence-contract.test.mjs",
     "test:seat-billing": "node --test scripts/verify-seat-billing.test.mjs",

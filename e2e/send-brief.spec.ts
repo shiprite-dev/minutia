@@ -14,42 +14,36 @@ async function gotoSeriesBrief(page: Page) {
   });
 }
 
-test.describe("Send Brief to Attendees", () => {
-  test("brief card shows send and copy buttons", async ({ page }) => {
+test.describe("Brief card", () => {
+  test.use({ permissions: ["clipboard-read", "clipboard-write"] });
+
+  test("shows Email brief and Copy actions", async ({ page }) => {
     await gotoSeriesBrief(page);
 
-    await expect(page.getByTestId("send-brief-btn")).toBeVisible();
-    await expect(page.getByTestId("send-brief-btn")).toHaveText(
-      /Send brief to attendees|Copy brief to send/
-    );
+    await expect(page.getByTestId("send-brief-btn")).toHaveText(/Email brief/);
     await expect(page.getByTestId("copy-brief-btn")).toBeVisible();
   });
 
-  test("send button triggers mailto with correct subject", async ({ page }) => {
+  test("email brief with no attendee emails surfaces a guidance notice", async ({
+    page,
+  }) => {
     await gotoSeriesBrief(page);
 
-    const sendBtn = page.getByTestId("send-brief-btn");
-    const btnText = await sendBtn.textContent();
-
-    if (btnText?.includes("Send brief")) {
-      await sendBtn.click();
-
-      const hiddenLink = page.locator('a[href^="mailto:"]');
-      const href = await hiddenLink.getAttribute("href");
-      expect(href).toContain("mailto:");
-      expect(href).toContain(
-        encodeURIComponent("Pre-Meeting Brief: Platform Team Standup")
-      );
-    } else {
-      await sendBtn.click();
-      await expect(sendBtn).toHaveText(/Brief copied/);
-    }
+    // Seed attendees are bare names, so there are no deliverable addresses.
+    await page.getByTestId("send-brief-btn").click();
+    await expect(page.getByTestId("brief-notice")).toContainText(
+      /No attendee emails/
+    );
   });
 
-  test("brief lists pending issues with owners and due dates", async ({ page }) => {
+  test("copy brief includes the guest live-log link", async ({ page }) => {
     await gotoSeriesBrief(page);
 
-    const briefCard = page.locator(".border-t-accent").first();
-    await expect(briefCard.getByText("Platform Team Standup")).toBeVisible();
+    await page.getByTestId("copy-brief-btn").click();
+    await expect(page.getByTestId("copy-brief-btn")).toContainText(/Copied/);
+
+    const clip = await page.evaluate(() => navigator.clipboard.readText());
+    expect(clip).toContain("See the live log:");
+    expect(clip).toContain("/share/");
   });
 });
