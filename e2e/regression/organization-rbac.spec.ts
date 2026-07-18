@@ -461,9 +461,11 @@ test.describe("Organization RBAC and workspace routes", () => {
 
     try {
       await page.goto("/admin");
-      await expect(page.getByRole("link", { name: "Settings" })).toBeVisible();
-      await expect(page.getByRole("link", { name: "Users" })).toBeVisible();
-      await expect(page.getByRole("link", { name: "Health" })).toBeVisible();
+      const adminNav = page.getByRole("navigation", { name: "Admin sections" });
+      await expect(adminNav.getByRole("link", { name: "Overview" })).toBeVisible();
+      await expect(adminNav.getByRole("link", { name: "Settings" })).toBeVisible();
+      await expect(adminNav.getByRole("link", { name: "Users" })).toBeVisible();
+      await expect(adminNav.getByRole("link", { name: "Health" })).toBeVisible();
     } finally {
       await setGlobalRole(request, "user");
     }
