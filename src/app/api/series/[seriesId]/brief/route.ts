@@ -140,7 +140,7 @@ export async function POST(
     .select("title, date")
     .eq("series_id", seriesId)
     .in("status", ["upcoming", "live"])
-    .order("date", { ascending: false })
+    .order("date", { ascending: true })
     .limit(1)
     .maybeSingle();
 
