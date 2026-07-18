@@ -41,6 +41,7 @@
     "deploy:env": "node scripts/generate-self-host-env.mjs",
     "test:oss-boundaries": "node scripts/verify-oss-boundaries.mjs",
     "test:self-host": "node --test scripts/verify-self-host-migrations.test.mjs",
+    "test:authz": "node --test scripts/authz/verify-authz.test.mjs scripts/authz/fixture.test.mjs scripts/authz/smoke-bundle.test.mjs scripts/authz/coverage.test.mjs",
     "test:runtime-config": "node --test scripts/verify-runtime-config.test.mjs",
     "test:query-contracts": "node scripts/verify-query-contracts.mjs",
     "test:ci-workflows": "node scripts/verify-ci-playwright-shards.mjs",
