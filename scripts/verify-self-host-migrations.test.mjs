@@ -18,6 +18,7 @@ const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const compose = readFileSync(join(root, "docker-compose.yml"), "utf8");
 const kongTemplate = readFileSync(join(root, "docker", "kong.yml"), "utf8");
 const migrateScript = readFileSync(join(root, "scripts", "run-self-host-migrations.sh"), "utf8");
+const ciWorkflow = readFileSync(join(root, ".github", "workflows", "ci.yml"), "utf8");
 
 // Slice a top-level (2-space indented) service block out of the compose file.
 function serviceBlock(name) {
@@ -141,5 +142,51 @@ test("migrate script default-grants the API roles before migrations, preserving 
     migrateScript,
     /GRANT (ALL|EXECUTE) ON ALL (TABLES|FUNCTIONS) IN SCHEMA public/,
     "must not blanket-GRANT ON ALL after migrations; it re-opens hardening REVOKEs (role escalation, token leak)",
+  );
+});
+
+// The migration wiring above only proves `docker compose up` applies the app
+// schema; it says nothing about whether the box a real self-hoster boots is
+// actually reachable end to end. A CI job must build the .env, boot the
+// production compose stack, wait for it, and drive the real cold-start
+// journey (setup wizard -> first login) against it, or a regression here
+// (e.g. Kong substitution, migrate wiring, /setup) ships invisibly since the
+// e2e matrix uses `supabase start`, not this compose path.
+test("cold-start gate is wired in CI", () => {
+  assert.match(
+    ciWorkflow,
+    /generate-self-host-env\.mjs --force/,
+    "CI must generate ./.env non-interactively before booting the compose stack",
+  );
+  assert.match(
+    ciWorkflow,
+    /docker compose up -d --build/,
+    "CI must boot the self-host stack with a production build",
+  );
+  const envIdx = ciWorkflow.indexOf("generate-self-host-env.mjs --force");
+  const upIdx = ciWorkflow.indexOf("docker compose up -d --build");
+  assert.ok(
+    envIdx !== -1 && upIdx !== -1 && envIdx < upIdx,
+    "./.env must be generated before `docker compose up -d --build`, since NEXT_PUBLIC_* build args are baked into the image at build time",
+  );
+
+  assert.match(
+    ciWorkflow,
+    /wait-for-cold-start-stack\.sh/,
+    "CI must wait for the booted stack to be ready via scripts/wait-for-cold-start-stack.sh before driving the journey",
+  );
+
+  assert.match(
+    ciWorkflow,
+    /playwright test --config=playwright\.cold-start\.config\.ts/,
+    "CI must run the cold-start journey against playwright.cold-start.config.ts",
+  );
+
+  const logStep = ciWorkflow
+    .split(/\n\s+- name:/)
+    .find((step) => step.includes("docker compose logs"));
+  assert.ok(
+    logStep && /if:\s*(always|failure)\(\)/.test(logStep),
+    "a step guarded by always() or failure() must capture `docker compose logs` so a cold-boot failure is diagnosable from the CI artifact",
   );
 });
