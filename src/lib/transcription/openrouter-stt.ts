@@ -12,10 +12,17 @@ import { sendTranscription, type TranscriptionResult } from "./shared";
 export const OPENROUTER_STT_URL = "https://openrouter.ai/api/v1/audio/transcriptions";
 export const OPENROUTER_STT_DEFAULT_MODEL = "openai/whisper-1";
 
+// supabase-swift stores the macOS companion's AAC-in-MP4 upload under a mime
+// derived from the ".m4a" extension, not the explicit FileOptions content
+// type, so the same recording can arrive as audio/mp4, audio/x-m4a, or
+// audio/m4a (see supabase/migrations/20260704120000_meeting_audio_m4a_mime.sql).
+// All must map to "m4a" or the provider 415s a real companion upload.
+const M4A_MIME_TYPES = new Set(["audio/mp4", "audio/x-m4a", "audio/m4a"]);
+
 /** OpenRouter's `input_audio.format` from a MIME type (codecs suffix ignored). */
 function audioFormatFromMime(mime: string): string {
   const base = mime.split(";")[0].trim();
-  if (base === "audio/mp4") return "m4a";
+  if (M4A_MIME_TYPES.has(base)) return "m4a";
   if (base === "audio/ogg") return "ogg";
   if (base === "audio/mpeg") return "mp3";
   if (base === "audio/wav") return "wav";
