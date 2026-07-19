@@ -4,8 +4,6 @@ import * as React from "react";
 import { X, Download } from "lucide-react";
 
 const DISMISS_KEY = "minutia.companion-prompt-dismissed";
-const DOWNLOAD_URL =
-  "https://github.com/shiprite-dev/minutia-desktop/releases/latest";
 
 // Inline nudge shown near the recorder when the signed-in user has no companion
 // app checked in yet (companion_last_seen_at is null) and has not dismissed it.
@@ -37,7 +35,7 @@ export function CompanionInstallPrompt({
         For the best experience, download and install the companion app.
       </p>
       <a
-        href={DOWNLOAD_URL}
+        href="/download"
         target="_blank"
         rel="noreferrer"
         className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-accent px-3 text-sm font-medium text-white hover:bg-accent-hover"
