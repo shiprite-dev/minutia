@@ -204,7 +204,10 @@ test.describe("companion handshake", () => {
   }) => {
     test.setTimeout(60_000);
 
-    await page.goto("/companion/authorize?device=Test%20Mac");
+    const stateNonce = randomUUID();
+    await page.goto(
+      `/companion/authorize?device=Test%20Mac&state=${stateNonce}`
+    );
     await waitForApp(page);
     await expect(
       page.getByText("Authorize the Minutia companion app on Test Mac?")
@@ -217,15 +220,16 @@ test.describe("companion handshake", () => {
     const href = await openLink.getAttribute("href");
     expect(href).toMatch(/^minutia:\/\/auth-callback\?token_hash=/);
 
-    const tokenHash = decodeURIComponent(
-      new URL(href!).search.replace("?token_hash=", "")
-    );
-    expect(tokenHash.length).toBeGreaterThan(0);
+    const url = new URL(href!);
+    expect(url.searchParams.get("state")).toBe(stateNonce);
+
+    const tokenHash = url.searchParams.get("token_hash");
+    expect(tokenHash?.length).toBeGreaterThan(0);
 
     // Prove the token is real: run the exact GoTrue exchange the desktop app runs.
     const verify = await request.post(`${SUPABASE_URL}/auth/v1/verify`, {
       headers: { apikey: ANON_KEY, "Content-Type": "application/json" },
-      data: { type: "magiclink", token_hash: tokenHash },
+      data: { type: "magiclink", token_hash: tokenHash! },
     });
     expect(verify.ok()).toBeTruthy();
     const session = await verify.json();
@@ -243,7 +247,10 @@ test.describe("companion handshake", () => {
     });
     const page = await context.newPage();
     try {
-      await page.goto("/companion/authorize?device=Test%20Mac");
+      const stateNonce = randomUUID();
+      await page.goto(
+        `/companion/authorize?device=Test%20Mac&state=${stateNonce}`
+      );
       await expect(page).toHaveURL(/\/login\?.*next=%2Fcompanion%2Fauthorize/);
 
       await page.getByLabel("Email address").fill("test@example.com");
@@ -251,13 +258,14 @@ test.describe("companion handshake", () => {
       await page.getByRole("button", { name: "Sign in", exact: true }).click();
 
       // The existing next/redirect handling returns to the authorize page with
-      // the device query intact.
+      // the device and state query intact.
       await expect(
         page.getByText("Authorize the Minutia companion app on Test Mac?")
       ).toBeVisible({ timeout: 15_000 });
       const returned = new URL(page.url());
       expect(returned.pathname).toBe("/companion/authorize");
       expect(returned.searchParams.get("device")).toBe("Test Mac");
+      expect(returned.searchParams.get("state")).toBe(stateNonce);
     } finally {
       await context.close();
     }

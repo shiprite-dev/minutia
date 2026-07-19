@@ -88,3 +88,28 @@ test("returns the link unchanged when NEXT_PUBLIC_SUPABASE_URL is unset", () => 
     assert.equal(toPublicActionLink(link), link);
   });
 });
+
+const authCallbackBundle = path.join(tempDir, "auth-callback-url.mjs");
+await esbuild.build({
+  entryPoints: ["src/lib/auth-callback-url.ts"],
+  outfile: authCallbackBundle,
+  bundle: true,
+  platform: "node",
+  format: "esm",
+  logLevel: "silent",
+  absWorkingDir: root,
+});
+const { safeAuthNextPath } = await import(
+  pathToFileURL(authCallbackBundle).href
+);
+
+test("safeAuthNextPath passes a companion authorize path with device and state through verbatim", () => {
+  const next = "/companion/authorize?device=Test%20Mac&state=nonce-1";
+  assert.equal(safeAuthNextPath(next), next);
+});
+
+test("safeAuthNextPath rejects non-path and protocol-relative values", () => {
+  assert.equal(safeAuthNextPath(null), "/");
+  assert.equal(safeAuthNextPath("https://evil.example"), "/");
+  assert.equal(safeAuthNextPath("//evil.example/companion/authorize"), "/");
+});
