@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Public `/download` page for the Minutia macOS companion. It resolves the latest signed DMG from GitHub Releases at request time (cached hourly) and degrades to a "watch for the release" state until the first build ships, so it never links to a 404. Includes system requirements, an open-source link, and how-it-works steps. The landing page and the in-app companion prompt both point to it.
 - Minutia Retro: a free, anonymous, multiplayer retrospective board at `/retro`. Guided 7-phase ritual (Lobby, Reflect, Reveal, Theme, Vote, Discuss, Commit) with realtime presence, a synchronized card-flip Reveal, and a closure bloom. Boards are ephemeral (30-day auto-expiry) and rate-limited.
 - Anonymous board operations run through `SECURITY DEFINER` Postgres RPCs (default-deny `retro_*` tables); liveness uses Supabase Realtime broadcast and presence with a snapshot reconcile.
 - AI theme-clustering suggestions during the Theme phase (OpenRouter; degrades silently when unconfigured).
