@@ -24,6 +24,10 @@ export async function requireAiAccess(): Promise<NextResponse | null> {
     .single();
 
   if (error || !profile) {
+    console.error(
+      `[ai-access] deny profile-read-failure user=${user.id}` +
+        (error ? ` error=${error.message}` : " reason=profile-missing"),
+    );
     return NextResponse.json(
       { error: "Unable to verify access. Please try again." },
       { status: 403 },
@@ -31,6 +35,9 @@ export async function requireAiAccess(): Promise<NextResponse | null> {
   }
 
   if (!profile.has_full_access) {
+    console.error(
+      `[ai-access] deny FEATURE_UNAVAILABLE user=${user.id} reason=entitlement-absent`,
+    );
     return NextResponse.json(
       {
         error: "AI features are not enabled for this account.",
