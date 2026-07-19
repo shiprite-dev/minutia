@@ -59,6 +59,16 @@ export default function LandingPage() {
         <p className="mt-3 text-xs text-ink-4">
           No credit card required. Open source.
         </p>
+        <p className="mt-6 text-sm text-ink-3">
+          On a Mac?{" "}
+          <Link
+            href="/download"
+            className="inline-flex items-center gap-1 font-medium text-accent hover:text-accent-hover"
+          >
+            Get the macOS companion
+            <ArrowRight className="size-3.5" />
+          </Link>
+        </p>
       </section>
 
       {/* ─── Features ─── */}

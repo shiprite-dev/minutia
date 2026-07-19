@@ -194,6 +194,7 @@ export async function middleware(request: NextRequest) {
     "/",
     "/login",
     "/signup",
+    "/download",
     "/accept-invite",
     "/auth/callback",
     "/reset-password",
