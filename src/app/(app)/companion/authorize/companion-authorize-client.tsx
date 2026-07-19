@@ -18,6 +18,7 @@ export function CompanionAuthorizeClient() {
   const searchParams = useSearchParams();
   // Rendered as React text content, so it is escaped; never interpolated into markup.
   const device = searchParams.get("device")?.trim() || "this device";
+  const state = searchParams.get("state")?.trim() || null;
 
   const [status, setStatus] = React.useState<"idle" | "authorizing" | "done">(
     "idle"
@@ -37,7 +38,7 @@ export function CompanionAuthorizeClient() {
         return;
       }
       const { token_hash } = (await res.json()) as { token_hash: string };
-      const url = buildCompanionAuthCallbackUrl(token_hash);
+      const url = buildCompanionAuthCallbackUrl(token_hash, state);
       setCallbackUrl(url);
       setStatus("done");
       // Hand off to the desktop app's registered URL scheme. If no handler is
