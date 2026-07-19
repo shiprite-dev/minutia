@@ -15,6 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Graduation: account-gated "Save to Minutia" turns retro action items into tracked issues in a new or existing series; free Markdown export needs no account.
 - `retro_enabled` instance flag (default off; admin toggle in workspace settings) gates the public board surface for self-host instances.
 
+### Changed
+
+- The companion authorize page now echoes the desktop app's state nonce on the minutia:// callback, letting the companion bind each sign-in callback to the attempt that initiated it.
+
 ## [1.1.0] - 2026-05-03
 
 ### Changed
