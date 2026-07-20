@@ -11,6 +11,7 @@ export const manifest = [
   { id: "screen:/", kind: "screen", url: "/" },
   { id: "screen:/login", kind: "screen", url: "/login" },
   { id: "screen:/signup", kind: "screen", url: "/signup" },
+  { id: "screen:/download", kind: "screen", url: "/download" },
   { id: "screen:/reset-password", kind: "screen", url: "/reset-password" },
   { id: "screen:/accept-invite", kind: "screen", url: "/accept-invite" },
   { id: "screen:/setup", kind: "screen", url: "/setup" },
