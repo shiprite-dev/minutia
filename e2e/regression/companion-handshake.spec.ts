@@ -21,8 +21,7 @@ const TEST_USER_ID = "00000000-0000-0000-0000-000000000001";
 
 const PROMPT_COPY =
   "For the best experience, download and install the companion app.";
-const DOWNLOAD_URL =
-  "https://github.com/shiprite-dev/minutia-desktop/releases/latest";
+const DOWNLOAD_URL = "/download";
 
 function serviceHeaders(prefer = "return=representation") {
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
