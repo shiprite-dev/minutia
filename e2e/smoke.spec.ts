@@ -34,7 +34,7 @@ test.describe("Smoke Tests", () => {
   });
 
   test("all public routes return valid responses", async ({ request }) => {
-    const routes = ["/login"];
+    const routes = ["/login", "/download"];
 
     for (const route of routes) {
       const response = await request.get(route);

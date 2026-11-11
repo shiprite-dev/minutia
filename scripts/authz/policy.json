@@ -24,6 +24,11 @@
       "note": "public signup disabled on self-host default (ENABLE_PUBLIC_SIGNUP!=true) -> redirect /login for everyone, before auth",
       "expect": { "loggedOut": "redirect:/login", "member": "redirect:/login", "orgAdmin": "redirect:/login", "globalAdmin": "redirect:/login", "crossTenant": "redirect:/login", "proMember": "redirect:/login" }
     },
+    "screen:/download": {
+      "kind": "screen",
+      "note": "public companion download page; in middleware publicPaths, no authed redirect",
+      "expect": { "loggedOut": "pass", "member": "pass", "orgAdmin": "pass", "globalAdmin": "pass", "crossTenant": "pass", "proMember": "pass" }
+    },
     "screen:/reset-password": {
       "kind": "screen",
       "expect": { "loggedOut": "pass", "member": "pass", "orgAdmin": "pass", "globalAdmin": "pass", "crossTenant": "pass", "proMember": "pass" }

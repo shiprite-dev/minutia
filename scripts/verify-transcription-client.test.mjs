@@ -173,6 +173,28 @@ test("transcribeWithOpenRouter posts base64 JSON with attribution headers", asyn
   assert.equal(result.durationSeconds, 3); // from usage.seconds
 });
 
+test("transcribeWithOpenRouter maps the macOS companion's m4a mime variants to the m4a format", async () => {
+  // supabase-swift stores the companion's AAC-in-MP4 upload under audio/x-m4a
+  // (see supabase/migrations/20260704120000_meeting_audio_m4a_mime.sql); every
+  // mime the storage layer admits for that same file must resolve to "m4a" here,
+  // or the provider 415s real companion recordings as unsupported.
+  const cases = [
+    ["audio/mp4", "m4a"],
+    ["audio/x-m4a", "m4a"],
+    ["audio/m4a", "m4a"],
+    ["audio/aac", "aac"],
+    ["audio/x-m4a; codecs=mp4a.40.2", "m4a"],
+    ["audio/webm", "webm"],
+    ["audio/unknown", "webm"],
+  ];
+  for (const [mimeType, expectedFormat] of cases) {
+    const calls = fakeFetch(() => okResponse({ text: "x" }));
+    await transcribeWithOpenRouter(audioBlob(64), { apiKey: "or-key", mimeType });
+    const body = JSON.parse(calls[0].options.body);
+    assert.equal(body.input_audio.format, expectedFormat, `${mimeType} -> ${expectedFormat}`);
+  }
+});
+
 // ---------------------------------------------------------------------------
 // AssemblyAI client (diarizing primary)
 // ---------------------------------------------------------------------------

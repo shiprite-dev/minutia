@@ -40,6 +40,36 @@ test("buildCompanionAuthCallbackUrl rejects an empty token hash", () => {
   assert.throws(() => buildCompanionAuthCallbackUrl("   "));
 });
 
+test("buildCompanionAuthCallbackUrl appends the state nonce when present", () => {
+  assert.equal(
+    buildCompanionAuthCallbackUrl("abc123", "nonce-1"),
+    "minutia://auth-callback?token_hash=abc123&state=nonce-1"
+  );
+  assert.equal(
+    buildCompanionAuthCallbackUrl("abc123", "a b+c/d"),
+    "minutia://auth-callback?token_hash=abc123&state=a%20b%2Bc%2Fd"
+  );
+  assert.equal(
+    buildCompanionAuthCallbackUrl("abc123", "a&b=c#d"),
+    "minutia://auth-callback?token_hash=abc123&state=a%26b%3Dc%23d"
+  );
+});
+
+test("buildCompanionAuthCallbackUrl omits state when absent or empty", () => {
+  assert.equal(
+    buildCompanionAuthCallbackUrl("abc123"),
+    "minutia://auth-callback?token_hash=abc123"
+  );
+  assert.equal(
+    buildCompanionAuthCallbackUrl("abc123", null),
+    "minutia://auth-callback?token_hash=abc123"
+  );
+  assert.equal(
+    buildCompanionAuthCallbackUrl("abc123", ""),
+    "minutia://auth-callback?token_hash=abc123"
+  );
+});
+
 test("buildCompanionRecordUrl builds the record scheme with the meeting id", () => {
   assert.equal(
     buildCompanionRecordUrl(LOWER),
