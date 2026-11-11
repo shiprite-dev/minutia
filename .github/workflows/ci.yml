@@ -298,6 +298,78 @@ jobs:
           retention-days: 14
           if-no-files-found: ignore
 
+  cold-start:
+    name: Self-Host Cold Start
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        id: playwright-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+
+      - name: Install Playwright browsers
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps chromium
+
+      - name: Install Playwright system deps
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
+
+      - name: Generate self-host env
+        run: |
+          node scripts/generate-self-host-env.mjs --force > /dev/null
+          for key in MINUTIA_SETUP_TOKEN ANON_KEY SERVICE_ROLE_KEY; do
+            echo "::add-mask::$(grep -E "^${key}=" .env | cut -d= -f2-)"
+          done
+          grep -E '^(MINUTIA_SETUP_TOKEN|ANON_KEY|SERVICE_ROLE_KEY|NEXT_PUBLIC_SUPABASE_URL)=' .env >> "$GITHUB_ENV"
+
+      - name: Boot self-host stack
+        run: docker compose up -d --build
+
+      - name: Wait for stack ready
+        run: bash scripts/wait-for-cold-start-stack.sh
+        env:
+          BASE_URL: http://localhost:3000
+
+      - name: Cold-start journey
+        run: pnpm exec playwright test --config=playwright.cold-start.config.ts
+        env:
+          PLAYWRIGHT_BASE_URL: http://localhost:3000
+
+      - name: Capture docker logs
+        if: always()
+        run: docker compose logs --no-color > cold-start-docker-logs.txt || true
+
+      - name: Upload cold-start artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cold-start-artifacts
+          path: |
+            cold-start-docker-logs.txt
+            playwright-report-cold-start/
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Tear down stack
+        if: always()
+        run: docker compose down -v || true
+
   audit:
     name: Dependency Audit
     runs-on: ubuntu-latest

@@ -11,6 +11,10 @@ const serverPort = serverURL.port || "3000";
 
 export default defineConfig({
   testDir: "./e2e",
+  // The cold-start gate runs only via playwright.cold-start.config.ts against
+  // the compose stack; on the seeded supabase-start stack its wizard walk
+  // cannot pass (setup is already completed).
+  testIgnore: "**/cold-start/**",
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
