@@ -6,10 +6,17 @@
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-export function buildCompanionAuthCallbackUrl(tokenHash: string): string {
+export function buildCompanionAuthCallbackUrl(
+  tokenHash: string,
+  state?: string | null
+): string {
   const token = tokenHash?.trim();
   if (!token) throw new Error("token_hash is required");
-  return `minutia://auth-callback?token_hash=${encodeURIComponent(token)}`;
+  let url = `minutia://auth-callback?token_hash=${encodeURIComponent(token)}`;
+  if (state) {
+    url += `&state=${encodeURIComponent(state)}`;
+  }
+  return url;
 }
 
 export function buildCompanionRecordUrl(meetingId: string): string {
