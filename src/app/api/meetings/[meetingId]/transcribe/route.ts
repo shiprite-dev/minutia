@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireAiAccess } from "@/lib/ai/access";
 import { generateMeetingSuggestions, isExplicitSkip } from "@/lib/ai/suggestions";
 import { MEETING_AUDIO_BUCKET } from "@/lib/audio";
+import { ownsSegmentRow } from "@/lib/audio/segments";
 import {
   assembleDiarizedTranscript,
   chunkAudioBlob,
@@ -20,6 +21,8 @@ import {
   segmentsCoverExpected,
   type SegmentRow,
 } from "@/lib/transcription/fast-lane";
+import { assembleChannelTranscript, attributionSource, speakerMapToStore } from "@/lib/transcription/channels";
+import { transcribeDualSegment } from "@/lib/transcription/dual";
 import { getInstanceConfigMap, InstanceConfigReadError } from "@/lib/instance-config";
 import { resolveAudioRetention, shouldDiscardAudio, type ExtractionOutcomeForRetention } from "@/lib/audio/retention";
 
@@ -272,7 +275,9 @@ export async function POST(
       // full-file chunking when no segments exist or a gap cannot be recovered.
       const { data: segmentRows, error: segmentsError } = await supabase
         .from("meeting_audio_segments")
-        .select("seq, status, transcript_text, storage_path, model, provider, transcription_outcome")
+        .select(
+          "seq, status, transcript_text, storage_path, model, provider, transcription_outcome, them_storage_path, offset_seconds, transcript_segments, recorded_by"
+        )
         .eq("meeting_id", meetingId)
         .order("seq", { ascending: true });
 
@@ -291,6 +296,10 @@ export async function POST(
         const nowIso = () => new Date().toISOString();
 
         for (const row of plan.retry) {
+          if (!ownsSegmentRow(meetingId, row.seq, row.storage_path, row.them_storage_path)) {
+            missing.push(row.seq);
+            continue;
+          }
           // Claim the segment before touching it so this final pass never
           // transcribes a seq concurrently with the per-segment route. A held
           // claim (or a claim error) means another worker owns it: treat the
@@ -307,8 +316,11 @@ export async function POST(
           const { data: segData, error: segDownloadError } = await supabase.storage
             .from(MEETING_AUDIO_BUCKET)
             .download(row.storage_path);
+          const themDownload = row.them_storage_path
+            ? await supabase.storage.from(MEETING_AUDIO_BUCKET).download(row.them_storage_path)
+            : null;
 
-          if (segDownloadError || !segData) {
+          if (segDownloadError || !segData || (themDownload && (themDownload.error || !themDownload.data))) {
             const { error: failWriteError } = await supabase
               .from("meeting_audio_segments")
               .update({ status: "failed", error_code: "download_failed", updated_at: nowIso() })
@@ -328,21 +340,42 @@ export async function POST(
           }
 
           try {
-            const result = await transcribeAudio(segData, {
-              fileName: `seg-${row.seq}.webm`,
-              mimeType: segData.type || "audio/webm",
-              deadlineAt,
-            });
-            const text = result.text.trim();
-            const outcome = result.outcome ?? (text ? "speech" : null);
+            let result: { model: string; provider: string; durationSeconds: number | null };
+            let text: string;
+            let outcome: "speech" | "no_speech" | null;
+            let channelSegments: TranscriptionSegment[] | null = null;
+            if (row.offset_seconds != null) {
+              const dual = await transcribeDualSegment({
+                meAudio: segData,
+                themAudio: themDownload?.data ?? null,
+                offsetSeconds: row.offset_seconds,
+                fileName: row.storage_path.split("/").pop() ?? `seg-${row.seq}.m4a`,
+                mimeType: segData.type || mimeFromPath(row.storage_path),
+                deadlineAt,
+              });
+              result = dual;
+              text = dual.transcriptText;
+              outcome = dual.outcome;
+              channelSegments = dual.merged;
+            } else {
+              const single = await transcribeAudio(segData, {
+                fileName: `seg-${row.seq}.webm`,
+                mimeType: segData.type || "audio/webm",
+                deadlineAt,
+              });
+              result = single;
+              text = single.text.trim();
+              outcome = single.outcome ?? (text ? "speech" : null);
+            }
             const { error: saveError } = await supabase
               .from("meeting_audio_segments")
               .update({
                 status: "completed",
                 transcript_text: text,
                 transcription_outcome: outcome,
+                ...(channelSegments ? { transcript_segments: channelSegments } : {}),
                 error_code: null,
-                size_bytes: segData.size,
+                size_bytes: segData.size + (themDownload?.data?.size ?? 0),
                 updated_at: nowIso(),
               })
               .eq("meeting_id", meetingId)
@@ -361,13 +394,15 @@ export async function POST(
               provider = result.provider;
               durationSeconds = result.durationSeconds;
             }
+            const recoveredSegments = channelSegments ? { transcript_segments: channelSegments } : {};
             if (text) {
-              recovered.push({ ...row, status: "completed", transcript_text: text });
+              recovered.push({ ...row, ...recoveredSegments, status: "completed", transcript_text: text });
             } else if (outcome === "no_speech") {
               // Confirmed silence is terminal: it covers its seq without text
               // and must not be retried forever.
               recovered.push({
                 ...row,
+                ...recoveredSegments,
                 status: "completed",
                 transcript_text: "",
                 transcription_outcome: "no_speech",
@@ -398,7 +433,20 @@ export async function POST(
           // segment texts without re-transcribing the already-completed ones.
           const updatedRows = [...plan.completed, ...recovered];
           selectedSegmentRows = updatedRows;
-          transcript = assembleFastTranscript(updatedRows);
+          if (attributionSource({ diarizingConfigured: false, rows: updatedRows }) === "channels") {
+            const recorderId = [...updatedRows].sort((a, b) => a.seq - b.seq)[0]?.recorded_by;
+            const { data: recorder } = recorderId
+              ? await supabase.from("profiles").select("name").eq("id", recorderId).single()
+              : { data: null };
+            const assembled = assembleChannelTranscript(updatedRows, recorder?.name ?? null, meeting.speaker_map);
+            transcript = assembled.transcriptRaw;
+            if (assembled.transcriptDiarized) {
+              segments = assembled.segments;
+              speakerMap = assembled.speakerMap;
+            }
+          } else {
+            transcript = assembleFastTranscript(updatedRows);
+          }
           chunkCount = updatedRows.length;
           resumed = true;
 
@@ -461,7 +509,7 @@ export async function POST(
         transcription_completed_at: new Date().toISOString(),
         transcript_segments: segments,
         transcript_diarized: !!segments,
-        speaker_map: speakerMap,
+        speaker_map: speakerMapToStore(speakerMap, meeting.speaker_map),
         // Backfill duration from the provider only if the upload did not record it.
         ...(meeting.audio_duration_seconds == null && durationSeconds != null
           ? { audio_duration_seconds: Math.round(durationSeconds) }

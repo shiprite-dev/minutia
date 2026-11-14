@@ -2,7 +2,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { requireAiAccess } from "@/lib/ai/access";
 import { MEETING_AUDIO_BUCKET } from "@/lib/audio";
-import { parseSegmentPath, segmentMimeForExt } from "@/lib/audio/segments";
+import { parseChannelSegmentBody, parseSegmentPath, segmentMimeForExt } from "@/lib/audio/segments";
+import { transcribeDualSegment } from "@/lib/transcription/dual";
 import {
   isTranscriptionConfigured,
   transcribeAudio,
@@ -54,17 +55,19 @@ export async function POST(
     return NextResponse.json({ ...body, request_id: requestId }, { status: aiDenied.status });
   }
 
-  let path: unknown;
+  let body: unknown;
   try {
-    ({ path } = (await request.json()) as { path?: unknown });
+    body = await request.json();
   } catch {
-    path = undefined;
+    body = undefined;
   }
-  const parsed = parseSegmentPath(meetingId, seq, path);
+  const path = (body as { path?: unknown } | null | undefined)?.path;
+  const channel = parseChannelSegmentBody(meetingId, seq, body);
+  const parsed = channel ? { ext: channel.ext } : parseSegmentPath(meetingId, seq, path);
   if (!parsed) {
     return NextResponse.json({ error: "Invalid segment path.", request_id: requestId }, { status: 400 });
   }
-  const storagePath = path as string;
+  const storagePath = channel ? channel.mePath : (path as string);
 
   const supabase = await createClient();
 
@@ -92,7 +95,12 @@ export async function POST(
   const { error: upsertError } = await supabase
     .from("meeting_audio_segments")
     .upsert(
-      { meeting_id: meetingId, seq, storage_path: storagePath },
+      {
+        meeting_id: meetingId,
+        seq,
+        storage_path: storagePath,
+        ...(channel ? { them_storage_path: channel.themPath, offset_seconds: channel.offsetSeconds } : {}),
+      },
       { onConflict: "meeting_id,seq", ignoreDuplicates: true }
     );
 
@@ -180,24 +188,60 @@ export async function POST(
       );
     }
 
-    const result = await transcribeAudio(audioData, {
-      fileName: `seg-${seq}.${parsed.ext}`,
-      mimeType: audioData.type || segmentMimeForExt(parsed.ext),
-      preferFast: true,
-      deadlineAt: Date.now() + REQUEST_BUDGET_MS,
-    });
-    const transcript = result.text.trim();
+    const fileName = `seg-${seq}.${parsed.ext}`;
+    const mimeType = audioData.type || segmentMimeForExt(parsed.ext);
+    const deadlineAt = Date.now() + REQUEST_BUDGET_MS;
+    let saved: Record<string, unknown>;
+    let transcript: string;
+    let result: { model: string; provider: string };
+
+    if (channel) {
+      let themAudio: Blob | null = null;
+      if (channel.themPath) {
+        const { data, error } = await supabase.storage.from(MEETING_AUDIO_BUCKET).download(channel.themPath);
+        if (error || !data) {
+          await markFailed("download_failed");
+          return NextResponse.json(
+            { error: "Could not read the segment audio.", request_id: requestId },
+            { status: 502 }
+          );
+        }
+        themAudio = data;
+      }
+      const dual = await transcribeDualSegment({
+        meAudio: audioData,
+        themAudio,
+        offsetSeconds: channel.offsetSeconds,
+        fileName,
+        mimeType,
+        deadlineAt,
+      });
+      result = dual;
+      transcript = dual.transcriptText;
+      saved = {
+        transcript_segments: dual.merged,
+        transcription_outcome: dual.outcome,
+        size_bytes: audioData.size + (themAudio?.size ?? 0),
+      };
+    } else {
+      const single = await transcribeAudio(audioData, { fileName, mimeType, preferFast: true, deadlineAt });
+      result = single;
+      transcript = single.text.trim();
+      saved = {
+        transcription_outcome: single.outcome ?? (transcript ? "speech" : null),
+        size_bytes: audioData.size,
+      };
+    }
 
     const { error: updateError } = await supabase
       .from("meeting_audio_segments")
       .update({
         status: "completed",
         transcript_text: transcript,
-        transcription_outcome: result.outcome ?? (transcript ? "speech" : null),
         model: result.model,
         provider: result.provider,
         error_code: null,
-        size_bytes: audioData.size,
+        ...saved,
         updated_at: new Date().toISOString(),
       })
       .eq("meeting_id", meetingId)

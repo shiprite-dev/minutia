@@ -92,3 +92,44 @@ export function parseSegmentPath(
   const ext = SEGMENT_EXTENSIONS.find((e) => path === segmentStoragePath(meetingId, seq, e));
   return ext ? { ext } : null;
 }
+
+/** Storage path for one channel of a dual-channel companion segment. */
+export function segmentChannelPath(
+  meetingId: string,
+  seq: number,
+  channel: "me" | "them",
+  ext: SegmentExtension
+): string {
+  return `${meetingId}/seg-${seq}-${channel}.${ext}`;
+}
+
+/** Validate a dual-channel register body. Null when it carries no `paths` (legacy) or is invalid. */
+export function parseChannelSegmentBody(
+  meetingId: string,
+  seq: number,
+  body: unknown
+): { mePath: string; themPath: string | null; ext: SegmentExtension; offsetSeconds: number } | null {
+  const { paths, offset_seconds } = (body ?? {}) as { paths?: { me?: unknown; them?: unknown }; offset_seconds?: unknown };
+  if (!paths || typeof paths !== "object") return null;
+  if (typeof offset_seconds !== "number" || !Number.isFinite(offset_seconds) || offset_seconds < 0) return null;
+  const ext = SEGMENT_EXTENSIONS.find((e) => paths.me === segmentChannelPath(meetingId, seq, "me", e));
+  if (!ext) return null;
+  const themPath = paths.them ?? null;
+  if (themPath !== null && themPath !== segmentChannelPath(meetingId, seq, "them", ext)) return null;
+  return { mePath: paths.me as string, themPath, ext, offsetSeconds: offset_seconds };
+}
+
+/** True only when a stored row's paths are exactly this meeting's own files for this seq. */
+export function ownsSegmentRow(
+  meetingId: string,
+  seq: number,
+  storagePath: string,
+  themStoragePath: string | null | undefined
+): boolean {
+  if (parseSegmentPath(meetingId, seq, storagePath)) return themStoragePath == null;
+  return SEGMENT_EXTENSIONS.some(
+    (ext) =>
+      storagePath === segmentChannelPath(meetingId, seq, "me", ext) &&
+      (themStoragePath == null || themStoragePath === segmentChannelPath(meetingId, seq, "them", ext))
+  );
+}
