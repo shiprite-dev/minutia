@@ -275,3 +275,19 @@ export function normalizeSuggestions<T extends RawSuggestion>(
     return [{ ...suggestion, type: "new_item", related_issue_number: null, suggested_status: null }];
   });
 }
+
+const DAY_MS = 86_400_000;
+
+function parseUtcDay(value: string): number | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  const ms = Date.parse(`${value}T00:00:00Z`);
+  return Number.isNaN(ms) || new Date(ms).toISOString().slice(0, 10) !== value ? null : ms;
+}
+
+export function resolveDueDate(due: string | null, meetingDate: string): string | null {
+  if (!due) return null;
+  const dueMs = parseUtcDay(due);
+  const meetingMs = parseUtcDay(meetingDate);
+  if (dueMs === null || meetingMs === null) return null;
+  return dueMs >= meetingMs && dueMs <= meetingMs + 366 * DAY_MS ? due : null;
+}

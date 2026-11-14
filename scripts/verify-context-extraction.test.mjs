@@ -506,3 +506,50 @@ test("an empty meeting with no notes is an explicit skip, not a failure", async 
   assert.equal(outcome.code, "skipped_no_content");
   assert.equal(isExplicitSkip(outcome), true);
 });
+
+// ---------------------------------------------------------------------------
+// Due dates: relative phrasing resolves against the meeting date, and code
+// rejects any date the model returns outside the plausible window.
+// ---------------------------------------------------------------------------
+const { resolveDueDate } = await import(pathToFileURL(bundled).href);
+
+test("resolveDueDate keeps a date on or after the meeting within a year", () => {
+  assert.equal(resolveDueDate("2026-11-20", "2026-11-14"), "2026-11-20");
+  assert.equal(resolveDueDate("2026-11-14", "2026-11-14"), "2026-11-14");
+  assert.equal(resolveDueDate("2027-11-15", "2026-11-14"), "2027-11-15");
+});
+
+test("resolveDueDate drops a date before the meeting", () => {
+  assert.equal(resolveDueDate("2025-05-16", "2026-11-14"), null);
+  assert.equal(resolveDueDate("2026-11-13", "2026-11-14"), null);
+});
+
+test("resolveDueDate drops a date more than 366 days out", () => {
+  assert.equal(resolveDueDate("2027-11-16", "2026-11-14"), null);
+});
+
+test("resolveDueDate passes null through and drops malformed input", () => {
+  assert.equal(resolveDueDate(null, "2026-11-14"), null);
+  assert.equal(resolveDueDate("next Friday", "2026-11-14"), null);
+  assert.equal(resolveDueDate("2026-11-20", "not-a-date"), null);
+});
+
+test("the prompt anchors relative due dates to the meeting date and weekday", () => {
+  const prompt = buildContextAwarePrompt({
+    title: "Weekly",
+    seriesName: "Weekly",
+    attendees: [],
+    notes: "",
+    transcript: "Daniel: I will ship it by Friday.",
+    contextBlock: "",
+    meetingDate: "2026-11-14",
+  });
+  assert.ok(prompt.includes("Meeting date: 2026-11-14 (Saturday)"), "prompt must state the meeting date and weekday");
+  assert.ok(!prompt.includes("Never infer from relative phrasing"), "relative phrasing is now resolved, not forbidden");
+});
+
+test("the generator applies resolveDueDate and bumps the prompt version", () => {
+  const generator = read("src/lib/ai/suggestions.ts");
+  assert.ok(generator.includes("resolveDueDate("), "generator must filter due dates in code");
+  assert.ok(generator.includes('"ai-suggestions-v3-due-dates"'), "prompt version must change with the prompt");
+});
