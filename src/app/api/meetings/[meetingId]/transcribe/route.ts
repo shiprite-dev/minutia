@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireAiAccess } from "@/lib/ai/access";
 import { generateMeetingSuggestions, isExplicitSkip } from "@/lib/ai/suggestions";
 import { MEETING_AUDIO_BUCKET } from "@/lib/audio";
-import { ownsSegmentPaths } from "@/lib/audio/segments";
+import { ownsSegmentRow } from "@/lib/audio/segments";
 import {
   assembleDiarizedTranscript,
   chunkAudioBlob,
@@ -21,7 +21,7 @@ import {
   segmentsCoverExpected,
   type SegmentRow,
 } from "@/lib/transcription/fast-lane";
-import { assembleChannelTranscript, attributionSource } from "@/lib/transcription/channels";
+import { assembleChannelTranscript, attributionSource, speakerMapToStore } from "@/lib/transcription/channels";
 import { transcribeDualSegment } from "@/lib/transcription/dual";
 import { getInstanceConfigMap, InstanceConfigReadError } from "@/lib/instance-config";
 import { resolveAudioRetention, shouldDiscardAudio, type ExtractionOutcomeForRetention } from "@/lib/audio/retention";
@@ -296,6 +296,10 @@ export async function POST(
         const nowIso = () => new Date().toISOString();
 
         for (const row of plan.retry) {
+          if (!ownsSegmentRow(meetingId, row.seq, row.storage_path, row.them_storage_path)) {
+            missing.push(row.seq);
+            continue;
+          }
           // Claim the segment before touching it so this final pass never
           // transcribes a seq concurrently with the per-segment route. A held
           // claim (or a claim error) means another worker owns it: treat the
@@ -304,7 +308,7 @@ export async function POST(
             p_meeting_id: meetingId,
             p_seq: row.seq,
           });
-          if (claimError || claimed !== true || !ownsSegmentPaths(meetingId, [row.storage_path, row.them_storage_path])) {
+          if (claimError || claimed !== true) {
             missing.push(row.seq);
             continue;
           }
@@ -505,7 +509,7 @@ export async function POST(
         transcription_completed_at: new Date().toISOString(),
         transcript_segments: segments,
         transcript_diarized: !!segments,
-        speaker_map: speakerMap,
+        speaker_map: speakerMapToStore(speakerMap, meeting.speaker_map),
         // Backfill duration from the provider only if the upload did not record it.
         ...(meeting.audio_duration_seconds == null && durationSeconds != null
           ? { audio_duration_seconds: Math.round(durationSeconds) }

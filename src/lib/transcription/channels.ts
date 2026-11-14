@@ -15,30 +15,36 @@ export interface ChannelInput {
   outcome?: "speech" | "no_speech";
 }
 
-const ECHO_TOLERANCE_SECONDS = 1.5;
+const ECHO_TOLERANCE_SECONDS = 0.5;
 const ECHO_WORD_SHARE = 0.6;
 
-function words(text: string): Set<string> {
-  return new Set(
-    text
-      .toLowerCase()
-      .split(/[^\p{L}\p{N}']+/u)
-      .filter(Boolean),
-  );
+function words(text: string): string[] {
+  return text
+    .toLowerCase()
+    .split(/[^\p{L}\p{N}']+/u)
+    .filter(Boolean);
 }
 
-/** A mic segment is echo when it overlaps a system segment in time and most of its words appear there. */
+function longestSharedRun(a: string[], b: string[]): number {
+  let best = 0;
+  let prev = new Array<number>(b.length + 1).fill(0);
+  for (const word of a) {
+    const row = new Array<number>(b.length + 1).fill(0);
+    b.forEach((other, j) => {
+      if (word === other) best = Math.max(best, (row[j + 1] = prev[j] + 1));
+    });
+    prev = row;
+  }
+  return best;
+}
+
+/** A mic segment is echo when it sits inside a system segment in time and most of its words appear there as one ordered run. */
 export function isEcho(me: TimedText, them: TimedText): boolean {
-  const overlaps =
-    me.start <= them.end + ECHO_TOLERANCE_SECONDS &&
-    me.end >= them.start - ECHO_TOLERANCE_SECONDS;
-  if (!overlaps) return false;
-  const mine = [...words(me.text)];
-  if (mine.length === 0) return false;
-  const theirs = words(them.text);
-  return (
-    mine.filter((w) => theirs.has(w)).length / mine.length >= ECHO_WORD_SHARE
-  );
+  const overlap = Math.min(me.end, them.end) - Math.max(me.start, them.start);
+  if (overlap < me.end - me.start - ECHO_TOLERANCE_SECONDS) return false;
+  const mine = words(me.text);
+  if (mine.length < 2) return false;
+  return longestSharedRun(mine, words(them.text)) / mine.length >= ECHO_WORD_SHARE;
 }
 
 /** Untimed channels degrade to one block spanning the whole segment window. */
@@ -111,9 +117,23 @@ export function attributionSource({
 }): "diarizer" | "channels" | "text" {
   if (diarizingConfigured) return "diarizer";
   return rows.length > 0 &&
-    rows.every((r) => Array.isArray(r.transcript_segments))
+    rows.every((r) => Array.isArray(r.transcript_segments) && r.transcript_segments.every(isStoredSegment))
     ? "channels"
     : "text";
+}
+
+function isStoredSegment(s: unknown): boolean {
+  const { speaker, text, start, end } = (s ?? {}) as Record<string, unknown>;
+  return (
+    typeof speaker === "string" &&
+    typeof text === "string" &&
+    Number.isFinite(start) &&
+    Number.isFinite(end)
+  );
+}
+
+export function speakerMapToStore<T>(produced: T | null, prior: T | null): T | null {
+  return produced ?? prior;
 }
 
 export function assembleChannelTranscript(

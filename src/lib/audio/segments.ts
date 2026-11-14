@@ -119,7 +119,17 @@ export function parseChannelSegmentBody(
   return { mePath: paths.me as string, themPath, ext, offsetSeconds: offset_seconds };
 }
 
-/** True when every stored segment path sits inside the meeting's own storage folder. */
-export function ownsSegmentPaths(meetingId: string, paths: (string | null | undefined)[]): boolean {
-  return paths.every((p) => p == null || (p.startsWith(`${meetingId}/`) && !p.includes("..")));
+/** True only when a stored row's paths are exactly this meeting's own files for this seq. */
+export function ownsSegmentRow(
+  meetingId: string,
+  seq: number,
+  storagePath: string,
+  themStoragePath: string | null | undefined
+): boolean {
+  if (parseSegmentPath(meetingId, seq, storagePath)) return themStoragePath == null;
+  return SEGMENT_EXTENSIONS.some(
+    (ext) =>
+      storagePath === segmentChannelPath(meetingId, seq, "me", ext) &&
+      (themStoragePath == null || themStoragePath === segmentChannelPath(meetingId, seq, "them", ext))
+  );
 }
