@@ -56,6 +56,7 @@ import { RemindOwnersButton } from "@/components/minutia/remind-owners-button";
 import { CarryoverBriefingPanel } from "@/components/minutia/carryover-briefing-panel";
 import { AiUnavailableNotice } from "@/components/minutia/ai-unavailable-notice";
 import { useAiAccess } from "@/lib/hooks/use-ai-access";
+import { composeMeetingNotes } from "@/lib/ai/companion-notes";
 import { humanizeError } from "@/lib/errors";
 import { ArrowLeft, Square, Play, Check, X, Sparkles, Loader2, ListChecks, FileText, CheckSquare, Gavel, AlertTriangle, Ban, RotateCcw, HelpCircle, ChevronDown, Radio } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -2277,6 +2278,16 @@ export function MeetingDetailContent({
             placeholder="Meeting notes..."
             className="min-h-[120px] font-sans text-sm"
           />
+          {(meeting.companion_notes_markdown ?? "").trim() !== "" && (
+            <div className="mt-4 rounded-md border border-rule bg-paper-2/40 px-4 py-3">
+              <h3 className="text-[11px] font-mono uppercase tracking-wider text-ink-4 font-medium">
+                From your desktop notepad
+              </h3>
+              <pre className="mt-2 whitespace-pre-wrap font-sans text-sm leading-6 text-ink-2">
+                {(meeting.companion_notes_markdown ?? "").trim()}
+              </pre>
+            </div>
+          )}
         </section>
         <section className="mt-10">
           <button
@@ -2380,7 +2391,11 @@ export function MeetingDetailContent({
                   <h4 className="text-sm font-semibold text-ink">Raw notes</h4>
                 </div>
                 <pre className="h-full overflow-auto whitespace-pre-wrap px-5 py-4 text-sm leading-6 text-ink-2">
-                  {meeting.raw_notes_markdown || notes || "No raw notes captured."}
+                  {composeMeetingNotes({
+                    raw_notes_markdown: meeting.raw_notes_markdown || notes || null,
+                    notes_markdown: meeting.notes_markdown,
+                    companion_notes_markdown: meeting.companion_notes_markdown,
+                  }) || "No raw notes captured."}
                 </pre>
               </div>
               <div className="min-h-0 bg-paper-2/40">
