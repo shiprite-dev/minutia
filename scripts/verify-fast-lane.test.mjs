@@ -115,3 +115,46 @@ test("segmentsCoverExpected is false on a duplicate seq", () => {
   const rows = [row(0, "completed", "a"), row(0, "completed", "dup")];
   assert.equal(segmentsCoverExpected(rows, 2), false);
 });
+
+// ---------------------------------------------------------------------------
+// Terminal no-speech outcomes
+// ---------------------------------------------------------------------------
+
+test("planSegmentResume treats completed no_speech rows as terminal, not retryable", () => {
+  const rows = [
+    { seq: 0, status: "completed", transcript_text: "hello", storage_path: "p0" },
+    { seq: 1, status: "completed", transcript_text: "", storage_path: "p1", transcription_outcome: "no_speech" },
+  ];
+  const plan = planSegmentResume(rows);
+  assert.deepEqual(plan.retry.map((r) => r.seq), []);
+  assert.deepEqual(plan.completed.map((r) => r.seq), [0, 1]);
+  assert.equal(plan.usable, true);
+});
+
+test("legacy completed-empty rows without an outcome stay retryable", () => {
+  const rows = [
+    { seq: 0, status: "completed", transcript_text: "", storage_path: "p0" },
+  ];
+  const plan = planSegmentResume(rows);
+  assert.deepEqual(plan.retry.map((r) => r.seq), [0]);
+  assert.deepEqual(plan.completed.map((r) => r.seq), []);
+});
+
+test("all-silence coverage assembles an empty transcript without retry", () => {
+  const rows = [
+    { seq: 0, status: "completed", transcript_text: "", storage_path: "p0", transcription_outcome: "no_speech" },
+    { seq: 1, status: "completed", transcript_text: "", storage_path: "p1", transcription_outcome: "no_speech" },
+  ];
+  const plan = planSegmentResume(rows);
+  assert.equal(segmentsCoverExpected(rows, 2), true);
+  assert.equal(assembleFastTranscript(rows), "");
+  assert.deepEqual(plan.retry, []);
+});
+
+test("mixed speech and silence preserves text order and omits silence", () => {
+  const rows = [
+    { seq: 1, status: "completed", transcript_text: "second", storage_path: "p1" },
+    { seq: 0, status: "completed", transcript_text: "", storage_path: "p0", transcription_outcome: "no_speech" },
+  ];
+  assert.equal(assembleFastTranscript(rows), "second");
+});

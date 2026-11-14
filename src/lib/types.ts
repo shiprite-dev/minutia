@@ -186,6 +186,7 @@ export interface Meeting {
   audio_duration_seconds: number | null;
   audio_file_size_bytes: number | null;
   transcription_status: TranscriptionStatus | null;
+  transcription_outcome?: "speech" | "no_speech" | null;
   transcription_model: string | null;
   transcription_provider: string | null;
   transcription_started_at: Date | null;

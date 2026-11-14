@@ -81,11 +81,24 @@ function num(value: unknown): number | null {
   return typeof value === "number" ? value : null;
 }
 
+/** The context query failed, so dedup context cannot be trusted. Extraction
+ * must refuse rather than silently run blind. */
+export class SeriesContextUnavailableError extends Error {
+  constructor(cause: unknown) {
+    super("Series context is unavailable", { cause });
+    this.name = "SeriesContextUnavailableError";
+  }
+}
+
 /**
  * Load the full series history that informs context-aware extraction: every
  * open OIL item across all meetings in the series, the most recent decisions,
  * and the most recent status changes. All three are series-scoped (RLS already
  * confines them to series the caller can access).
+ *
+ * Throws SeriesContextUnavailableError when any query fails: a failed read must
+ * never masquerade as empty history, or extraction would dedupe against
+ * nothing during an outage.
  */
 export async function buildSeriesContext(
   supabase: SupabaseLike,
@@ -114,6 +127,12 @@ export async function buildSeriesContext(
       .order("created_at", { ascending: false })
       .limit(UPDATE_LIMIT),
   ]);
+
+  // A failed read must never masquerade as empty history: extraction deduping
+  // against nothing during an outage is the bug this guard exists for.
+  if (issuesRes.error || decisionsRes.error || updatesRes.error) {
+    throw new SeriesContextUnavailableError({ issues: issuesRes.error, decisions: decisionsRes.error, updates: updatesRes.error });
+  }
 
   const openIssues: SeriesContextIssue[] = (issuesRes.data ?? []).map((row) => ({
     issue_number: num(row.issue_number) ?? 0,
