@@ -30,6 +30,8 @@ function colorForSpeaker(label: string, order: string[]): string {
 }
 
 function fallbackName(label: string): string {
+  if (label === "me") return "Me";
+  if (label === "them") return "Them";
   return `Speaker ${/^[A-Za-z]$/.test(label) ? label.toUpperCase() : label}`;
 }
 
