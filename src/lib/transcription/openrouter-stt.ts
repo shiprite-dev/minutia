@@ -38,6 +38,7 @@ export interface OpenRouterTranscribeOptions {
   mimeType?: string;
   timeoutMs?: number;
   signal?: AbortSignal;
+  deadlineAt?: number;
   /** Overrides the default attribution origin (defaults to SITE_URL). */
   referer?: string;
 }
@@ -51,6 +52,7 @@ export async function transcribeWithOpenRouter(
     mimeType = "audio/webm",
     timeoutMs,
     signal,
+    deadlineAt,
     referer = process.env.SITE_URL ?? "https://example.com",
   }: OpenRouterTranscribeOptions
 ): Promise<TranscriptionResult> {
@@ -77,5 +79,6 @@ export async function transcribeWithOpenRouter(
     },
     timeoutMs,
     signal,
+    deadlineAt,
   });
 }

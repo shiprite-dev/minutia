@@ -35,10 +35,29 @@ test("resolveAudioRetention keeps audio for keep_forever and any unrecognized va
   assert.equal(resolveAudioRetention("garbage"), "keep_forever");
 });
 
-test("shouldDiscardAudio only discards on a completed transcript under the discard policy", () => {
-  assert.equal(shouldDiscardAudio("discard_after_transcript", "completed"), true);
-  assert.equal(shouldDiscardAudio("discard_after_transcript", "failed"), false);
+test("shouldDiscardAudio only discards on a completed transcript with a non-failed extraction", () => {
+  assert.equal(shouldDiscardAudio("discard_after_transcript", "completed", "completed"), true);
+  assert.equal(shouldDiscardAudio("discard_after_transcript", "failed"), false, "omitted outcome fails closed");
   assert.equal(shouldDiscardAudio("discard_after_transcript", null), false);
-  assert.equal(shouldDiscardAudio("discard_after_transcript", "processing"), false);
-  assert.equal(shouldDiscardAudio("keep_forever", "completed"), false);
+  assert.equal(shouldDiscardAudio("discard_after_transcript", "processing", "completed"), false);
+  assert.equal(shouldDiscardAudio("keep_forever", "completed", "completed"), false);
+});
+
+// ---------------------------------------------------------------------------
+// Extraction-gated cleanup
+// ---------------------------------------------------------------------------
+
+test("shouldDiscardAudio requires extraction completed or explicitly skipped", () => {
+  assert.equal(shouldDiscardAudio("discard_after_transcript", "completed", "completed"), true);
+  assert.equal(shouldDiscardAudio("discard_after_transcript", "completed", "skipped"), true);
+  assert.equal(shouldDiscardAudio("discard_after_transcript", "completed", "failed"), false);
+});
+
+test("shouldDiscardAudio fails closed when the extraction outcome is omitted", () => {
+  assert.equal(shouldDiscardAudio("discard_after_transcript", "completed"), false);
+});
+
+test("shouldDiscardAudio still requires a completed transcript", () => {
+  assert.equal(shouldDiscardAudio("discard_after_transcript", "processing", "completed"), false);
+  assert.equal(shouldDiscardAudio("keep_forever", "completed", "completed"), false);
 });

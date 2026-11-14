@@ -74,3 +74,49 @@ test("falls back to a generic message for empty/opaque/unknown input", () => {
 test("accepts a raw string", () => {
   assert.equal(humanizeError("Invalid login credentials"), "That email or password doesn't match our records.");
 });
+
+test("normalizes a top-level string error from a response body", () => {
+  assert.equal(
+    humanizeError({ error: "Transcription failed.", code: "timeout" }),
+    "Transcription took too long. Try again."
+  );
+  assert.equal(
+    humanizeError({ error: "Inviting members requires an upgraded workspace." }),
+    "Inviting members requires an upgraded workspace."
+  );
+});
+
+test("maps transcription codes to plain, non-technical, actionable copy", () => {
+  const cases = {
+    timeout: "Transcription took too long. Try again.",
+    rate_limit: "Transcription is temporarily busy. Try again in a moment.",
+    auth_error: "This workspace has not been set up for transcription yet. Ask your administrator.",
+    no_api_key: "This workspace has not been set up for transcription yet. Ask your administrator.",
+    provider_not_configured:
+      "This workspace has not been set up for transcription yet. Ask your administrator.",
+    transcription_unconfigured:
+      "This workspace has not been set up for transcription yet. Ask your administrator.",
+    unsupported_format: "This recording format is not supported. Try uploading the recording again.",
+    provider_error: "Transcription failed. Try again.",
+    processing_conflict: "This recording is already being transcribed.",
+    input_mismatch: "This recording changed. Refresh to see its current status.",
+    extraction_failed: "Your transcript is ready, but action items could not be created.",
+    download_failed: "The recording could not be downloaded. Try again.",
+  };
+  for (const [code, copy] of Object.entries(cases)) {
+    assert.equal(humanizeError({ error: "Transcription failed.", code }), copy, `body shape for ${code}`);
+    assert.equal(humanizeError({ code }), copy, `code only for ${code}`);
+  }
+});
+
+test("prototype keys are never treated as transcription codes", () => {
+  assert.equal(humanizeError({ error: "Transcription failed.", code: "constructor" }), "Transcription failed.");
+  assert.equal(humanizeError({ code: "__proto__" }), "Something went wrong. Please try again.");
+});
+
+test("transcription code mappings never leak the raw code", () => {
+  for (const code of ["timeout", "rate_limit", "auth_error", "unsupported_format", "input_mismatch"]) {
+    const copy = humanizeError({ error: "Transcription failed.", code });
+    assert.ok(!copy.toLowerCase().includes(code), `${code} must not appear in user copy`);
+  }
+});

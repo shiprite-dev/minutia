@@ -12,7 +12,7 @@ concurrency:
 jobs:
   lint-and-typecheck:
     name: Lint & Typecheck
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
@@ -74,8 +74,22 @@ jobs:
       - name: Verify transcription client
         run: pnpm test:transcription
 
+      - name: Verify transcription retry budget
+        run: pnpm test:transcription-budget
+      - name: Verify transcription status copy
+        run: pnpm test:transcription-status-copy
+
+      - name: Verify transcription route contracts
+        run: pnpm test:transcription-routes
+
+      - name: Verify transcription outcome contracts
+        run: pnpm test:transcription-outcome
+
       - name: Verify context-aware extraction
         run: pnpm test:context-extraction
+
+      - name: Verify instance-config read contracts
+        run: pnpm test:instance-config
 
       - name: Verify feature-access gate
         run: pnpm test:feature-access
@@ -148,7 +162,7 @@ jobs:
 
   e2e:
     name: E2E Tests ${{ matrix.shard }}/16
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     env:
       # Pin the Supabase CLI: bare `npx supabase` floats to the latest stable,
@@ -300,7 +314,7 @@ jobs:
 
   audit:
     name: Dependency Audit
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4
