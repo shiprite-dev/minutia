@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireAiAccess } from "@/lib/ai/access";
 import { generateMeetingSuggestions, isExplicitSkip } from "@/lib/ai/suggestions";
 import { MEETING_AUDIO_BUCKET } from "@/lib/audio";
+import { ownsSegmentPaths } from "@/lib/audio/segments";
 import {
   assembleDiarizedTranscript,
   chunkAudioBlob,
@@ -303,7 +304,7 @@ export async function POST(
             p_meeting_id: meetingId,
             p_seq: row.seq,
           });
-          if (claimError || claimed !== true) {
+          if (claimError || claimed !== true || !ownsSegmentPaths(meetingId, [row.storage_path, row.them_storage_path])) {
             missing.push(row.seq);
             continue;
           }

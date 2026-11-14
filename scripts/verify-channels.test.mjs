@@ -615,3 +615,18 @@ test("transcribeAudio forwards timestamps to the OpenRouter provider", async () 
   );
   assert.deepEqual(result.timed, [timed(0, 1, "x")]);
 });
+
+test("ownsSegmentPaths accepts only paths inside the meeting folder", () => {
+  const ownsSegmentPaths = fn(segments, "ownsSegmentPaths");
+  assert.equal(ownsSegmentPaths("m1", ["m1/seg-0-me.m4a", "m1/seg-0-them.m4a"]), true);
+  assert.equal(ownsSegmentPaths("m1", ["m1/seg-0.webm", null]), true);
+  assert.equal(ownsSegmentPaths("m1", ["m1/seg-0-me.m4a", "m2/seg-0-them.m4a"]), false);
+  assert.equal(ownsSegmentPaths("m1", ["m10/seg-0.webm"]), false);
+  assert.equal(ownsSegmentPaths("m1", ["../m1/seg-0.webm"]), false);
+  assert.equal(ownsSegmentPaths("m1", ["m1/../m2/seg-0.webm"]), false);
+});
+
+test("the final pass refuses a stored segment path outside its meeting", () => {
+  const route = fs.readFileSync("src/app/api/meetings/[meetingId]/transcribe/route.ts", "utf8");
+  assert.ok(route.includes("ownsSegmentPaths(meetingId, [row.storage_path, row.them_storage_path])"));
+});
