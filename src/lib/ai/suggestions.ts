@@ -3,6 +3,7 @@ import type { createClient } from "@/lib/supabase/server";
 import { hasAiConfigured } from "@/lib/ai/config";
 import { getTextFromOpenRouter } from "./ask-series-answer";
 import { callAi } from "./call";
+import { composeMeetingNotes } from "./companion-notes";
 import {
   buildSeriesContext,
   formatSeriesContextForPrompt,
@@ -168,8 +169,8 @@ export async function generateMeetingSuggestions(
     return { ok: false, status: 404, error: "Meeting not found", code: "not_found" };
   }
 
-  const rawNotes = meeting.raw_notes_markdown || meeting.notes_markdown || "";
-  if (!rawNotes.trim() && !meeting.transcript_raw?.trim()) {
+  const notes = composeMeetingNotes(meeting);
+  if (!notes.trim() && !meeting.transcript_raw?.trim()) {
     return {
       ok: false,
       status: 400,
@@ -210,7 +211,7 @@ export async function generateMeetingSuggestions(
     title: meeting.title,
     seriesName: meeting.series?.name ?? "Untitled series",
     attendees: meeting.attendees ?? [],
-    notes: rawNotes,
+    notes,
     transcript: meeting.transcript_raw,
     contextBlock: formatSeriesContextForPrompt(context),
     meetingDate,
