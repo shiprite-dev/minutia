@@ -142,6 +142,9 @@ jobs:
       - name: Fast-lane contracts
         run: pnpm test:fast-lane
 
+      - name: Me/them channel contracts
+        run: pnpm test:channels
+
       - name: Audio retention contracts
         run: pnpm test:retention
 

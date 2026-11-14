@@ -97,8 +97,10 @@ export function resolveSpeakerMap(
   return { map, proposals };
 }
 
-/** "Speaker A" label for an unmapped provider speaker. */
+/** "Speaker A" label for an unmapped provider speaker; reserved channel labels read "Me" / "Them". */
 function displayLabel(speaker: string): string {
+  if (speaker === "me") return "Me";
+  if (speaker === "them") return "Them";
   return /^[A-Za-z]$/.test(speaker) ? `Speaker ${speaker.toUpperCase()}` : `Speaker ${speaker}`;
 }
 

@@ -7,7 +7,7 @@
 // The model and endpoint are env-overridable.
 // ---------------------------------------------------------------------------
 
-import { sendTranscription, type TranscriptionResult } from "./shared";
+import { sendTranscription, TranscriptionError, type TranscriptionResult } from "./shared";
 
 export const OPENROUTER_STT_URL = "https://openrouter.ai/api/v1/audio/transcriptions";
 export const OPENROUTER_STT_DEFAULT_MODEL = "openai/whisper-1";
@@ -41,6 +41,8 @@ export interface OpenRouterTranscribeOptions {
   deadlineAt?: number;
   /** Overrides the default attribution origin (defaults to SITE_URL). */
   referer?: string;
+  /** Request segment timestamps (verbose_json); retried once as plain json when the model rejects it. */
+  timestamps?: boolean;
 }
 
 export async function transcribeWithOpenRouter(
@@ -54,31 +56,40 @@ export async function transcribeWithOpenRouter(
     signal,
     deadlineAt,
     referer = process.env.SITE_URL ?? "https://example.com",
+    timestamps = false,
   }: OpenRouterTranscribeOptions
 ): Promise<TranscriptionResult> {
   const base64 = Buffer.from(await audio.arrayBuffer()).toString("base64");
-  const body = JSON.stringify({
-    model,
-    input_audio: { data: base64, format: audioFormatFromMime(mimeType) },
-  });
+  const send = (withTimestamps: boolean) =>
+    sendTranscription({
+      url,
+      apiKey,
+      body: JSON.stringify({
+        model,
+        input_audio: { data: base64, format: audioFormatFromMime(mimeType) },
+        ...(withTimestamps ? { response_format: "verbose_json", timestamp_granularities: ["word", "segment"] } : {}),
+      }),
+      model,
+      provider: "openrouter",
+      headers: {
+        "Content-Type": "application/json",
+        "HTTP-Referer": referer,
+        "X-Title": "Minutia",
+      },
+      getDuration: (json) => {
+        const usage = json.usage as { seconds?: unknown } | undefined;
+        return typeof usage?.seconds === "number" ? usage.seconds : null;
+      },
+      timeoutMs,
+      signal,
+      deadlineAt,
+    });
 
-  return sendTranscription({
-    url,
-    apiKey,
-    body,
-    model,
-    provider: "openrouter",
-    headers: {
-      "Content-Type": "application/json",
-      "HTTP-Referer": referer,
-      "X-Title": "Minutia",
-    },
-    getDuration: (json) => {
-      const usage = json.usage as { seconds?: unknown } | undefined;
-      return typeof usage?.seconds === "number" ? usage.seconds : null;
-    },
-    timeoutMs,
-    signal,
-    deadlineAt,
-  });
+  if (!timestamps) return send(false);
+  try {
+    return await send(true);
+  } catch (error) {
+    if (error instanceof TranscriptionError && error.code === "unsupported_format") return send(false);
+    throw error;
+  }
 }
