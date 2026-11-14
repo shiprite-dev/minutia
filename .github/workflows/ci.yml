@@ -76,7 +76,8 @@ jobs:
 
       - name: Verify transcription retry budget
         run: pnpm test:transcription-budget
-      run: test:transcription-status-copy
+      - name: Verify transcription status copy
+        run: pnpm test:transcription-status-copy
 
       - name: Verify transcription route contracts
         run: pnpm test:transcription-routes
