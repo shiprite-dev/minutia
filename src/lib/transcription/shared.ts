@@ -63,6 +63,17 @@ export interface TranscriptionResult {
    * finished and produced no speech. Only set when the provider supplied
    * positive evidence of silence, never inferred from a malformed payload. */
   outcome?: "speech" | "no_speech";
+  /** Provider segment timings (seconds) when every reported segment is well formed. */
+  timed?: { start: number; end: number; text: string }[];
+}
+
+/** Trusts provider `segments` only when every entry has numeric start/end and string text. */
+function parseTimed(segments: unknown): TranscriptionResult["timed"] {
+  if (!Array.isArray(segments) || segments.length === 0) return undefined;
+  const valid = segments.every(
+    (s) => typeof s?.start === "number" && typeof s?.end === "number" && typeof s?.text === "string"
+  );
+  return valid ? segments.map((s) => ({ start: s.start, end: s.end, text: s.text.trim() })) : undefined;
 }
 
 export type TranscriptionErrorCode =
@@ -262,5 +273,6 @@ export async function sendTranscription({
   // An empty transcript from a completed provider job is confirmed silence,
   // not a failure: persist it as no_speech so silence completes once.
   const outcome = record.text.trim() === "" ? "no_speech" : "speech";
-  return { text: record.text, model, provider, durationSeconds, diarized: false, outcome };
+  const timed = parseTimed(record.segments);
+  return { text: record.text, model, provider, durationSeconds, diarized: false, outcome, ...(timed ? { timed } : {}) };
 }

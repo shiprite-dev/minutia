@@ -9,6 +9,8 @@
 // in isolation.
 // ---------------------------------------------------------------------------
 
+import type { TranscriptionSegment } from "./shared";
+
 export interface SegmentRow {
   seq: number;
   status: string;
@@ -19,6 +21,10 @@ export interface SegmentRow {
   /** Persisted terminal outcome ("speech" | "no_speech"); null/absent on
    * legacy rows written before outcomes existed. */
   transcription_outcome?: string | null;
+  them_storage_path?: string | null;
+  offset_seconds?: number | null;
+  transcript_segments?: TranscriptionSegment[] | null;
+  recorded_by?: string | null;
 }
 
 /** A row is usable transcript when it completed AND carries non-empty trimmed text. */

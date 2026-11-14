@@ -54,6 +54,7 @@
     "test:transcription": "node --test scripts/verify-transcription-client.test.mjs",
     "test:transcription-budget": "node --test scripts/verify-transcription-budget.test.mjs",
     "test:diarization": "node --test scripts/verify-diarization.test.mjs",
+    "test:channels": "node --test scripts/verify-channels.test.mjs",
     "test:context-extraction": "node --test scripts/verify-context-extraction.test.mjs",
     "test:feature-access": "node --test scripts/verify-feature-access.test.mjs",
     "test:ai-openai-compatible": "node --test scripts/verify-ai-openai-compatible.test.mjs",

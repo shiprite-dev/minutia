@@ -179,6 +179,8 @@ export interface TranscribeAudioOptions {
   languageHint?: string;
   /** Inject a run budget for tests; one is created per call otherwise. */
   budget?: RunBudget;
+  /** Ask for provider segment timestamps (OpenRouter; Groq always returns them). */
+  timestamps?: boolean;
 }
 
 function runProvider(
@@ -220,6 +222,7 @@ function runProvider(
     timeoutMs: options.timeoutMs,
     signal: options.signal,
     deadlineAt: options.deadlineAt,
+    timestamps: options.timestamps,
   });
 }
 

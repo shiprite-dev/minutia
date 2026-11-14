@@ -105,6 +105,7 @@ export async function getInstanceConfigMap(keys) {
 fs.writeFileSync(path.join(stubDir, "segments.mjs"), `
 export function parseSegmentPath() { return { ext: "webm" }; }
 export function segmentMimeForExt() { return "audio/webm"; }
+export function parseChannelSegmentBody() { return null; }
 `);
 
 // Test-side Supabase double. Chainable; every table write is recorded.
