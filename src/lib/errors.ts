@@ -25,9 +25,12 @@ const NOISE = [
 function extractMessage(err: unknown): string {
   if (typeof err === "string") return err;
   if (err && typeof err === "object") {
-    const o = err as { message?: unknown; error?: { message?: unknown } };
+    const o = err as { message?: unknown; error?: unknown };
+    // A BFF error body carries its user-facing sentence in a top-level `error`.
+    if (typeof o.error === "string") return o.error;
     if (typeof o.message === "string") return o.message;
-    if (o.error && typeof o.error.message === "string") return o.error.message;
+    const nested = o.error as { message?: unknown } | undefined;
+    if (nested && typeof nested.message === "string") return nested.message;
   }
   return "";
 }
@@ -41,10 +44,36 @@ function extractCode(err: unknown): string {
   return "";
 }
 
+// Transcription failure codes, mapped to plain, non-technical copy. Keyed off
+// the machine code so a body like { error, code } always yields a human reason
+// instead of leaking the code or falling through to the generic message.
+const TRANSCRIPTION_CODE_COPY: Record<string, string> = {
+  timeout: "Transcription took too long. Try again.",
+  rate_limit: "Transcription is temporarily busy. Try again in a moment.",
+  auth_error: "This workspace has not been set up for transcription yet. Ask your administrator.",
+  no_api_key: "This workspace has not been set up for transcription yet. Ask your administrator.",
+  provider_not_configured:
+    "This workspace has not been set up for transcription yet. Ask your administrator.",
+  transcription_unconfigured:
+    "This workspace has not been set up for transcription yet. Ask your administrator.",
+  unsupported_format: "This recording format is not supported. Try uploading the recording again.",
+  provider_error: "Transcription failed. Try again.",
+  processing_conflict: "This recording is already being transcribed.",
+  input_mismatch: "This recording changed. Refresh to see its current status.",
+  extraction_failed: "Your transcript is ready, but action items could not be created.",
+  download_failed: "The recording could not be downloaded. Try again.",
+};
+
 export function humanizeError(err: unknown): string {
   const raw = extractMessage(err).trim();
   const code = extractCode(err);
   const m = raw.toLowerCase();
+
+  const normalizedCode = code.toLowerCase();
+  const transcriptionCopy = Object.prototype.hasOwnProperty.call(TRANSCRIPTION_CODE_COPY, normalizedCode)
+    ? TRANSCRIPTION_CODE_COPY[normalizedCode]
+    : undefined;
+  if (transcriptionCopy) return transcriptionCopy;
 
   if (m.includes("invalid login credentials")) {
     return "That email or password doesn't match our records.";

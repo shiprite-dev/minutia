@@ -74,8 +74,21 @@ jobs:
       - name: Verify transcription client
         run: pnpm test:transcription
 
+      - name: Verify transcription retry budget
+        run: pnpm test:transcription-budget
+      run: test:transcription-status-copy
+
+      - name: Verify transcription route contracts
+        run: pnpm test:transcription-routes
+
+      - name: Verify transcription outcome contracts
+        run: pnpm test:transcription-outcome
+
       - name: Verify context-aware extraction
         run: pnpm test:context-extraction
+
+      - name: Verify instance-config read contracts
+        run: pnpm test:instance-config
 
       - name: Verify feature-access gate
         run: pnpm test:feature-access

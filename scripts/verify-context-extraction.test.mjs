@@ -362,3 +362,147 @@ test("prompt teaches self-assignment attribution from speaker turns", () => {
   assert.match(prompt, /self-assign/i);
   assert.match(prompt, /first person/i);
 });
+
+// ---------------------------------------------------------------------------
+// Context availability: a failed query must refuse, never degrade to empty
+// ---------------------------------------------------------------------------
+
+test("buildSeriesContext throws when a context query fails", async () => {
+  const tables = fixtureTables();
+  const supabase = {
+    from(table) {
+      const builder = {
+        select() { return builder; },
+        eq() { return builder; },
+        in() { return builder; },
+        order() { return builder; },
+        limit() { return builder; },
+        then(resolve, reject) {
+          // The issues query fails; the others succeed.
+          const error = table === "issues" ? { message: "connection reset" } : null;
+          return Promise.resolve({
+            data: error ? null : tables[table] ?? [],
+            error,
+          }).then(resolve, reject);
+        },
+      };
+      return builder;
+    },
+  };
+  await assert.rejects(
+    buildSeriesContext(supabase, SERIES_ID),
+    (err) => {
+      assert.equal(err.name, "SeriesContextUnavailableError");
+      return true;
+    }
+  );
+});
+
+// Bundle suggestions.ts with the AI-call/config seams stubbed so the refusal
+// contract is exercised against the real generator.
+const suggestionsBundle = path.join(tempDir, "suggestions-stubbed.mjs");
+const stubDir = path.join(tempDir, "stubs");
+fs.mkdirSync(stubDir, { recursive: true });
+const configState = { configured: true, fail: false };
+fs.writeFileSync(
+  path.join(stubDir, "ai-config.mjs"),
+  "export async function hasAiConfigured() { return true; }"
+);
+fs.writeFileSync(
+  path.join(stubDir, "call.mjs"),
+  "export async function callAi() { throw new Error('ai unreachable'); }"
+);
+fs.writeFileSync(
+  path.join(stubDir, "ask-series-answer.mjs"),
+  "export function getTextFromOpenRouter() { return ''; }"
+);
+fs.writeFileSync(
+  path.join(stubDir, "supabase-server.mjs"),
+  "export async function createClient() { return null; }"
+);
+function stubPlugin(build) {
+  return {
+    name: "stub-deps",
+    setup(instance) {
+      instance.onResolve({ filter: /^@\/lib\/(ai\/config|supabase\/server)$/ }, (args) => ({
+        path: path.join(stubDir, args.path.includes("ai/config") ? "ai-config.mjs" : "supabase-server.mjs"),
+      }));
+      instance.onResolve({ filter: /^\.\/(call|ask-series-answer)$/ }, (args) => ({
+        path: path.join(stubDir, args.path === "./call" ? "call.mjs" : "ask-series-answer.mjs"),
+      }));
+    },
+  };
+}
+await esbuild.build({
+  entryPoints: ["src/lib/ai/suggestions.ts"],
+  outfile: suggestionsBundle,
+  bundle: true,
+  platform: "node",
+  format: "esm",
+  logLevel: "silent",
+  absWorkingDir: root,
+  plugins: [stubPlugin()],
+});
+const { generateMeetingSuggestions, isExplicitSkip } = await import(pathToFileURL(suggestionsBundle).href);
+
+function suggestionsSupabase(meeting, tables) {
+  return {
+    from(table) {
+      const builder = {
+        select() { return builder; },
+        eq() { return builder; },
+        in() { return builder; },
+        order() { return builder; },
+        limit() { return builder; },
+        single() {
+          return Promise.resolve(
+            table === "meetings"
+              ? { data: meeting, error: null }
+              : { data: null, error: { message: "unexpected" } }
+          );
+        },
+        then(resolve, reject) {
+          const error = table === "issues" ? { message: "db outage" } : null;
+          return Promise.resolve({ data: error ? null : tables[table] ?? [], error }).then(resolve, reject);
+        },
+      };
+      return builder;
+    },
+  };
+}
+
+const MEETING_ID = "20000000-0000-0000-0000-000000000002";
+
+test("generateMeetingSuggestions refuses when series context is unavailable", async () => {
+  const meeting = {
+    id: MEETING_ID,
+    series_id: SERIES_ID,
+    title: "Weekly",
+    attendees: [],
+    raw_notes_markdown: "Discussed launch",
+    notes_markdown: "",
+    transcript_raw: "some transcript",
+    series: { name: "Weekly" },
+  };
+  const outcome = await generateMeetingSuggestions(suggestionsSupabase(meeting, {}), MEETING_ID);
+  assert.equal(outcome.ok, false);
+  assert.equal(outcome.code, "context_unavailable");
+  assert.equal(isExplicitSkip(outcome), false, "context unavailability is a failure, not a skip");
+});
+
+test("an empty meeting with no notes is an explicit skip, not a failure", async () => {
+  const meeting = {
+    id: MEETING_ID,
+    series_id: SERIES_ID,
+    title: "Weekly",
+    attendees: [],
+    raw_notes_markdown: "",
+    notes_markdown: "",
+    transcript_raw: "",
+    series: { name: "Weekly" },
+  };
+  const outcome = await generateMeetingSuggestions(suggestionsSupabase(meeting, {}), MEETING_ID);
+  assert.equal(outcome.ok, false);
+  assert.equal(outcome.code, "skipped_no_content");
+  assert.equal(isExplicitSkip(outcome), true);
+});

@@ -26,10 +26,14 @@ import { useIssues, useCreateIssue, useUpdateIssueStatus, useUpdateIssue, useAss
 import { useCreateDecision, decisionKeys } from "@/lib/hooks/use-decisions";
 import { SyncIndicator } from "@/components/minutia/sync-indicator";
 import { useOfflineSync } from "@/lib/hooks/use-offline-sync";
-import { addPendingItem, clearAudioChunks } from "@/lib/offline-buffer";
+import { addPendingItem, clearAudioChunks, getAudioChunks } from "@/lib/offline-buffer";
 import { RecordingIndicator } from "@/components/minutia/recording-indicator";
+import {
+  TranscriptionStatus,
+  type TranscriptionUiState,
+} from "@/components/minutia/transcription-status";
 import { useMeetingRecorder } from "@/lib/hooks/use-meeting-recorder";
-import { uploadMeetingAudio } from "@/lib/audio";
+import { uploadMeetingAudio, MEETING_AUDIO_BUCKET } from "@/lib/audio";
 import { createClient } from "@/lib/supabase/client";
 import { CaptureInput } from "@/components/minutia/capture-input";
 import { InlineTaskList } from "@/components/minutia/inline-task-list";
@@ -52,6 +56,7 @@ import { RemindOwnersButton } from "@/components/minutia/remind-owners-button";
 import { CarryoverBriefingPanel } from "@/components/minutia/carryover-briefing-panel";
 import { AiUnavailableNotice } from "@/components/minutia/ai-unavailable-notice";
 import { useAiAccess } from "@/lib/hooks/use-ai-access";
+import { humanizeError } from "@/lib/errors";
 import { ArrowLeft, Square, Play, Check, X, Sparkles, Loader2, ListChecks, FileText, CheckSquare, Gavel, AlertTriangle, Ban, RotateCcw, HelpCircle, ChevronDown, Radio } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatShortDate } from "@/lib/date-utils";
@@ -61,6 +66,88 @@ import Link from "next/link";
 interface MeetingDetailContentProps {
   seriesId: string;
   meetingId: string;
+}
+
+type TranscriptionFailureKind =
+  | "failed"
+  | "failed_unknown"
+  | "needs_admin"
+  | "needs_signin"
+  | "already_running"
+  | "input_mismatch"
+  | "extraction_failed"
+  | "buffered_local"
+  | "buffered_failed"
+  | "deleted";
+
+interface TranscriptionFailure {
+  kind: TranscriptionFailureKind;
+  reason?: string;
+}
+
+// The server reclaims a processing row after this window, so a client may only
+// offer a retry once the claim is actually stale.
+const STALE_PROCESSING_MS = 15 * 60 * 1000;
+
+const ADMIN_CODES = new Set([
+  "auth_error",
+  "no_api_key",
+  "provider_not_configured",
+  "transcription_unconfigured",
+]);
+
+// A live meeting has nothing to report until something was recorded, so the
+// two "nothing here" states stay out of the live view.
+const LIVE_STATUS_STATES: TranscriptionUiState[] = [
+  "recording",
+  "paused",
+  "mic_denied",
+  "saving",
+  "saved_pending",
+  "transcribing",
+  "transcribing_stale",
+  "processing_return",
+  "transcript_ready",
+  "extraction_failed",
+  "no_speech",
+  "failed",
+  "failed_unknown",
+  "needs_admin",
+  "needs_signin",
+  "already_running",
+  "input_mismatch",
+  "buffered_local",
+  "buffered_failed",
+];
+
+// The capture states only ever exist while the meeting is live.
+const CAPTURE_STATUS_STATES: TranscriptionUiState[] = [
+  "recording",
+  "paused",
+  "mic_denied",
+];
+
+// A non-2xx transcribe response carries a machine code. Map it to the UX
+// contract before anything reaches the screen, so a raw code never shows up.
+function mapTranscriptionFailure(
+  status: number,
+  payload: Record<string, unknown>
+): TranscriptionFailure {
+  const rawCode = typeof payload.code === "string" ? payload.code.toLowerCase() : "";
+  const message = typeof payload.error === "string" ? payload.error : "";
+
+  if (rawCode === "extraction_failed") return { kind: "extraction_failed" };
+  if (rawCode === "processing_conflict") return { kind: "already_running" };
+  if (rawCode === "input_mismatch") return { kind: "input_mismatch" };
+  if (ADMIN_CODES.has(rawCode)) return { kind: "needs_admin" };
+  if (status === 401) return { kind: "needs_signin" };
+  if (status === 404) return { kind: "deleted" };
+  if (rawCode) {
+    return { kind: "failed", reason: humanizeError({ error: message, code: rawCode }) };
+  }
+  if (message) return { kind: "failed", reason: humanizeError({ error: message }) };
+  if (status >= 500) return { kind: "failed_unknown" };
+  return { kind: "failed", reason: humanizeError({ error: message }) };
 }
 
 type AiNotesPreview = {
@@ -589,7 +676,11 @@ export function MeetingDetailContent({
 }: MeetingDetailContentProps) {
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { data: meeting, isLoading: meetingLoading } = useMeeting(meetingId);
+  const { data: meeting, isLoading: meetingLoading, error: meetingError } = useMeeting(meetingId);
+  // The row is gone (deleted, or the viewer lost access). A stale row would
+  // otherwise keep rendering a meeting that no longer exists.
+  const meetingGone =
+    !!meetingError && (meetingError as { code?: string }).code === "PGRST116";
   const { data: series } = useSeriesDetail(seriesId);
   const { data: participantRole } = useSeriesParticipantRole(seriesId);
   const { data: profile } = useProfile();
@@ -641,6 +732,22 @@ export function MeetingDetailContent({
   const [transcribing, setTranscribing] = React.useState(false);
   const [autoStartSummary, setAutoStartSummary] = React.useState(false);
   const autoSummaryFiredRef = React.useRef(false);
+  // The upload landed and the transcription request has not been issued yet.
+  const [uploadedPending, setUploadedPending] = React.useState(false);
+  const [transcriptionFailure, setTranscriptionFailure] = React.useState<TranscriptionFailure | null>(null);
+  // When the current transcription request was issued, for elapsed copy.
+  const transcribeStartedAtRef = React.useRef<number | null>(null);
+  // The transcript was already committed when the page loaded, so its arrival
+  // is not news and must not toast.
+  const initialTranscriptRef = React.useRef<boolean | null>(null);
+  const transcriptAnnouncedRef = React.useRef(false);
+  // The meeting is gone: no late completion may toast or reopen the panel.
+  const meetingMissingRef = React.useRef(false);
+  const statusRegionRef = React.useRef<HTMLDivElement>(null);
+  const notesAreaRef = React.useRef<HTMLTextAreaElement>(null);
+  const liveNotesAreaRef = React.useRef<HTMLTextAreaElement>(null);
+  const transcriptAreaRef = React.useRef<HTMLTextAreaElement>(null);
+  const [clock, setClock] = React.useState(() => Date.now());
   // Bumping this nonce re-runs the recap stream; driven by the footer "Replay
   // recap" button and the R shortcut on the completed view.
   const [replayNonce, setReplayNonce] = React.useState(0);
@@ -668,15 +775,18 @@ export function MeetingDetailContent({
   }, [meetingId]);
 
   // The recording pipeline: transcribe the uploaded audio, which auto-extracts
-  // context-aware suggestions on completion, then surface them. Best-effort so a
-  // missing AI key or provider hiccup never blocks the recording itself.
+  // context-aware suggestions on completion, then surface them. A failed
+  // request always ends in a visible state, never a silent stop.
   const runTranscription = React.useCallback(async () => {
-    setTranscribing(true);
     try {
       // Wait for the fast lane to settle so the tail segment's row is registered
       // before the final pass decides whether to trust the segment rows. Only
       // claim segment coverage when every segment actually completed.
       const lane = await recorder.waitForFastLane(25000);
+      if (meetingMissingRef.current) return;
+      setUploadedPending(false);
+      setTranscribing(true);
+      transcribeStartedAtRef.current = Date.now();
       const body =
         lane.state === "ready" && lane.segmentsTotal > 0
           ? JSON.stringify({ expected_segments: lane.segmentsTotal })
@@ -686,16 +796,23 @@ export function MeetingDetailContent({
         headers: { "Content-Type": "application/json" },
         body,
       });
+      const payload = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+      if (meetingMissingRef.current) return;
       if (response.ok) {
+        setTranscriptionFailure(null);
         // The transcript text lands via the meeting realtime poll; pull the
         // suggestions the transcription just generated and reveal them.
         await loadSuggestions();
         setSuggestionsOpen(true);
+        return;
       }
+      setTranscriptionFailure(mapTranscriptionFailure(response.status, payload));
     } catch {
-      // Network error; the recording is saved and transcription can be retried.
+      // Network error: the recording is saved, so the user can retry.
+      if (!meetingMissingRef.current) setTranscriptionFailure({ kind: "failed_unknown" });
     } finally {
       setTranscribing(false);
+      transcribeStartedAtRef.current = null;
     }
   }, [meetingId, loadSuggestions, recorder.waitForFastLane]);
 
@@ -732,6 +849,57 @@ export function MeetingDetailContent({
   React.useEffect(() => {
     if (meeting?.transcript_raw != null) setTranscript(meeting.transcript_raw);
   }, [meeting?.transcript_raw]);
+
+  // A meeting that disappeared mid-run must not fire late completion effects.
+  React.useEffect(() => {
+    if (!meetingLoading && (!meeting || meetingGone)) meetingMissingRef.current = true;
+  }, [meeting, meetingLoading, meetingGone]);
+
+  // Remember whether the transcript was already there on arrival, so a
+  // pre-existing transcript never toasts as if it had just landed.
+  React.useEffect(() => {
+    if (initialTranscriptRef.current === null && meeting !== undefined) {
+      initialTranscriptRef.current = !!meeting.transcript_raw?.trim();
+    }
+  }, [meeting]);
+
+  // A committed transcript is shown as soon as it is observed: open the panel
+  // once and toast once. Refreshing, or a panel the user closed, changes
+  // nothing.
+  React.useEffect(() => {
+    const text = meeting?.transcript_raw?.trim();
+    if (!text) return;
+    if (meetingMissingRef.current) return;
+    if (transcriptAnnouncedRef.current) return;
+    transcriptAnnouncedRef.current = true;
+    // Only a transcript that lands while the page is open takes over the view:
+    // a past meeting keeps its collapsed-by-default panel, so opening it later is
+    // never undone by this effect.
+    if (initialTranscriptRef.current === false) {
+      setTranscriptOpen(true);
+      toast("Transcript ready. Check action items below.");
+    }
+  }, [meeting?.transcript_raw]);
+
+  // A transcript must appear without the user refreshing, even when the
+  // realtime subscription is unavailable (self-hosted instances without
+  // replication). While a run is in flight, re-read the meeting on a short
+  // interval so the committed transcript and the terminal status are observed.
+  React.useEffect(() => {
+    const inFlight = transcribing || meeting?.transcription_status === "processing";
+    if (!inFlight || meetingMissingRef.current) return;
+    const id = setInterval(() => {
+      void queryClient.invalidateQueries({ queryKey: meetingKeys.detail(meetingId) });
+    }, 2000);
+    return () => clearInterval(id);
+  }, [transcribing, meeting?.transcription_status, meetingId, queryClient]);
+
+  // The elapsed-time copy needs a moving clock while a run is in flight.
+  React.useEffect(() => {
+    if (!transcribing && meeting?.transcription_status !== "processing") return;
+    const id = setInterval(() => setClock(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [transcribing, meeting?.transcription_status]);
 
   // Auto-save notes with debounce
   const saveTimerRef = React.useRef<ReturnType<typeof setTimeout>>(null);
@@ -797,6 +965,158 @@ export function MeetingDetailContent({
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [canReplayRecap, replayRecap]);
 
+  // =========================================================================
+  // TRANSCRIPTION STATE
+  // =========================================================================
+  const startedAtMs = meeting?.transcription_started_at
+    ? new Date(meeting.transcription_started_at).getTime()
+    : null;
+  const runAgeMs =
+    startedAtMs != null && Number.isFinite(startedAtMs) ? clock - startedAtMs : null;
+  const isProcessing = meeting?.transcription_status === "processing";
+  const isStaleRun = runAgeMs != null && runAgeMs > STALE_PROCESSING_MS;
+  const hasTranscript = !!meeting?.transcript_raw?.trim();
+  const canDownloadAudio = !!meeting?.audio_file_path;
+
+  // One derived state drives the whole status region. The order is the
+  // contract: capture first, then the request this client owns, then the
+  // persisted run, then the last failure, then what the meeting holds.
+  let transcriptionState: TranscriptionUiState;
+  if (recorder.error) {
+    transcriptionState = "mic_denied";
+  } else if (recorder.state === "recording") {
+    transcriptionState = "recording";
+  } else if (recorder.state === "paused") {
+    transcriptionState = "paused";
+  } else if (savingRecording) {
+    transcriptionState = "saving";
+  } else if (transcribing) {
+    transcriptionState = "transcribing";
+  } else if (isProcessing) {
+    transcriptionState = isStaleRun ? "transcribing_stale" : "processing_return";
+  } else if (
+    transcriptionFailure &&
+    !(hasTranscript && transcriptionFailure.kind !== "extraction_failed")
+  ) {
+    // A committed transcript outranks an earlier failure, except for the
+    // extraction failure, which is defined on top of a ready transcript.
+    transcriptionState = transcriptionFailure.kind;
+  } else if (hasTranscript) {
+    transcriptionState = "transcript_ready";
+  } else if (uploadedPending || meeting?.transcription_status === "pending") {
+    transcriptionState = "saved_pending";
+  } else if (meeting?.transcription_outcome === "no_speech") {
+    transcriptionState = "no_speech";
+  } else if (meeting?.transcription_status === "failed") {
+    transcriptionState = "failed_unknown";
+  } else if (meeting?.transcription_status === "completed") {
+    transcriptionState = "empty_unknown";
+  } else {
+    transcriptionState = "no_recording";
+  }
+
+  function focusNotes() {
+    const area = liveNotesAreaRef.current ?? notesAreaRef.current;
+    area?.focus();
+  }
+
+  function focusTranscript() {
+    setTranscriptOpen(true);
+    window.setTimeout(() => transcriptAreaRef.current?.focus(), 0);
+  }
+
+  function focusStatus() {
+    statusRegionRef.current?.focus();
+  }
+
+  async function handleRetryTranscription() {
+    await runTranscription();
+  }
+
+  async function handleRetryActionItems() {
+    await generateSuggestions();
+  }
+
+  async function handleDownloadAudio() {
+    const path = meeting?.audio_file_path;
+    if (!path) return;
+    const { data, error } = await createClient()
+      .storage.from(MEETING_AUDIO_BUCKET)
+      .createSignedUrl(path, 60);
+    if (error || !data?.signedUrl) {
+      toast.error("The recording could not be downloaded. Try again.");
+      return;
+    }
+    window.open(data.signedUrl, "_blank", "noopener");
+  }
+
+  async function handleRetryUpload() {
+    try {
+      const chunks = await getAudioChunks(meetingId);
+      if (chunks.length === 0) {
+        toast.error("No local recording found to upload.");
+        return;
+      }
+      const mimeType = chunks[0].type || "audio/webm";
+      const blob = new Blob(chunks, { type: mimeType });
+      await uploadMeetingAudio(createClient(), {
+        meetingId,
+        blob,
+        durationSeconds: 0,
+        mimeType,
+      });
+      await clearAudioChunks(meetingId);
+      setTranscriptionFailure(null);
+      setUploadedPending(true);
+      toast("Recording uploaded.");
+      void runTranscription();
+    } catch {
+      setTranscriptionFailure({ kind: "buffered_local" });
+      toast.error("Couldn't upload the recording, it's saved locally and will retry.");
+    }
+  }
+
+  function handleContactAdmin() {
+    if (profile?.role === "admin") {
+      router.push("/admin/settings");
+      return;
+    }
+    toast("Ask your workspace administrator to set up transcription.");
+  }
+
+  const transcriptionStatusProps = {
+    state: transcriptionState,
+    partsDone: recorder.fastLane.segmentsDone,
+    partsTotal: recorder.fastLane.segmentsTotal,
+    elapsedSeconds:
+      transcribeStartedAtRef.current != null
+        ? Math.floor((clock - transcribeStartedAtRef.current) / 1000)
+        : runAgeMs != null
+          ? Math.floor(runAgeMs / 1000)
+          : undefined,
+    startedMinutesAgo: runAgeMs != null ? Math.floor(runAgeMs / 60000) : null,
+    reason: transcriptionFailure?.reason ?? null,
+    canDownloadAudio,
+    regionRef: statusRegionRef,
+    onStop: handleStopRecording,
+    onPause: recorder.pause,
+    onResume: recorder.resume,
+    onRetryMicrophone: () => void recorder.start(),
+    onRetryTranscription: handleRetryTranscription,
+    onDownloadAudio: handleDownloadAudio,
+    onRetryActionItems: handleRetryActionItems,
+    onAddNotes: focusNotes,
+    onEditTranscript: focusTranscript,
+    onReviewActionItems: handleOpenSuggestions,
+    onViewStatus: focusStatus,
+    onRefreshStatus: () =>
+      queryClient.invalidateQueries({ queryKey: meetingKeys.detail(meetingId) }),
+    onRetryUpload: handleRetryUpload,
+    onBackToSeries: () => router.push(`/series/${seriesId}`),
+    onContactAdmin: handleContactAdmin,
+    onSignIn: () => router.push("/login"),
+  };
+
   if (meetingLoading) {
     return (
       <div className="min-h-full bg-paper">
@@ -811,10 +1131,16 @@ export function MeetingDetailContent({
     );
   }
 
-  if (!meeting) {
+  if (!meeting || meetingGone) {
     return (
-      <div className="min-h-full bg-paper flex items-center justify-center">
-        <p className="text-sm text-ink-3">Meeting not found.</p>
+      <div className="min-h-full bg-paper">
+        <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6 lg:px-8">
+          <TranscriptionStatus
+            state="deleted"
+            regionRef={statusRegionRef}
+            onBackToSeries={() => router.push(`/series/${seriesId}`)}
+          />
+        </div>
       </div>
     );
   }
@@ -951,6 +1277,7 @@ export function MeetingDetailContent({
           mimeType: result.mimeType,
         });
         await clearAudioChunks(meetingId);
+        setUploadedPending(true);
         // Kick off transcription + context-aware extraction so the facilitator
         // returns to a ready transcript and suggested action items. Fire-and-
         // forget with its own progress state; it must not block stop/end.
@@ -958,6 +1285,7 @@ export function MeetingDetailContent({
       }
     } catch {
       // Upload failed; the recording stays buffered in IndexedDB for recovery.
+      setTranscriptionFailure({ kind: "buffered_local" });
       toast.error("Couldn't upload the recording, it's saved locally and will retry.");
     } finally {
       setSavingRecording(false);
@@ -1109,6 +1437,10 @@ export function MeetingDetailContent({
         return;
       }
       setAiSuggestions(payload.suggestions ?? []);
+      // The action items exist now, so the extraction failure no longer holds.
+      setTranscriptionFailure((current) =>
+        current?.kind === "extraction_failed" ? null : current
+      );
     } catch {
       setSuggestionsError("AI suggestions could not be generated.");
     } finally {
@@ -1265,6 +1597,13 @@ export function MeetingDetailContent({
         {/* Companion app install nudge */}
         <CompanionInstallPrompt lastSeenAt={profile?.companion_last_seen_at} />
 
+        {/* Transcription status */}
+        {LIVE_STATUS_STATES.includes(transcriptionState) && (
+          <div className="mx-auto max-w-7xl px-6 pt-6">
+            <TranscriptionStatus {...transcriptionStatusProps} />
+          </div>
+        )}
+
         {/* Two-column layout */}
         <div className="mx-auto max-w-7xl px-6 py-6 flex gap-6">
           {/* Main column */}
@@ -1389,6 +1728,7 @@ export function MeetingDetailContent({
                 </span>
               </div>
               <Textarea
+                ref={liveNotesAreaRef}
                 value={notes}
                 onChange={(e) => handleNotesChange(e.target.value)}
                 placeholder="Type meeting notes here..."
@@ -1611,6 +1951,11 @@ export function MeetingDetailContent({
             )}
           </div>
         </header>
+
+        {/* Transcription status */}
+        {!CAPTURE_STATUS_STATES.includes(transcriptionState) && (
+          <TranscriptionStatus {...transcriptionStatusProps} />
+        )}
 
         {canManageMeeting && (
           <FlowingSummary
@@ -1926,6 +2271,7 @@ export function MeetingDetailContent({
             </div>
           )}
           <Textarea
+            ref={notesAreaRef}
             value={notes}
             onChange={(e) => handleNotesChange(e.target.value)}
             placeholder="Meeting notes..."
@@ -1972,6 +2318,7 @@ export function MeetingDetailContent({
               </div>
             ) : (
               <Textarea
+                ref={transcriptAreaRef}
                 value={transcript}
                 onChange={(e) => handleTranscriptChange(e.target.value)}
                 placeholder="Paste transcript..."

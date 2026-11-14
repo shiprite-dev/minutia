@@ -14,6 +14,10 @@ import {
 export const runtime = "nodejs";
 export const maxDuration = 120;
 
+// One absolute deadline for the whole segment request: 100s of work plus a
+// 20s reserve for persistence. Shared by every provider attempt and fallback.
+const REQUEST_BUDGET_MS = 100_000;
+
 /** Map a transcription failure cause to the right HTTP status. */
 function statusForCode(code: TranscriptionErrorCode): number {
   switch (code) {
@@ -25,6 +29,7 @@ function statusForCode(code: TranscriptionErrorCode): number {
       return 415;
     case "no_api_key":
     case "provider_not_configured":
+    case "auth_error":
       return 503;
     default:
       return 502;
@@ -111,6 +116,35 @@ export async function POST(
     );
   }
   if (claimed !== true) {
+    // Another worker owns the seq, or it is already terminal. Re-read so a
+    // completed segment replays its persisted result instead of 409ing
+    // forever (and never re-bills the provider).
+    const { data: current, error: rereadError } = await supabase
+      .from("meeting_audio_segments")
+      .select("status, transcript_text, model, provider, transcription_outcome")
+      .eq("meeting_id", meetingId)
+      .eq("seq", seq)
+      .single();
+    if (rereadError || !current) {
+      return NextResponse.json(
+        { error: "Could not read segment state.", request_id: requestId },
+        { status: 500 }
+      );
+    }
+    if (current.status === "completed") {
+      return NextResponse.json(
+        {
+          status: "completed",
+          replay: true,
+          seq,
+          transcript_length: (current.transcript_text ?? "").length,
+          provider: current.provider ?? "",
+          model: current.model ?? "",
+          request_id: requestId,
+        },
+        { status: 200 }
+      );
+    }
     return NextResponse.json(
       { error: "Segment transcription is already in progress.", request_id: requestId },
       { status: 409 }
@@ -150,6 +184,7 @@ export async function POST(
       fileName: `seg-${seq}.${parsed.ext}`,
       mimeType: audioData.type || segmentMimeForExt(parsed.ext),
       preferFast: true,
+      deadlineAt: Date.now() + REQUEST_BUDGET_MS,
     });
     const transcript = result.text.trim();
 
@@ -158,6 +193,7 @@ export async function POST(
       .update({
         status: "completed",
         transcript_text: transcript,
+        transcription_outcome: result.outcome ?? (transcript ? "speech" : null),
         model: result.model,
         provider: result.provider,
         error_code: null,
