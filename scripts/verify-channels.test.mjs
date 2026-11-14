@@ -616,17 +616,64 @@ test("transcribeAudio forwards timestamps to the OpenRouter provider", async () 
   assert.deepEqual(result.timed, [timed(0, 1, "x")]);
 });
 
-test("ownsSegmentPaths accepts only paths inside the meeting folder", () => {
-  const ownsSegmentPaths = fn(segments, "ownsSegmentPaths");
-  assert.equal(ownsSegmentPaths("m1", ["m1/seg-0-me.m4a", "m1/seg-0-them.m4a"]), true);
-  assert.equal(ownsSegmentPaths("m1", ["m1/seg-0.webm", null]), true);
-  assert.equal(ownsSegmentPaths("m1", ["m1/seg-0-me.m4a", "m2/seg-0-them.m4a"]), false);
-  assert.equal(ownsSegmentPaths("m1", ["m10/seg-0.webm"]), false);
-  assert.equal(ownsSegmentPaths("m1", ["../m1/seg-0.webm"]), false);
-  assert.equal(ownsSegmentPaths("m1", ["m1/../m2/seg-0.webm"]), false);
+test("ownsSegmentRow accepts only this meeting's own files for this seq", () => {
+  const ownsSegmentRow = fn(segments, "ownsSegmentRow");
+  assert.equal(ownsSegmentRow("m1", 0, "m1/seg-0-me.m4a", "m1/seg-0-them.m4a"), true);
+  assert.equal(ownsSegmentRow("m1", 0, "m1/seg-0.webm", null), true);
+  assert.equal(ownsSegmentRow("m1", 0, "m1/seg-0-me.m4a", "m2/seg-0-them.m4a"), false);
+  assert.equal(ownsSegmentRow("m1", 0, "m10/seg-0.webm", null), false);
+  assert.equal(ownsSegmentRow("m1", 0, "m1/../m2/seg-0.webm", null), false);
+  assert.equal(ownsSegmentRow("m1", 0, "m1/seg-0-me.m4a", "m1/recording.m4a"), false);
+  assert.equal(ownsSegmentRow("m1", 0, "m1/seg-0-me.m4a", "m1/seg-1-them.m4a"), false);
+  assert.equal(ownsSegmentRow("m1", 0, "m1/seg-1.webm", null), false);
+  assert.equal(ownsSegmentRow("m1", 0, "m1/recording.m4a", null), false);
+  assert.equal(ownsSegmentRow("m1", 0, "m1/seg-0-me.m4a", "m1/seg-0-them.webm"), false);
 });
 
-test("the final pass refuses a stored segment path outside its meeting", () => {
+test("the final pass checks a stored row's paths before it claims the segment", () => {
   const route = fs.readFileSync("src/app/api/meetings/[meetingId]/transcribe/route.ts", "utf8");
-  assert.ok(route.includes("ownsSegmentPaths(meetingId, [row.storage_path, row.them_storage_path])"));
+  const guard = route.indexOf("ownsSegmentRow(meetingId, row.seq, row.storage_path, row.them_storage_path)");
+  const claim = route.indexOf('"claim_segment_transcription"');
+  assert.ok(guard > 0, "the retry loop must guard stored paths per seq");
+  assert.ok(guard < claim, "a rejected row must never be claimed");
+  assert.ok(!route.includes("ownsSegmentPaths"), "the prefix-only guard is replaced");
+});
+
+test("isEcho keeps a short reply that reuses the question's words", () => {
+  const isEcho = fn(channels, "isEcho");
+  assert.equal(isEcho(timed(3.5, 5, "Yes, I can do that"), timed(0, 3, "Can you do that by Friday?")), false);
+  assert.equal(isEcho(timed(3.2, 4.5, "I can do it"), timed(0, 3, "can you do it")), false);
+  assert.equal(isEcho(timed(1, 3, "yes I can do that"), timed(0, 3, "can you do that by friday")), false);
+  assert.equal(isEcho(timed(2.6, 3.4, "Friday"), timed(0, 3, "Can you do that by Friday?")), false);
+});
+
+test("isEcho needs the me line to sit inside the them line, not merely near it", () => {
+  const isEcho = fn(channels, "isEcho");
+  assert.equal(isEcho(timed(3.3, 6, "can you ship it by friday"), timed(0, 3, "can you ship it by friday")), false);
+  assert.equal(isEcho(timed(0.3, 3.2, "can you ship it by friday"), timed(0, 3, "can you ship it by friday")), true);
+});
+
+test("attributionSource falls back to text when stored segments are malformed", () => {
+  const attributionSource = fn(channels, "attributionSource");
+  const good = [{ speaker: "me", start: 0, end: 1, text: "hi" }];
+  assert.equal(attributionSource({ rows: [{ transcript_segments: good }] }), "channels");
+  assert.equal(attributionSource({ rows: [{ transcript_segments: [{}] }] }), "text");
+  assert.equal(attributionSource({ rows: [{ transcript_segments: [null] }] }), "text");
+  assert.equal(attributionSource({ rows: [{ transcript_segments: [{ speaker: "me", start: "0", end: 1, text: "hi" }] }] }), "text");
+  assert.equal(attributionSource({ rows: [{ transcript_segments: [{ speaker: "me", start: 0, end: Number.NaN, text: "hi" }] }] }), "text");
+  assert.equal(attributionSource({ rows: [{ transcript_segments: good }, { transcript_segments: null }] }), "text");
+  assert.equal(attributionSource({ rows: [] }), "text");
+});
+
+test("speakerMapToStore keeps a human-corrected map when a run produces none", () => {
+  const speakerMapToStore = fn(channels, "speakerMapToStore");
+  const prior = { me: "Priya", them: "Daniel" };
+  assert.deepEqual(speakerMapToStore(null, prior), prior);
+  assert.deepEqual(speakerMapToStore({ me: "Priya", them: null }, prior), { me: "Priya", them: null });
+  assert.equal(speakerMapToStore(null, null), null);
+});
+
+test("the final pass stores the speaker map through speakerMapToStore", () => {
+  const route = fs.readFileSync("src/app/api/meetings/[meetingId]/transcribe/route.ts", "utf8");
+  assert.ok(route.includes("speakerMapToStore("), "a run that yields no map must not wipe corrections");
 });

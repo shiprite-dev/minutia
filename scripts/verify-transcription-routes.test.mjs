@@ -106,7 +106,7 @@ fs.writeFileSync(path.join(stubDir, "segments.mjs"), `
 export function parseSegmentPath() { return { ext: "webm" }; }
 export function segmentMimeForExt() { return "audio/webm"; }
 export function parseChannelSegmentBody() { return null; }
-export function ownsSegmentPaths() { return true; }
+export function ownsSegmentRow() { return true; }
 `);
 
 // Test-side Supabase double. Chainable; every table write is recorded.
