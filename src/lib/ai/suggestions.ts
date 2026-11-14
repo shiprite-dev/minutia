@@ -7,6 +7,7 @@ import {
   buildSeriesContext,
   formatSeriesContextForPrompt,
   normalizeSuggestions,
+  resolveDueDate,
   type SeriesContext,
   type SeriesContextClient,
 } from "./context-builder";
@@ -19,7 +20,7 @@ import {
 // on prior items, and flag contradictions, then enforces referential integrity
 // before anything is written.
 
-export const SUGGESTIONS_PROMPT_VERSION = "ai-suggestions-v2-context";
+export const SUGGESTIONS_PROMPT_VERSION = "ai-suggestions-v3-due-dates";
 
 const SYSTEM_PROMPT =
   "You extract accountable meeting follow-ups using the full history of a recurring meeting series. Return valid JSON only.";
@@ -70,6 +71,7 @@ export function buildContextAwarePrompt(input: {
   notes: string;
   transcript: string | null;
   contextBlock: string;
+  meetingDate: string;
 }) {
   return [
     "You extract reviewable accountability suggestions for Minutia, an Outstanding Issues Log (OIL) for a recurring meeting series.",
@@ -90,7 +92,7 @@ export function buildContextAwarePrompt(input: {
     "- title: concise imperative summary, max 120 characters, no trailing punctuation.",
     '- details: one or two sentences of supporting context, or "" if none.',
     '- owner_name: the person accountable. The transcript is attributed as "Name: text". When a speaker self-assigns in the first person ("I\'ll take that", "I can own this"), set owner_name to that speaker\'s name. Otherwise copy a name verbatim only if the source explicitly assigns them. Never guess. Use "" when genuinely unassigned.',
-    "- due_date: an explicit calendar date as YYYY-MM-DD, only if the source states one. Never infer from relative phrasing. Use null otherwise.",
+    "- due_date: YYYY-MM-DD. Use an explicit date as stated. Resolve relative phrasing (\"by Friday\", \"next Tuesday\", \"end of month\") against the meeting date given below. Use null when no deadline is stated.",
     "- confidence: 0 to 1. Use 0.9+ when explicitly stated and owned, 0.5 to 0.8 when implied, and omit any item you would score below 0.4.",
     "- source_excerpt: a verbatim quote copied from the notes or transcript that supports this item. Do not paraphrase. Keep it under 160 characters.",
     "- related_issue_number: the OIL item number this references (e.g. 45 for OIL-45). Required for status_update and duplicate_warning. Use null for a new_item.",
@@ -111,6 +113,7 @@ export function buildContextAwarePrompt(input: {
     "",
     `Series: ${clamp(input.seriesName, 200)}`,
     `Meeting: ${clamp(input.title, 200)}`,
+    `Meeting date: ${input.meetingDate} (${new Date(`${input.meetingDate}T00:00:00Z`).toLocaleDateString("en-US", { weekday: "long", timeZone: "UTC" })})`,
     `Attendees: ${clamp(input.attendees.join(", ") || "Unknown", 500)}`,
     "",
     "Transcript:",
@@ -202,6 +205,7 @@ export async function generateMeetingSuggestions(
     };
   }
 
+  const meetingDate = new Date(meeting.date).toISOString().slice(0, 10);
   const prompt = buildContextAwarePrompt({
     title: meeting.title,
     seriesName: meeting.series?.name ?? "Untitled series",
@@ -209,6 +213,7 @@ export async function generateMeetingSuggestions(
     notes: rawNotes,
     transcript: meeting.transcript_raw,
     contextBlock: formatSeriesContextForPrompt(context),
+    meetingDate,
   });
 
   let providerData: unknown;
@@ -226,7 +231,10 @@ export async function generateMeetingSuggestions(
     return { ok: false, status: 502, error: "AI provider returned invalid suggestions.", code: "invalid_suggestions" };
   }
 
-  const normalized = normalizeSuggestions(parsed.suggestions, context.openIssues);
+  const normalized = normalizeSuggestions(parsed.suggestions, context.openIssues).map((s) => ({
+    ...s,
+    due_date: resolveDueDate(s.due_date, meetingDate),
+  }));
 
   const { error: deleteError } = await supabase
     .from("meeting_ai_suggestions")
