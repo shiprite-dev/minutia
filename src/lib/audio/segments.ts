@@ -118,3 +118,8 @@ export function parseChannelSegmentBody(
   if (themPath !== null && themPath !== segmentChannelPath(meetingId, seq, "them", ext)) return null;
   return { mePath: paths.me as string, themPath, ext, offsetSeconds: offset_seconds };
 }
+
+/** True when every stored segment path sits inside the meeting's own storage folder. */
+export function ownsSegmentPaths(meetingId: string, paths: (string | null | undefined)[]): boolean {
+  return paths.every((p) => p == null || (p.startsWith(`${meetingId}/`) && !p.includes("..")));
+}
