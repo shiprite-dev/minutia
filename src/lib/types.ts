@@ -174,6 +174,7 @@ export interface Meeting {
   attendees: string[];
   notes_markdown: string;
   raw_notes_markdown: string | null;
+  companion_notes_markdown: string;
   ai_notes_markdown: string | null;
   ai_notes_generated_at: Date | null;
   ai_notes_model: string | null;

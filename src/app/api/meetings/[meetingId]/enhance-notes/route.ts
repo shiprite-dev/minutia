@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getTextFromOpenRouter } from "@/lib/ai/ask-series-answer";
 import { callAi } from "@/lib/ai/call";
 import { hasAiConfigured } from "@/lib/ai/config";
+import { composeMeetingNotes } from "@/lib/ai/companion-notes";
 import { requireAiAccess } from "@/lib/ai/access";
 
 const PROMPT_VERSION = "ai-notes-v1";
@@ -121,7 +122,8 @@ export async function POST(
   }
 
   const rawNotes = meeting.raw_notes_markdown || meeting.notes_markdown || "";
-  if (!rawNotes.trim() && !meeting.transcript_raw?.trim()) {
+  const notesForAi = composeMeetingNotes(meeting);
+  if (!notesForAi.trim() && !meeting.transcript_raw?.trim()) {
     return NextResponse.json(
       { error: "Add notes or a transcript before enhancing.", request_id: requestId },
       { status: 400 }
@@ -132,7 +134,7 @@ export async function POST(
     title: meeting.title,
     seriesName: meeting.series?.name ?? "Untitled series",
     attendees: meeting.attendees ?? [],
-    notes: rawNotes,
+    notes: notesForAi,
     transcript: meeting.transcript_raw,
     issues: meeting.issues ?? [],
     decisions: meeting.decisions ?? [],

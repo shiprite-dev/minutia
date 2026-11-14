@@ -103,6 +103,9 @@ jobs:
       - name: Verify reminders core
         run: pnpm test:reminders
 
+      - name: Verify companion-notes composition
+        run: pnpm test:companion-notes
+
       - name: Verify email sender resolution
         run: pnpm test:email-sender
 
