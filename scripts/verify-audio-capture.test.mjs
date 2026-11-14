@@ -183,6 +183,8 @@ test("uploadMeetingAudio uploads to the bucket and stamps the meeting row", asyn
   assert.equal(supabase.calls.update.audio_duration_seconds, 66); // rounded
   assert.equal(supabase.calls.update.audio_file_size_bytes, 524288);
   assert.equal(supabase.calls.update.transcription_status, "pending");
+  // A new recording invalidates the previous recording's outcome.
+  assert.equal(supabase.calls.update.transcription_outcome, null);
 });
 
 test("uploadMeetingAudio throws when the storage upload fails", async () => {

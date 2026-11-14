@@ -29,6 +29,7 @@ const {
   transcribeWithLocalSidecar,
   resolveTranscriptionProvider,
   getProviderChain,
+  allowsCloudFallback,
   orderChainPreferFast,
   isTranscriptionConfigured,
   isDiarizingProvider,
@@ -40,6 +41,10 @@ const {
   findWebmClusterOffsets,
   planWebmChunks,
   chunkAudioBlob,
+  normalizeLanguageHint,
+  providerSupportsLanguage,
+  selectChainForLanguage,
+  describeCapabilities,
 } = await import(pathToFileURL(bundled).href);
 
 const realFetch = globalThis.fetch;
@@ -101,6 +106,7 @@ test("transcribeWithGroq posts multipart audio to the OpenAI-compatible endpoint
     provider: "groq",
     durationSeconds: 12.5,
     diarized: false,
+    outcome: "speech",
   });
 });
 
@@ -362,9 +368,16 @@ test("isTranscriptionConfigured reflects whether any usable provider key exists"
   assert.equal(isTranscriptionConfigured({ TRANSCRIPTION_PROVIDER: "groq", GROQ_API_KEY: "g" }), true);
   assert.equal(isTranscriptionConfigured({ TRANSCRIPTION_PROVIDER: "groq", OPENROUTER_API_KEY: "o" }), true);
   assert.equal(isTranscriptionConfigured({ TRANSCRIPTION_PROVIDER: "groq" }), false);
-  // deepgram/local are not implemented, so they only count if OpenRouter can cover.
+  // A local deployment is only configured by its own sidecar URL, or by an
+  // explicit cloud-egress opt-in. A cloud key alone must not count: local-only
+  // installs must never silently send audio upstream.
   assert.equal(isTranscriptionConfigured({ TRANSCRIPTION_PROVIDER: "local" }), false);
-  assert.equal(isTranscriptionConfigured({ TRANSCRIPTION_PROVIDER: "local", OPENROUTER_API_KEY: "o" }), true);
+  assert.equal(isTranscriptionConfigured({ TRANSCRIPTION_PROVIDER: "local", OPENROUTER_API_KEY: "o" }), false);
+  assert.equal(isTranscriptionConfigured({ TRANSCRIPTION_PROVIDER: "local", TRANSCRIPTION_LOCAL_URL: "http://127.0.0.1:9000" }), true);
+  assert.equal(
+    isTranscriptionConfigured({ TRANSCRIPTION_PROVIDER: "local", OPENROUTER_API_KEY: "o", TRANSCRIPTION_ALLOW_CLOUD_FALLBACK: "true" }),
+    true
+  );
 });
 
 test("assemblyai primary keeps groq/openrouter as fallback and reports diarizing", async () => {
@@ -413,10 +426,10 @@ test("transcribeAudio falls back from a failing primary to OpenRouter", async ()
   const calls = fakeFetch((url) =>
     url.includes("groq.com") ? errResponse(500) : okResponse({ text: "saved by fallback", usage: { seconds: 1 } })
   );
-  const result = await transcribeAudio(audioBlob(), { env });
+  const result = await transcribeAudio(audioBlob(), { env, deadlineAt: Date.now() + 250 });
   assert.equal(result.provider, "openrouter");
   assert.equal(result.text, "saved by fallback");
-  assert.equal(calls.length, 2, "tried groq, then openrouter");
+  assert.equal(calls.length, 3, "groq's transient failure retries once, then falls back to openrouter");
 });
 
 test("transcribeAudio surfaces the primary provider's error, not the fallback's", async () => {
@@ -561,4 +574,194 @@ test("the transcribe route claims via the RPC, not an or() on UPDATE", () => {
     !/\.update\([\s\S]*?\.or\(/.test(transcribeRoute),
     "route must not use .or() on an UPDATE (broken on self-host PostgREST)"
   );
+});
+
+// ---------------------------------------------------------------------------
+// Terminal outcomes and request deadlines
+// ---------------------------------------------------------------------------
+
+test("empty text from a completed provider job is confirmed no_speech", async () => {
+  fakeFetch(() => okResponse({ text: "" }));
+  const result = await transcribeWithGroq(audioBlob(), { apiKey: "groq-key" });
+  assert.equal(result.text, "");
+  assert.equal(result.outcome, "no_speech");
+});
+
+test("non-empty text is marked as speech", async () => {
+  fakeFetch(() => okResponse({ text: "hello" }));
+  const result = await transcribeWithGroq(audioBlob(), { apiKey: "groq-key" });
+  assert.equal(result.outcome, "speech");
+});
+
+test("an exhausted request deadline makes zero provider calls", async () => {
+  const calls = fakeFetch(() => okResponse({ text: "x" }));
+  await assert.rejects(
+    transcribeWithGroq(audioBlob(), { apiKey: "groq-key", deadlineAt: Date.now() - 1 }),
+    (err) => {
+      assert.ok(err instanceof TranscriptionError);
+      assert.equal(err.code, "timeout");
+      return true;
+    }
+  );
+  assert.equal(calls.length, 0, "no fetch may happen once the budget is spent");
+});
+
+test("deadlineAt clamps a longer timeoutMs to the remaining budget", async () => {
+  // A hung fetch that only resolves when aborted: the clamp must abort it
+  // within the remaining 50ms budget, not the 120s default.
+  globalThis.fetch = (_url, options = {}) =>
+    new Promise((_resolve, reject) => {
+      options.signal?.addEventListener("abort", () =>
+        reject(Object.assign(new Error("aborted"), { name: "AbortError" }))
+      );
+    });
+  await assert.rejects(
+    transcribeWithGroq(audioBlob(), { apiKey: "groq-key", deadlineAt: Date.now() + 50 }),
+    (err) => err instanceof TranscriptionError && err.code === "timeout"
+  );
+});
+
+test("a hung success body times out after headers arrive", async () => {
+  globalThis.fetch = async (_url, options = {}) => {
+    options.signal?.addEventListener("abort", () => {});
+    return {
+      ok: true,
+      status: 200,
+      json() {
+        return new Promise((_resolve, reject) => {
+          options.signal?.addEventListener("abort", () =>
+            reject(Object.assign(new Error("aborted"), { name: "AbortError" }))
+          );
+        });
+      },
+      text() { return Promise.resolve(""); },
+    };
+  };
+  await assert.rejects(
+    transcribeWithGroq(audioBlob(), { apiKey: "groq-key", timeoutMs: 50 }),
+    (err) => err instanceof TranscriptionError
+  );
+});
+
+test("local sidecar defaults to 240s and treats explicit empty as no_speech", async () => {
+  fakeFetch(() => okResponse({ text: "", segments: [] }));
+  const result = await transcribeWithLocalSidecar(audioBlob(), { url: "http://localhost:9999" });
+  assert.equal(result.outcome, "no_speech");
+  assert.equal(result.text, "");
+});
+
+test("local sidecar leaves outcome unset on a malformed payload", async () => {
+  fakeFetch(() => okResponse({}));
+  const result = await transcribeWithLocalSidecar(audioBlob(), { url: "http://localhost:9999" });
+  assert.equal(result.outcome, undefined);
+  assert.equal(result.text, "");
+});
+
+test("transcribeAudio passes the request deadline to the provider chain", async () => {
+  const calls = fakeFetch(() => okResponse({ text: "x" }));
+  await transcribeAudio(audioBlob(), {
+    env: { GROQ_API_KEY: "k", TRANSCRIPTION_PROVIDER: "groq", OPENROUTER_API_KEY: "f" },
+    deadlineAt: Date.now() - 1,
+  }).catch(() => {});
+  assert.equal(calls.length, 0, "exhausted budget must stop the chain before any provider call");
+});
+
+// ---------------------------------------------------------------------------
+// Language capabilities (explicit hint only, never inferred)
+// ---------------------------------------------------------------------------
+
+test("normalizeLanguageHint accepts ISO-639-1 and the documented 3-letter aliases", () => {
+  assert.equal(normalizeLanguageHint("ja"), "ja");
+  assert.equal(normalizeLanguageHint("JA"), "ja");
+  assert.equal(normalizeLanguageHint(" jpn "), "ja");
+  assert.equal(normalizeLanguageHint("eng"), "en");
+  assert.equal(normalizeLanguageHint("cmn"), "zh");
+});
+
+test("normalizeLanguageHint rejects auto, mixed, unknown, empty, and unsupported codes", () => {
+  for (const raw of ["auto", "mixed", "unknown", "xx", "", "   ", null, undefined]) {
+    assert.equal(normalizeLanguageHint(raw), null, `${String(raw)} must be rejected`);
+  }
+});
+
+test("providerSupportsLanguage is conservative for unsupported pairs", () => {
+  assert.equal(providerSupportsLanguage("groq", "ja"), true);
+  assert.equal(providerSupportsLanguage("openrouter", "ja"), true);
+  assert.equal(providerSupportsLanguage("local", "ja"), true);
+  assert.equal(providerSupportsLanguage("assemblyai", "ja"), true);
+  // Welsh is a Whisper language but not in AssemblyAI's documented Universal set.
+  assert.equal(providerSupportsLanguage("assemblyai", "cy"), false);
+  // deepgram has no client in this build.
+  assert.equal(providerSupportsLanguage("deepgram", "en"), false);
+  // Unknown codes never claim support.
+  assert.equal(providerSupportsLanguage("groq", "xx"), false);
+});
+
+test("selectChainForLanguage leaves the chain unchanged without a hint", () => {
+  const chain = ["assemblyai", "groq"];
+  assert.deepEqual(selectChainForLanguage(chain, null, {}), chain);
+  assert.deepEqual(selectChainForLanguage(chain, "auto", {}), chain);
+});
+
+test("selectChainForLanguage filters to supporting providers and never returns an empty chain", () => {
+  assert.deepEqual(selectChainForLanguage(["assemblyai", "groq"], "cy", {}), ["groq"]);
+  assert.deepEqual(
+    selectChainForLanguage(["assemblyai"], "cy", {}),
+    ["assemblyai"],
+    "an empty filter falls back to the original chain"
+  );
+});
+
+test("transcribeAudio applies the explicit language hint to the provider chain", async () => {
+  const env = { TRANSCRIPTION_PROVIDER: "assemblyai", ASSEMBLYAI_API_KEY: "a", OPENROUTER_API_KEY: "o" };
+  const calls = fakeFetch((url) => {
+    if (url.includes("assemblyai")) throw new Error("assemblyai must not be called for an unsupported hint");
+    return okResponse({ text: "welsh", usage: { seconds: 1 } });
+  });
+  const result = await transcribeAudio(audioBlob(), { env, languageHint: "cy" });
+  assert.equal(result.provider, "openrouter");
+  assert.equal(calls.length, 1);
+  assert.ok(calls[0].url.includes("openrouter.ai"), "assemblyai must be filtered out for Welsh");
+});
+
+test("describeCapabilities reports languages and configuration without secrets", () => {
+  const described = describeCapabilities({ GROQ_API_KEY: "super-secret" });
+  const groq = described.find((entry) => entry.provider === "groq");
+  const openrouter = described.find((entry) => entry.provider === "openrouter");
+  assert.equal(groq.configured, true);
+  assert.equal(openrouter.configured, false);
+  assert.ok(groq.languages.includes("ja"));
+  assert.equal(groq.diarizes, false);
+  assert.equal(described.find((entry) => entry.provider === "assemblyai").diarizes, true);
+  assert.ok(!JSON.stringify(described).includes("super-secret"));
+});
+
+test("a local-only deployment never appends a cloud provider", () => {
+  const env = { TRANSCRIPTION_PROVIDER: "local", TRANSCRIPTION_LOCAL_URL: "http://127.0.0.1:9000", OPENROUTER_API_KEY: "o" };
+  assert.deepEqual(getProviderChain(env), ["local"]);
+  assert.equal(allowsCloudFallback(env), false);
+});
+
+test("cloud fallback from local requires an explicit opt-in", () => {
+  const env = {
+    TRANSCRIPTION_PROVIDER: "local",
+    TRANSCRIPTION_LOCAL_URL: "http://127.0.0.1:9000",
+    OPENROUTER_API_KEY: "o",
+    TRANSCRIPTION_ALLOW_CLOUD_FALLBACK: "TRUE",
+  };
+  assert.deepEqual(getProviderChain(env), ["local", "openrouter"]);
+  assert.equal(allowsCloudFallback(env), true);
+});
+
+test("a local-only policy keeps failing locally instead of egressing", async () => {
+  const env = { TRANSCRIPTION_PROVIDER: "local", TRANSCRIPTION_LOCAL_URL: "http://127.0.0.1:9000", OPENROUTER_API_KEY: "o" };
+  const calls = fakeFetch((url) => {
+    if (url.includes("openrouter")) throw new Error("cloud egress under a local-only policy");
+    return errResponse(500);
+  });
+  await assert.rejects(transcribeAudio(audioBlob(), { env }));
+  // One first attempt plus one same-provider retry, then the chain is empty:
+  // a local-only policy fails locally instead of reaching for a cloud provider.
+  assert.equal(calls.length, 2, "first attempt plus one retry, never a cloud switch");
+  assert.ok(calls.every((call) => !call.url.includes("openrouter")));
 });

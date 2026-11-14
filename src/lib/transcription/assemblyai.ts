@@ -10,6 +10,7 @@
 import {
   TranscriptionError,
   mapHttpStatusToCode,
+  parseRetryAfterMs,
   type TranscriptionResult,
   type TranscriptionSegment,
 } from "./shared";
@@ -24,20 +25,27 @@ interface AssemblyOptions {
   speakersExpected?: number;
   timeoutMs?: number;
   signal?: AbortSignal;
+  deadlineAt?: number;
   baseUrl?: string;
   pollIntervalMs?: number;
 }
 
 // Per-request timeout tied to the remaining time budget, matching shared.ts's
 // sendTranscription idiom: an internal AbortController that also forwards the
-// caller's signal, so no single fetch can hang past the deadline.
+// caller's signal. The timer stays armed until the caller releases it after
+// body consumption, so a hung body cannot outlive the deadline.
+interface AaiResponse {
+  res: Response;
+  release: () => void;
+}
+
 async function aaiFetch(
   url: string,
   apiKey: string,
   init: RequestInit,
   deadline: number,
   signal?: AbortSignal
-): Promise<Response> {
+): Promise<AaiResponse> {
   const remaining = deadline - Date.now();
   if (remaining <= 0) {
     throw new TranscriptionError("timeout", "AssemblyAI job timed out after the time budget", {
@@ -48,7 +56,12 @@ async function aaiFetch(
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), remaining);
   const onAbort = () => controller.abort();
-  signal?.addEventListener("abort", onAbort);
+  if (signal?.aborted) controller.abort();
+  else signal?.addEventListener("abort", onAbort);
+  const release = () => {
+    clearTimeout(timer);
+    signal?.removeEventListener("abort", onAbort);
+  };
 
   let res: Response;
   try {
@@ -58,6 +71,7 @@ async function aaiFetch(
       signal: controller.signal,
     });
   } catch (error) {
+    release();
     if (error instanceof TranscriptionError) throw error;
     const aborted = error instanceof Error && error.name === "AbortError";
     throw new TranscriptionError(
@@ -65,20 +79,43 @@ async function aaiFetch(
       aborted ? "AssemblyAI request timed out" : "AssemblyAI request failed",
       { provider: "assemblyai", cause: error }
     );
-  } finally {
-    clearTimeout(timer);
-    signal?.removeEventListener("abort", onAbort);
   }
 
   if (!res.ok) {
-    const detail = await res.text().catch(() => "");
+    let detail = "";
+    try {
+      detail = await res.text();
+    } catch (error) {
+      release();
+      throw new TranscriptionError("timeout", "AssemblyAI hung on the error body", {
+        provider: "assemblyai",
+        cause: error,
+      });
+    }
+    release();
+    const retryAfterMs = parseRetryAfterMs(res.headers.get("retry-after"));
     throw new TranscriptionError(
       mapHttpStatusToCode(res.status),
       `AssemblyAI returned ${res.status}${detail ? `: ${detail.slice(0, 300)}` : ""}`,
-      { status: res.status, provider: "assemblyai" }
+      { status: res.status, provider: "assemblyai", retryAfterMs: retryAfterMs ?? undefined }
     );
   }
-  return res;
+  return { res, release };
+}
+
+async function readJson<T>(response: AaiResponse): Promise<T> {
+  try {
+    return (await response.res.json()) as T;
+  } catch (error) {
+    const aborted = error instanceof Error && error.name === "AbortError";
+    throw new TranscriptionError(
+      aborted ? "timeout" : "provider_error",
+      aborted ? "AssemblyAI response body timed out" : "AssemblyAI returned invalid JSON",
+      { provider: "assemblyai", cause: error }
+    );
+  } finally {
+    response.release();
+  }
 }
 
 export async function transcribeWithAssemblyAI(
@@ -88,10 +125,22 @@ export async function transcribeWithAssemblyAI(
     speakersExpected,
     timeoutMs = 120_000,
     signal,
+    deadlineAt,
     baseUrl = ASSEMBLYAI_BASE_URL,
     pollIntervalMs = POLL_INTERVAL_MS,
   }: AssemblyOptions
 ): Promise<TranscriptionResult> {
+  // Clamp the whole job (upload, create, polling, body reads) to the remaining
+  // request budget so this attempt cannot borrow time the request does not have.
+  if (deadlineAt != null) {
+    const remaining = deadlineAt - Date.now();
+    if (remaining <= 0) {
+      throw new TranscriptionError("timeout", "Transcription request budget exhausted", {
+        provider: "assemblyai",
+      });
+    }
+    timeoutMs = Math.min(timeoutMs, remaining);
+  }
   const deadline = Date.now() + timeoutMs;
 
   const uploadRes = await aaiFetch(
@@ -101,7 +150,7 @@ export async function transcribeWithAssemblyAI(
     deadline,
     signal
   );
-  const { upload_url } = (await uploadRes.json()) as { upload_url: string };
+  const { upload_url } = await readJson<{ upload_url: string }>(uploadRes);
 
   const body: Record<string, unknown> = { audio_url: upload_url, speaker_labels: true };
   if (speakersExpected && speakersExpected > 1) body.speakers_expected = speakersExpected;
@@ -113,7 +162,7 @@ export async function transcribeWithAssemblyAI(
     deadline,
     signal
   );
-  const { id } = (await createRes.json()) as { id: string };
+  const { id } = await readJson<{ id: string }>(createRes);
 
   // Poll until terminal. The internal deadline caps total time; the injected
   // signal still cancels immediately. Each fetch also carries its own
@@ -127,13 +176,13 @@ export async function transcribeWithAssemblyAI(
       });
     }
     const pollRes = await aaiFetch(`${baseUrl}/v2/transcript/${id}`, apiKey, { method: "GET" }, deadline, signal);
-    const job = (await pollRes.json()) as {
+    const job = await readJson<{
       status: string;
       text?: string;
       error?: string;
       audio_duration?: number;
       utterances?: { speaker: string; start: number; end: number; text: string; confidence: number }[];
-    };
+    }>(pollRes);
 
     if (job.status === "error") {
       throw new TranscriptionError("provider_error", `AssemblyAI job failed: ${job.error ?? "unknown"}`, {
@@ -148,13 +197,25 @@ export async function transcribeWithAssemblyAI(
         text: u.text,
         confidence: typeof u.confidence === "number" ? u.confidence : null,
       }));
+      const text = job.text ?? segments.map((s) => s.text).join(" ");
+      // Silence is terminal only with positive evidence: an explicit empty
+      // utterance collection (or explicit empty text) from a finished job. A
+      // completed job whose payload carries neither is malformed, not silent:
+      // fail loudly instead of manufacturing an empty success.
+      if (text.trim() === "" && job.text == null && !Array.isArray(job.utterances)) {
+        throw new TranscriptionError("provider_error", "AssemblyAI returned an invalid empty result", {
+          provider: "assemblyai",
+        });
+      }
+      const outcome: "speech" | "no_speech" = text.trim() === "" ? "no_speech" : "speech";
       return {
-        text: job.text ?? segments.map((s) => s.text).join(" "),
+        text,
         model: ASSEMBLYAI_DEFAULT_MODEL,
         provider: "assemblyai",
         durationSeconds: typeof job.audio_duration === "number" ? job.audio_duration : null,
         segments: segments.length ? segments : undefined,
         diarized: segments.length > 0,
+        outcome,
       };
     }
     await new Promise((r) => setTimeout(r, pollIntervalMs));

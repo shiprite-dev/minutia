@@ -19,10 +19,21 @@ export function resolveAudioRetention(value: string | null | undefined): AudioRe
   return "keep_forever";
 }
 
-/** True only when the policy is discard AND the transcript finished. */
+/** Whether extraction finished or was deliberately skipped. "failed" means
+ * suggestions are still outstanding, so the audio must be retained for a
+ * retry. An omitted outcome is treated as failed (fail closed). */
+export type ExtractionOutcomeForRetention = "completed" | "skipped" | "failed";
+
+/** True only when the policy is discard AND the transcript finished AND
+ * extraction completed or was explicitly skipped. */
 export function shouldDiscardAudio(
   retention: AudioRetention,
-  transcriptionStatus: string | null
+  transcriptionStatus: string | null,
+  extraction: ExtractionOutcomeForRetention = "failed"
 ): boolean {
-  return retention === "discard_after_transcript" && transcriptionStatus === "completed";
+  return (
+    retention === "discard_after_transcript" &&
+    transcriptionStatus === "completed" &&
+    extraction !== "failed"
+  );
 }

@@ -18,6 +18,7 @@ export interface GroqTranscribeOptions {
   fileName?: string;
   timeoutMs?: number;
   signal?: AbortSignal;
+  deadlineAt?: number;
 }
 
 export function transcribeWithGroq(
@@ -29,6 +30,7 @@ export function transcribeWithGroq(
     fileName = "meeting-audio.webm",
     timeoutMs,
     signal,
+    deadlineAt,
   }: GroqTranscribeOptions
 ): Promise<TranscriptionResult> {
   const form = new FormData();
@@ -45,5 +47,6 @@ export function transcribeWithGroq(
     provider: "groq",
     timeoutMs,
     signal,
+    deadlineAt,
   });
 }

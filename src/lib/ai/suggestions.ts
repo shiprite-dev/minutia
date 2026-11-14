@@ -1,11 +1,13 @@
 import { z } from "zod";
 import type { createClient } from "@/lib/supabase/server";
+import { hasAiConfigured } from "@/lib/ai/config";
 import { getTextFromOpenRouter } from "./ask-series-answer";
 import { callAi } from "./call";
 import {
   buildSeriesContext,
   formatSeriesContextForPrompt,
   normalizeSuggestions,
+  type SeriesContext,
   type SeriesContextClient,
 } from "./context-builder";
 
@@ -123,15 +125,31 @@ function formatSeriesContextHeading(contextBlock: string) {
   return ["=== SERIES HISTORY (cross-meeting memory) ===", contextBlock].join("\n");
 }
 
+export type GenerateFailureCode =
+  | "not_found"
+  | "skipped_no_content"
+  | "skipped_unconfigured"
+  | "context_unavailable"
+  | "provider_error"
+  | "invalid_suggestions"
+  | "save_failed";
+
 export type GenerateOutcome =
   | { ok: true; suggestions: unknown[]; model: string }
-  | { ok: false; status: number; error: string };
+  | { ok: false; status: number; error: string; code: GenerateFailureCode };
+
+/** True when extraction deliberately did not run (nothing to extract, or no AI
+ * configured). These are explicit skips, not failures: audio cleanup may
+ * proceed because there is no outstanding work. */
+export function isExplicitSkip(outcome: GenerateOutcome): boolean {
+  return !outcome.ok && (outcome.code === "skipped_no_content" || outcome.code === "skipped_unconfigured");
+}
 
 /**
  * Generate context-aware suggestions for a meeting and persist them, replacing
  * any pending ones. Returns a structured outcome so the suggestions route can
- * map it to an HTTP status while the transcribe route can treat a failure as
- * non-fatal (the transcript is already saved).
+ * map it to an HTTP status while the transcribe route can gate audio cleanup
+ * on extraction actually completing (or being explicitly skipped).
  */
 export async function generateMeetingSuggestions(
   supabase: SupabaseServerClient,
@@ -144,18 +162,45 @@ export async function generateMeetingSuggestions(
     .single();
 
   if (error || !meeting) {
-    return { ok: false, status: 404, error: "Meeting not found" };
+    return { ok: false, status: 404, error: "Meeting not found", code: "not_found" };
   }
 
   const rawNotes = meeting.raw_notes_markdown || meeting.notes_markdown || "";
   if (!rawNotes.trim() && !meeting.transcript_raw?.trim()) {
-    return { ok: false, status: 400, error: "Add notes or a transcript before extracting suggestions." };
+    return {
+      ok: false,
+      status: 400,
+      error: "Add notes or a transcript before extracting suggestions.",
+      code: "skipped_no_content",
+    };
   }
 
-  const context = await buildSeriesContext(
-    supabase as unknown as SeriesContextClient,
-    meeting.series_id
-  );
+  // An unconfigured AI is an explicit skip, not a failure. A config READ
+  // failure propagates (never confuse "cannot read config" with "no AI").
+  if (!(await hasAiConfigured())) {
+    return {
+      ok: false,
+      status: 503,
+      error: "AI is not configured on this instance.",
+      code: "skipped_unconfigured",
+    };
+  }
+
+  let context: SeriesContext;
+  try {
+    context = await buildSeriesContext(
+      supabase as unknown as SeriesContextClient,
+      meeting.series_id
+    );
+  } catch {
+    // Dedup context is unavailable: refuse rather than extract blind.
+    return {
+      ok: false,
+      status: 503,
+      error: "Series history is unavailable, so suggestions were not generated.",
+      code: "context_unavailable",
+    };
+  }
 
   const prompt = buildContextAwarePrompt({
     title: meeting.title,
@@ -171,14 +216,14 @@ export async function generateMeetingSuggestions(
   try {
     ({ data: providerData, model } = await callAi({ system: SYSTEM_PROMPT, prompt }));
   } catch {
-    return { ok: false, status: 502, error: "AI provider request failed." };
+    return { ok: false, status: 502, error: "AI provider request failed.", code: "provider_error" };
   }
 
   let parsed: z.infer<typeof suggestionsSchema>;
   try {
     parsed = suggestionsSchema.parse(JSON.parse(getTextFromOpenRouter(providerData)));
   } catch {
-    return { ok: false, status: 502, error: "AI provider returned invalid suggestions." };
+    return { ok: false, status: 502, error: "AI provider returned invalid suggestions.", code: "invalid_suggestions" };
   }
 
   const normalized = normalizeSuggestions(parsed.suggestions, context.openIssues);
@@ -189,7 +234,7 @@ export async function generateMeetingSuggestions(
     .eq("meeting_id", meetingId)
     .eq("status", "pending");
   if (deleteError) {
-    return { ok: false, status: 500, error: "Failed to refresh AI suggestions." };
+    return { ok: false, status: 500, error: "Failed to refresh AI suggestions.", code: "save_failed" };
   }
 
   if (normalized.length === 0) {
@@ -219,7 +264,7 @@ export async function generateMeetingSuggestions(
     .select("*")
     .order("created_at", { ascending: true });
   if (insertError) {
-    return { ok: false, status: 500, error: "Failed to save AI suggestions." };
+    return { ok: false, status: 500, error: "Failed to save AI suggestions.", code: "save_failed" };
   }
 
   return { ok: true, suggestions: inserted ?? [], model };

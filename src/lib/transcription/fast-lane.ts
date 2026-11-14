@@ -16,11 +16,25 @@ export interface SegmentRow {
   storage_path: string;
   model?: string | null;
   provider?: string | null;
+  /** Persisted terminal outcome ("speech" | "no_speech"); null/absent on
+   * legacy rows written before outcomes existed. */
+  transcription_outcome?: string | null;
 }
 
 /** A row is usable transcript when it completed AND carries non-empty trimmed text. */
 function hasUsableText(row: SegmentRow): boolean {
   return row.status === "completed" && (row.transcript_text?.trim() ?? "") !== "";
+}
+
+/** A completed row with a persisted no_speech outcome is terminal silence:
+ * it counts toward coverage and must never be retried. Legacy completed-empty
+ * rows without the outcome stay retryable (their emptiness is unexplained). */
+export function isTerminalNoSpeech(row: SegmentRow): boolean {
+  return (
+    row.status === "completed" &&
+    (row.transcript_text?.trim() ?? "") === "" &&
+    row.transcription_outcome === "no_speech"
+  );
 }
 
 /**
@@ -37,11 +51,12 @@ export function assembleFastTranscript(rows: SegmentRow[]): string {
 }
 
 /**
- * Partition segment rows for the resumable final pass. `completed` holds rows with
- * real text; `retry` holds every other row (uploaded, failed, processing, or
- * completed-with-empty-text) sorted by seq. `processing` counts as retry because
- * resume runs only after atomically claiming the whole meeting, so a lingering
- * processing segment is a crashed run. `usable` is true whenever any rows exist.
+ * Partition segment rows for the resumable final pass. `completed` holds rows
+ * with real text plus confirmed-terminal silence rows; `retry` holds every other
+ * row (uploaded, failed, processing, or completed-with-unexplained-empty-text)
+ * sorted by seq. `processing` counts as retry because resume runs only after
+ * atomically claiming the whole meeting, so a lingering processing segment is a
+ * crashed run. `usable` is true whenever any rows exist.
  */
 export function planSegmentResume(rows: SegmentRow[]): {
   retry: SegmentRow[];
@@ -49,8 +64,8 @@ export function planSegmentResume(rows: SegmentRow[]): {
   usable: boolean;
 } {
   const bySeq = (a: SegmentRow, b: SegmentRow) => a.seq - b.seq;
-  const completed = rows.filter(hasUsableText).sort(bySeq);
-  const retry = rows.filter((row) => !hasUsableText(row)).sort(bySeq);
+  const completed = rows.filter((row) => hasUsableText(row) || isTerminalNoSpeech(row)).sort(bySeq);
+  const retry = rows.filter((row) => !hasUsableText(row) && !isTerminalNoSpeech(row)).sort(bySeq);
   const usable = rows.length > 0 && completed.length + retry.length > 0;
   return { retry, completed, usable };
 }

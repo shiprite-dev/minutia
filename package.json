@@ -52,6 +52,7 @@
     "test:audio": "node --test scripts/verify-audio-capture.test.mjs",
     "test:audio-segments": "node scripts/verify-audio-segments.test.mjs",
     "test:transcription": "node --test scripts/verify-transcription-client.test.mjs",
+    "test:transcription-budget": "node --test scripts/verify-transcription-budget.test.mjs",
     "test:diarization": "node --test scripts/verify-diarization.test.mjs",
     "test:context-extraction": "node --test scripts/verify-context-extraction.test.mjs",
     "test:feature-access": "node --test scripts/verify-feature-access.test.mjs",
@@ -94,7 +95,11 @@
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed",
     "test:e2e:ui": "playwright test --ui",
-    "test:e2e:debug": "playwright test --debug"
+    "test:e2e:debug": "playwright test --debug",
+    "test:transcription-routes": "node --test scripts/verify-transcription-routes.test.mjs",
+    "test:transcription-outcome": "node --test scripts/verify-transcription-outcome.test.mjs",
+    "test:instance-config": "node --test scripts/verify-instance-config.test.mjs",
+    "test:transcription-status-copy": "node --test scripts/verify-transcription-status-copy.test.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

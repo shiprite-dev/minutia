@@ -1,8 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { requireAiAccess } from "@/lib/ai/access";
-import { hasAiConfigured } from "@/lib/ai/config";
-import { generateMeetingSuggestions } from "@/lib/ai/suggestions";
+import { generateMeetingSuggestions, isExplicitSkip } from "@/lib/ai/suggestions";
 import { MEETING_AUDIO_BUCKET } from "@/lib/audio";
 import {
   assembleDiarizedTranscript,
@@ -16,16 +15,22 @@ import {
 } from "@/lib/transcription";
 import {
   assembleFastTranscript,
+  isTerminalNoSpeech,
   planSegmentResume,
   segmentsCoverExpected,
   type SegmentRow,
 } from "@/lib/transcription/fast-lane";
-import { getInstanceConfigMap } from "@/lib/instance-config";
-import { resolveAudioRetention, shouldDiscardAudio } from "@/lib/audio/retention";
+import { getInstanceConfigMap, InstanceConfigReadError } from "@/lib/instance-config";
+import { resolveAudioRetention, shouldDiscardAudio, type ExtractionOutcomeForRetention } from "@/lib/audio/retention";
 
 // Transcription is provider-bound and can run for minutes on a long recording.
 export const runtime = "nodejs";
 export const maxDuration = 300;
+
+// One absolute deadline for the whole request, shared by every provider
+// attempt, retry, and chunk: 270s of work plus a 30s reserve for persistence
+// and post-processing. No provider call ever borrows time outside this budget.
+const REQUEST_BUDGET_MS = 270_000;
 
 // A 'processing' row older than this is treated as a crashed run and reclaimable.
 // Comfortably exceeds maxDuration so a live run is never stolen out from under itself.
@@ -58,10 +63,33 @@ function statusForCode(code: TranscriptionErrorCode): number {
       return 415;
     case "no_api_key":
     case "provider_not_configured":
+    case "auth_error":
       return 503;
     default:
       return 502;
   }
+}
+
+type MeetingTranscriptionOutcome = "speech" | "no_speech" | null;
+
+/**
+ * Meeting-level outcome. Speech requires committed text. No-speech requires
+ * positive terminal-silence evidence covering the selected input: either every
+ * selected segment row is completed with a persisted no_speech outcome, or every
+ * provider result that fed the transcript reported no_speech. Empty text alone
+ * is never silence, so an unexplained empty transcript stays unknown (null).
+ */
+function deriveMeetingOutcome(
+  transcript: string,
+  providerOutcomes: Array<"speech" | "no_speech" | undefined>,
+  segmentRows: SegmentRow[] | null
+): MeetingTranscriptionOutcome {
+  if (transcript.trim() !== "") return "speech";
+  if (segmentRows?.length && segmentRows.every(isTerminalNoSpeech)) return "no_speech";
+  if (providerOutcomes.length > 0 && providerOutcomes.every((outcome) => outcome === "no_speech")) {
+    return "no_speech";
+  }
+  return null;
 }
 
 export async function POST(
@@ -93,19 +121,39 @@ export async function POST(
   }
 
   const supabase = await createClient();
+  const deadlineAt = Date.now() + REQUEST_BUDGET_MS;
 
   // RLS scopes this to the caller's owned series, so loading the row both finds
   // the meeting and authorizes access in one query.
   const { data: meeting, error: meetingError } = await supabase
     .from("meetings")
     .select(
-      "id, audio_file_path, audio_duration_seconds, transcription_status, transcription_started_at, attendees, speaker_map"
+      "id, audio_file_path, audio_duration_seconds, transcription_status, transcription_started_at, transcription_outcome, attendees, speaker_map, transcript_raw, transcription_model, transcription_provider"
     )
     .eq("id", meetingId)
     .single();
 
   if (meetingError || !meeting) {
     return NextResponse.json({ error: "Meeting not found", request_id: requestId }, { status: 404 });
+  }
+
+  // Idempotent replay: a completed meeting returns its persisted result without
+  // a provider call, re-billing, or touching storage. This must run BEFORE the
+  // missing-audio check, or a replay after audio discard looks like an error.
+  if (meeting.transcription_status === "completed") {
+    return NextResponse.json(
+      {
+        status: "completed",
+        replay: true,
+        outcome: meeting.transcription_outcome ?? null,
+        transcript_length: (meeting.transcript_raw ?? "").length,
+        model: meeting.transcription_model ?? "",
+        provider: meeting.transcription_provider ?? "",
+        audio_discarded: false,
+        request_id: requestId,
+      },
+      { status: 200 }
+    );
   }
 
   if (!meeting.audio_file_path) {
@@ -119,7 +167,7 @@ export async function POST(
   // config. Stale runs fall through to be reclaimed by the atomic claim below.
   if (meeting.transcription_status === "processing" && isFreshRun(meeting.transcription_started_at)) {
     return NextResponse.json(
-      { error: "Transcription is already in progress.", request_id: requestId },
+      { error: "Transcription is already in progress.", code: "processing_conflict", request_id: requestId },
       { status: 409 }
     );
   }
@@ -147,7 +195,7 @@ export async function POST(
   }
   if (!claimed) {
     return NextResponse.json(
-      { error: "Transcription is already in progress.", request_id: requestId },
+      { error: "Transcription is already in progress.", code: "processing_conflict", request_id: requestId },
       { status: 409 }
     );
   }
@@ -191,6 +239,8 @@ export async function POST(
     let segments: TranscriptionSegment[] | null = null;
     let speakerMap: Record<string, string | null> | null = null;
     let chunkCount = 1;
+    let providerOutcomes: Array<"speech" | "no_speech" | undefined> = [];
+    let selectedSegmentRows: SegmentRow[] | null = null;
 
     if (isDiarizingProviderConfigured()) {
       // Diarization needs the whole recording in one pass: splitting it would
@@ -201,7 +251,9 @@ export async function POST(
         fileName: `meeting-${meetingId}.webm`,
         mimeType,
         speakersExpected: attendees.length || undefined,
+        deadlineAt,
       });
+      providerOutcomes = [result.outcome];
       model = result.model;
       provider = result.provider;
       durationSeconds = result.durationSeconds;
@@ -220,7 +272,7 @@ export async function POST(
       // full-file chunking when no segments exist or a gap cannot be recovered.
       const { data: segmentRows, error: segmentsError } = await supabase
         .from("meeting_audio_segments")
-        .select("seq, status, transcript_text, storage_path, model, provider")
+        .select("seq, status, transcript_text, storage_path, model, provider, transcription_outcome")
         .eq("meeting_id", meetingId)
         .order("seq", { ascending: true });
 
@@ -257,11 +309,20 @@ export async function POST(
             .download(row.storage_path);
 
           if (segDownloadError || !segData) {
-            await supabase
+            const { error: failWriteError } = await supabase
               .from("meeting_audio_segments")
               .update({ status: "failed", error_code: "download_failed", updated_at: nowIso() })
               .eq("meeting_id", meetingId)
               .eq("seq", row.seq);
+            // A failed failure-state write is a persistence problem, not a
+            // recoverable gap: surface it instead of silently re-running work.
+            if (failWriteError) {
+              await markFailed();
+              return NextResponse.json(
+                { error: "Transcription could not be recorded.", request_id: requestId },
+                { status: 500 }
+              );
+            }
             missing.push(row.seq);
             continue;
           }
@@ -270,19 +331,31 @@ export async function POST(
             const result = await transcribeAudio(segData, {
               fileName: `seg-${row.seq}.webm`,
               mimeType: segData.type || "audio/webm",
+              deadlineAt,
             });
             const text = result.text.trim();
-            await supabase
+            const outcome = result.outcome ?? (text ? "speech" : null);
+            const { error: saveError } = await supabase
               .from("meeting_audio_segments")
               .update({
                 status: "completed",
                 transcript_text: text,
+                transcription_outcome: outcome,
                 error_code: null,
                 size_bytes: segData.size,
                 updated_at: nowIso(),
               })
               .eq("meeting_id", meetingId)
               .eq("seq", row.seq);
+            // A recovered segment only counts once its write is durable;
+            // otherwise a DB hiccup would silently drop it from the transcript.
+            if (saveError) {
+              await markFailed();
+              return NextResponse.json(
+                { error: "Transcription completed but could not be saved.", request_id: requestId },
+                { status: 500 }
+              );
+            }
             if (!model) {
               model = result.model;
               provider = result.provider;
@@ -290,16 +363,32 @@ export async function POST(
             }
             if (text) {
               recovered.push({ ...row, status: "completed", transcript_text: text });
+            } else if (outcome === "no_speech") {
+              // Confirmed silence is terminal: it covers its seq without text
+              // and must not be retried forever.
+              recovered.push({
+                ...row,
+                status: "completed",
+                transcript_text: "",
+                transcription_outcome: "no_speech",
+              });
             } else {
               missing.push(row.seq);
             }
           } catch (segError) {
             const code = segError instanceof TranscriptionError ? segError.code : "provider_error";
-            await supabase
+            const { error: failWriteError } = await supabase
               .from("meeting_audio_segments")
               .update({ status: "failed", error_code: code, updated_at: nowIso() })
               .eq("meeting_id", meetingId)
               .eq("seq", row.seq);
+            if (failWriteError) {
+              await markFailed();
+              return NextResponse.json(
+                { error: "Transcription could not be recorded.", request_id: requestId },
+                { status: 500 }
+              );
+            }
             missing.push(row.seq);
           }
         }
@@ -308,6 +397,7 @@ export async function POST(
           // Every original segment now carries usable text: stitch the recap from
           // segment texts without re-transcribing the already-completed ones.
           const updatedRows = [...plan.completed, ...recovered];
+          selectedSegmentRows = updatedRows;
           transcript = assembleFastTranscript(updatedRows);
           chunkCount = updatedRows.length;
           resumed = true;
@@ -338,7 +428,12 @@ export async function POST(
 
         const texts: string[] = [];
         for (const chunk of chunks) {
-          const result = await transcribeAudio(chunk, { fileName: `meeting-${meetingId}.webm`, mimeType });
+          const result = await transcribeAudio(chunk, {
+            fileName: `meeting-${meetingId}.webm`,
+            mimeType,
+            deadlineAt,
+          });
+          providerOutcomes.push(result.outcome);
           texts.push(result.text.trim());
           if (!model) {
             model = result.model;
@@ -349,6 +444,12 @@ export async function POST(
         transcript = texts.filter(Boolean).join("\n\n");
       }
     }
+
+    // A persisted outcome is never overwritten; an unknown one stays unwritten
+    // unless this run produced positive evidence.
+    const existingOutcome: MeetingTranscriptionOutcome = meeting.transcription_outcome ?? null;
+    const derivedOutcome = deriveMeetingOutcome(transcript, providerOutcomes, selectedSegmentRows);
+    const effectiveOutcome = existingOutcome ?? derivedOutcome;
 
     const { error: updateError } = await supabase
       .from("meetings")
@@ -365,6 +466,9 @@ export async function POST(
         ...(meeting.audio_duration_seconds == null && durationSeconds != null
           ? { audio_duration_seconds: Math.round(durationSeconds) }
           : {}),
+        ...(existingOutcome == null && derivedOutcome != null
+          ? { transcription_outcome: derivedOutcome }
+          : {}),
       })
       .eq("id", meetingId);
 
@@ -378,73 +482,103 @@ export async function POST(
 
     // MIN-121: now that a transcript exists, run context-aware extraction so the
     // facilitator finds suggestions waiting (deduped against the OIL, with
-    // resolutions and duplicates flagged). Best-effort: the transcript is
-    // already saved, so a failure here must not fail the transcription.
-    if (await hasAiConfigured()) {
-      try {
-        await generateMeetingSuggestions(supabase, meetingId);
-      } catch (suggestionError) {
-        console.error("[transcribe] context-aware suggestion extraction failed", {
-          meetingId,
-          requestId,
-          error:
-            suggestionError instanceof Error ? suggestionError.message : String(suggestionError),
-        });
+    // resolutions and duplicates flagged). Extraction completed or being
+    // explicitly skipped (no AI configured, nothing to extract) gates audio
+    // cleanup; a failed extraction retains the audio for a later retry via the
+    // suggestions endpoint. The transcript itself stays committed either way.
+    let extraction: ExtractionOutcomeForRetention = "failed";
+    let extractionError: string | null = null;
+    try {
+      const outcome = await generateMeetingSuggestions(supabase, meetingId);
+      if (outcome.ok) {
+        extraction = "completed";
+      } else if (isExplicitSkip(outcome)) {
+        extraction = "skipped";
+      } else {
+        extractionError = outcome.error;
       }
+    } catch (suggestionError) {
+      // Config read failures land here: never confuse "cannot read config"
+      // with an explicit skip. The transcript stays; audio is retained.
+      extractionError = suggestionError instanceof Error ? suggestionError.message : String(suggestionError);
     }
 
-    // Audio retention: with a transcript durably saved, discard the raw
-    // recording when the instance policy says so (the default). Best-effort:
-    // the deletion runs with the caller's RLS client, so a facilitator-triggered
-    // run may lack owner-scoped storage delete rights. A failure here must never
-    // fail the response; the transcript is already the source of truth.
+    if (extraction === "failed") {
+      console.error("[transcribe] context-aware suggestion extraction failed", {
+        meetingId,
+        requestId,
+        error: extractionError,
+      });
+      return NextResponse.json(
+        {
+          error: "Transcription completed but suggestion extraction failed.",
+          code: "extraction_failed",
+          transcription_status: "completed",
+          outcome: effectiveOutcome,
+          transcript_length: transcript.length,
+          audio_discarded: false,
+          request_id: requestId,
+        },
+        { status: 500 }
+      );
+    }
+
+    // Audio retention: discard the raw recording only when the instance policy
+    // says so AND the transcript is durably saved AND extraction finished (or
+    // was explicitly skipped). Best-effort per-operation verification: every
+    // phase must succeed before audio_discarded is reported true.
     let audioDiscarded = false;
     try {
       const configMap = await getInstanceConfigMap(["audio_retention"]);
       const retention = resolveAudioRetention(configMap.audio_retention ?? null);
-      if (shouldDiscardAudio(retention, "completed")) {
-        const { data: objects } = await supabase.storage.from(MEETING_AUDIO_BUCKET).list(meetingId);
-        const paths = (objects ?? []).map((o) => `${meetingId}/${o.name}`);
+      if (shouldDiscardAudio(retention, "completed", extraction)) {
+        // Enumerate every page of the meeting's folder before deleting so a
+        // paginated listing cannot leave objects behind.
+        const paths: string[] = [];
+        const PAGE_SIZE = 100;
+        for (let offset = 0; ; offset += PAGE_SIZE) {
+          const { data: objects, error: listError } = await supabase.storage
+            .from(MEETING_AUDIO_BUCKET)
+            .list(meetingId, { limit: PAGE_SIZE, offset });
+          if (listError) throw listError;
+          const page = objects ?? [];
+          paths.push(...page.map((o) => `${meetingId}/${o.name}`));
+          if (page.length < PAGE_SIZE) break;
+        }
         if (paths.length) {
-          const { error } = await supabase.storage.from(MEETING_AUDIO_BUCKET).remove(paths);
-          if (error) throw error;
+          const { error: removeError } = await supabase.storage.from(MEETING_AUDIO_BUCKET).remove(paths);
+          if (removeError) throw removeError;
         }
         const { error: meetingNullError } = await supabase
           .from("meetings")
           .update({ audio_file_path: null, audio_file_size_bytes: null })
           .eq("id", meetingId);
-        if (meetingNullError) {
-          console.error("[transcribe] retention discard failed", {
-            meetingId,
-            requestId,
-            step: "meetings-null-update",
-            error: meetingNullError.message,
-          });
-        }
+        if (meetingNullError) throw meetingNullError;
         const { error: segmentsDeleteError } = await supabase
           .from("meeting_audio_segments")
           .delete()
           .eq("meeting_id", meetingId);
-        if (segmentsDeleteError) {
-          console.error("[transcribe] retention discard failed", {
-            meetingId,
-            requestId,
-            step: "segments-delete",
-            error: segmentsDeleteError.message,
-          });
-        }
+        if (segmentsDeleteError) throw segmentsDeleteError;
+        // Verified completion: every deletion and pointer clear succeeded.
         audioDiscarded = true;
       }
     } catch (retentionError) {
+      // A failed config read (InstanceConfigReadError) or any failed deletion
+      // phase postpones cleanup: never report discarded, never clear pointers
+      // on a partial delete. A later successful retry completes it idempotently.
+      audioDiscarded = false;
+      const failedRead = retentionError instanceof InstanceConfigReadError;
       console.error("[transcribe] retention discard failed", {
         meetingId,
         requestId,
+        reason: failedRead ? "config_unavailable" : "cleanup_error",
         error: retentionError instanceof Error ? retentionError.message : String(retentionError),
       });
     }
 
     return NextResponse.json({
       status: "completed",
+      outcome: effectiveOutcome,
       transcript_length: transcript.length,
       chunks: chunkCount,
       model,

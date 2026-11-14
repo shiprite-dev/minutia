@@ -6,7 +6,11 @@ const SUPABASE_URL = process.env.SUPABASE_URL ?? "http://127.0.0.1:54321";
 const HAS_SERVICE_ROLE = !!process.env.SUPABASE_SERVICE_ROLE_KEY;
 const HAS_GROQ = !!process.env.GROQ_API_KEY;
 const HAS_TRANSCRIPTION =
-  HAS_GROQ || !!process.env.OPENROUTER_API_KEY || !!process.env.AI_API_KEY;
+  HAS_GROQ ||
+  !!process.env.OPENROUTER_API_KEY ||
+  !!process.env.AI_API_KEY ||
+  !!process.env.ASSEMBLYAI_API_KEY ||
+  !!process.env.TRANSCRIPTION_LOCAL_URL;
 const TEST_USER_ID = "00000000-0000-0000-0000-000000000001";
 
 function serviceHeaders(prefer = "return=representation") {
@@ -165,7 +169,7 @@ test.describe("Transcription pipeline", () => {
 
   test("transcribes a recorded meeting end to end", async ({ page, request }) => {
     test.skip(!HAS_SERVICE_ROLE, "Requires service role for isolated transcription fixtures");
-    test.skip(!HAS_GROQ, "Requires GROQ_API_KEY for live transcription coverage");
+    test.skip(!HAS_TRANSCRIPTION, "Requires any configured transcription provider for live coverage");
     test.setTimeout(120_000);
 
     const fixture = await createMeetingFixture(request, { status: "live" });
@@ -176,7 +180,18 @@ test.describe("Transcription pipeline", () => {
       await page.goto(`/series/${fixture.seriesId}/meetings/${fixture.meetingId}`);
       await waitForApp(page);
       await page.getByRole("button", { name: "Record meeting audio" }).click();
-      await expect(page.getByLabel("Recording time")).toBeVisible();
+      await page.waitForTimeout(2500);
+      // The dev server hydrates the capture control after the shell paints, and a
+      // click on a not-yet-hydrated button is silently swallowed. Retry the click
+      // until the capture state actually appears instead of guessing a delay.
+      const recording = page.getByText("Recording…").first();
+      const record = page.getByRole("button", { name: "Record meeting audio" });
+      for (let attempt = 0; attempt < 4 && !(await recording.isVisible().catch(() => false)); attempt += 1) {
+        await record.click({ force: true }).catch(() => {});
+        await page.waitForTimeout(1500);
+      }
+      await expect(recording, "capture must start after Record is clicked").toBeVisible();
+      await expect(page.getByText("Recording…").first()).toBeVisible();
       await page.waitForTimeout(3000);
       await page.getByRole("button", { name: "End meeting" }).click();
       await page.getByRole("alertdialog").getByRole("button", { name: "End meeting" }).click();
