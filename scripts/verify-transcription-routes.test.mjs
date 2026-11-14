@@ -6,7 +6,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import * as esbuild from "esbuild";
 
-// Transcription route reliability contracts (Granola-port tranche 1): the
+// Transcription route reliability contracts: the
 // actual route handlers are bundled and invoked with test-only Supabase,
 // storage, config, and provider doubles (repo pattern; doubles live only in
 // this harness, never in production code).
