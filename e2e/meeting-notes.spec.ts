@@ -7,8 +7,11 @@ test.describe("Meeting Notes Persistence", () => {
   test("typing notes auto-saves and persists on reload", async ({ page }) => {
     await page.goto(MEETING_URL);
 
-    const textarea = page.getByPlaceholder("Meeting notes");
-    await expect(textarea).toBeVisible();
+    const rendered = page.getByRole("group", { name: "Edit notes" });
+    const textarea = page.getByPlaceholder("Meeting notes...");
+    await expect(rendered.or(textarea)).toBeVisible();
+    if (await rendered.isVisible()) await rendered.click();
+    await expect(textarea).toBeFocused();
 
     const testNote = `Auto-save test ${Date.now()}`;
     await textarea.fill(testNote);
@@ -16,9 +19,13 @@ test.describe("Meeting Notes Persistence", () => {
     // Wait for debounced save (1s) plus network
     await page.waitForTimeout(2000);
 
-    // Reload and verify persistence
     await page.reload();
-    const reloadedTextarea = page.getByPlaceholder("Meeting notes");
-    await expect(reloadedTextarea).toHaveValue(testNote);
+    await expect(page.locator("[data-notes-rendered]").first()).toHaveText(
+      testNote,
+    );
+    await page.getByRole("group", { name: "Edit notes" }).click();
+    await expect(page.getByPlaceholder("Meeting notes...")).toHaveValue(
+      testNote,
+    );
   });
 });

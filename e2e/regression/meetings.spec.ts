@@ -7,7 +7,8 @@ const HAS_SERVICE_ROLE = !!process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 function serviceHeaders(prefer = "return=representation") {
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!key) throw new Error("SUPABASE_SERVICE_ROLE_KEY is required for this test");
+  if (!key)
+    throw new Error("SUPABASE_SERVICE_ROLE_KEY is required for this test");
   return {
     apikey: key,
     Authorization: `Bearer ${key}`,
@@ -19,7 +20,7 @@ function serviceHeaders(prefer = "return=representation") {
 async function rest(
   request: APIRequestContext,
   path: string,
-  options: Parameters<APIRequestContext["fetch"]>[1] = {}
+  options: Parameters<APIRequestContext["fetch"]>[1] = {},
 ) {
   const response = await request.fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
     ...options,
@@ -42,7 +43,7 @@ async function deleteSeries(request: APIRequestContext, id: string) {
 async function getSeedOwnerId(request: APIRequestContext) {
   const rows = await rest(
     request,
-    `meeting_series?id=eq.${SERIES.platformStandup}&select=owner_id`
+    `meeting_series?id=eq.${SERIES.platformStandup}&select=owner_id`,
   );
   expect(rows[0]?.owner_id).toBeTruthy();
   return rows[0].owner_id as string;
@@ -138,12 +139,10 @@ test.describe("Meeting Detail (Completed)", () => {
     await page.goto(url);
     await waitForApp(page);
 
-    await expect(
-      page.getByText("Platform Team Standup").first()
-    ).toBeVisible();
+    await expect(page.getByText("Platform Team Standup").first()).toBeVisible();
 
     await expect(
-      page.getByRole("heading", { name: "Platform Standup #2" })
+      page.getByRole("heading", { name: "Platform Standup #2" }),
     ).toBeVisible();
 
     await expect(page.getByText(/April 8, 2026/i).first()).toBeVisible();
@@ -156,7 +155,7 @@ test.describe("Meeting Detail (Completed)", () => {
     await expect(page.getByTitle("Carol").first()).toBeVisible();
 
     await expect(
-      page.getByRole("heading", { name: "Tracked in the log" })
+      page.getByRole("heading", { name: "Tracked in the log" }),
     ).toBeVisible();
     await expect(page.getByText(/Items raised/i).first()).toBeVisible();
     await expect(page.getByText(/Decisions/i).first()).toBeVisible();
@@ -167,9 +166,7 @@ test.describe("Meeting Detail (Completed)", () => {
     await page.goto(url);
     await waitForApp(page);
 
-    await expect(
-      page.getByText("Use GitHub Actions for CI/CD")
-    ).toBeVisible();
+    await expect(page.getByText("Use GitHub Actions for CI/CD")).toBeVisible();
   });
 
   test("uses embedded meeting decisions without a duplicate decisions request", async ({
@@ -188,18 +185,21 @@ test.describe("Meeting Detail (Completed)", () => {
     await page.goto(url);
     await waitForApp(page);
 
-    await expect(
-      page.getByText("Use GitHub Actions for CI/CD")
-    ).toBeVisible();
+    await expect(page.getByText("Use GitHub Actions for CI/CD")).toBeVisible();
     expect(meetingDecisionRequests).toHaveLength(0);
   });
 
-  test("notes textarea is editable", async ({ page }) => {
+  test("notes open for editing from the completed meeting", async ({
+    page,
+  }) => {
     await page.goto(url);
     await waitForApp(page);
 
-    const textarea = page.locator("textarea").first();
-    await expect(textarea).toBeVisible();
+    const rendered = page.getByRole("group", { name: "Edit notes" });
+    const textarea = page.getByPlaceholder("Meeting notes...");
+    await expect(rendered.or(textarea)).toBeVisible();
+    if (await rendered.isVisible()) await rendered.click();
+    await expect(textarea).toBeFocused();
     await expect(textarea).toBeEditable();
   });
 
@@ -220,18 +220,25 @@ test.describe("Meeting Lifecycle", () => {
     page,
     request,
   }) => {
-    test.skip(!HAS_SERVICE_ROLE, "Requires service role cleanup for isolated meeting data");
+    test.skip(
+      !HAS_SERVICE_ROLE,
+      "Requires service role cleanup for isolated meeting data",
+    );
 
     const fixture = await createMeetingFlowFixture(request);
 
     try {
-      await page.goto(`/series/${fixture.seriesId}/meetings/${fixture.meetingId}`);
+      await page.goto(
+        `/series/${fixture.seriesId}/meetings/${fixture.meetingId}`,
+      );
       await waitForApp(page);
 
       await expect(
-        page.getByRole("heading", { name: /working session/ })
+        page.getByRole("heading", { name: /working session/ }),
       ).toBeVisible();
-      await expect(page.getByText("Brief", { exact: true }).first()).toBeVisible();
+      await expect(
+        page.getByText("Brief", { exact: true }).first(),
+      ).toBeVisible();
       await expect(page.getByText("Alice").first()).toBeVisible();
 
       await page.getByRole("button", { name: "Start meeting" }).click();
@@ -253,47 +260,57 @@ test.describe("Meeting Lifecycle", () => {
       await page.keyboard.press("Enter");
       await expect(page.getByText(fixture.decisionTitle).first()).toBeVisible();
 
-      await page.getByPlaceholder("Type meeting notes here...").fill(fixture.noteText);
+      await page
+        .getByPlaceholder("Type meeting notes here...")
+        .fill(fixture.noteText);
       await expect(
-        page.getByPlaceholder("Type meeting notes here...")
+        page.getByPlaceholder("Type meeting notes here..."),
       ).toHaveValue(fixture.noteText);
       await expect
-        .poll(async () => {
-          const rows = await rest(
-            request,
-            `meetings?id=eq.${fixture.meetingId}&select=notes_markdown`
-          );
-          return rows[0]?.notes_markdown;
-        }, { timeout: 20_000 })
+        .poll(
+          async () => {
+            const rows = await rest(
+              request,
+              `meetings?id=eq.${fixture.meetingId}&select=notes_markdown`,
+            );
+            return rows[0]?.notes_markdown;
+          },
+          { timeout: 20_000 },
+        )
         .toBe(fixture.noteText);
 
       await page.getByRole("button", { name: "End meeting" }).click();
-      await page.getByRole("alertdialog").getByRole("button", { name: "End meeting" }).click();
+      await page
+        .getByRole("alertdialog")
+        .getByRole("button", { name: "End meeting" })
+        .click();
 
       await expect(page.getByText("Meeting recap")).toBeVisible();
       await expect(
-        page.getByRole("heading", { name: "Tracked in the log" })
+        page.getByRole("heading", { name: "Tracked in the log" }),
       ).toBeVisible();
       await expect(page.getByText("Items raised").first()).toBeVisible();
       await expect(page.getByText("Decisions").first()).toBeVisible();
-      await expect(page.getByText("Resolved this meeting").first()).toBeVisible();
+      await expect(
+        page.getByText("Resolved this meeting").first(),
+      ).toBeVisible();
       await expect(page.getByText(fixture.actionTitle).first()).toBeVisible();
       await expect(page.getByText(fixture.decisionTitle).first()).toBeVisible();
       await expect(page.getByText(fixture.carriedTitle).first()).toBeVisible();
       await expect(page.locator("[data-notes-rendered]").first()).toContainText(
-        fixture.noteText
+        fixture.noteText,
       );
 
       await page.reload();
       await waitForApp(page);
       await expect(page.getByText("Meeting recap")).toBeVisible();
       await expect(page.locator("[data-notes-rendered]").first()).toContainText(
-        fixture.noteText
+        fixture.noteText,
       );
 
       const meetingRows = await rest(
         request,
-        `meetings?id=eq.${fixture.meetingId}&select=status,notes_markdown,completed_at`
+        `meetings?id=eq.${fixture.meetingId}&select=status,notes_markdown,completed_at`,
       );
       expect(meetingRows[0]).toMatchObject({
         status: "completed",
@@ -303,28 +320,28 @@ test.describe("Meeting Lifecycle", () => {
 
       const issueRows = await rest(
         request,
-        `issues?series_id=eq.${fixture.seriesId}&select=title,status,resolved_in_meeting_id,raised_in_meeting_id`
+        `issues?series_id=eq.${fixture.seriesId}&select=title,status,resolved_in_meeting_id,raised_in_meeting_id`,
       );
       expect(issueRows).toContainEqual(
         expect.objectContaining({
           title: fixture.carriedTitle,
           status: "resolved",
           resolved_in_meeting_id: fixture.meetingId,
-        })
+        }),
       );
       expect(issueRows).toContainEqual(
         expect.objectContaining({
           title: fixture.actionTitle,
           raised_in_meeting_id: fixture.meetingId,
-        })
+        }),
       );
 
       const decisionRows = await rest(
         request,
-        `decisions?meeting_id=eq.${fixture.meetingId}&select=title`
+        `decisions?meeting_id=eq.${fixture.meetingId}&select=title`,
       );
       expect(decisionRows).toContainEqual(
-        expect.objectContaining({ title: fixture.decisionTitle })
+        expect.objectContaining({ title: fixture.decisionTitle }),
       );
     } finally {
       await deleteSeries(request, fixture.seriesId);
@@ -342,15 +359,15 @@ test.describe("Meeting Detail (Upcoming)", () => {
     await waitForApp(page);
 
     await expect(
-      page.getByRole("heading", { name: "Platform Standup #4" })
+      page.getByRole("heading", { name: "Platform Standup #4" }),
     ).toBeVisible();
 
     await expect(
-      page.getByRole("button", { name: "Start meeting" })
+      page.getByRole("button", { name: "Start meeting" }),
     ).toBeVisible();
 
     await expect(
-      page.getByText("Brief", { exact: true }).first()
+      page.getByText("Brief", { exact: true }).first(),
     ).toBeVisible();
 
     await expect(page.getByText("Attendees").first()).toBeVisible();
@@ -368,7 +385,7 @@ test.describe("Meeting Detail (Retro)", () => {
     await waitForApp(page);
 
     await expect(
-      page.getByRole("heading", { name: /Retro: API Outage/i })
+      page.getByRole("heading", { name: /Retro: API Outage/i }),
     ).toBeVisible();
 
     await expect(page.getByTitle("Frank").first()).toBeVisible();
