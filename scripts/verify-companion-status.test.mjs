@@ -108,6 +108,14 @@ test("my own fresh request is starting, even before the Mac has checked in", () 
   });
 });
 
+test("a request means nothing when this person has never connected a Mac", () => {
+  const request = { record_requested_by: ME, record_requested_at: ago(3_000) };
+  assert.deepEqual(status({ checkinAt: null }, request), { kind: "install" });
+  assert.deepEqual(status({ checkinAt: null, isMac: false }, request), {
+    kind: "none",
+  });
+});
+
 test("my claimed Mac is starting until it reports, then lost after 20 s", () => {
   const claimed = (ms) => ({
     recording_user_id: ME,

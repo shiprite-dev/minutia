@@ -446,6 +446,34 @@ test.describe("A browser that is not on a Mac", () => {
   });
 });
 
+test.describe("A manager without a companion", () => {
+  test.skip(!HAS_SERVICE_ROLE, "Requires service role for isolated fixtures");
+  test.use({ userAgent: LINUX_UA });
+
+  test("starts a meeting and can record in the browser right away", async ({
+    page,
+    request,
+  }) => {
+    const { seriesId } = await createSeries(request, null);
+    try {
+      await setPresence(request, { checkin: null });
+      await page.goto(`/series/${seriesId}`);
+      await waitForApp(page);
+      await page.getByRole("button", { name: "Start meeting" }).click();
+      await expect(
+        page.getByRole("button", { name: "Record meeting audio" }),
+      ).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByText("Starting on your Mac…")).toHaveCount(0);
+      const meetingId = await liveMeetingId(request, seriesId);
+      expect(
+        (await readMeeting(request, meetingId)).record_requested_by,
+      ).toBeNull();
+    } finally {
+      await cleanup(request, seriesId);
+    }
+  });
+});
+
 test.describe("The server keeps one recorder per meeting", () => {
   test.skip(!HAS_SERVICE_ROLE, "Requires service role for isolated fixtures");
 
