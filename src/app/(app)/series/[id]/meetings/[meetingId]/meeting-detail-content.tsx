@@ -18,15 +18,29 @@ import {
   useUpdateMeetingTranscript,
   useUpdateSpeakerMap,
 } from "@/lib/hooks/use-meetings";
-import { useSeriesDetail, useSeriesParticipantRole } from "@/lib/hooks/use-series";
+import {
+  useSeriesDetail,
+  useSeriesParticipantRole,
+} from "@/lib/hooks/use-series";
 import { useProfile } from "@/lib/hooks/use-profile";
 import { CompanionInstallPrompt } from "@/components/minutia/companion-install-prompt";
 import { buildCompanionRecordUrl, isMacPlatform } from "@/lib/companion-links";
-import { useIssues, useCreateIssue, useUpdateIssueStatus, useUpdateIssue, useAssignIssue, issueKeys } from "@/lib/hooks/use-issues";
+import {
+  useIssues,
+  useCreateIssue,
+  useUpdateIssueStatus,
+  useUpdateIssue,
+  useAssignIssue,
+  issueKeys,
+} from "@/lib/hooks/use-issues";
 import { useCreateDecision, decisionKeys } from "@/lib/hooks/use-decisions";
 import { SyncIndicator } from "@/components/minutia/sync-indicator";
 import { useOfflineSync } from "@/lib/hooks/use-offline-sync";
-import { addPendingItem, clearAudioChunks, getAudioChunks } from "@/lib/offline-buffer";
+import {
+  addPendingItem,
+  clearAudioChunks,
+  getAudioChunks,
+} from "@/lib/offline-buffer";
 import { RecordingIndicator } from "@/components/minutia/recording-indicator";
 import {
   TranscriptionStatus,
@@ -56,7 +70,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { recapProgressDetail, recapStep, shouldAutoStartRecap } from "@/lib/summary/recap";
+import {
+  recapProgressDetail,
+  recapStep,
+  shouldAutoStartRecap,
+} from "@/lib/summary/recap";
 import { DiarizedTranscript } from "@/components/minutia/diarized-transcript";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -69,10 +87,35 @@ import { AiUnavailableNotice } from "@/components/minutia/ai-unavailable-notice"
 import { useAiAccess } from "@/lib/hooks/use-ai-access";
 import { composeMeetingNotes } from "@/lib/ai/companion-notes";
 import { humanizeError } from "@/lib/errors";
-import { ArrowLeft, Square, Play, Check, X, Sparkles, Loader2, FileText, CheckSquare, Gavel, AlertTriangle, Ban, RotateCcw, HelpCircle, ChevronDown, Radio, MoreHorizontal } from "lucide-react";
+import {
+  ArrowLeft,
+  Square,
+  Play,
+  Check,
+  X,
+  Sparkles,
+  Loader2,
+  FileText,
+  CheckSquare,
+  Gavel,
+  AlertTriangle,
+  Ban,
+  RotateCcw,
+  HelpCircle,
+  ChevronDown,
+  Radio,
+  MoreHorizontal,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatShortDate } from "@/lib/date-utils";
-import type { IssueCategory, IssueStatus, Issue, Decision, Meeting, MeetingAiSuggestion } from "@/lib/types";
+import type {
+  IssueCategory,
+  IssueStatus,
+  Issue,
+  Decision,
+  Meeting,
+  MeetingAiSuggestion,
+} from "@/lib/types";
 import Link from "next/link";
 
 interface MeetingDetailContentProps {
@@ -136,9 +179,10 @@ const LIVE_STATUS_STATES: TranscriptionUiState[] = [
 // contract before anything reaches the screen, so a raw code never shows up.
 function mapTranscriptionFailure(
   status: number,
-  payload: Record<string, unknown>
+  payload: Record<string, unknown>,
 ): TranscriptionFailure {
-  const rawCode = typeof payload.code === "string" ? payload.code.toLowerCase() : "";
+  const rawCode =
+    typeof payload.code === "string" ? payload.code.toLowerCase() : "";
   const message = typeof payload.error === "string" ? payload.error : "";
 
   if (rawCode === "extraction_failed") return { kind: "extraction_failed" };
@@ -148,9 +192,13 @@ function mapTranscriptionFailure(
   if (status === 401) return { kind: "needs_signin" };
   if (status === 404) return { kind: "deleted" };
   if (rawCode) {
-    return { kind: "failed", reason: humanizeError({ error: message, code: rawCode }) };
+    return {
+      kind: "failed",
+      reason: humanizeError({ error: message, code: rawCode }),
+    };
   }
-  if (message) return { kind: "failed", reason: humanizeError({ error: message }) };
+  if (message)
+    return { kind: "failed", reason: humanizeError({ error: message }) };
   if (status >= 500) return { kind: "failed_unknown" };
   return { kind: "failed", reason: humanizeError({ error: message }) };
 }
@@ -186,7 +234,9 @@ function suggestionCategoryLabel(category: IssueCategory) {
 
 function dateInputValue(date: Date | string | null | undefined) {
   if (!date) return "";
-  return typeof date === "string" ? date.slice(0, 10) : date.toISOString().slice(0, 10);
+  return typeof date === "string"
+    ? date.slice(0, 10)
+    : date.toISOString().slice(0, 10);
 }
 
 function formatMeetingDate(date: Date | string): string {
@@ -239,7 +289,8 @@ function parseAiNotesMarkdown(markdown: string): Partial<AiNotesPayload> {
 }
 
 function normalizeAiNotesPreview(preview: AiNotesPreview): AiNotesPayload {
-  const source = preview.ai_notes ?? parseAiNotesMarkdown(preview.ai_notes_markdown);
+  const source =
+    preview.ai_notes ?? parseAiNotesMarkdown(preview.ai_notes_markdown);
   return {
     summary: source.summary ?? [],
     action_items: source.action_items ?? [],
@@ -274,7 +325,12 @@ function AiNotesSection({
     <section className="rounded-lg bg-card px-4 py-3 shadow-[var(--shadow-raised)]">
       <div className="mb-3 flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          <span className={cn("flex size-7 items-center justify-center rounded-md", toneClass)}>
+          <span
+            className={cn(
+              "flex size-7 items-center justify-center rounded-md",
+              toneClass,
+            )}
+          >
             <Icon className="size-3.5" />
           </span>
           <h4 className="text-sm font-semibold text-ink">{title}</h4>
@@ -286,7 +342,10 @@ function AiNotesSection({
 
       <ul className="space-y-2">
         {items.map((item, index) => (
-          <li key={`${title}-${index}`} className="flex gap-2 text-sm leading-5 text-ink-2">
+          <li
+            key={`${title}-${index}`}
+            className="flex gap-2 text-sm leading-5 text-ink-2"
+          >
             <span className="mt-2 size-1.5 shrink-0 rounded-full bg-accent" />
             <span>{item}</span>
           </li>
@@ -295,7 +354,6 @@ function AiNotesSection({
     </section>
   );
 }
-
 
 // ---------------------------------------------------------------------------
 // Live timer hook
@@ -328,7 +386,13 @@ function useLiveTimer(startTime: Date | string | null) {
 // Attendee avatar
 // ---------------------------------------------------------------------------
 
-function AttendeeAvatar({ name, className }: { name: string; className?: string }) {
+function AttendeeAvatar({
+  name,
+  className,
+}: {
+  name: string;
+  className?: string;
+}) {
   const initial = name.charAt(0).toUpperCase();
   const colors = [
     "bg-accent text-white",
@@ -343,7 +407,7 @@ function AttendeeAvatar({ name, className }: { name: string; className?: string 
       className={cn(
         "inline-flex items-center justify-center size-7 rounded-full text-[11px] font-medium font-mono ring-2 ring-paper",
         colors[colorIdx],
-        className
+        className,
       )}
       title={name}
     >
@@ -413,11 +477,15 @@ function CarriedIssueCard({
       tabIndex={done ? undefined : 0}
       onClick={done ? undefined : () => setSelected((s) => !s)}
       onFocus={done ? undefined : () => setSelected(true)}
-      onBlur={done ? undefined : (e) => {
-        if (!ref.current?.contains(e.relatedTarget as Node)) {
-          setSelected(false);
-        }
-      }}
+      onBlur={
+        done
+          ? undefined
+          : (e) => {
+              if (!ref.current?.contains(e.relatedTarget as Node)) {
+                setSelected(false);
+              }
+            }
+      }
       onMouseEnter={done ? undefined : () => setHovered(true)}
       onMouseLeave={done ? undefined : () => setHovered(false)}
       onKeyDown={handleKey}
@@ -440,23 +508,29 @@ function CarriedIssueCard({
 
       {/* Status indicator */}
       {done ? (
-        <span className={cn(
-          "inline-flex items-center justify-center size-4 rounded-full shrink-0",
-          issue.status === "resolved" ? "bg-success/20" : "bg-ink-4/20"
-        )}>
-          {issue.status === "resolved"
-            ? <Check className="size-2.5 text-success" />
-            : <X className="size-2.5 text-ink-4" />
-          }
+        <span
+          className={cn(
+            "inline-flex items-center justify-center size-4 rounded-full shrink-0",
+            issue.status === "resolved" ? "bg-success/20" : "bg-ink-4/20",
+          )}
+        >
+          {issue.status === "resolved" ? (
+            <Check className="size-2.5 text-success" />
+          ) : (
+            <X className="size-2.5 text-ink-4" />
+          )}
         </span>
       ) : (
         <span
           className={cn(
             "size-2 rounded-full shrink-0 transition-colors",
-            issue.status === "in_progress" ? "bg-accent" :
-            issue.status === "resolved" ? "bg-success" :
-            issue.status === "dropped" ? "bg-ink-4" :
-            "bg-ink"
+            issue.status === "in_progress"
+              ? "bg-accent"
+              : issue.status === "resolved"
+                ? "bg-success"
+                : issue.status === "dropped"
+                  ? "bg-ink-4"
+                  : "bg-ink",
           )}
         />
       )}
@@ -468,7 +542,7 @@ function CarriedIssueCard({
           onClick={(e) => e.stopPropagation()}
           className={cn(
             "text-sm font-medium transition-all hover:text-accent",
-            done ? "line-through text-ink-3 hover:text-ink-3" : "text-ink"
+            done ? "line-through text-ink-3 hover:text-ink-3" : "text-ink",
           )}
         >
           {issue.title}
@@ -476,13 +550,19 @@ function CarriedIssueCard({
         <div className="flex items-center gap-2 mt-0.5">
           <CategoryBadge category={issue.category} size="sm" />
           {issue.owner_name && (
-            <span className="text-xs font-mono text-ink-4">{issue.owner_name}</span>
+            <span className="text-xs font-mono text-ink-4">
+              {issue.owner_name}
+            </span>
           )}
           {issue.due_date && (
-            <span className={cn(
-              "text-xs font-mono tabular-nums",
-              !done && new Date(issue.due_date) < new Date() ? "text-accent" : "text-ink-4"
-            )}>
+            <span
+              className={cn(
+                "text-xs font-mono tabular-nums",
+                !done && new Date(issue.due_date) < new Date()
+                  ? "text-accent"
+                  : "text-ink-4",
+              )}
+            >
               {formatShortDate(issue.due_date)}
             </span>
           )}
@@ -491,10 +571,14 @@ function CarriedIssueCard({
 
       {/* Done badge */}
       {done && (
-        <span className={cn(
-          "text-[10px] font-medium px-2 py-0.5 rounded-full shrink-0",
-          issue.status === "resolved" ? "bg-success/10 text-success" : "bg-paper-2 text-ink-4"
-        )}>
+        <span
+          className={cn(
+            "text-[10px] font-medium px-2 py-0.5 rounded-full shrink-0",
+            issue.status === "resolved"
+              ? "bg-success/10 text-success"
+              : "bg-paper-2 text-ink-4",
+          )}
+        >
           {issue.status === "resolved" ? "Resolved" : "Dropped"}
         </span>
       )}
@@ -509,9 +593,21 @@ function CarriedIssueCard({
             transition={{ duration: 0.12 }}
             className="flex items-center gap-1 shrink-0"
           >
-            <ActionButton letter="R" label="Resolve" onClick={() => handleActionClick("resolved")} />
-            <ActionButton letter="P" label="Progress" onClick={() => handleActionClick("in_progress")} />
-            <ActionButton letter="X" label="Drop" onClick={() => handleActionClick("dropped")} />
+            <ActionButton
+              letter="R"
+              label="Resolve"
+              onClick={() => handleActionClick("resolved")}
+            />
+            <ActionButton
+              letter="P"
+              label="Progress"
+              onClick={() => handleActionClick("in_progress")}
+            />
+            <ActionButton
+              letter="X"
+              label="Drop"
+              onClick={() => handleActionClick("dropped")}
+            />
           </motion.div>
         )}
       </AnimatePresence>
@@ -527,12 +623,16 @@ function CarriedIssueCard({
               "text-xs font-medium px-2 py-0.5 rounded-full",
               justChanged === "resolved" && "bg-success-soft text-success",
               justChanged === "in_progress" && "bg-accent-soft text-accent",
-              justChanged === "dropped" && "bg-paper-2 text-ink-3"
+              justChanged === "dropped" && "bg-paper-2 text-ink-3",
             )}
           >
-            {justChanged === "resolved" ? "Resolved" :
-             justChanged === "in_progress" ? "In Progress" :
-             justChanged === "dropped" ? "Dropped" : justChanged}
+            {justChanged === "resolved"
+              ? "Resolved"
+              : justChanged === "in_progress"
+                ? "In Progress"
+                : justChanged === "dropped"
+                  ? "Dropped"
+                  : justChanged}
           </motion.span>
         )}
       </AnimatePresence>
@@ -540,18 +640,31 @@ function CarriedIssueCard({
   );
 }
 
-function ActionButton({ letter, label, onClick }: { letter: string; label: string; onClick: () => void }) {
+function ActionButton({
+  letter,
+  label,
+  onClick,
+}: {
+  letter: string;
+  label: string;
+  onClick: () => void;
+}) {
   return (
     <button
       type="button"
-      onClick={(e) => { e.stopPropagation(); onClick(); }}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick();
+      }}
       className="flex items-center gap-1 px-1.5 py-1 rounded hover:bg-paper-2 transition-colors"
       title={`${letter} to ${label}`}
     >
-      <kbd className={cn(
-        "inline-flex items-center justify-center size-5 rounded text-[10px] font-mono font-medium",
-        "bg-paper-2 text-ink-3 border border-rule"
-      )}>
+      <kbd
+        className={cn(
+          "inline-flex items-center justify-center size-5 rounded text-[10px] font-mono font-medium",
+          "bg-paper-2 text-ink-3 border border-rule",
+        )}
+      >
         {letter}
       </kbd>
       <span className="text-[10px] text-ink-4 hidden lg:inline">{label}</span>
@@ -595,10 +708,14 @@ function CapturedItem({
         <span className="text-xs font-mono text-ink-4">{issue.owner_name}</span>
       )}
       {issue.due_date && (
-        <span className={cn(
-          "text-xs font-mono tabular-nums",
-          new Date(issue.due_date) < new Date() ? "text-accent" : "text-ink-4"
-        )}>
+        <span
+          className={cn(
+            "text-xs font-mono tabular-nums",
+            new Date(issue.due_date) < new Date()
+              ? "text-accent"
+              : "text-ink-4",
+          )}
+        >
           {formatShortDate(issue.due_date)}
         </span>
       )}
@@ -662,13 +779,24 @@ function LogGroupLabel({
   const color = tone === "accent" ? "text-accent" : "text-ink-4";
   return (
     <div className="mb-2 flex items-center gap-2">
-      <span className={cn("font-mono text-[11px] font-medium uppercase tracking-wider", color)}>
+      <span
+        className={cn(
+          "font-mono text-[11px] font-medium uppercase tracking-wider",
+          color,
+        )}
+      >
         {label}
       </span>
       {count > 0 && (
-        <span className={cn("font-mono text-[11px] tabular-nums", color)}>{count}</span>
+        <span className={cn("font-mono text-[11px] tabular-nums", color)}>
+          {count}
+        </span>
       )}
-      {aside && <span className="ml-auto font-mono text-[11px] text-ink-4">{aside}</span>}
+      {aside && (
+        <span className="ml-auto font-mono text-[11px] text-ink-4">
+          {aside}
+        </span>
+      )}
     </div>
   );
 }
@@ -680,7 +808,9 @@ function meetingDurationMinutes(meeting: Meeting): number | null {
     return Math.max(1, Math.round(meeting.audio_duration_seconds / 60));
   }
   if (meeting.completed_at && meeting.created_at) {
-    const ms = new Date(meeting.completed_at).getTime() - new Date(meeting.created_at).getTime();
+    const ms =
+      new Date(meeting.completed_at).getTime() -
+      new Date(meeting.created_at).getTime();
     if (ms > 30_000) return Math.max(1, Math.round(ms / 60_000));
   }
   return null;
@@ -696,7 +826,11 @@ export function MeetingDetailContent({
 }: MeetingDetailContentProps) {
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { data: meeting, isLoading: meetingLoading, error: meetingError } = useMeeting(meetingId);
+  const {
+    data: meeting,
+    isLoading: meetingLoading,
+    error: meetingError,
+  } = useMeeting(meetingId);
   // The row is gone (deleted, or the viewer lost access). A stale row would
   // otherwise keep rendering a meeting that no longer exists.
   const meetingGone =
@@ -717,7 +851,9 @@ export function MeetingDetailContent({
   }, [seriesIssues]);
 
   useMeetingRealtime(meetingId, seriesId);
-  const presenceUsers = useMeetingPresence(meeting?.status === "live" ? meetingId : "");
+  const presenceUsers = useMeetingPresence(
+    meeting?.status === "live" ? meetingId : "",
+  );
   const confirm = useConfirm();
   const endMeeting = useEndMeeting();
   const startOrJoinMeeting = useStartOrJoinMeeting();
@@ -732,20 +868,30 @@ export function MeetingDetailContent({
   const hasAccess = aiAccess?.hasAccess === true;
 
   const [notes, setNotes] = React.useState(meeting?.notes_markdown ?? "");
-  const [transcript, setTranscript] = React.useState(meeting?.transcript_raw ?? "");
+  const [transcript, setTranscript] = React.useState(
+    meeting?.transcript_raw ?? "",
+  );
   const [transcriptOpen, setTranscriptOpen] = React.useState(false);
   const [aiPreview, setAiPreview] = React.useState<AiNotesPreview | null>(null);
   const [aiError, setAiError] = React.useState<string | null>(null);
   const [enhancingNotes, setEnhancingNotes] = React.useState(false);
-  const [aiSuggestions, setAiSuggestions] = React.useState<MeetingAiSuggestion[]>([]);
-  const [suggestionsError, setSuggestionsError] = React.useState<string | null>(null);
+  const [aiSuggestions, setAiSuggestions] = React.useState<
+    MeetingAiSuggestion[]
+  >([]);
+  const [suggestionsError, setSuggestionsError] = React.useState<string | null>(
+    null,
+  );
   const [loadingSuggestions, setLoadingSuggestions] = React.useState(false);
-  const [reviewingSuggestionId, setReviewingSuggestionId] = React.useState<string | null>(null);
+  const [reviewingSuggestionId, setReviewingSuggestionId] = React.useState<
+    string | null
+  >(null);
   const updateNotes = useUpdateMeetingNotes();
   const updateTranscript = useUpdateMeetingTranscript();
   const updateSpeakerMap = useUpdateSpeakerMap();
   const applyAiNotes = useApplyAiMeetingNotes();
-  const timer = useLiveTimer(meeting?.status === "live" ? meeting.created_at : null);
+  const timer = useLiveTimer(
+    meeting?.status === "live" ? meeting.created_at : null,
+  );
   const recorder = useMeetingRecorder(meetingId);
   const [savingRecording, setSavingRecording] = React.useState(false);
   const [transcribing, setTranscribing] = React.useState(false);
@@ -753,7 +899,8 @@ export function MeetingDetailContent({
   const autoSummaryFiredRef = React.useRef(false);
   // The upload landed and the transcription request has not been issued yet.
   const [uploadedPending, setUploadedPending] = React.useState(false);
-  const [transcriptionFailure, setTranscriptionFailure] = React.useState<TranscriptionFailure | null>(null);
+  const [transcriptionFailure, setTranscriptionFailure] =
+    React.useState<TranscriptionFailure | null>(null);
   // When the current transcription request was issued, for elapsed copy.
   const transcribeStartedAtRef = React.useRef<number | null>(null);
   // The transcript was already committed when the page loaded, so its arrival
@@ -769,7 +916,8 @@ export function MeetingDetailContent({
   const [clock, setClock] = React.useState(() => Date.now());
   const [recapStreaming, setRecapStreaming] = React.useState(false);
   const [regenerateNonce, setRegenerateNonce] = React.useState(0);
-  const [generatingSuggestions, setGeneratingSuggestions] = React.useState(false);
+  const [generatingSuggestions, setGeneratingSuggestions] =
+    React.useState(false);
   const [showReviewed, setShowReviewed] = React.useState(false);
   const [seenPending, setSeenPending] = React.useState(0);
   const [loopClosedKey, setLoopClosedKey] = React.useState(0);
@@ -781,7 +929,9 @@ export function MeetingDetailContent({
   const loadSuggestions = React.useCallback(async () => {
     setLoadingSuggestions(true);
     try {
-      const response = await fetch(`/api/meetings/${meetingId}/suggestions`, { method: "GET" });
+      const response = await fetch(`/api/meetings/${meetingId}/suggestions`, {
+        method: "GET",
+      });
       const payload = await response.json().catch(() => ({}));
       if (response.ok) setAiSuggestions(payload.suggestions ?? []);
     } catch {
@@ -813,7 +963,10 @@ export function MeetingDetailContent({
         headers: { "Content-Type": "application/json" },
         body,
       });
-      const payload = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+      const payload = (await response.json().catch(() => ({}))) as Record<
+        string,
+        unknown
+      >;
       if (meetingMissingRef.current) return;
       if (response.ok) {
         setTranscriptionFailure(null);
@@ -822,10 +975,13 @@ export function MeetingDetailContent({
         await loadSuggestions();
         return;
       }
-      setTranscriptionFailure(mapTranscriptionFailure(response.status, payload));
+      setTranscriptionFailure(
+        mapTranscriptionFailure(response.status, payload),
+      );
     } catch {
       // Network error: the recording is saved, so the user can retry.
-      if (!meetingMissingRef.current) setTranscriptionFailure({ kind: "failed_unknown" });
+      if (!meetingMissingRef.current)
+        setTranscriptionFailure({ kind: "failed_unknown" });
     } finally {
       setTranscribing(false);
       transcribeStartedAtRef.current = null;
@@ -839,24 +995,38 @@ export function MeetingDetailContent({
   const suggestionsLoadedRef = React.useRef(false);
   React.useEffect(() => {
     if (suggestionsLoadedRef.current) return;
-    const manages = participantRole === "owner" || participantRole === "facilitator";
+    const manages =
+      participantRole === "owner" || participantRole === "facilitator";
     if (!manages || !hasAccess) return;
     if (!meeting?.transcript_raw && !meeting?.notes_markdown) return;
     suggestionsLoadedRef.current = true;
     void loadSuggestions();
-  }, [participantRole, hasAccess, meeting?.transcript_raw, meeting?.notes_markdown, loadSuggestions]);
+  }, [
+    participantRole,
+    hasAccess,
+    meeting?.transcript_raw,
+    meeting?.notes_markdown,
+    loadSuggestions,
+  ]);
 
   // Auto-flow the recap the moment recording stops and the fast lane is ready
   // (or the final transcript lands for non-webm browsers). Managers only, once.
   React.useEffect(() => {
     if (autoSummaryFiredRef.current) return;
-    const manages = participantRole === "owner" || participantRole === "facilitator";
+    const manages =
+      participantRole === "owner" || participantRole === "facilitator";
     if (!manages || !hasAccess) return;
     if (recorder.state !== "stopped") return;
     if (recorder.fastLane.state !== "ready" && !meeting?.transcript_raw) return;
     autoSummaryFiredRef.current = true;
     setAutoStartSummary(true);
-  }, [participantRole, hasAccess, recorder.state, recorder.fastLane.state, meeting?.transcript_raw]);
+  }, [
+    participantRole,
+    hasAccess,
+    recorder.state,
+    recorder.fastLane.state,
+    meeting?.transcript_raw,
+  ]);
 
   React.useEffect(() => {
     if (meeting?.notes_markdown) setNotes(meeting.notes_markdown);
@@ -868,7 +1038,8 @@ export function MeetingDetailContent({
 
   // A meeting that disappeared mid-run must not fire late completion effects.
   React.useEffect(() => {
-    if (!meetingLoading && (!meeting || meetingGone)) meetingMissingRef.current = true;
+    if (!meetingLoading && (!meeting || meetingGone))
+      meetingMissingRef.current = true;
   }, [meeting, meetingLoading, meetingGone]);
 
   // Remember whether the transcript was already there on arrival, so a
@@ -899,10 +1070,13 @@ export function MeetingDetailContent({
   // replication). While a run is in flight, re-read the meeting on a short
   // interval so the committed transcript and the terminal status are observed.
   React.useEffect(() => {
-    const inFlight = transcribing || meeting?.transcription_status === "processing";
+    const inFlight =
+      transcribing || meeting?.transcription_status === "processing";
     if (!inFlight || meetingMissingRef.current) return;
     const id = setInterval(() => {
-      void queryClient.invalidateQueries({ queryKey: meetingKeys.detail(meetingId) });
+      void queryClient.invalidateQueries({
+        queryKey: meetingKeys.detail(meetingId),
+      });
     }, 2000);
     return () => clearInterval(id);
   }, [transcribing, meeting?.transcription_status, meetingId, queryClient]);
@@ -924,20 +1098,22 @@ export function MeetingDetailContent({
         updateNotes.mutate({ meetingId, notes: value });
       }, 1000);
     },
-    [meetingId, updateNotes]
+    [meetingId, updateNotes],
   );
 
   // Auto-save transcript with its own debounce timer.
-  const saveTranscriptTimerRef = React.useRef<ReturnType<typeof setTimeout>>(null);
+  const saveTranscriptTimerRef =
+    React.useRef<ReturnType<typeof setTimeout>>(null);
   const handleTranscriptChange = React.useCallback(
     (value: string) => {
       setTranscript(value);
-      if (saveTranscriptTimerRef.current) clearTimeout(saveTranscriptTimerRef.current);
+      if (saveTranscriptTimerRef.current)
+        clearTimeout(saveTranscriptTimerRef.current);
       saveTranscriptTimerRef.current = setTimeout(() => {
         updateTranscript.mutate({ meetingId, transcript: value });
       }, 1000);
     },
-    [meetingId, updateTranscript]
+    [meetingId, updateTranscript],
   );
 
   // Correct a diarized speaker: the route re-flattens transcript_raw and
@@ -947,13 +1123,14 @@ export function MeetingDetailContent({
     (speaker: string, name: string | null) => {
       updateSpeakerMap.mutate({ meetingId, speaker, attendee: name });
     },
-    [meetingId, updateSpeakerMap]
+    [meetingId, updateSpeakerMap],
   );
 
   React.useEffect(() => {
     return () => {
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-      if (saveTranscriptTimerRef.current) clearTimeout(saveTranscriptTimerRef.current);
+      if (saveTranscriptTimerRef.current)
+        clearTimeout(saveTranscriptTimerRef.current);
     };
   }, []);
 
@@ -964,7 +1141,9 @@ export function MeetingDetailContent({
     ? new Date(meeting.transcription_started_at).getTime()
     : null;
   const runAgeMs =
-    startedAtMs != null && Number.isFinite(startedAtMs) ? clock - startedAtMs : null;
+    startedAtMs != null && Number.isFinite(startedAtMs)
+      ? clock - startedAtMs
+      : null;
   const isProcessing = meeting?.transcription_status === "processing";
   const isStaleRun = runAgeMs != null && runAgeMs > STALE_PROCESSING_MS;
   const hasTranscript = !!meeting?.transcript_raw?.trim();
@@ -985,7 +1164,9 @@ export function MeetingDetailContent({
   } else if (transcribing) {
     transcriptionState = "transcribing";
   } else if (isProcessing) {
-    transcriptionState = isStaleRun ? "transcribing_stale" : "processing_return";
+    transcriptionState = isStaleRun
+      ? "transcribing_stale"
+      : "processing_return";
   } else if (
     transcriptionFailure &&
     !(hasTranscript && transcriptionFailure.kind !== "extraction_failed")
@@ -1064,7 +1245,9 @@ export function MeetingDetailContent({
       void runTranscription();
     } catch {
       setTranscriptionFailure({ kind: "buffered_local" });
-      toast.error("Couldn't upload the recording, it's saved locally and will retry.");
+      toast.error(
+        "Couldn't upload the recording, it's saved locally and will retry.",
+      );
     }
   }
 
@@ -1102,7 +1285,9 @@ export function MeetingDetailContent({
     onReviewActionItems: undefined,
     onViewStatus: focusStatus,
     onRefreshStatus: () =>
-      queryClient.invalidateQueries({ queryKey: meetingKeys.detail(meetingId) }),
+      queryClient.invalidateQueries({
+        queryKey: meetingKeys.detail(meetingId),
+      }),
     onRetryUpload: handleRetryUpload,
     onBackToSeries: () => router.push(`/series/${seriesId}`),
     onContactAdmin: handleContactAdmin,
@@ -1139,20 +1324,25 @@ export function MeetingDetailContent({
 
   const meetingIssues = meeting.issues ?? [];
   const meetingDecisions = meeting.decisions ?? [];
-  const raisedInThisMeeting = meetingIssues;
+  const seriesIssueById = new Map(
+    (seriesIssues ?? []).map((issue) => [issue.id, issue]),
+  );
+  const raisedInThisMeeting = meetingIssues.map(
+    (issue) => seriesIssueById.get(issue.id) ?? issue,
+  );
 
   const allCarriedIssues = (seriesIssues ?? []).filter(
-    (issue) => issue.raised_in_meeting_id !== meetingId
+    (issue) => issue.raised_in_meeting_id !== meetingId,
   );
   const carriedIssues = allCarriedIssues.filter(
-    (issue) => issue.status !== "resolved" && issue.status !== "dropped"
+    (issue) => issue.status !== "resolved" && issue.status !== "dropped",
   );
   // Issues resolved/dropped during this meeting (both carried AND raised here)
   const allSeriesIssues = seriesIssues ?? [];
   const doneThisMeeting = allSeriesIssues.filter(
     (issue) =>
       (issue.status === "resolved" || issue.status === "dropped") &&
-      issue.resolved_in_meeting_id === meetingId
+      issue.resolved_in_meeting_id === meetingId,
   );
 
   const meetingSequence = series?.meetings
@@ -1160,7 +1350,9 @@ export function MeetingDetailContent({
         .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
         .findIndex((m) => m.id === meetingId) + 1
     : null;
-  const liveMeetingInSeries = series?.meetings?.find((m) => m.status === "live");
+  const liveMeetingInSeries = series?.meetings?.find(
+    (m) => m.status === "live",
+  );
   const canManageMeeting =
     participantRole === "owner" || participantRole === "facilitator";
 
@@ -1172,7 +1364,7 @@ export function MeetingDetailContent({
     isMacPlatform(
       (navigator as Navigator & { userAgentData?: { platform?: string } })
         .userAgentData,
-      navigator.userAgent
+      navigator.userAgent,
     );
   const canOfferCompanionRecord = companionKnown && isMacClient;
 
@@ -1180,14 +1372,18 @@ export function MeetingDetailContent({
     presenceUsers.length > 0
       ? presenceUsers
           .map((user) =>
-            user.deviceCount > 1 ? `${user.name} (${user.deviceCount} devices)` : user.name
+            user.deviceCount > 1
+              ? `${user.name} (${user.deviceCount} devices)`
+              : user.name,
           )
           .join(", ")
       : "Waiting for participants";
-  const structuredAiPreview = aiPreview ? normalizeAiNotesPreview(aiPreview) : emptyAiNotes;
+  const structuredAiPreview = aiPreview
+    ? normalizeAiNotesPreview(aiPreview)
+    : emptyAiNotes;
   const structuredAiPreviewCount = Object.values(structuredAiPreview).reduce(
     (total, items) => total + items.length,
-    0
+    0,
   );
 
   // Handlers
@@ -1241,7 +1437,7 @@ export function MeetingDetailContent({
 
   function handleStatusChange(issueId: string, newStatus: IssueStatus) {
     const issue = [...raisedInThisMeeting, ...allSeriesIssues].find(
-      (i) => i.id === issueId
+      (i) => i.id === issueId,
     );
     if (!issue) return;
     updateIssueStatus.mutate({
@@ -1278,18 +1474,24 @@ export function MeetingDetailContent({
     } catch {
       // Upload failed; the recording stays buffered in IndexedDB for recovery.
       setTranscriptionFailure({ kind: "buffered_local" });
-      toast.error("Couldn't upload the recording, it's saved locally and will retry.");
+      toast.error(
+        "Couldn't upload the recording, it's saved locally and will retry.",
+      );
     } finally {
       setSavingRecording(false);
     }
   }
 
   async function handleEndMeeting() {
-    if (!(await confirm({
-      title: "End meeting?",
-      description: "Notes become read-only for everyone once the meeting ends.",
-      confirmLabel: "End meeting",
-    }))) return;
+    if (
+      !(await confirm({
+        title: "End meeting?",
+        description:
+          "Notes become read-only for everyone once the meeting ends.",
+        confirmLabel: "End meeting",
+      }))
+    )
+      return;
     await handleStopRecording();
     await endMeeting.mutateAsync(meetingId);
   }
@@ -1332,7 +1534,7 @@ export function MeetingDetailContent({
 
   function handleAssigneeChange(
     issueId: string,
-    payload: { owner_user_id: string | null; owner_name: string }
+    payload: { owner_user_id: string | null; owner_name: string },
   ) {
     assignIssue.mutate({
       issueId,
@@ -1383,18 +1585,24 @@ export function MeetingDetailContent({
 
   function updateSuggestionDraft(
     suggestionId: string,
-    patch: Partial<Pick<MeetingAiSuggestion, "title" | "owner_name" | "due_date">>
+    patch: Partial<
+      Pick<MeetingAiSuggestion, "title" | "owner_name" | "due_date">
+    >,
   ) {
     setAiSuggestions((current) =>
       current.map((suggestion) =>
-        suggestion.id === suggestionId ? { ...suggestion, ...patch } : suggestion
-      )
+        suggestion.id === suggestionId
+          ? { ...suggestion, ...patch }
+          : suggestion,
+      ),
     );
   }
 
   async function refreshTrackedMeetingData() {
     await Promise.all([
-      queryClient.invalidateQueries({ queryKey: meetingKeys.detail(meetingId) }),
+      queryClient.invalidateQueries({
+        queryKey: meetingKeys.detail(meetingId),
+      }),
       queryClient.invalidateQueries({ queryKey: issueKeys.all }),
       queryClient.invalidateQueries({ queryKey: issueKeys.list(seriesId) }),
       queryClient.invalidateQueries({ queryKey: decisionKeys.all }),
@@ -1413,13 +1621,15 @@ export function MeetingDetailContent({
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
-        setSuggestionsError(payload.error ?? "AI suggestions could not be generated.");
+        setSuggestionsError(
+          payload.error ?? "AI suggestions could not be generated.",
+        );
         return;
       }
       setAiSuggestions(payload.suggestions ?? []);
       // The action items exist now, so the extraction failure no longer holds.
       setTranscriptionFailure((current) =>
-        current?.kind === "extraction_failed" ? null : current
+        current?.kind === "extraction_failed" ? null : current,
       );
     } catch {
       setSuggestionsError("AI suggestions could not be generated.");
@@ -1431,7 +1641,7 @@ export function MeetingDetailContent({
 
   async function handleSuggestionReview(
     suggestion: MeetingAiSuggestion,
-    action: "accept" | "reject"
+    action: "accept" | "reject",
   ) {
     setReviewingSuggestionId(suggestion.id);
     setSuggestionsError(null);
@@ -1448,16 +1658,20 @@ export function MeetingDetailContent({
             owner_name: suggestion.owner_name ?? "",
             due_date: suggestion.due_date ?? null,
           }),
-        }
+        },
       );
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
-        setSuggestionsError(payload.error ?? "AI suggestion could not be reviewed.");
+        setSuggestionsError(
+          payload.error ?? "AI suggestion could not be reviewed.",
+        );
         return;
       }
       const reviewedSuggestion = payload.suggestion as MeetingAiSuggestion;
       setAiSuggestions((current) =>
-        current.map((item) => (item.id === suggestion.id ? reviewedSuggestion : item))
+        current.map((item) =>
+          item.id === suggestion.id ? reviewedSuggestion : item,
+        ),
       );
       if (action === "accept") {
         await refreshTrackedMeetingData();
@@ -1489,11 +1703,15 @@ export function MeetingDetailContent({
                 <h1 className="font-display text-base font-semibold text-ink leading-tight">
                   {series?.name}
                   {meetingSequence && (
-                    <span className="text-ink-3 font-normal"> - M-{meetingSequence}</span>
+                    <span className="text-ink-3 font-normal">
+                      {" "}
+                      - M-{meetingSequence}
+                    </span>
                   )}
                 </h1>
                 <p className="text-xs font-mono text-ink-4">
-                  {formatShortDate(meeting.date)} · {meeting.attendees?.length ?? 0} attendees present
+                  {formatShortDate(meeting.date)} ·{" "}
+                  {meeting.attendees?.length ?? 0} attendees present
                 </p>
                 <p className="text-xs text-ink-3">
                   Active now: {activePresenceLabel}
@@ -1658,7 +1876,9 @@ export function MeetingDetailContent({
               <div aria-live="polite" aria-relevant="additions">
                 <InlineTaskList
                   issues={raisedInThisMeeting}
-                  attendees={meeting.attendees ?? series?.default_attendees ?? []}
+                  attendees={
+                    meeting.attendees ?? series?.default_attendees ?? []
+                  }
                   onStatusChange={handleStatusChange}
                   onTitleChange={handleTitleChange}
                   onAssigneeChange={handleAssigneeChange}
@@ -1687,7 +1907,9 @@ export function MeetingDetailContent({
                     >
                       <span className="text-accent text-xs">&#9670;</span>
                       <span className="flex-1 text-sm text-ink">{d.title}</span>
-                      <span className="text-[10px] text-ink-4 font-medium uppercase tracking-wider">Decision</span>
+                      <span className="text-[10px] text-ink-4 font-medium uppercase tracking-wider">
+                        Decision
+                      </span>
                     </div>
                   ))}
                 </div>
@@ -1703,7 +1925,11 @@ export function MeetingDetailContent({
                   Freeform notes
                 </h3>
                 <span className="text-[10px] text-ink-4">
-                  {updateNotes.isPending ? "Saving…" : updateNotes.isError ? "Save failed" : "Autosaved"}
+                  {updateNotes.isPending
+                    ? "Saving…"
+                    : updateNotes.isError
+                      ? "Save failed"
+                      : "Autosaved"}
                 </span>
               </div>
               <Textarea
@@ -1718,24 +1944,28 @@ export function MeetingDetailContent({
                   Sync status
                 </h3>
                 <div className="flex items-center gap-2">
-                  <span className={cn(
-                    "size-2 rounded-full",
-                    syncStatus === "synced" ? "bg-success" :
-                    syncStatus === "syncing" ? "bg-warn animate-pulse" :
-                    "bg-warn"
-                  )} />
+                  <span
+                    className={cn(
+                      "size-2 rounded-full",
+                      syncStatus === "synced"
+                        ? "bg-success"
+                        : syncStatus === "syncing"
+                          ? "bg-warn animate-pulse"
+                          : "bg-warn",
+                    )}
+                  />
                   <span className="text-xs text-ink-3">
                     {syncStatus === "synced" && "Synced"}
                     {syncStatus === "syncing" && "Syncing..."}
-                    {syncStatus === "offline" && (
-                      pendingCount > 0
+                    {syncStatus === "offline" &&
+                      (pendingCount > 0
                         ? `${pendingCount} item${pendingCount === 1 ? "" : "s"} buffered`
-                        : "Offline"
-                    )}
+                        : "Offline")}
                   </span>
                 </div>
                 <p className="text-[10px] text-ink-4 mt-1.5">
-                  Offline capture buffered locally; auto-syncs when connection returns.
+                  Offline capture buffered locally; auto-syncs when connection
+                  returns.
                 </p>
               </div>
             </div>
@@ -1750,13 +1980,13 @@ export function MeetingDetailContent({
   // =========================================================================
   if (meeting.status === "upcoming") {
     const openIssues = (seriesIssues ?? []).filter(
-      (issue) => issue.status !== "resolved" && issue.status !== "dropped"
+      (issue) => issue.status !== "resolved" && issue.status !== "dropped",
     );
     const agendaDrafts = raisedInThisMeeting.filter(
-      (issue) => issue.source === "calendar_auto_draft"
+      (issue) => issue.source === "calendar_auto_draft",
     );
     const briefIssues = openIssues.filter(
-      (issue) => issue.source !== "calendar_auto_draft"
+      (issue) => issue.source !== "calendar_auto_draft",
     );
 
     return (
@@ -1782,7 +2012,8 @@ export function MeetingDetailContent({
                 {meeting.title}
               </h1>
             </div>
-            <Button variant="accent"
+            <Button
+              variant="accent"
               onClick={handleStartMeeting}
               disabled={startOrJoinMeeting.isPending}
             >
@@ -1792,7 +2023,10 @@ export function MeetingDetailContent({
           </div>
 
           {agendaDrafts.length > 0 && (
-            <section className="mb-6 space-y-3" aria-label="Drafted agenda items">
+            <section
+              className="mb-6 space-y-3"
+              aria-label="Drafted agenda items"
+            >
               <CalendarDraftNotice count={agendaDrafts.length} />
               <InlineTaskList
                 issues={agendaDrafts}
@@ -1815,7 +2049,10 @@ export function MeetingDetailContent({
 
           <div className="mb-8">
             {hasAccess ? (
-              <CarryoverBriefingPanel meetingId={meetingId} issueCount={openIssues.length} />
+              <CarryoverBriefingPanel
+                meetingId={meetingId}
+                issueCount={openIssues.length}
+              />
             ) : openIssues.length > 0 ? (
               <AiUnavailableNotice />
             ) : null}
@@ -1872,12 +2109,22 @@ export function MeetingDetailContent({
   const canGenerateRecap = canManageMeeting && hasAccess;
   const recapPreparing =
     (recorder.state === "stopped" &&
-      (recorder.fastLane.state === "active" || recorder.fastLane.state === "finalizing")) ||
-    (["saving", "saved_pending", "transcribing", "processing_return"] as TranscriptionUiState[]).includes(
-      transcriptionState
-    );
+      (recorder.fastLane.state === "active" ||
+        recorder.fastLane.state === "finalizing")) ||
+    (
+      [
+        "saving",
+        "saved_pending",
+        "transcribing",
+        "processing_return",
+      ] as TranscriptionUiState[]
+    ).includes(transcriptionState);
   const step = canManageMeeting
-    ? recapStep(transcriptionState, generatingSuggestions, recapStreaming || recapPreparing)
+    ? recapStep(
+        transcriptionState,
+        generatingSuggestions,
+        recapStreaming || recapPreparing,
+      )
     : null;
   const progressDetail = recapProgressDetail(
     transcriptionState,
@@ -1885,13 +2132,18 @@ export function MeetingDetailContent({
       state: transcriptionState,
       partsDone: recorder.fastLane.segmentsDone,
       partsTotal: recorder.fastLane.segmentsTotal,
-      elapsedSeconds: runAgeMs != null ? Math.floor(runAgeMs / 1000) : undefined,
+      elapsedSeconds:
+        runAgeMs != null ? Math.floor(runAgeMs / 1000) : undefined,
       startedMinutesAgo: runAgeMs != null ? Math.floor(runAgeMs / 60000) : null,
-    }).details
+    }).details,
   );
   const autoStartRecap =
     autoStartSummary ||
-    (shouldAutoStartRecap({ canGenerate: canGenerateRecap, storedText: storedRecap, hasSource }) &&
+    (shouldAutoStartRecap({
+      canGenerate: canGenerateRecap,
+      storedText: storedRecap,
+      hasSource,
+    }) &&
       !recapPreparing);
 
   const HIDDEN_ON_RECAP: TranscriptionUiState[] = [
@@ -1905,13 +2157,20 @@ export function MeetingDetailContent({
     "transcript_ready",
     "extraction_failed",
   ];
-  const QUIET: TranscriptionUiState[] = ["no_recording", "empty_unknown", "no_speech"];
+  const QUIET: TranscriptionUiState[] = [
+    "no_recording",
+    "empty_unknown",
+    "no_speech",
+  ];
   const showStatus =
     canManageMeeting &&
     !HIDDEN_ON_RECAP.includes(transcriptionState) &&
     !(transcriptionState === "no_recording" && hasAnyNotes);
   const alertShown = showStatus && !QUIET.includes(transcriptionState);
-  const logCount = raisedInThisMeeting.length + doneThisMeeting.length + meetingDecisions.length;
+  const logCount =
+    raisedInThisMeeting.length +
+    doneThisMeeting.length +
+    meetingDecisions.length;
   const sendEmphasis =
     !alertShown &&
     ((aiSuggestions.length > 0 && pending.length === 0) ||
@@ -1922,7 +2181,11 @@ export function MeetingDetailContent({
   const findAgain = canGenerateRecap && aiSuggestions.length > 0;
 
   const speakers = hasDiarizedTranscript
-    ? [...new Set((meeting.transcript_segments ?? []).map((segment) => segment.speaker))]
+    ? [
+        ...new Set(
+          (meeting.transcript_segments ?? []).map((segment) => segment.speaker),
+        ),
+      ]
     : [];
   const speakerLabel = `${speakers.length} ${speakers.length === 1 ? "speaker" : "speakers"}`;
   const transcriptMeta =
@@ -1932,128 +2195,138 @@ export function MeetingDetailContent({
         ? `Me / Them · ${speakerLabel}`
         : speakerLabel;
   const showTranscript =
-    hasDiarizedTranscript || !!transcript.trim() || (canManageMeeting && !meeting.audio_file_path);
+    hasDiarizedTranscript ||
+    !!transcript.trim() ||
+    (canManageMeeting && !meeting.audio_file_path);
 
   const renderSuggestion = (suggestion: MeetingAiSuggestion, i: number) => {
     const isReviewed = suggestion.status !== "pending";
     const relatedHref =
       suggestion.related_issue_number != null
-        ? issueHrefByNumber.get(suggestion.related_issue_number) ?? null
+        ? (issueHrefByNumber.get(suggestion.related_issue_number) ?? null)
         : null;
     // status_update / duplicate_warning act on an existing OIL
     // item, so their fields are read-only; only a new_item is editable.
     const isContextual = suggestion.type !== "new_item";
     return (
-        <article
-          key={suggestion.id}
-          data-suggestion-card
-          className="materialize py-4"
-          style={{ animationDelay: `${Math.min(i, 8) * 40}ms` }}
-        >
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <div className="flex flex-wrap items-center gap-2">
-              <SuggestionContextBadge
-                type={suggestion.type}
-                relatedIssueNumber={suggestion.related_issue_number}
-                suggestedStatus={suggestion.suggested_status}
-                relatedHref={relatedHref}
-              />
-              <span className="text-xs font-semibold uppercase tracking-wide text-ink-3">
-                {suggestionCategoryLabel(suggestion.category)}
-              </span>
-            </div>
-            <span className="rounded-full bg-paper-2 px-2 py-1 text-[11px] font-mono text-ink-3">
-              {Math.round(suggestion.confidence * 100)}%
+      <article
+        key={suggestion.id}
+        data-suggestion-card
+        className="materialize py-4"
+        style={{ animationDelay: `${Math.min(i, 8) * 40}ms` }}
+      >
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <SuggestionContextBadge
+              type={suggestion.type}
+              relatedIssueNumber={suggestion.related_issue_number}
+              suggestedStatus={suggestion.suggested_status}
+              relatedHref={relatedHref}
+            />
+            <span className="text-xs font-semibold uppercase tracking-wide text-ink-3">
+              {suggestionCategoryLabel(suggestion.category)}
             </span>
           </div>
+          <span className="rounded-full bg-paper-2 px-2 py-1 text-[11px] font-mono text-ink-3">
+            {Math.round(suggestion.confidence * 100)}%
+          </span>
+        </div>
 
-          {isContextual ? (
-            <p className="text-sm leading-6 text-ink-2">{suggestion.title}</p>
-          ) : (
-            <div className="grid grid-cols-2 gap-3 @lg/log:grid-cols-[minmax(0,1fr)_10rem_9rem]">
-              <input
-                aria-label="Suggestion title"
-                value={suggestion.title}
-                disabled={isReviewed}
-                onChange={(event) =>
-                  updateSuggestionDraft(suggestion.id, { title: event.target.value })
-                }
-                className="col-span-2 min-w-0 rounded-md border border-rule bg-card px-3 py-2 text-sm text-ink-2 disabled:bg-paper-2 disabled:text-ink-3 @lg/log:col-span-1"
-              />
-              <input
-                aria-label="Suggestion owner"
-                value={suggestion.owner_name ?? ""}
-                disabled={isReviewed}
-                onChange={(event) =>
-                  updateSuggestionDraft(suggestion.id, { owner_name: event.target.value })
-                }
-                placeholder="Owner"
-                className="min-w-0 rounded-md border border-rule bg-card px-3 py-2 text-sm text-ink disabled:bg-paper-2 disabled:text-ink-3"
-              />
-              <input
-                aria-label="Suggestion due date"
-                type="date"
-                value={dateInputValue(suggestion.due_date)}
-                disabled={isReviewed}
-                onChange={(event) =>
-                  updateSuggestionDraft(suggestion.id, {
-                    due_date: event.target.value || null,
-                  })
-                }
-                className="min-w-0 rounded-md border border-rule bg-card px-3 py-2 text-sm text-ink disabled:bg-paper-2 disabled:text-ink-3"
-              />
+        {isContextual ? (
+          <p className="text-sm leading-6 text-ink-2">{suggestion.title}</p>
+        ) : (
+          <div className="grid grid-cols-2 gap-3 @lg/log:grid-cols-[minmax(0,1fr)_10rem_9rem]">
+            <input
+              aria-label="Suggestion title"
+              value={suggestion.title}
+              disabled={isReviewed}
+              onChange={(event) =>
+                updateSuggestionDraft(suggestion.id, {
+                  title: event.target.value,
+                })
+              }
+              className="col-span-2 min-w-0 rounded-md border border-rule bg-card px-3 py-2 text-sm text-ink-2 disabled:bg-paper-2 disabled:text-ink-3 @lg/log:col-span-1"
+            />
+            <input
+              aria-label="Suggestion owner"
+              value={suggestion.owner_name ?? ""}
+              disabled={isReviewed}
+              onChange={(event) =>
+                updateSuggestionDraft(suggestion.id, {
+                  owner_name: event.target.value,
+                })
+              }
+              placeholder="Owner"
+              className="min-w-0 rounded-md border border-rule bg-card px-3 py-2 text-sm text-ink disabled:bg-paper-2 disabled:text-ink-3"
+            />
+            <input
+              aria-label="Suggestion due date"
+              type="date"
+              value={dateInputValue(suggestion.due_date)}
+              disabled={isReviewed}
+              onChange={(event) =>
+                updateSuggestionDraft(suggestion.id, {
+                  due_date: event.target.value || null,
+                })
+              }
+              className="min-w-0 rounded-md border border-rule bg-card px-3 py-2 text-sm text-ink disabled:bg-paper-2 disabled:text-ink-3"
+            />
+          </div>
+        )}
+
+        {suggestion.source_excerpt && (
+          <p className="mt-3 rounded-md bg-paper-2 px-3 py-2 text-xs leading-5 text-ink-3">
+            {suggestion.source_excerpt}
+          </p>
+        )}
+
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+          <p className="text-xs text-ink-3">
+            {suggestion.status === "accepted" &&
+              (suggestion.type === "status_update"
+                ? "Applied to the linked item."
+                : "Accepted into tracked work.")}
+            {suggestion.status === "rejected" && "Dismissed."}
+            {suggestion.status === "pending" &&
+              (suggestion.type === "duplicate_warning"
+                ? "Review to dismiss, or open the existing item."
+                : "Pending review.")}
+          </p>
+          {suggestion.status === "pending" && (
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => handleSuggestionReview(suggestion, "reject")}
+                disabled={reviewingSuggestionId === suggestion.id}
+              >
+                <X className="size-3.5" />
+                Reject suggestion
+              </Button>
+              {suggestion.type !== "duplicate_warning" && (
+                <Button
+                  variant="accent"
+                  type="button"
+                  size="sm"
+                  onClick={() => handleSuggestionReview(suggestion, "accept")}
+                  disabled={
+                    reviewingSuggestionId === suggestion.id ||
+                    !suggestion.title.trim()
+                  }
+                >
+                  {reviewingSuggestionId === suggestion.id ? (
+                    <Loader2 className="size-3.5 animate-spin" />
+                  ) : (
+                    <Check className="size-3.5" />
+                  )}
+                  Accept suggestion
+                </Button>
+              )}
             </div>
           )}
-
-          {suggestion.source_excerpt && (
-            <p className="mt-3 rounded-md bg-paper-2 px-3 py-2 text-xs leading-5 text-ink-3">
-              {suggestion.source_excerpt}
-            </p>
-          )}
-
-          <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-            <p className="text-xs text-ink-3">
-              {suggestion.status === "accepted" &&
-                (suggestion.type === "status_update"
-                  ? "Applied to the linked item."
-                  : "Accepted into tracked work.")}
-              {suggestion.status === "rejected" && "Dismissed."}
-              {suggestion.status === "pending" &&
-                (suggestion.type === "duplicate_warning"
-                  ? "Review to dismiss, or open the existing item."
-                  : "Pending review.")}
-            </p>
-            {suggestion.status === "pending" && (
-              <div className="flex items-center gap-2">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => handleSuggestionReview(suggestion, "reject")}
-                  disabled={reviewingSuggestionId === suggestion.id}
-                >
-                  <X className="size-3.5" />
-                  Reject suggestion
-                </Button>
-                {suggestion.type !== "duplicate_warning" && (
-                  <Button variant="accent"
-                    type="button"
-                    size="sm"
-                    onClick={() => handleSuggestionReview(suggestion, "accept")}
-                    disabled={reviewingSuggestionId === suggestion.id || !suggestion.title.trim()}
-                  >
-                    {reviewingSuggestionId === suggestion.id ? (
-                      <Loader2 className="size-3.5 animate-spin" />
-                    ) : (
-                      <Check className="size-3.5" />
-                    )}
-                    Accept suggestion
-                  </Button>
-                )}
-              </div>
-            )}
-          </div>
-        </article>
+        </div>
+      </article>
     );
   };
 
@@ -2070,24 +2343,39 @@ export function MeetingDetailContent({
   );
 
   const pendingGroup =
-    canManageMeeting && hasAccess && transcriptionState !== "extraction_failed" && pending.length > 0 ? (
+    canManageMeeting &&
+    hasAccess &&
+    transcriptionState !== "extraction_failed" &&
+    pending.length > 0 ? (
       <motion.div
         key="to-review"
         exit={{ height: 0, opacity: 0 }}
-        transition={{ duration: reducedMotion ? 0 : 0.32, ease: [0.2, 0, 0, 1] }}
+        transition={{
+          duration: reducedMotion ? 0 : 0.32,
+          ease: [0.2, 0, 0, 1],
+        }}
         className="overflow-hidden"
       >
         <LogGroupLabel
           label="To review"
           count={pending.length}
           tone="accent"
-          aside={transcript.trim() ? "Suggested from the transcript" : "Suggested from your notes"}
+          aside={
+            transcript.trim()
+              ? "Suggested from the transcript"
+              : "Suggested from your notes"
+          }
         />
-        <div role="region" aria-label="AI suggestions" className="divide-y divide-rule">
+        <div
+          role="region"
+          aria-label="AI suggestions"
+          className="divide-y divide-rule"
+        >
           {pending.map(renderSuggestion)}
           {showReviewed && reviewed.map(renderSuggestion)}
         </div>
-        {reviewed.length > 0 && reviewedToggle(`Show ${reviewed.length} reviewed`)}
+        {reviewed.length > 0 &&
+          reviewedToggle(`Show ${reviewed.length} reviewed`)}
       </motion.div>
     ) : null;
 
@@ -2126,11 +2414,16 @@ export function MeetingDetailContent({
       reviewStatus = (
         <div>
           <p className="materialize text-sm text-ink-3">
-            Review complete. {accepted} added to the log, {reviewed.length - accepted} dismissed.{" "}
+            Review complete. {accepted} added to the log,{" "}
+            {reviewed.length - accepted} dismissed.{" "}
             {reviewedToggle("Show reviewed")}
           </p>
           {showReviewed && (
-            <div role="region" aria-label="AI suggestions" className="mt-2 divide-y divide-rule">
+            <div
+              role="region"
+              aria-label="AI suggestions"
+              className="mt-2 divide-y divide-rule"
+            >
               {reviewed.map(renderSuggestion)}
             </div>
           )}
@@ -2157,264 +2450,314 @@ export function MeetingDetailContent({
   return (
     <div className="min-h-full bg-paper">
       <div className="@container/recap">
-      <div className="recap-shell mx-auto max-w-3xl px-4 py-8 sm:px-6 lg:px-8">
-        <div className="mb-8 flex items-center gap-3">
-          <Link
-            href={`/series/${seriesId}`}
-            className="text-ink-3 transition-colors hover:text-ink"
-            aria-label="Back to series"
-          >
-            <ArrowLeft className="size-5" />
-          </Link>
-          <p className="flex-1 truncate font-mono text-[11px] uppercase tracking-[0.18em] text-ink-4">
-            {series?.name}
-            {series?.name && " / "}
-            {formatShortDate(meeting.date)}
-          </p>
-          <div className="flex items-center gap-2">
-            <SendMeetingNotesButton
-              meetingId={meetingId}
-              attendees={meeting.attendees ?? series?.default_attendees ?? []}
-              emphasis={sendEmphasis}
-            />
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" aria-label="More actions">
-                  <MoreHorizontal className="size-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                {canManageMeeting && <RemindOwnersButton seriesId={seriesId} as="menuitem" />}
-                <ShareButton resource_type="meeting" resource_id={meetingId} as="menuitem" />
-                {(regen || findAgain || canDownloadAudio) && <DropdownMenuSeparator />}
-                {regen && (
-                  <DropdownMenuItem onSelect={() => setRegenerateNonce((n) => n + 1)}>
-                    Regenerate recap
-                  </DropdownMenuItem>
-                )}
-                {findAgain && (
-                  <DropdownMenuItem onSelect={() => void generateSuggestions()}>
-                    Find action items again
-                  </DropdownMenuItem>
-                )}
-                {canDownloadAudio && (
-                  <DropdownMenuItem onSelect={() => void handleDownloadAudio()}>
-                    Download audio
-                  </DropdownMenuItem>
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </div>
-
-        <header className="mb-8">
-          <p className="font-mono text-[11px] font-medium uppercase tracking-[0.18em] text-accent">
-            Meeting recap
-          </p>
-          <h1 className="mt-2 font-display text-4xl font-semibold leading-[1.1] tracking-tight text-ink">
-            {meeting.title}
-          </h1>
-          <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-ink-3">
-            <span className="font-mono text-xs tabular-nums text-ink-4">
-              {formatMeetingDate(meeting.date)}
-            </span>
-            {durationMinutes && (
-              <>
-                <span className="text-ink-4" aria-hidden="true">·</span>
-                <span className="font-mono text-xs tabular-nums text-ink-4">
-                  {durationMinutes} min
-                </span>
-              </>
-            )}
-            {attendees.length > 0 && (
-              <>
-                <span className="text-ink-4" aria-hidden="true">·</span>
-                <span className="flex -space-x-1.5">
-                  {attendees.slice(0, 5).map((name) => (
-                    <AttendeeAvatar key={name} name={name} />
-                  ))}
-                  {attendees.length > 5 && (
-                    <span className="inline-flex size-7 items-center justify-center rounded-full bg-paper-2 text-[10px] font-medium text-ink-3 ring-2 ring-paper">
-                      +{attendees.length - 5}
-                    </span>
+        <div className="recap-shell mx-auto max-w-3xl px-4 py-8 sm:px-6 lg:px-8">
+          <div className="mb-8 flex items-center gap-3">
+            <Link
+              href={`/series/${seriesId}`}
+              className="text-ink-3 transition-colors hover:text-ink"
+              aria-label="Back to series"
+            >
+              <ArrowLeft className="size-5" />
+            </Link>
+            <p className="flex-1 truncate font-mono text-[11px] uppercase tracking-[0.18em] text-ink-4">
+              {series?.name}
+              {series?.name && " / "}
+              {formatShortDate(meeting.date)}
+            </p>
+            <div className="flex items-center gap-2">
+              <SendMeetingNotesButton
+                meetingId={meetingId}
+                attendees={meeting.attendees ?? series?.default_attendees ?? []}
+                emphasis={sendEmphasis}
+              />
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" aria-label="More actions">
+                    <MoreHorizontal className="size-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  {canManageMeeting && (
+                    <RemindOwnersButton seriesId={seriesId} as="menuitem" />
                   )}
-                </span>
-              </>
-            )}
+                  <ShareButton
+                    resource_type="meeting"
+                    resource_id={meetingId}
+                    as="menuitem"
+                  />
+                  {(regen || findAgain || canDownloadAudio) && (
+                    <DropdownMenuSeparator />
+                  )}
+                  {regen && (
+                    <DropdownMenuItem
+                      onSelect={() => setRegenerateNonce((n) => n + 1)}
+                    >
+                      Regenerate recap
+                    </DropdownMenuItem>
+                  )}
+                  {findAgain && (
+                    <DropdownMenuItem
+                      onSelect={() => void generateSuggestions()}
+                    >
+                      Find action items again
+                    </DropdownMenuItem>
+                  )}
+                  {canDownloadAudio && (
+                    <DropdownMenuItem
+                      onSelect={() => void handleDownloadAudio()}
+                    >
+                      Download audio
+                    </DropdownMenuItem>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
           </div>
-        </header>
 
-        <RecapProgress active={step} detail={step === "transcribe" ? progressDetail : undefined} />
+          <header className="mb-8">
+            <p className="font-mono text-[11px] font-medium uppercase tracking-[0.18em] text-accent">
+              Meeting recap
+            </p>
+            <h1 className="mt-2 font-display text-4xl font-semibold leading-[1.1] tracking-tight text-ink">
+              {meeting.title}
+            </h1>
+            <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-ink-3">
+              <span className="font-mono text-xs tabular-nums text-ink-4">
+                {formatMeetingDate(meeting.date)}
+              </span>
+              {durationMinutes && (
+                <>
+                  <span className="text-ink-4" aria-hidden="true">
+                    ·
+                  </span>
+                  <span className="font-mono text-xs tabular-nums text-ink-4">
+                    {durationMinutes} min
+                  </span>
+                </>
+              )}
+              {attendees.length > 0 && (
+                <>
+                  <span className="text-ink-4" aria-hidden="true">
+                    ·
+                  </span>
+                  <span className="flex -space-x-1.5">
+                    {attendees.slice(0, 5).map((name) => (
+                      <AttendeeAvatar key={name} name={name} />
+                    ))}
+                    {attendees.length > 5 && (
+                      <span className="inline-flex size-7 items-center justify-center rounded-full bg-paper-2 text-[10px] font-medium text-ink-3 ring-2 ring-paper">
+                        +{attendees.length - 5}
+                      </span>
+                    )}
+                  </span>
+                </>
+              )}
+            </div>
+          </header>
 
-        {showStatus && (
-          <div className="recap-status">
-            <TranscriptionStatus
-              {...transcriptionStatusProps}
-              tone={QUIET.includes(transcriptionState) ? "quiet" : "card"}
-            />
-          </div>
-        )}
-
-        <div className="recap-grid">
-          <FlowingSummary
-            meetingId={meetingId}
-            canGenerate={canGenerateRecap}
-            initialText={storedRecap}
-            generatedAt={meeting.recap_generated_at}
-            model={meeting.recap_model}
-            autoStart={autoStartRecap}
-            preparing={recapPreparing}
-            regenerateNonce={regenerateNonce}
-            onStreamingChange={setRecapStreaming}
-            onRecapWritten={() =>
-              void queryClient.invalidateQueries({ queryKey: meetingKeys.detail(meetingId) })
-            }
+          <RecapProgress
+            active={step}
+            detail={step === "transcribe" ? progressDetail : undefined}
           />
 
-          <section aria-label="Tracked in the log" className="recap-rail @container/log">
-            <SectionHeading title="Tracked in the log" flashKey={loopClosedKey || undefined} />
-            <div className="space-y-6">
-              {canManageMeeting && suggestionsError && (
-                <div className="rounded-md border border-warn/30 bg-warn/10 px-3 py-2 text-sm text-ink">
-                  {suggestionsError}
-                </div>
-              )}
-              <AnimatePresence initial={false}>{pendingGroup}</AnimatePresence>
-              {reviewStatus}
+          {showStatus && (
+            <div className="recap-status">
+              <TranscriptionStatus
+                {...transcriptionStatusProps}
+                tone={QUIET.includes(transcriptionState) ? "quiet" : "card"}
+              />
+            </div>
+          )}
 
-              <section aria-label="Items raised">
-                <LogGroupLabel label="Items raised" count={raisedInThisMeeting.length} />
-                <InlineTaskList
-                  issues={raisedInThisMeeting}
-                  attendees={meeting.attendees ?? series?.default_attendees ?? []}
-                  onStatusChange={handleStatusChange}
-                  onTitleChange={handleTitleChange}
-                  onAssigneeChange={handleAssigneeChange}
-                  onAddItem={handleInlineAdd}
-                  emptyText={null}
-                />
-              </section>
+          <div className="recap-grid">
+            <FlowingSummary
+              meetingId={meetingId}
+              canGenerate={canGenerateRecap}
+              initialText={storedRecap}
+              generatedAt={meeting.recap_generated_at}
+              model={meeting.recap_model}
+              autoStart={autoStartRecap}
+              preparing={recapPreparing}
+              regenerateNonce={regenerateNonce}
+              onStreamingChange={setRecapStreaming}
+              onRecapWritten={() =>
+                void queryClient.invalidateQueries({
+                  queryKey: meetingKeys.detail(meetingId),
+                })
+              }
+            />
 
-              {doneThisMeeting.length > 0 && (
-                <section aria-label="Resolved this meeting">
-                  <LogGroupLabel label="Resolved this meeting" count={doneThisMeeting.length} />
+            <section
+              aria-label="Tracked in the log"
+              className="recap-rail @container/log"
+            >
+              <SectionHeading
+                title="Tracked in the log"
+                flashKey={loopClosedKey || undefined}
+              />
+              <div className="space-y-6">
+                {canManageMeeting && suggestionsError && (
+                  <div className="rounded-md border border-warn/30 bg-warn/10 px-3 py-2 text-sm text-ink">
+                    {suggestionsError}
+                  </div>
+                )}
+                <AnimatePresence initial={false}>
+                  {pendingGroup}
+                </AnimatePresence>
+                {reviewStatus}
+
+                <section aria-label="Items raised">
+                  <LogGroupLabel
+                    label="Items raised"
+                    count={raisedInThisMeeting.length}
+                  />
                   <InlineTaskList
-                    issues={doneThisMeeting}
-                    attendees={meeting.attendees ?? series?.default_attendees ?? []}
+                    issues={raisedInThisMeeting}
+                    attendees={
+                      meeting.attendees ?? series?.default_attendees ?? []
+                    }
                     onStatusChange={handleStatusChange}
                     onTitleChange={handleTitleChange}
                     onAssigneeChange={handleAssigneeChange}
+                    onAddItem={handleInlineAdd}
+                    emptyText={null}
                   />
                 </section>
-              )}
 
-              {meetingDecisions.length > 0 && (
-                <section aria-label="Decisions">
-                  <LogGroupLabel label="Decisions" count={meetingDecisions.length} />
-                  <div className="space-y-3">
-                    {meetingDecisions.map((decision) => (
-                      <DecisionCard key={decision.id} decision={decision} />
-                    ))}
-                  </div>
-                </section>
-              )}
-            </div>
-          </section>
+                {doneThisMeeting.length > 0 && (
+                  <section aria-label="Resolved this meeting">
+                    <LogGroupLabel
+                      label="Resolved this meeting"
+                      count={doneThisMeeting.length}
+                    />
+                    <InlineTaskList
+                      issues={doneThisMeeting}
+                      attendees={
+                        meeting.attendees ?? series?.default_attendees ?? []
+                      }
+                      onStatusChange={handleStatusChange}
+                      onTitleChange={handleTitleChange}
+                      onAssigneeChange={handleAssigneeChange}
+                    />
+                  </section>
+                )}
 
-          {(canManageMeeting || hasAnyNotes) && (
-            <section aria-label="Notes">
-              <div className="mb-4 flex items-baseline gap-3">
-                <h2
-                  className="font-display text-xl font-semibold text-ink"
-                  title={
-                    meeting.ai_notes_generated_at
-                      ? `AI-enhanced with ${meeting.ai_notes_model ?? "configured model"}`
-                      : undefined
-                  }
-                >
-                  Notes
-                </h2>
-                <div className="ml-1 flex-1 self-center border-t border-rule" />
-                {canManageMeeting && hasAccess && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={handleEnhanceNotes}
-                    disabled={enhancingNotes || (!notes.trim() && !transcript.trim())}
-                  >
-                    {enhancingNotes ? (
-                      <Loader2 className="size-3.5 animate-spin" />
-                    ) : (
-                      <Sparkles className="size-3.5" />
-                    )}
-                    Enhance notes
-                  </Button>
+                {meetingDecisions.length > 0 && (
+                  <section aria-label="Decisions">
+                    <LogGroupLabel
+                      label="Decisions"
+                      count={meetingDecisions.length}
+                    />
+                    <div className="space-y-3">
+                      {meetingDecisions.map((decision) => (
+                        <DecisionCard key={decision.id} decision={decision} />
+                      ))}
+                    </div>
+                  </section>
                 )}
               </div>
-              {aiError && (
-                <div className="mb-3 rounded-md border border-warn/30 bg-warn/10 px-3 py-2 text-sm text-ink">
-                  {aiError}
-                </div>
-              )}
-              <MeetingNotesSurface
-                webNotes={notes}
-                companionNotes={companionNotes}
-                canEdit={canManageMeeting}
-                onChange={handleNotesChange}
-                textareaRef={notesAreaRef}
-              />
             </section>
-          )}
 
-          {showTranscript && (
-            <section>
-              <button
-                type="button"
-                onClick={() => setTranscriptOpen((open) => !open)}
-                className="flex w-full items-baseline gap-3 text-left"
-                aria-expanded={transcriptOpen}
-              >
-                <span className="font-display text-xl font-semibold text-ink">Transcript</span>
-                {transcriptMeta && (
-                  <span className="font-mono text-[11px] text-ink-4">{transcriptMeta}</span>
-                )}
-                <span className="flex-1 self-center border-t border-rule" />
-                <ChevronDown
-                  className={`size-4 shrink-0 self-center text-ink-3 transition-transform ${transcriptOpen ? "rotate-180" : ""}`}
-                />
-              </button>
-              {transcriptOpen &&
-                (hasDiarizedTranscript ? (
-                  <div className="mt-3">
-                    <DiarizedTranscript
-                      segments={meeting?.transcript_segments ?? []}
-                      speakerMap={meeting.speaker_map ?? undefined}
-                      canEdit={canManageMeeting}
-                      onRenameSpeaker={patchSpeaker}
-                    />
+            {(canManageMeeting || hasAnyNotes) && (
+              <section aria-label="Notes">
+                <div className="mb-4 flex items-baseline gap-3">
+                  <h2
+                    className="font-display text-xl font-semibold text-ink"
+                    title={
+                      meeting.ai_notes_generated_at
+                        ? `AI-enhanced with ${meeting.ai_notes_model ?? "configured model"}`
+                        : undefined
+                    }
+                  >
+                    Notes
+                  </h2>
+                  <div className="ml-1 flex-1 self-center border-t border-rule" />
+                  {canManageMeeting && hasAccess && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleEnhanceNotes}
+                      disabled={
+                        enhancingNotes || (!notes.trim() && !transcript.trim())
+                      }
+                    >
+                      {enhancingNotes ? (
+                        <Loader2 className="size-3.5 animate-spin" />
+                      ) : (
+                        <Sparkles className="size-3.5" />
+                      )}
+                      Enhance notes
+                    </Button>
+                  )}
+                </div>
+                {aiError && (
+                  <div className="mb-3 rounded-md border border-warn/30 bg-warn/10 px-3 py-2 text-sm text-ink">
+                    {aiError}
                   </div>
-                ) : (
-                  <>
-                    {canManageMeeting && !transcript.trim() && (
-                      <p className="mb-2 mt-3 text-xs text-ink-4">
-                        Paste a transcript to get a recap and action items.
-                      </p>
-                    )}
-                    <Textarea
-                      ref={transcriptAreaRef}
-                      value={transcript}
-                      onChange={(e) => handleTranscriptChange(e.target.value)}
-                      readOnly={!canManageMeeting}
-                      placeholder="Paste transcript..."
-                      className="mt-3 min-h-[160px] font-sans text-sm"
-                    />
-                  </>
-                ))}
-            </section>
-          )}
+                )}
+                <MeetingNotesSurface
+                  webNotes={notes}
+                  companionNotes={companionNotes}
+                  canEdit={canManageMeeting}
+                  onChange={handleNotesChange}
+                  textareaRef={notesAreaRef}
+                />
+              </section>
+            )}
+
+            {showTranscript && (
+              <section>
+                <button
+                  type="button"
+                  onClick={() => setTranscriptOpen((open) => !open)}
+                  className="flex w-full items-baseline gap-3 text-left"
+                  aria-expanded={transcriptOpen}
+                >
+                  <span className="font-display text-xl font-semibold text-ink">
+                    Transcript
+                  </span>
+                  {transcriptMeta && (
+                    <span className="font-mono text-[11px] text-ink-4">
+                      {transcriptMeta}
+                    </span>
+                  )}
+                  <span className="flex-1 self-center border-t border-rule" />
+                  <ChevronDown
+                    className={`size-4 shrink-0 self-center text-ink-3 transition-transform ${transcriptOpen ? "rotate-180" : ""}`}
+                  />
+                </button>
+                {transcriptOpen &&
+                  (hasDiarizedTranscript ? (
+                    <div className="mt-3">
+                      <DiarizedTranscript
+                        segments={meeting?.transcript_segments ?? []}
+                        speakerMap={meeting.speaker_map ?? undefined}
+                        canEdit={canManageMeeting}
+                        onRenameSpeaker={patchSpeaker}
+                      />
+                    </div>
+                  ) : (
+                    <>
+                      {canManageMeeting && !transcript.trim() && (
+                        <p className="mb-2 mt-3 text-xs text-ink-4">
+                          Paste a transcript to get a recap and action items.
+                        </p>
+                      )}
+                      <Textarea
+                        ref={transcriptAreaRef}
+                        value={transcript}
+                        onChange={(e) => handleTranscriptChange(e.target.value)}
+                        readOnly={!canManageMeeting}
+                        placeholder="Paste transcript..."
+                        className="mt-3 min-h-[160px] font-sans text-sm"
+                      />
+                    </>
+                  ))}
+              </section>
+            )}
+          </div>
         </div>
-      </div>
       </div>
       {aiPreview && (
         <div className="fixed inset-0 z-[90] bg-ink/25 px-4 py-6 backdrop-blur-sm sm:px-6">
@@ -2433,7 +2776,8 @@ export function MeetingDetailContent({
                   Review before applying
                 </h3>
                 <p className="mt-1 text-sm text-ink-3">
-                  Your raw notes stay preserved. Apply only when the generated record looks right.
+                  Your raw notes stay preserved. Apply only when the generated
+                  record looks right.
                 </p>
               </div>
               <button
@@ -2453,7 +2797,8 @@ export function MeetingDetailContent({
                 </div>
                 <pre className="h-full overflow-auto whitespace-pre-wrap px-5 py-4 text-sm leading-6 text-ink-2">
                   {composeMeetingNotes({
-                    raw_notes_markdown: meeting.raw_notes_markdown || notes || null,
+                    raw_notes_markdown:
+                      meeting.raw_notes_markdown || notes || null,
                     notes_markdown: meeting.notes_markdown,
                     companion_notes_markdown: meeting.companion_notes_markdown,
                   }) || "No raw notes captured."}
@@ -2462,9 +2807,12 @@ export function MeetingDetailContent({
               <div className="min-h-0 bg-paper-2/40">
                 <div className="flex items-center justify-between gap-3 border-b border-rule px-5 py-3">
                   <div>
-                    <h4 className="text-sm font-semibold text-ink">Structured record</h4>
+                    <h4 className="text-sm font-semibold text-ink">
+                      Structured record
+                    </h4>
                     <p className="mt-0.5 text-xs text-ink-4">
-                      {structuredAiPreviewCount} suggested {structuredAiPreviewCount === 1 ? "entry" : "entries"}
+                      {structuredAiPreviewCount} suggested{" "}
+                      {structuredAiPreviewCount === 1 ? "entry" : "entries"}
                     </p>
                   </div>
                   <span className="rounded-full bg-accent-soft px-2.5 py-1 text-[11px] font-medium text-accent">
@@ -2475,7 +2823,9 @@ export function MeetingDetailContent({
                   <div className="space-y-3">
                     {structuredAiPreviewCount === 0 && (
                       <div className="rounded-lg border border-dashed border-rule bg-card px-4 py-8 text-center">
-                        <p className="text-sm font-medium text-ink">No structured notes generated.</p>
+                        <p className="text-sm font-medium text-ink">
+                          No structured notes generated.
+                        </p>
                         <p className="mt-1 text-xs text-ink-4">
                           Add more raw notes, then try enhancing again.
                         </p>
@@ -2536,7 +2886,8 @@ export function MeetingDetailContent({
                 >
                   Cancel
                 </Button>
-                <Button variant="accent"
+                <Button
+                  variant="accent"
                   type="button"
                   onClick={handleApplyAiNotes}
                   disabled={applyAiNotes.isPending}
