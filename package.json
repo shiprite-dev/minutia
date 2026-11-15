@@ -91,6 +91,7 @@
     "test:calendar-draft": "node --test scripts/verify-calendar-draft.test.mjs",
     "test:errors": "node --test scripts/verify-humanize-error.test.mjs",
     "test:fast-lane": "node scripts/verify-fast-lane.test.mjs",
+    "test:finishing": "node --test scripts/verify-finishing.test.mjs",
     "test:optimistic": "node --test scripts/verify-optimistic.test.mjs",
     "test:summary-flow": "node --test scripts/verify-summary-flow.test.mjs",
     "eval:recap-structure": "node scripts/eval-recap-structure.mjs",
