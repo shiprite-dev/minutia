@@ -7,7 +7,7 @@ import {
 } from "@playwright/test";
 import { waitForApp } from "./seed-data";
 
-test.describe.configure({ mode: "default" });
+test.describe.configure({ mode: "serial" });
 
 const SUPABASE_URL =
   process.env.NEXT_PUBLIC_SUPABASE_URL ?? "http://127.0.0.1:54321";
@@ -86,12 +86,48 @@ function companion(request: APIRequestContext, token: string) {
   };
 }
 
-async function setLastSeen(request: APIRequestContext, value: string | null) {
+async function setPresence(
+  request: APIRequestContext,
+  presence: { checkin: string | null; legacy?: string | null },
+) {
   await rest(request, `profiles?id=eq.${TEST_USER_ID}`, {
     method: "PATCH",
     headers: serviceHeaders("return=minimal"),
-    data: { companion_last_seen_at: value },
+    data: {
+      companion_checkin_at: presence.checkin,
+      companion_last_seen_at: presence.legacy ?? presence.checkin,
+    },
   });
+}
+
+async function setMeeting(
+  request: APIRequestContext,
+  meetingId: string,
+  data: Record<string, unknown>,
+) {
+  await rest(request, `meetings?id=eq.${meetingId}`, {
+    method: "PATCH",
+    headers: serviceHeaders("return=minimal"),
+    data,
+  });
+}
+
+async function rpc(
+  request: APIRequestContext,
+  token: string,
+  name: string,
+  data: Record<string, unknown>,
+) {
+  const response = await request.post(`${SUPABASE_URL}/rest/v1/rpc/${name}`, {
+    headers: {
+      apikey: ANON_KEY,
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    data,
+  });
+  expect(response.ok(), `${name} ${response.status()}`).toBeTruthy();
+  return response.json();
 }
 
 async function createSeries(
@@ -129,7 +165,7 @@ async function createSeries(
 async function readMeeting(request: APIRequestContext, meetingId: string) {
   const rows = await rest(
     request,
-    `meetings?id=eq.${meetingId}&select=status,record_requested_at,record_requested_by,recording_user_id,recording_device_name,recording_started_at,recording_failed_reason`,
+    `meetings?id=eq.${meetingId}&select=status,record_requested_at,record_requested_by,recording_user_id,recording_device_name,recording_started_at,recording_seen_at,recording_failed_reason`,
   );
   return rows[0] as Record<string, string | null>;
 }
@@ -152,7 +188,7 @@ async function asMacBrowser(page: Page) {
 }
 
 async function cleanup(request: APIRequestContext, seriesId: string) {
-  await setLastSeen(request, null);
+  await setPresence(request, { checkin: null });
   await rest(request, `meeting_series?id=eq.${seriesId}`, {
     method: "DELETE",
     headers: serviceHeaders("return=minimal"),
@@ -235,6 +271,105 @@ test.describe("Starting on the web records on the Mac", () => {
     }
   });
 
+  test("a Mac seen before but asleep is offered to open, and opening it asks again", async ({
+    page,
+    request,
+  }) => {
+    const { seriesId, meetingId } = await createSeries(request, {
+      status: "live",
+    });
+    try {
+      await setPresence(request, {
+        checkin: new Date(Date.now() - 10 * 60_000).toISOString(),
+      });
+      await asMacBrowser(page);
+      await page.goto(`/series/${seriesId}/meetings/${meetingId}`);
+      await waitForApp(page);
+      const open = page.getByRole("link", { name: "Open Minutia on your Mac" });
+      await expect(open).toHaveAttribute("href", "minutia://open");
+      await expect(page.getByText(INSTALL_COPY)).toHaveCount(0);
+      await open.evaluate((a) =>
+        a.addEventListener("click", (e) => e.preventDefault()),
+      );
+      await open.click();
+      await expect
+        .poll(
+          async () =>
+            (await readMeeting(request, meetingId)).record_requested_by,
+        )
+        .toBe(TEST_USER_ID);
+    } finally {
+      await cleanup(request, seriesId);
+    }
+  });
+
+  test("an older companion that only says hello is offered its record link", async ({
+    page,
+    request,
+  }) => {
+    const { seriesId, meetingId } = await createSeries(request, {
+      status: "live",
+    });
+    try {
+      await setPresence(request, {
+        checkin: null,
+        legacy: new Date(Date.now() - 30_000).toISOString(),
+      });
+      await asMacBrowser(page);
+      await page.goto(`/series/${seriesId}/meetings/${meetingId}`);
+      await waitForApp(page);
+      const link = page.getByRole("link", { name: "Record on your Mac" });
+      await expect(link).toHaveAttribute(
+        "href",
+        new RegExp(`^minutia://record\\?.*${meetingId}`),
+      );
+      await expect(page.getByText(INSTALL_COPY)).toHaveCount(0);
+    } finally {
+      await cleanup(request, seriesId);
+    }
+  });
+
+  test("the install prompt shows only on a Mac that has never connected, and a check-in removes it", async ({
+    page,
+    request,
+  }) => {
+    const { seriesId, meetingId } = await createSeries(request, {
+      status: "live",
+    });
+    try {
+      await setPresence(request, { checkin: null });
+      await asMacBrowser(page);
+      await page.goto(`/series/${seriesId}/meetings/${meetingId}`);
+      await waitForApp(page);
+      await expect(page.getByText(INSTALL_COPY)).toBeVisible();
+
+      await companion(request, await userToken(request)).checkin(false);
+      await page.reload();
+      await waitForApp(page);
+      await expect(page.getByText("Live").first()).toBeVisible();
+      await expect(page.getByText(INSTALL_COPY)).toHaveCount(0);
+      await expect(
+        page.getByRole("button", { name: "Record on your Mac" }),
+      ).toBeVisible();
+    } finally {
+      await cleanup(request, seriesId);
+    }
+  });
+});
+
+test.describe("Recording here instead of on the Mac", () => {
+  test.skip(!HAS_SERVICE_ROLE, "Requires service role for isolated fixtures");
+  test.use({
+    userAgent: MAC_UA,
+    launchOptions: {
+      args: [
+        "--use-fake-ui-for-media-stream",
+        "--use-fake-device-for-media-stream",
+      ],
+    },
+    permissions: ["microphone"],
+  });
+
   test("a Mac that cannot start hands recording back to the browser", async ({
     page,
     request,
@@ -262,72 +397,21 @@ test.describe("Starting on the web records on the Mac", () => {
         0,
       );
       await expect(
-        page.getByRole("button", { name: "Record meeting audio" }),
-      ).toBeVisible();
-    } finally {
-      await cleanup(request, seriesId);
-    }
-  });
-
-  test("a Mac seen before but asleep is offered to open, and opening it asks again", async ({
-    page,
-    request,
-  }) => {
-    const { seriesId, meetingId } = await createSeries(request, {
-      status: "live",
-    });
-    try {
-      await setLastSeen(
-        request,
-        new Date(Date.now() - 10 * 60_000).toISOString(),
-      );
-      await asMacBrowser(page);
-      await page.goto(`/series/${seriesId}/meetings/${meetingId}`);
-      await waitForApp(page);
-      const open = page.getByRole("link", { name: "Open Minutia on your Mac" });
-      await expect(open).toHaveAttribute("href", "minutia://open");
-      await expect(page.getByText(INSTALL_COPY)).toHaveCount(0);
-      await open.evaluate((a) =>
-        a.addEventListener("click", (e) => e.preventDefault()),
-      );
-      await open.click();
+        page.getByRole("button", { name: "Stop recording" }),
+      ).toBeVisible({ timeout: 10_000 });
       await expect
         .poll(
           async () =>
-            (await readMeeting(request, meetingId)).record_requested_by,
+            (await readMeeting(request, meetingId)).recording_failed_reason,
         )
-        .toBe(TEST_USER_ID);
+        .toBe("in_browser");
+      expect((await mac.event(meetingId, "started")).result).toBe("conflict");
+      await page.getByRole("button", { name: "Stop recording" }).click();
     } finally {
       await cleanup(request, seriesId);
     }
   });
 
-  test("the install prompt shows only on a Mac that has never connected, and a check-in removes it", async ({
-    page,
-    request,
-  }) => {
-    const { seriesId, meetingId } = await createSeries(request, {
-      status: "live",
-    });
-    try {
-      await setLastSeen(request, null);
-      await asMacBrowser(page);
-      await page.goto(`/series/${seriesId}/meetings/${meetingId}`);
-      await waitForApp(page);
-      await expect(page.getByText(INSTALL_COPY)).toBeVisible();
-
-      await companion(request, await userToken(request)).checkin(false);
-      await page.reload();
-      await waitForApp(page);
-      await expect(page.getByText("Live").first()).toBeVisible();
-      await expect(page.getByText(INSTALL_COPY)).toHaveCount(0);
-      await expect(
-        page.getByRole("button", { name: "Record on your Mac" }),
-      ).toBeVisible();
-    } finally {
-      await cleanup(request, seriesId);
-    }
-  });
 });
 
 test.describe("A browser that is not on a Mac", () => {
@@ -342,7 +426,7 @@ test.describe("A browser that is not on a Mac", () => {
       status: "live",
     });
     try {
-      await setLastSeen(request, null);
+      await setPresence(request, { checkin: null });
       await page.addInitScript(() => {
         Object.defineProperty(navigator, "userAgentData", {
           configurable: true,
@@ -375,28 +459,16 @@ test.describe("The server keeps one recorder per meeting", () => {
     const mac = companion(request, token);
     const other = { device_id: randomUUID(), device_name: "Laptop" };
     try {
-      const requested = await request.post(
-        `${SUPABASE_URL}/rest/v1/rpc/request_companion_record`,
-        {
-          headers: {
-            apikey: ANON_KEY,
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-          data: { p_meeting_id: meetingId },
-        },
-      );
-      expect(requested.ok()).toBeTruthy();
-      expect(await requested.json()).toBe("requested");
+      expect(
+        await rpc(request, token, "request_companion_record", {
+          p_meeting_id: meetingId,
+        }),
+      ).toBe("requested");
 
       expect((await mac.checkin(false)).claim).toBeNull();
 
-      await rest(request, `meetings?id=eq.${meetingId}`, {
-        method: "PATCH",
-        headers: serviceHeaders("return=minimal"),
-        data: {
-          record_requested_at: new Date(Date.now() - 3 * 60_000).toISOString(),
-        },
+      await setMeeting(request, meetingId, {
+        record_requested_at: new Date(Date.now() - 60_000).toISOString(),
       });
       expect((await mac.checkin(true)).claim).toBeNull();
 
@@ -429,7 +501,37 @@ test.describe("The server keeps one recorder per meeting", () => {
         (await readMeeting(request, meetingId)).recording_device_name,
       ).toBe("Studio Mac");
 
-      expect((await mac.event(meetingId, "stopped")).result).toBe("ok");
+      expect(
+        await rpc(request, token, "request_companion_record", {
+          p_meeting_id: meetingId,
+        }),
+      ).toBe("busy");
+
+      await setMeeting(request, meetingId, {
+        recording_seen_at: new Date(Date.now() - 3 * 60_000).toISOString(),
+      });
+      expect((await mac.event(meetingId, "started", other)).result).toBe("ok");
+      expect((await mac.event(meetingId, "stopped")).result).toBe("ignored");
+      expect((await mac.event(meetingId, "stopped", other)).result).toBe("ok");
+    } finally {
+      await cleanup(request, seriesId);
+    }
+  });
+
+  test("a finished meeting cannot take a recorder and drops what it had", async ({
+    request,
+  }) => {
+    const { seriesId, meetingId } = await createSeries(request, {
+      status: "live",
+    });
+    const mac = companion(request, await userToken(request));
+    try {
+      expect((await mac.event(meetingId, "started")).result).toBe("ok");
+      await setMeeting(request, meetingId, { status: "completed" });
+      const row = await readMeeting(request, meetingId);
+      expect(row.recording_user_id).toBeNull();
+      expect(row.recording_started_at).toBeNull();
+      expect((await mac.event(meetingId, "started")).result).toBe("ignored");
     } finally {
       await cleanup(request, seriesId);
     }
