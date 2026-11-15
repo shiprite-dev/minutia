@@ -20,7 +20,7 @@ await esbuild.build({
   logLevel: "silent",
   absWorkingDir: root,
 });
-const { isFinishing, shouldAutoStartRecap, FINISHING_LIMIT_MS } = await import(
+const { isFinishing, FINISHING_LIMIT_MS } = await import(
   pathToFileURL(bundled).href
 );
 
@@ -75,31 +75,4 @@ test("finishing ends when the transcript lands, when transcription fails, or aft
     isFinishing({ ...waiting, now: waiting.openedAt + FINISHING_LIMIT_MS }),
     false,
   );
-});
-
-const landed = {
-  autoRecap: true,
-  transcriptRaw: "Test User: Ship it.",
-  transcriptionStatus: "completed",
-  hasRecap: false,
-  alreadyStarted: false,
-};
-
-test("the recap starts itself once the final transcript lands", () => {
-  assert.equal(shouldAutoStartRecap(landed), true);
-});
-
-test("the recap never starts from window text alone, twice, over a stored recap, or without the stop flag", () => {
-  assert.equal(
-    shouldAutoStartRecap({ ...landed, transcriptionStatus: "processing" }),
-    false,
-  );
-  assert.equal(shouldAutoStartRecap({ ...landed, transcriptRaw: null }), false);
-  assert.equal(shouldAutoStartRecap({ ...landed, transcriptRaw: "  " }), false);
-  assert.equal(
-    shouldAutoStartRecap({ ...landed, alreadyStarted: true }),
-    false,
-  );
-  assert.equal(shouldAutoStartRecap({ ...landed, hasRecap: true }), false);
-  assert.equal(shouldAutoStartRecap({ ...landed, autoRecap: false }), false);
 });

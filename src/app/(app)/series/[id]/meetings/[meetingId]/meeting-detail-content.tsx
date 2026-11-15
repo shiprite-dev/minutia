@@ -37,7 +37,7 @@ import { useMeetingRecorder } from "@/lib/hooks/use-meeting-recorder";
 import { uploadMeetingAudio, MEETING_AUDIO_BUCKET } from "@/lib/audio";
 import { createClient } from "@/lib/supabase/client";
 import { useMeetingWindows } from "@/lib/hooks/use-meeting-windows";
-import { isFinishing, shouldAutoStartRecap as shouldAutoStartFinishedRecap } from "@/lib/meetings/finishing";
+import { isFinishing } from "@/lib/meetings/finishing";
 import { CaptureInput } from "@/components/minutia/capture-input";
 import { InlineTaskList } from "@/components/minutia/inline-task-list";
 import { IssueCard } from "@/components/minutia/issue-card";
@@ -753,7 +753,6 @@ export function MeetingDetailContent({
   const [transcribing, setTranscribing] = React.useState(false);
   const [autoStartSummary, setAutoStartSummary] = React.useState(false);
   const autoSummaryFiredRef = React.useRef(false);
-  const finishingRecapFiredRef = React.useRef(false);
   const [finishingOpenedAt, setFinishingOpenedAt] = React.useState<number | null>(null);
   // The upload landed and the transcription request has not been issued yet.
   const [uploadedPending, setUploadedPending] = React.useState(false);
@@ -925,35 +924,9 @@ export function MeetingDetailContent({
     autoRecap: finishingOpenedAt !== null,
     openedAt: finishingOpenedAt ?? 0,
     now: clock,
-    transcriptRaw: meeting?.transcript_raw ?? null,
     transcriptionStatus: meeting?.transcription_status ?? null,
   });
   const { data: heardWindows = [] } = useMeetingWindows(meetingId, finishing);
-
-  // Syncs with sessionStorage so a reload never starts the recap twice.
-  React.useEffect(() => {
-    if (finishingOpenedAt === null || finishingRecapFiredRef.current) return;
-    const key = `recap-auto:${meetingId}`;
-    let seen = false;
-    try {
-      seen = sessionStorage.getItem(key) !== null;
-    } catch {}
-    if (
-      !shouldAutoStartFinishedRecap({
-        autoRecap: true,
-        transcriptRaw: meeting?.transcript_raw ?? null,
-        transcriptionStatus: meeting?.transcription_status ?? null,
-        hasRecap: !!meeting?.recap_markdown?.trim(),
-        alreadyStarted: seen,
-      })
-    )
-      return;
-    finishingRecapFiredRef.current = true;
-    try {
-      sessionStorage.setItem(key, "1");
-    } catch {}
-    setAutoStartSummary(true);
-  }, [finishingOpenedAt, meetingId, meeting?.transcript_raw, meeting?.transcription_status, meeting?.recap_markdown]);
 
   // The elapsed-time copy needs a moving clock while a run is in flight.
   React.useEffect(() => {

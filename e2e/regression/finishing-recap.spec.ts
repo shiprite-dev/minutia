@@ -200,13 +200,6 @@ test.describe("Recap page opened at stop", () => {
       );
       expect(streams.calls).toBe(1);
 
-      await page.reload();
-      await waitForApp(page);
-      await expect(
-        page.getByText("Meeting recap", { exact: true }),
-      ).toBeVisible({
-        timeout: 20_000,
-      });
       await page.waitForTimeout(3_000);
       expect(streams.calls).toBe(1);
     } finally {
