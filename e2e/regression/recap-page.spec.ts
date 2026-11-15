@@ -218,6 +218,62 @@ async function topOf(page: Page, locator: ReturnType<Page["locator"]>) {
   return box.y;
 }
 
+async function boxOf(locator: ReturnType<Page["locator"]>) {
+  await expect(locator).toBeVisible();
+  const box = await locator.boundingBox();
+  if (!box) throw new Error("element has no layout box");
+  return box;
+}
+
+const LONG_NOTES = Array.from(
+  { length: 80 },
+  (_, i) => `Note line ${i + 1}: rollout detail recorded in the room.`,
+).join("\n\n");
+
+function layoutFixture(request: APIRequestContext) {
+  return createFixture(
+    request,
+    {
+      notes_markdown: LONG_NOTES,
+      transcript_raw: ME_THEM_TRANSCRIPT,
+      transcript_diarized: true,
+      transcript_segments: ME_THEM_SEGMENTS,
+      speaker_map: { me: "Test User", them: null },
+      recap_markdown: STORED_RECAP,
+      recap_generated_at: new Date().toISOString(),
+      recap_model: "test-model-x",
+    },
+    [
+      {
+        title: "Draft the rollout plan",
+        owner_name: "Test User",
+        source_excerpt: "I will draft the rollout plan.",
+      },
+      {
+        title: "Book the vendor review",
+        owner_name: "Mike Ross",
+        source_excerpt: "Then I will book the vendor review.",
+      },
+    ],
+  );
+}
+
+function layoutParts(page: Page) {
+  return {
+    recap: page.locator("[data-recap-section]"),
+    rail: page.locator('section[aria-label="Tracked in the log"]'),
+    notes: page.getByRole("heading", { name: "Notes", exact: true }),
+  };
+}
+
+async function startWithCalendarClosed(page: Page) {
+  await page.addInitScript(() => {
+    try {
+      localStorage.setItem("minutia:calendar-sidebar", "false");
+    } catch {}
+  });
+}
+
 test.describe("Completed meeting recap page", () => {
   test.skip(
     !HAS_SERVICE_ROLE,
@@ -338,6 +394,7 @@ test.describe("Completed meeting recap page", () => {
     });
 
     try {
+      await page.setViewportSize({ width: 800, height: 900 });
       await countRecapStreams(page, fixture.meetingId);
       await open(page, fixture);
 
@@ -362,6 +419,178 @@ test.describe("Completed meeting recap page", () => {
         page.locator("#main-content").getByText(/^0[1-9]$/),
       ).toHaveCount(0);
       await expect(page.locator("footer").getByText(/Replay/)).toHaveCount(0);
+    } finally {
+      await deleteFixture(request, fixture);
+    }
+  });
+
+  test("on a wide screen the facilitator reviews the queue beside the recap", async ({
+    page,
+    request,
+  }) => {
+    const fixture = await layoutFixture(request);
+
+    try {
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await startWithCalendarClosed(page);
+      await countRecapStreams(page, fixture.meetingId);
+      await open(page, fixture);
+      await expect(page.locator("[data-flowing-summary]")).toContainText(
+        "The team agreed to ship the rollout on Friday.",
+      );
+
+      const toReview = page.getByText("To review", { exact: true });
+      const region = page.getByRole("region", { name: "AI suggestions" });
+      await expect(toReview).toBeInViewport();
+      await expect(region).toBeInViewport();
+
+      const parts = layoutParts(page);
+      const recap = await boxOf(parts.recap);
+      const rail = await boxOf(parts.rail);
+      expect(rail.x).toBeGreaterThanOrEqual(recap.x + recap.width);
+      expect(Math.abs(rail.y - recap.y)).toBeLessThanOrEqual(2);
+
+      const prose = await boxOf(page.locator("[data-flowing-summary]"));
+      expect(prose.width).toBeGreaterThanOrEqual(480);
+      expect(prose.width).toBeLessThanOrEqual(720);
+
+      const notes = await boxOf(parts.notes);
+      expect(Math.abs(notes.x - recap.x)).toBeLessThanOrEqual(2);
+      expect(notes.y).toBeGreaterThan(recap.y);
+
+      const send = page.getByRole("button", { name: "Send notes" });
+      await expect(send).toHaveAttribute("data-emphasis", "outline");
+
+      const main = page.locator("#main-content");
+      expect(
+        await main.evaluate((el) => el.scrollHeight > el.clientHeight),
+      ).toBe(true);
+      await main.evaluate((el) => el.scrollTo(0, el.scrollHeight));
+      await expect
+        .poll(() => main.evaluate((el) => el.scrollTop))
+        .toBeGreaterThan(0);
+      await expect(toReview).toBeInViewport();
+
+      await region
+        .locator("[data-suggestion-card]")
+        .filter({ hasText: "I will draft the rollout plan." })
+        .getByRole("button", { name: "Accept suggestion" })
+        .click();
+      await region
+        .locator("[data-suggestion-card]")
+        .filter({ hasText: "Then I will book the vendor review." })
+        .getByRole("button", { name: "Reject suggestion" })
+        .click();
+
+      await expect(
+        page
+          .locator('section[aria-label="Items raised"]')
+          .getByText("Draft the rollout plan")
+          .first(),
+      ).toBeInViewport();
+      await expect(
+        page.getByText(/Review complete\. 1 added to the log, 1 dismissed\./),
+      ).toBeVisible();
+      await expect(send).toHaveAttribute("data-emphasis", "accent");
+
+      await expect
+        .poll(async () => {
+          const rows = (await rest(
+            request,
+            `meeting_ai_suggestions?meeting_id=eq.${fixture.meetingId}&select=title,status&order=title`,
+          )) as { title: string; status: string }[];
+          return rows;
+        })
+        .toEqual([
+          { title: "Book the vendor review", status: "rejected" },
+          { title: "Draft the rollout plan", status: "accepted" },
+        ]);
+    } finally {
+      await deleteFixture(request, fixture);
+    }
+  });
+
+  test("on a narrow window the page is one column in reading order", async ({
+    page,
+    request,
+  }) => {
+    const fixture = await layoutFixture(request);
+
+    try {
+      await page.setViewportSize({ width: 800, height: 900 });
+      await countRecapStreams(page, fixture.meetingId);
+      await open(page, fixture);
+
+      const parts = layoutParts(page);
+      const recap = await boxOf(parts.recap);
+      const rail = await boxOf(parts.rail);
+      expect(rail.y).toBeGreaterThan(recap.y + recap.height - 1);
+      expect(Math.abs(rail.x - recap.x)).toBeLessThanOrEqual(2);
+      const notes = await boxOf(parts.notes);
+      expect(notes.y).toBeGreaterThan(rail.y);
+
+      const overflow = await page.evaluate(() => {
+        const main = document.getElementById("main-content");
+        return {
+          doc:
+            document.documentElement.scrollWidth -
+            document.documentElement.clientWidth,
+          main: main ? main.scrollWidth - main.clientWidth : 0,
+        };
+      });
+      expect(overflow.doc).toBeLessThanOrEqual(0);
+      expect(overflow.main).toBeLessThanOrEqual(0);
+
+      const card = page
+        .getByRole("region", { name: "AI suggestions" })
+        .locator("[data-suggestion-card]")
+        .first();
+      await expect(card.getByLabel("Suggestion title")).toBeVisible();
+      await expect(card.getByLabel("Suggestion owner")).toBeVisible();
+      await expect(card.getByLabel("Suggestion due date")).toBeVisible();
+    } finally {
+      await deleteFixture(request, fixture);
+    }
+  });
+
+  test("opening the calendar panel folds the rail under the recap and closing it restores it", async ({
+    page,
+    request,
+  }) => {
+    const fixture = await layoutFixture(request);
+
+    try {
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await startWithCalendarClosed(page);
+      await countRecapStreams(page, fixture.meetingId);
+      await open(page, fixture);
+
+      const parts = layoutParts(page);
+      const beside = async () => {
+        const recap = await boxOf(parts.recap);
+        const rail = await boxOf(parts.rail);
+        return (
+          rail.x >= recap.x + recap.width && Math.abs(rail.y - recap.y) <= 2
+        );
+      };
+      const below = async () => {
+        const recap = await boxOf(parts.recap);
+        const rail = await boxOf(parts.rail);
+        return rail.y > recap.y + recap.height - 1;
+      };
+      expect(await beside()).toBe(true);
+
+      await page.getByRole("button", { name: "Open calendar" }).click();
+      await expect(
+        page.getByRole("complementary", { name: "Calendar sidebar" }),
+      ).toBeVisible();
+      await expect.poll(below).toBe(true);
+
+      await page.getByRole("button", { name: "Close calendar" }).click();
+      await expect(
+        page.getByRole("complementary", { name: "Calendar sidebar" }),
+      ).toHaveCount(0);
+      await expect.poll(beside).toBe(true);
     } finally {
       await deleteFixture(request, fixture);
     }

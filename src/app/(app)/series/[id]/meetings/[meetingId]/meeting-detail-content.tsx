@@ -1970,7 +1970,7 @@ export function MeetingDetailContent({
           {isContextual ? (
             <p className="text-sm leading-6 text-ink-2">{suggestion.title}</p>
           ) : (
-            <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_10rem_9rem]">
+            <div className="grid grid-cols-2 gap-3 @lg/log:grid-cols-[minmax(0,1fr)_10rem_9rem]">
               <input
                 aria-label="Suggestion title"
                 value={suggestion.title}
@@ -1978,7 +1978,7 @@ export function MeetingDetailContent({
                 onChange={(event) =>
                   updateSuggestionDraft(suggestion.id, { title: event.target.value })
                 }
-                className="min-w-0 rounded-md border border-rule bg-card px-3 py-2 text-sm text-ink-2 disabled:bg-paper-2 disabled:text-ink-3"
+                className="col-span-2 min-w-0 rounded-md border border-rule bg-card px-3 py-2 text-sm text-ink-2 disabled:bg-paper-2 disabled:text-ink-3 @lg/log:col-span-1"
               />
               <input
                 aria-label="Suggestion owner"
@@ -2156,7 +2156,8 @@ export function MeetingDetailContent({
 
   return (
     <div className="min-h-full bg-paper">
-      <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6 lg:px-8">
+      <div className="@container/recap">
+      <div className="recap-shell mx-auto max-w-3xl px-4 py-8 sm:px-6 lg:px-8">
         <div className="mb-8 flex items-center gap-3">
           <Link
             href={`/series/${seriesId}`}
@@ -2246,13 +2247,15 @@ export function MeetingDetailContent({
         <RecapProgress active={step} detail={step === "transcribe" ? progressDetail : undefined} />
 
         {showStatus && (
-          <TranscriptionStatus
-            {...transcriptionStatusProps}
-            tone={QUIET.includes(transcriptionState) ? "quiet" : "card"}
-          />
+          <div className="recap-status">
+            <TranscriptionStatus
+              {...transcriptionStatusProps}
+              tone={QUIET.includes(transcriptionState) ? "quiet" : "card"}
+            />
+          </div>
         )}
 
-        <div className="space-y-12">
+        <div className="recap-grid">
           <FlowingSummary
             meetingId={meetingId}
             canGenerate={canGenerateRecap}
@@ -2268,7 +2271,7 @@ export function MeetingDetailContent({
             }
           />
 
-          <section aria-label="Tracked in the log">
+          <section aria-label="Tracked in the log" className="recap-rail @container/log">
             <SectionHeading title="Tracked in the log" flashKey={loopClosedAt ?? undefined} />
             <div className="space-y-6">
               {canManageMeeting && suggestionsError && (
@@ -2411,6 +2414,7 @@ export function MeetingDetailContent({
             </section>
           )}
         </div>
+      </div>
       </div>
       {aiPreview && (
         <div className="fixed inset-0 z-[90] bg-ink/25 px-4 py-6 backdrop-blur-sm sm:px-6">
