@@ -45,6 +45,7 @@ export const NextResponse = {
   },
 };
 export class NextRequest {}
+export function after() {}
 `);
 fs.writeFileSync(path.join(stubDir, "supabase-server.mjs"), `
 export async function createClient() { return globalThis.__S.supabase; }

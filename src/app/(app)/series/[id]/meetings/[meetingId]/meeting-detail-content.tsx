@@ -36,6 +36,8 @@ import {
 import { useMeetingRecorder } from "@/lib/hooks/use-meeting-recorder";
 import { uploadMeetingAudio, MEETING_AUDIO_BUCKET } from "@/lib/audio";
 import { createClient } from "@/lib/supabase/client";
+import { useMeetingWindows } from "@/lib/hooks/use-meeting-windows";
+import { isFinishing } from "@/lib/meetings/finishing";
 import { CaptureInput } from "@/components/minutia/capture-input";
 import { InlineTaskList } from "@/components/minutia/inline-task-list";
 import { IssueCard } from "@/components/minutia/issue-card";
@@ -751,6 +753,9 @@ export function MeetingDetailContent({
   const [transcribing, setTranscribing] = React.useState(false);
   const [autoStartSummary, setAutoStartSummary] = React.useState(false);
   const autoSummaryFiredRef = React.useRef(false);
+  const [finishingOpenedAt, setFinishingOpenedAt] = React.useState<number | null>(null);
+  const [stopOutcome, setStopOutcome] = React.useState<"completed" | "failed" | null>(null);
+  const [extractionWaitOver, setExtractionWaitOver] = React.useState(false);
   // The upload landed and the transcription request has not been issued yet.
   const [uploadedPending, setUploadedPending] = React.useState(false);
   const [transcriptionFailure, setTranscriptionFailure] = React.useState<TranscriptionFailure | null>(null);
@@ -778,8 +783,8 @@ export function MeetingDetailContent({
   // Load already-extracted suggestions (e.g. the ones the transcription
   // auto-generated) instead of re-running the model. This is what makes the
   // auto-trigger pay off: its output is shown, not silently discarded.
-  const loadSuggestions = React.useCallback(async () => {
-    setLoadingSuggestions(true);
+  const loadSuggestions = React.useCallback(async (quiet = false) => {
+    if (!quiet) setLoadingSuggestions(true);
     try {
       const response = await fetch(`/api/meetings/${meetingId}/suggestions`, { method: "GET" });
       const payload = await response.json().catch(() => ({}));
@@ -787,7 +792,7 @@ export function MeetingDetailContent({
     } catch {
       // Best-effort: the Review button can still trigger generation on demand.
     } finally {
-      setLoadingSuggestions(false);
+      if (!quiet) setLoadingSuggestions(false);
     }
   }, [meetingId]);
 
@@ -907,12 +912,52 @@ export function MeetingDetailContent({
     return () => clearInterval(id);
   }, [transcribing, meeting?.transcription_status, meetingId, queryClient]);
 
+  // Syncs with the browser URL: the stop hand-off flag is read once, then removed.
+  React.useEffect(() => {
+    const url = new URL(window.location.href);
+    if (url.searchParams.get("recap") !== "auto") return;
+    setFinishingOpenedAt(Date.now());
+    setTranscriptOpen(true);
+    url.searchParams.delete("recap");
+    window.history.replaceState(window.history.state, "", url);
+  }, []);
+
+  const stopStatus = meeting?.transcription_status;
+  if (finishingOpenedAt !== null && (stopStatus === "completed" || stopStatus === "failed")) {
+    setFinishingOpenedAt(null);
+    setStopOutcome(stopStatus);
+  }
+  const finishing = isFinishing({
+    autoRecap: finishingOpenedAt !== null,
+    openedAt: finishingOpenedAt ?? 0,
+    now: clock,
+    transcriptionStatus: meeting?.transcription_status ?? null,
+  });
+  const { data: heardWindows = [] } = useMeetingWindows(meetingId, finishing);
+
+  // Polls the server while action items are still being extracted after the stop.
+  React.useEffect(() => {
+    if (stopOutcome !== "completed" || aiSuggestions.length > 0) return;
+    const startedAt = Date.now();
+    const id = setInterval(() => {
+      if (Date.now() - startedAt > 60_000) {
+        clearInterval(id);
+        setExtractionWaitOver(true);
+        return;
+      }
+      void loadSuggestions(true);
+    }, 3000);
+    return () => clearInterval(id);
+  }, [stopOutcome, aiSuggestions.length, loadSuggestions]);
+  const findingSuggestions =
+    loadingSuggestions || (stopOutcome === "completed" && aiSuggestions.length === 0 && !extractionWaitOver);
+
   // The elapsed-time copy needs a moving clock while a run is in flight.
   React.useEffect(() => {
-    if (!transcribing && meeting?.transcription_status !== "processing") return;
+    if (!transcribing && meeting?.transcription_status !== "processing" && !finishing) return;
     const id = setInterval(() => setClock(Date.now()), 1000);
     return () => clearInterval(id);
-  }, [transcribing, meeting?.transcription_status]);
+  }, [transcribing, meeting?.transcription_status, finishing]);
 
   // Auto-save notes with debounce
   const saveTimerRef = React.useRef<ReturnType<typeof setTimeout>>(null);
@@ -1872,6 +1917,7 @@ export function MeetingDetailContent({
   const hasAnyNotes = !!notes.trim() || !!companionNotes;
   const canGenerateRecap = canManageMeeting && hasAccess;
   const recapPreparing =
+    finishing ||
     (recorder.state === "stopped" &&
       (recorder.fastLane.state === "active" || recorder.fastLane.state === "finalizing")) ||
     (["saving", "saved_pending", "transcribing", "processing_return"] as TranscriptionUiState[]).includes(
@@ -1893,7 +1939,8 @@ export function MeetingDetailContent({
   const autoStartRecap =
     autoStartSummary ||
     (shouldAutoStartRecap({ canGenerate: canGenerateRecap, storedText: storedRecap, hasSource }) &&
-      !recapPreparing);
+      !recapPreparing &&
+      finishingOpenedAt === null);
 
   const HIDDEN_ON_RECAP: TranscriptionUiState[] = [
     "recording",
@@ -1909,6 +1956,7 @@ export function MeetingDetailContent({
   const QUIET: TranscriptionUiState[] = ["no_recording", "empty_unknown", "no_speech"];
   const showStatus =
     canManageMeeting &&
+    !finishing &&
     !HIDDEN_ON_RECAP.includes(transcriptionState) &&
     !(transcriptionState === "no_recording" && hasAnyNotes);
   const alertShown = showStatus && !QUIET.includes(transcriptionState);
@@ -1916,7 +1964,7 @@ export function MeetingDetailContent({
   const sendEmphasis =
     !alertShown &&
     ((aiSuggestions.length > 0 && pending.length === 0) ||
-      (aiSuggestions.length === 0 && !loadingSuggestions && logCount > 0))
+      (aiSuggestions.length === 0 && !findingSuggestions && logCount > 0))
       ? "accent"
       : "outline";
   const regen = canGenerateRecap && !!storedRecap;
@@ -1933,7 +1981,7 @@ export function MeetingDetailContent({
         ? `Me / Them · ${speakerLabel}`
         : speakerLabel;
   const showTranscript =
-    hasDiarizedTranscript || !!transcript.trim() || (canManageMeeting && !meeting.audio_file_path);
+    finishing || hasDiarizedTranscript || !!transcript.trim() || (canManageMeeting && !meeting.audio_file_path);
 
   const renderSuggestion = (suggestion: MeetingAiSuggestion, i: number) => {
     const isReviewed = suggestion.status !== "pending";
@@ -2113,7 +2161,7 @@ export function MeetingDetailContent({
       );
     } else if (pending.length > 0) {
       reviewStatus = null;
-    } else if (loadingSuggestions) {
+    } else if (findingSuggestions) {
       reviewStatus = (
         <div>
           <LogGroupLabel label="To review" count={0} tone="accent" />
@@ -2386,7 +2434,14 @@ export function MeetingDetailContent({
                 />
               </button>
               {transcriptOpen &&
-                (hasDiarizedTranscript ? (
+                (finishing ? (
+                  <div data-finishing-transcript className="mt-3 space-y-3 text-sm text-ink-2">
+                    {heardWindows.map((text, i) => (
+                      <p key={i}>{text}</p>
+                    ))}
+                    <p className="finishing-breath text-ink-3">Catching the last few minutes…</p>
+                  </div>
+                ) : hasDiarizedTranscript ? (
                   <div className="mt-3">
                     <DiarizedTranscript
                       segments={meeting?.transcript_segments ?? []}

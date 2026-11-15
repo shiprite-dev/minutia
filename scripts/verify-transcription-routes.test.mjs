@@ -44,6 +44,7 @@ export const NextResponse = {
   },
 };
 export class NextRequest {}
+export function after(task) { globalThis.__S.afterTasks.push(task); }
 `);
 fs.writeFileSync(path.join(stubDir, "supabase-server.mjs"), `
 export async function createClient() { return globalThis.__S.supabase; }
@@ -159,7 +160,7 @@ function buildSupabase() {
     storage: {
       from() {
         return {
-          async download() { return { data: new Blob(["x"]), error: null }; },
+          async download() { S.downloads += 1; return { data: new Blob(["x"]), error: null }; },
           list(folder, { limit, offset } = {}) {
             if (S.listError) return { data: null, error: S.listError };
             const start = offset ?? 0;
@@ -264,16 +265,22 @@ function reset(overrides = {}) {
     extractionThrow: null,
     __seq: null,
     __pendingSeq: null,
+    afterTasks: [],
+    downloads: 0,
   }, overrides);
   globalThis.__S.supabase = buildSupabase();
 }
 
-function request() {
-  return { json: async () => ({}), url: "https://x/api" };
+function request(body = {}) {
+  return { json: async () => body, url: "https://x/api" };
 }
 
-async function callMeetingRoute() {
-  return meetingRoute.POST(request(), { params: Promise.resolve({ meetingId: MEETING_ID }) });
+async function callMeetingRoute(body) {
+  return meetingRoute.POST(request(body), { params: Promise.resolve({ meetingId: MEETING_ID }) });
+}
+
+async function runAfterResponse() {
+  for (const task of S.afterTasks.splice(0)) await task();
 }
 
 // ---------------------------------------------------------------------------
@@ -390,6 +397,53 @@ test("cleanup enumerates every storage page before deleting", async () => {
   const body = await res.json();
   assert.equal(body.audio_discarded, true);
   assert.equal(S.removed.length, 150, "both pages must be enumerated and deleted");
+});
+
+test("a stop that asks not to wait responds once the transcript is saved, then extracts and cleans up", async () => {
+  reset();
+  const res = await callMeetingRoute({ defer_extraction: true });
+  const body = await res.json();
+  assert.equal(res.status, 200);
+  assert.equal(body.status, "completed");
+  assert.equal(body.deferred, true);
+  assert.equal(body.audio_discarded, false);
+  assert.ok(S.meetingUpdates.some((u) => u.table === "meetings" && u.row?.transcription_status === "completed"));
+  assert.equal(S.removed.length, 0, "nothing is deleted before the response");
+  assert.equal(S.afterTasks.length, 1);
+  await runAfterResponse();
+  assert.equal(S.removed.length, 1, "retention runs after the response");
+});
+
+test("a deferred extraction that fails keeps the audio", async () => {
+  reset({ extraction: { ok: false, status: 502, error: "AI provider request failed.", code: "provider_error" } });
+  const res = await callMeetingRoute({ defer_extraction: true });
+  assert.equal(res.status, 200);
+  await runAfterResponse();
+  assert.equal(S.removed.length, 0);
+  assert.ok(!S.meetingUpdates.some((u) => u.table === "meetings" && u.row?.audio_file_path === null));
+});
+
+test("stitching already-transcribed windows never downloads the recording", async () => {
+  reset({
+    segmentRows: [0, 1].map((seq) => ({
+      seq,
+      status: "completed",
+      transcript_text: `window ${seq}`,
+      storage_path: `${MEETING_ID}/seg-${seq}.webm`,
+      transcription_outcome: "speech",
+    })),
+  });
+  const res = await callMeetingRoute({ expected_segments: 2 });
+  assert.equal(res.status, 200);
+  assert.equal(S.providerCalls, 0);
+  assert.equal(S.downloads, 0);
+});
+
+test("the full-file path still downloads the recording once", async () => {
+  reset();
+  const res = await callMeetingRoute();
+  assert.equal(res.status, 200);
+  assert.equal(S.downloads, 1);
 });
 
 test("a transcript-save failure prevents extraction and cleanup", async () => {

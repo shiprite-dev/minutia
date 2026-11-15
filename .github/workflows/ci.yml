@@ -151,6 +151,9 @@ jobs:
       - name: Fast-lane contracts
         run: pnpm test:fast-lane
 
+      - name: Finishing state contracts
+        run: pnpm test:finishing
+
       - name: Me/them channel contracts
         run: pnpm test:channels
 
