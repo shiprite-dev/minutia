@@ -89,9 +89,9 @@ test.describe("Meeting Issue Resolution Flow", () => {
         page.getByText("Resolved this meeting").first()
       ).toBeVisible({ timeout: 5000 });
 
-      const resolvedSection = page.locator("section").filter({
-        hasText: "Resolved this meeting",
-      });
+      const resolvedSection = page.locator(
+        'section[aria-label="Resolved this meeting"]'
+      );
       await expect(resolvedSection.getByText(issue.title)).toBeVisible();
     } finally {
       await deleteIssue(request, issue.id).catch(() => undefined);

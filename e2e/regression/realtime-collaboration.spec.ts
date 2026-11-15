@@ -293,4 +293,81 @@ test.describe("Realtime collaboration and series participation", () => {
       await deleteAuthUser(request, participantId);
     }
   });
+
+  test("a participant cannot rewrite the stored AI recap, while the owner can", async ({
+    request,
+  }) => {
+    const orgId = await getCurrentOrgId(request);
+    const participantEmail = `recap-participant-${Date.now()}@example.com`;
+    let participantId: string | null = null;
+    const seriesId = await createSeries(request, orgId, `Recap guard series ${Date.now()}`);
+    const meetingId = await createMeeting(request, seriesId, "completed");
+
+    const patchAs = (token: string, data: Record<string, unknown>) =>
+      request.fetch(`${SUPABASE_URL}/rest/v1/meetings?id=eq.${meetingId}`, {
+        method: "PATCH",
+        headers: {
+          apikey: ANON_KEY,
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+          Prefer: "return=minimal",
+        },
+        data,
+      });
+    const readRecap = async () =>
+      (
+        await rest(
+          request,
+          `meetings?id=eq.${meetingId}&select=recap_markdown,recap_model,recap_generated_at,notes_markdown`
+        )
+      )[0];
+
+    try {
+      await rest(request, `meetings?id=eq.${meetingId}`, {
+        method: "PATCH",
+        data: {
+          recap_markdown: "Stored recap.",
+          recap_model: "test-model-x",
+          recap_generated_at: "2026-11-15T09:00:00.000Z",
+        },
+        headers: serviceHeaders("return=minimal"),
+      });
+      participantId = await createAuthUser(request, participantEmail);
+      await finishProfileSetup(request, orgId, participantId);
+      await addSeriesParticipant(request, seriesId, participantId, "participant");
+      const participant = await getAccessToken(request, participantEmail);
+
+      for (const forged of [
+        { recap_markdown: "Forged recap." },
+        { recap_model: "forged-model" },
+        { recap_generated_at: "2026-11-16T09:00:00.000Z" },
+      ]) {
+        const denied = await patchAs(participant.access_token, forged);
+        expect(denied.status(), await denied.text()).toBe(403);
+      }
+      expect(await readRecap()).toMatchObject({
+        recap_markdown: "Stored recap.",
+        recap_model: "test-model-x",
+      });
+
+      const notes = await patchAs(participant.access_token, {
+        notes_markdown: "Participant note.",
+      });
+      expect(notes.status(), await notes.text()).toBe(204);
+      expect((await readRecap()).notes_markdown).toBe("Participant note.");
+
+      const owner = await getAccessToken(request, TEST_USER_EMAIL);
+      const allowed = await patchAs(owner.access_token, {
+        recap_markdown: "Owner recap.",
+      });
+      expect(allowed.status(), await allowed.text()).toBe(204);
+      expect((await readRecap()).recap_markdown).toBe("Owner recap.");
+    } finally {
+      await rest(request, `meeting_series?id=eq.${seriesId}`, {
+        method: "DELETE",
+        headers: serviceHeaders("return=minimal"),
+      }).catch(() => undefined);
+      await deleteAuthUser(request, participantId);
+    }
+  });
 });

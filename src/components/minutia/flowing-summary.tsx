@@ -87,7 +87,7 @@ export function FlowingSummary({
     []
   );
 
-  const start = React.useCallback(async () => {
+  const start = React.useCallback(async (overwrite = false) => {
     if (streaming) return;
     setStreamedText("");
     setDone(false);
@@ -98,7 +98,7 @@ export function FlowingSummary({
     const controller = new AbortController();
     controllerRef.current = controller;
     try {
-      const response = await fetch(`/api/meetings/${meetingId}/summary/stream`, {
+      const response = await fetch(`/api/meetings/${meetingId}/summary/stream${overwrite ? "?regenerate=1" : ""}`, {
         method: "POST",
         signal: controller.signal,
       });
@@ -126,7 +126,16 @@ export function FlowingSummary({
             firstWordSeen = true;
             setStreamedText((prev) => prev + frame.word);
           }
+          if (frame.error) {
+            setStreamedText("");
+            setFailure("error");
+            return;
+          }
           if (frame.done) {
+            if (!firstWordSeen) {
+              setFailure("error");
+              return;
+            }
             setDone(true);
             setFinishedAt(new Date());
             setStreamingState(false);
@@ -139,7 +148,10 @@ export function FlowingSummary({
     } catch {
       if (!controller.signal.aborted && !firstWordSeen) setFailure("error");
     } finally {
-      setStreamingState(false);
+      if (controllerRef.current === controller) {
+        controllerRef.current = null;
+        setStreamingState(false);
+      }
     }
   }, [meetingId, streaming, setStreamingState, onRecapWritten]);
 
@@ -158,7 +170,7 @@ export function FlowingSummary({
     if (regenerateNonce === undefined || regenerateNonce === regenerateRef.current) return;
     regenerateRef.current = regenerateNonce;
     if (!canGenerate) return;
-    void start();
+    void start(true);
   }, [regenerateNonce, canGenerate, start]);
 
   const view = resolveRecapView({
@@ -230,7 +242,7 @@ export function FlowingSummary({
             variant="link"
             size="sm"
             className="h-auto px-0 text-ink"
-            onClick={start}
+            onClick={() => void start()}
           >
             Try again
           </Button>

@@ -13,6 +13,8 @@ fs.mkdirSync(stubDir);
 
 const MEETING_ID = "20000000-0000-0000-0000-0000000000aa";
 const MODEL = "test-model";
+const SERIES_ID = "10000000-0000-0000-0000-0000000000aa";
+const USER_ID = "00000000-0000-0000-0000-0000000000aa";
 
 fs.writeFileSync(
   path.join(stubDir, "supabase-server.mjs"),
@@ -29,6 +31,10 @@ fs.writeFileSync(
 fs.writeFileSync(
   path.join(stubDir, "stream.mjs"),
   "export function streamAi(input) { return globalThis.__R.streamAi(input); }\n",
+);
+fs.writeFileSync(
+  path.join(stubDir, "manage-access.mjs"),
+  "export async function userManagesSeries(seriesId, userId) { return globalThis.__R.manages(seriesId, userId); }\n",
 );
 fs.writeFileSync(
   path.join(stubDir, "next-server.mjs"),
@@ -51,6 +57,7 @@ function stubPlugin() {
         "@/lib/ai/access": "access.mjs",
         "@/lib/ai/config": "config.mjs",
         "@/lib/ai/stream": "stream.mjs",
+        "@/lib/series/manage-access": "manage-access.mjs",
         "next/server": "next-server.mjs",
       };
       for (const [specifier, file] of Object.entries(map)) {
@@ -79,6 +86,7 @@ async function bundle(entry, name, plugins = []) {
 }
 
 const recap = await bundle("src/lib/summary/recap.ts", "recap");
+const sse = await bundle("src/lib/summary/sse.ts", "sse");
 const route = await bundle(
   "src/app/api/meetings/[meetingId]/summary/stream/route.ts",
   "summary-stream-route",
@@ -92,6 +100,9 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 // the route must target the row with .eq("id", ...) alone.
 function fakeSupabase(state) {
   return {
+    auth: {
+      getUser: () => Promise.resolve({ data: { user: state.user }, error: null }),
+    },
     from(table) {
       const q = {
         update(row) {
@@ -103,6 +114,10 @@ function fakeSupabase(state) {
         },
         eq(column, value) {
           q._filters.push([column, value]);
+          return q;
+        },
+        is(column, value) {
+          q._filters.push([column, "is", value]);
           return q;
         },
         order() {
@@ -135,6 +150,7 @@ function fakeSupabase(state) {
 function setup(streamAi, overrides = {}) {
   const state = {
     meeting: {
+      series_id: SERIES_ID,
       title: "Weekly sync",
       attendees: ["Mike Ross"],
       notes_markdown: "",
@@ -142,16 +158,33 @@ function setup(streamAi, overrides = {}) {
       transcript_raw: "Mike Ross: I will own the migration review.",
       series: { name: "Platform" },
     },
+    user: { id: USER_ID },
+    manages: true,
+    manageChecks: [],
+    streamCalls: 0,
     updates: [],
     updateError: null,
     ...overrides,
   };
-  globalThis.__R = { supabase: () => fakeSupabase(state), streamAi };
+  globalThis.__R = {
+    supabase: () => fakeSupabase(state),
+    streamAi: (input) => {
+      state.streamCalls += 1;
+      return streamAi(input);
+    },
+    manages: async (seriesId, userId) => {
+      state.manageChecks.push([seriesId, userId]);
+      return state.manages;
+    },
+  };
   return state;
 }
 
-function post(signal) {
-  const request = { signal: signal ?? new AbortController().signal };
+function post(signal, query = "") {
+  const request = {
+    signal: signal ?? new AbortController().signal,
+    url: `http://localhost/api/meetings/${MEETING_ID}/summary/stream${query}`,
+  };
   return route.POST(request, {
     params: Promise.resolve({ meetingId: MEETING_ID }),
   });
@@ -186,12 +219,17 @@ test("a completed recap stream stores the text, time and model on the meeting be
 
   assert.equal(wordsFrom(body), "Mike Ross owns the migration review.");
   assert.ok(body.trimEnd().endsWith("data: [DONE]"));
+  assert.ok(!body.includes(sse.SSE_ERROR), "a finished recap sends no error frame");
 
   const recapUpdates = state.updates.filter((u) => "recap_markdown" in u.row);
   assert.equal(recapUpdates.length, 1, "exactly one recap write");
   const [{ table, row, filters }] = recapUpdates;
   assert.equal(table, "meetings");
-  assert.deepEqual(filters, [["id", MEETING_ID]]);
+  // A plain is-null filter: self-hosted PostgREST honors it on UPDATE, unlike or()/and().
+  assert.deepEqual(filters, [
+    ["id", MEETING_ID],
+    ["recap_markdown", "is", null],
+  ]);
   assert.equal(row.recap_markdown, "Mike Ross owns the migration review.");
   assert.equal(row.recap_model, MODEL);
   const stamp = new Date(row.recap_generated_at).getTime();
@@ -210,7 +248,24 @@ test("a provider error mid-stream ends the stream but writes nothing", async () 
 
   const body = await (await post()).text();
   assert.equal(wordsFrom(body), "Partial ");
+  assert.ok(body.includes(sse.SSE_ERROR), "the client is told the recap failed");
   assert.ok(body.trimEnd().endsWith("data: [DONE]"));
+  assert.ok(body.indexOf(sse.SSE_ERROR) < body.lastIndexOf("data: [DONE]"));
+  assert.equal(state.updates.length, 0);
+});
+
+test("a provider failure before the first word sends an error frame and writes nothing", async () => {
+  const state = setup(async function* () {
+    throw new Error("401 Unauthorized");
+  });
+
+  const response = await post();
+  assert.equal(response.status, 200);
+  const body = await response.text();
+  assert.ok(sse.SSE_ERROR, "sse.ts exports an SSE_ERROR frame");
+  assert.equal(wordsFrom(body), "");
+  assert.ok(body.includes(sse.SSE_ERROR));
+  assert.ok(body.indexOf(sse.SSE_ERROR) < body.lastIndexOf("data: [DONE]"));
   assert.equal(state.updates.length, 0);
 });
 
@@ -253,24 +308,77 @@ test("a cancelled response body writes nothing", async () => {
   assert.equal(state.updates.length, 0);
 });
 
-test("an empty provider response writes nothing", async () => {
+test("an empty provider response sends an error frame and writes nothing", async () => {
   const state = setup(async function* () {});
   const body = await (await post()).text();
+  assert.ok(body.includes(sse.SSE_ERROR));
   assert.ok(body.trimEnd().endsWith("data: [DONE]"));
   assert.equal(state.updates.length, 0);
 });
 
-test("a failed write still settles the stream with [DONE]", async () => {
+test("a failed write still settles the stream with [DONE] and logs the meeting id", async () => {
   const state = setup(
     async function* () {
       yield "Recap text.";
     },
     { updateError: { message: "permission denied" } },
   );
-  const body = await (await post()).text();
+  const logged = [];
+  const original = console.error;
+  console.error = (...args) => logged.push(args.map(String).join(" "));
+  let body;
+  try {
+    body = await (await post()).text();
+  } finally {
+    console.error = original;
+  }
   assert.equal(wordsFrom(body), "Recap text.");
   assert.ok(body.trimEnd().endsWith("data: [DONE]"));
   assert.equal(state.updates.length, 1);
+  assert.equal(logged.length, 1, "one console.error for the failed write");
+  assert.match(logged[0], new RegExp(MEETING_ID));
+  assert.match(logged[0], /permission denied/);
+  assert.doesNotMatch(logged[0], /apiKey|Bearer/);
+});
+
+test("Regenerate overwrites the stored recap without the is-null guard", async () => {
+  const state = setup(async function* () {
+    yield "Fresh recap.";
+  });
+  const body = await (await post(undefined, "?regenerate=1")).text();
+  assert.equal(wordsFrom(body), "Fresh recap.");
+  assert.equal(state.updates.length, 1);
+  assert.deepEqual(state.updates[0].filters, [["id", MEETING_ID]]);
+  assert.equal(state.updates[0].row.recap_markdown, "Fresh recap.");
+});
+
+test("a member who does not manage the series gets 403, no stream and no write", async () => {
+  const state = setup(
+    async function* () {
+      yield "Should never stream.";
+    },
+    { manages: false },
+  );
+  const response = await post();
+  assert.equal(response.status, 403);
+  assert.match(response.headers.get("content-type") ?? "", /json/);
+  assert.equal(state.streamCalls, 0);
+  assert.equal(state.updates.length, 0);
+  assert.deepEqual(state.manageChecks, [[SERIES_ID, USER_ID]]);
+});
+
+test("a signed-out caller gets 403 without a manager lookup", async () => {
+  const state = setup(
+    async function* () {
+      yield "Should never stream.";
+    },
+    { user: null },
+  );
+  const response = await post();
+  assert.equal(response.status, 403);
+  assert.equal(state.streamCalls, 0);
+  assert.equal(state.updates.length, 0);
+  assert.deepEqual(state.manageChecks, []);
 });
 
 test("a meeting with only desktop notepad notes still gets a stored recap", async () => {
@@ -282,6 +390,7 @@ test("a meeting with only desktop notepad notes still gets a stored recap", asyn
     },
     {
       meeting: {
+        series_id: SERIES_ID,
         title: "Weekly sync",
         attendees: [],
         notes_markdown: "",
@@ -303,6 +412,96 @@ test("a meeting with only desktop notepad notes still gets a stored recap", asyn
 // ---------------------------------------------------------------------------
 // Pure recap core
 // ---------------------------------------------------------------------------
+
+test("pipeRecap reports whether a recap was produced", async () => {
+  const run = (words, signal = new AbortController().signal) =>
+    recap.pipeRecap({
+      words,
+      emit: () => {},
+      signal,
+      model: MODEL,
+      persist: async () => {},
+    });
+  assert.equal(
+    await run((async function* () {
+      yield "Done.";
+    })()),
+    true,
+  );
+  assert.equal(
+    await run((async function* () {
+      throw new Error("429");
+    })()),
+    false,
+  );
+  assert.equal(await run((async function* () {})()), false);
+  assert.equal(
+    await run((async function* () {
+      yield "   ";
+    })()),
+    false,
+  );
+  const aborted = new AbortController();
+  aborted.abort();
+  assert.equal(
+    await run((async function* () {
+      yield "Late.";
+    })(), aborted.signal),
+    false,
+  );
+  assert.equal(
+    await recap.pipeRecap({
+      words: (async function* () {
+        yield "Stored or not.";
+      })(),
+      emit: () => {},
+      signal: new AbortController().signal,
+      model: MODEL,
+      persist: async () => {
+        throw new Error("write failed");
+      },
+    }),
+    true,
+    "a failed write still counts as a written recap for the stream",
+  );
+});
+
+test("parseSseFrame reads the error frame", () => {
+  assert.equal(typeof sse.SSE_ERROR, "string");
+  assert.match(sse.SSE_ERROR, /^data: .*\n\n$/);
+  assert.deepEqual(sse.parseSseFrame(sse.SSE_ERROR.trim()), { error: true });
+  assert.deepEqual(sse.parseSseFrame('data: {"t":"Hi "}'), { word: "Hi " });
+});
+
+test("a migration lets only series managers change the stored recap", () => {
+  const dir = path.join(root, "supabase/migrations");
+  const files = fs.readdirSync(dir).filter((f) => f.endsWith(".sql")).sort();
+  const name = files.find((f) => {
+    const s = fs.readFileSync(path.join(dir, f), "utf8");
+    return /recap_markdown/.test(s) && /user_can_manage_series/.test(s);
+  });
+  assert.ok(name, "expected a migration guarding the recap columns");
+  assert.ok(
+    name > "20261115130000_meeting_recap.sql",
+    "the guard is a new migration, never an edit of the recap migration",
+  );
+  const sql = fs.readFileSync(path.join(dir, name), "utf8");
+  for (const column of ["recap_markdown", "recap_generated_at", "recap_model"]) {
+    assert.match(
+      sql,
+      new RegExp(`NEW\\.${column}\\s+IS DISTINCT FROM\\s+OLD\\.${column}`, "i"),
+      `${column} changes are checked`,
+    );
+  }
+  assert.match(sql, /NOT\s+public\.user_can_manage_series\(\s*OLD\.series_id\s*\)/i);
+  assert.match(sql, /ERRCODE\s*=\s*'42501'/i);
+  assert.match(sql, /auth\.role\(\)\s*=\s*'service_role'/i);
+  assert.match(sql, /session_user\s+IN\s*\(\s*'postgres'/i);
+  assert.match(sql, /SECURITY DEFINER/i);
+  assert.match(sql, /SET search_path = public/i);
+  assert.match(sql, /BEFORE UPDATE[\s\S]*ON public\.meetings/i);
+  assert.match(sql, /FOR EACH ROW EXECUTE FUNCTION public\.enforce_meeting_recap_permissions\(\)/i);
+});
 
 test("buildRecapUpdate trims the text and stamps model and time", () => {
   const now = new Date("2026-11-15T10:00:00.000Z");

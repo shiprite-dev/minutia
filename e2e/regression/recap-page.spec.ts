@@ -55,11 +55,9 @@ async function rest(
     ...options,
     headers: { ...serviceHeaders(), ...(options.headers ?? {}) },
   });
-  expect(
-    response.ok(),
-    `${response.status()} ${await response.text()}`,
-  ).toBeTruthy();
-  return response.status() === 204 ? null : response.json();
+  const text = await response.text();
+  expect(response.ok(), `${response.status()} ${text}`).toBeTruthy();
+  return text ? JSON.parse(text) : null;
 }
 
 interface MeetingSeed {
@@ -485,6 +483,70 @@ test.describe("Completed meeting recap page", () => {
     }
   });
 
+  for (const [name, body] of [
+    [
+      "a provider failure before the first word",
+      `:\n\ndata: {"m":"test-model-x"}\n\ndata: {"e":"failed"}\n\ndata: [DONE]\n\n`,
+    ],
+    ["a stream that ends with no words", `:\n\ndata: [DONE]\n\n`],
+  ] as const) {
+    test(`${name} offers a retry instead of an empty recap, and the retry recovers`, async ({
+      page,
+      request,
+    }) => {
+      const fixture = await createFixture(request, {
+        transcript_raw: "Test User: Ship the rollout on Friday.",
+      });
+
+      try {
+        const urls: string[] = [];
+        const streams = await countRecapStreams(
+          page,
+          fixture.meetingId,
+          (route, call) => {
+            urls.push(route.request().url());
+            return call === 1
+              ? route.fulfill({
+                  status: 200,
+                  headers: {
+                    "content-type": "text/event-stream",
+                    "x-summary-model": "test-model-x",
+                  },
+                  body,
+                })
+              : route.fulfill(sseResponse(["Recovered ", "recap."]));
+          },
+        );
+        await open(page, fixture);
+
+        await expect(
+          page.getByText("The recap could not be written."),
+        ).toBeVisible();
+        await expect(page.locator("[data-recap-provenance]")).toHaveCount(0);
+        await expect(
+          page
+            .locator("span[aria-live='polite']")
+            .filter({ hasText: "Summary ready" }),
+        ).toHaveCount(0);
+
+        await page.getByRole("button", { name: "Try again" }).click();
+        await expect(page.locator("[data-flowing-summary]")).toContainText(
+          "Recovered recap.",
+        );
+        await expect(page.locator("[data-recap-provenance]")).toContainText(
+          "Written by AI",
+        );
+        await expect(
+          page.getByText("The recap could not be written."),
+        ).toHaveCount(0);
+        expect(streams.calls).toBe(2);
+        expect(urls.every((u) => !u.includes("regenerate=1"))).toBe(true);
+      } finally {
+        await deleteFixture(request, fixture);
+      }
+    });
+  }
+
   test("a transcribing meeting says what is happening instead of showing empty sections", async ({
     page,
     request,
@@ -665,11 +727,16 @@ test.describe("Completed meeting recap page", () => {
     });
 
     try {
+      const regenerateUrls: string[] = [];
       const streams = await countRecapStreams(
         page,
         fixture.meetingId,
-        (route) =>
-          route.fulfill(sseResponse(["Regenerated ", "recap ", "text."])),
+        (route) => {
+          regenerateUrls.push(route.request().url());
+          return route.fulfill(
+            sseResponse(["Regenerated ", "recap ", "text."]),
+          );
+        },
       );
       await open(page, fixture);
 
@@ -699,6 +766,7 @@ test.describe("Completed meeting recap page", () => {
         "Regenerated recap text.",
       );
       expect(streams.calls).toBe(1);
+      expect(regenerateUrls[0]).toContain("regenerate=1");
 
       await page.getByRole("button", { name: "More actions" }).click();
       await page.getByRole("menuitem", { name: "Copy share link" }).click();
@@ -853,6 +921,45 @@ test.describe("Completed meeting recap page", () => {
         page.getByRole("menuitem", { name: "Remind owners" }),
       ).toHaveCount(0);
       expect(streams.calls).toBe(0);
+    } finally {
+      await deleteFixture(request, fixture);
+    }
+  });
+
+  test("a participant on a meeting with no recap never starts one", async ({
+    page,
+    request,
+  }) => {
+    const fixture = await createFixture(request, {
+      notes_markdown: "Participant-visible note.",
+      transcript_raw: "Test User: Ship the rollout on Friday.",
+    });
+
+    try {
+      await rest(
+        request,
+        `series_participants?series_id=eq.${fixture.seriesId}&user_id=eq.${TEST_USER_ID}`,
+        {
+          method: "PATCH",
+          headers: serviceHeaders("return=minimal"),
+          data: { role: "participant" },
+        },
+      );
+      const streams = await countRecapStreams(page, fixture.meetingId);
+      await open(page, fixture);
+
+      await expect(page.getByPlaceholder("Meeting notes...")).toHaveJSProperty(
+        "readOnly",
+        true,
+      );
+      await expect(page.locator("[data-recap-section]")).toHaveCount(0);
+      await expect(
+        page.getByRole("status", { name: "Recap progress" }),
+      ).toHaveCount(0);
+      await page.waitForTimeout(1500);
+      expect(streams.calls).toBe(0);
+      const row = await readMeeting(request, fixture.meetingId, "recap_markdown");
+      expect(row.recap_markdown).toBeNull();
     } finally {
       await deleteFixture(request, fixture);
     }

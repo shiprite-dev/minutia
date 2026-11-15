@@ -498,10 +498,27 @@ test.describe("Transcription UX states", () => {
     });
 
     try {
-      await openMeeting(page, fixture.seriesId, fixture.meetingId);
+      // A toast dismisses itself, so count every announcement as it appears.
+      await page.addInitScript((text) => {
+        const seen = new WeakSet<Element>();
+        const w = window as unknown as { __transcriptAnnouncements: number };
+        w.__transcriptAnnouncements = 0;
+        new MutationObserver(() => {
+          for (const el of document.querySelectorAll("[aria-live] [data-sonner-toast]")) {
+            if (!seen.has(el) && el.textContent?.includes(text)) {
+              seen.add(el);
+              w.__transcriptAnnouncements += 1;
+            }
+          }
+        }).observe(document, { childList: true, subtree: true, characterData: true });
+      }, "Transcript ready. Check action items below.");
+      const announcements = () =>
+        page.evaluate(
+          () => (window as unknown as { __transcriptAnnouncements: number }).__transcriptAnnouncements
+        );
 
-      const toasts = page.getByText("Transcript ready. Check action items below.");
-      await expect(toasts).toHaveCount(0);
+      await openMeeting(page, fixture.seriesId, fixture.meetingId);
+      expect(await announcements()).toBe(0);
 
       // The transcript commits while the page is open: the run leaves processing
       // and the committed text lands in one update.
@@ -513,16 +530,16 @@ test.describe("Transcription UX states", () => {
         },
       });
 
-      await expect(toasts).toHaveCount(1, { timeout: 20_000 });
+      await expect.poll(announcements, { timeout: 20_000 }).toBe(1);
       // The landed transcript is evidence: it stays collapsed until asked for.
       await expect(page.getByRole("button", { name: /^Transcript/ })).toHaveAttribute(
         "aria-expanded",
         "false"
       );
 
-      // Later refreshes must not repeat the toast.
+      // Later refreshes must not repeat the announcement.
       await page.waitForTimeout(6000);
-      await expect(toasts).toHaveCount(1);
+      expect(await announcements()).toBe(1);
     } finally {
       await deleteSeries(request, fixture.seriesId);
     }

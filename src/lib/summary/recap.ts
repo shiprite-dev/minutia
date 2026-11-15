@@ -23,14 +23,15 @@ export function buildRecapUpdate(text: string, model: string, now: Date): RecapU
 }
 
 // Streams words to the client and stores the recap only when the provider
-// finished and the client is still listening. A throw or an abort stores nothing.
+// finished and the client is still listening. Resolves false when no recap was
+// produced (throw, abort or blank), so the route can tell the client.
 export async function pipeRecap(input: {
   words: AsyncIterable<string>;
   emit: (word: string) => void;
   signal: AbortSignal;
   model: string;
   persist: (row: RecapUpdate) => Promise<void>;
-}): Promise<void> {
+}): Promise<boolean> {
   let text = "";
   try {
     for await (const word of input.words) {
@@ -38,11 +39,13 @@ export async function pipeRecap(input: {
       text += word;
     }
   } catch {
-    return;
+    return false;
   }
-  if (input.signal.aborted) return;
+  if (input.signal.aborted) return false;
   const row = buildRecapUpdate(text, input.model, new Date());
-  if (row) await input.persist(row).catch(() => undefined);
+  if (!row) return false;
+  await input.persist(row).catch(() => undefined);
+  return true;
 }
 
 export function shouldAutoStartRecap(p: {
