@@ -200,7 +200,23 @@ test.describe("Recap page opened at stop", () => {
       );
       expect(streams.calls).toBe(1);
 
-      await page.waitForTimeout(3_000);
+      await rest(request, "meeting_ai_suggestions", {
+        method: "POST",
+        data: {
+          meeting_id: fixture.meetingId,
+          series_id: fixture.seriesId,
+          type: "new_item",
+          category: "action",
+          title: "Book the vendor review",
+          owner_name: "Mike Ross",
+          confidence: 0.9,
+          source_excerpt: "I will book the vendor review.",
+          status: "pending",
+        },
+      });
+      await expect(page.getByText("Book the vendor review").first()).toBeVisible({
+        timeout: 10_000,
+      });
       expect(streams.calls).toBe(1);
     } finally {
       await deleteFixture(request, fixture);
