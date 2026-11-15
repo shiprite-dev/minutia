@@ -199,6 +199,27 @@ function sseResponse(words: string[], model = "test-model-x") {
 // Counts every recap stream request for the meeting (with or without a query
 // string, so a regenerate is caught too) and answers with a fixed recap, so no
 // test depends on a live AI provider.
+async function countRecapAnimations(page: Page) {
+  await page.addInitScript(() => {
+    const w = window as unknown as { __recapAnimations: number };
+    w.__recapAnimations = 0;
+    document.addEventListener(
+      "animationstart",
+      (e) => {
+        if ((e.target as Element).closest?.("[data-flowing-summary]"))
+          w.__recapAnimations++;
+      },
+      true,
+    );
+  });
+}
+
+const recapAnimations = (page: Page) =>
+  page.evaluate(
+    () =>
+      (window as unknown as { __recapAnimations: number }).__recapAnimations,
+  );
+
 async function countRecapStreams(
   page: Page,
   meetingId: string,
@@ -238,7 +259,9 @@ async function expectStructuredRecap(page: Page) {
   const owner = summary
     .getByRole("listitem")
     .filter({ hasText: "books the vendor review" });
-  await expect(owner).toContainText("Mike Ross: books the vendor review (by Friday)");
+  await expect(owner).toContainText(
+    "Mike Ross: books the vendor review (by Friday)",
+  );
   expect(
     await owner.evaluate((li) =>
       Array.from(li.querySelectorAll("strong"))
@@ -734,14 +757,17 @@ test.describe("Completed meeting recap page", () => {
       // Fail until the user retries: a dev-mode remount can send an aborted
       // first request, so the call count cannot decide which answer fails.
       let retried = false;
-      const streams = await countRecapStreams(page, fixture.meetingId, (route) =>
-        retried
-          ? route.fulfill(sseResponse(["Recovered ", "recap."]))
-          : route.fulfill({
-              status: 500,
-              contentType: "application/json",
-              body: "{}",
-            }),
+      const streams = await countRecapStreams(
+        page,
+        fixture.meetingId,
+        (route) =>
+          retried
+            ? route.fulfill(sseResponse(["Recovered ", "recap."]))
+            : route.fulfill({
+                status: 500,
+                contentType: "application/json",
+                body: "{}",
+              }),
       );
       await open(page, fixture);
 
@@ -1241,7 +1267,11 @@ test.describe("Completed meeting recap page", () => {
       ).toHaveCount(0);
       await page.waitForTimeout(1500);
       expect(streams.calls).toBe(0);
-      const row = await readMeeting(request, fixture.meetingId, "recap_markdown");
+      const row = await readMeeting(
+        request,
+        fixture.meetingId,
+        "recap_markdown",
+      );
       expect(row.recap_markdown).toBeNull();
     } finally {
       await deleteFixture(request, fixture);
@@ -1346,8 +1376,10 @@ test.describe("Completed meeting recap page", () => {
     });
 
     try {
-      const streams = await countRecapStreams(page, fixture.meetingId, (route) =>
-        route.fulfill(sseResponse(STRUCTURED_FRAMES)),
+      const streams = await countRecapStreams(
+        page,
+        fixture.meetingId,
+        (route) => route.fulfill(sseResponse(STRUCTURED_FRAMES)),
       );
       await open(page, fixture);
 
@@ -1409,8 +1441,10 @@ test.describe("Completed meeting recap page", () => {
 
     try {
       const streams = await countRecapStreams(page, fixture.meetingId);
+      await countRecapAnimations(page);
       await open(page, fixture);
       await expectStructuredRecap(page);
+      expect(await recapAnimations(page)).toBe(0);
       await page.reload();
       await waitForApp(page);
       await expectStructuredRecap(page);
@@ -1420,7 +1454,10 @@ test.describe("Completed meeting recap page", () => {
     }
   });
 
-  test("a legacy prose recap still reads as prose", async ({ page, request }) => {
+  test("a legacy prose recap still reads as prose", async ({
+    page,
+    request,
+  }) => {
     const fixture = await createFixture(request, {
       transcript_raw: "Test User: Ship the rollout on Friday.",
       recap_markdown: STORED_RECAP,
