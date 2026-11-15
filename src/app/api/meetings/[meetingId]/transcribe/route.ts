@@ -221,14 +221,8 @@ export async function POST(
   };
 
   try {
-    let audioBlob: Blob | null = null;
-    const loadAudio = async () => {
-      if (!audioBlob) {
-        const { data } = await supabase.storage.from(MEETING_AUDIO_BUCKET).download(meeting.audio_file_path!);
-        audioBlob = data;
-      }
-      return audioBlob;
-    };
+    const loadAudio = async () =>
+      (await supabase.storage.from(MEETING_AUDIO_BUCKET).download(meeting.audio_file_path!)).data;
     const audioUnreadable = async () => {
       await markFailed();
       return NextResponse.json(
@@ -666,7 +660,6 @@ export async function POST(
         { status: 500 }
       );
     }
-
 
     const audioDiscarded = await retain(extraction);
 

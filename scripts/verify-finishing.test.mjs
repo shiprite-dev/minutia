@@ -28,7 +28,6 @@ const waiting = {
   autoRecap: true,
   openedAt: 1_000,
   now: 2_000,
-  transcriptRaw: null,
   transcriptionStatus: null,
 };
 
@@ -42,7 +41,6 @@ test("a page opened at stop is finishing while the transcript has not landed", (
     isFinishing({ ...waiting, transcriptionStatus: "processing" }),
     true,
   );
-  assert.equal(isFinishing({ ...waiting, transcriptRaw: "   " }), true);
 });
 
 test("a page opened any other way is never finishing", () => {
@@ -53,7 +51,6 @@ test("finishing ends when the transcript lands, when transcription fails, or aft
   assert.equal(
     isFinishing({
       ...waiting,
-      transcriptRaw: "Test User: Ship it.",
       transcriptionStatus: "completed",
     }),
     false,

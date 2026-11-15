@@ -754,6 +754,7 @@ export function MeetingDetailContent({
   const [autoStartSummary, setAutoStartSummary] = React.useState(false);
   const autoSummaryFiredRef = React.useRef(false);
   const [finishingOpenedAt, setFinishingOpenedAt] = React.useState<number | null>(null);
+  const [stopOutcome, setStopOutcome] = React.useState<"completed" | "failed" | null>(null);
   // The upload landed and the transcription request has not been issued yet.
   const [uploadedPending, setUploadedPending] = React.useState(false);
   const [transcriptionFailure, setTranscriptionFailure] = React.useState<TranscriptionFailure | null>(null);
@@ -781,8 +782,8 @@ export function MeetingDetailContent({
   // Load already-extracted suggestions (e.g. the ones the transcription
   // auto-generated) instead of re-running the model. This is what makes the
   // auto-trigger pay off: its output is shown, not silently discarded.
-  const loadSuggestions = React.useCallback(async () => {
-    setLoadingSuggestions(true);
+  const loadSuggestions = React.useCallback(async (quiet = false) => {
+    if (!quiet) setLoadingSuggestions(true);
     try {
       const response = await fetch(`/api/meetings/${meetingId}/suggestions`, { method: "GET" });
       const payload = await response.json().catch(() => ({}));
@@ -790,7 +791,7 @@ export function MeetingDetailContent({
     } catch {
       // Best-effort: the Review button can still trigger generation on demand.
     } finally {
-      setLoadingSuggestions(false);
+      if (!quiet) setLoadingSuggestions(false);
     }
   }, [meetingId]);
 
@@ -920,6 +921,11 @@ export function MeetingDetailContent({
     window.history.replaceState(window.history.state, "", url);
   }, []);
 
+  const stopStatus = meeting?.transcription_status;
+  if (finishingOpenedAt !== null && (stopStatus === "completed" || stopStatus === "failed")) {
+    setFinishingOpenedAt(null);
+    setStopOutcome(stopStatus);
+  }
   const finishing = isFinishing({
     autoRecap: finishingOpenedAt !== null,
     openedAt: finishingOpenedAt ?? 0,
@@ -927,6 +933,17 @@ export function MeetingDetailContent({
     transcriptionStatus: meeting?.transcription_status ?? null,
   });
   const { data: heardWindows = [] } = useMeetingWindows(meetingId, finishing);
+
+  // Polls the server while action items are still being extracted after the stop.
+  React.useEffect(() => {
+    if (stopOutcome !== "completed" || aiSuggestions.length > 0) return;
+    const startedAt = Date.now();
+    const id = setInterval(() => {
+      if (Date.now() - startedAt > 60_000) return clearInterval(id);
+      void loadSuggestions(true);
+    }, 3000);
+    return () => clearInterval(id);
+  }, [stopOutcome, aiSuggestions.length, loadSuggestions]);
 
   // The elapsed-time copy needs a moving clock while a run is in flight.
   React.useEffect(() => {
@@ -1893,7 +1910,7 @@ export function MeetingDetailContent({
   const hasAnyNotes = !!notes.trim() || !!companionNotes;
   const canGenerateRecap = canManageMeeting && hasAccess;
   const recapPreparing =
-    finishing ||
+    finishingOpenedAt !== null ||
     (recorder.state === "stopped" &&
       (recorder.fastLane.state === "active" || recorder.fastLane.state === "finalizing")) ||
     (["saving", "saved_pending", "transcribing", "processing_return"] as TranscriptionUiState[]).includes(
