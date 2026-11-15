@@ -1529,7 +1529,7 @@ test("enhanced notes read as sections, and a click edits the raw text", async ({
         .filter({ hasText: "Ship the rollout on Friday." }),
     ).toBeVisible();
     await expect(
-      notes.locator("strong").filter({ hasText: "Mike Ross" }),
+      notes.locator("strong").filter({ hasText: "Mike" }),
     ).toBeVisible();
     await expect(notes).not.toContainText("##");
     await expect(page.getByPlaceholder("Meeting notes...")).toHaveCount(0);

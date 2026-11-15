@@ -73,6 +73,7 @@ export function MeetingNotesSurface({
       ref={areaRef}
       value={webNotes}
       onChange={(e) => onChange(e.target.value)}
+      onFocus={() => setEditing(true)}
       onBlur={() => setEditing(false)}
       onKeyDown={(e) => e.key === "Escape" && e.currentTarget.blur()}
       placeholder="Meeting notes..."
