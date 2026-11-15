@@ -21,8 +21,11 @@ test.describe("Diarized transcript", () => {
   test("shows speaker chips and attributes the owner suggestion", async ({ page }) => {
     await gotoDiarizedMeeting(page);
 
-    // Speaker turns render with resolved names, not "Speaker A" / "Speaker B".
-    await page.getByRole("button", { name: /Transcript/ }).click();
+    // Speaker turns render with resolved names, not "Speaker A" / "Speaker B",
+    // once the collapsed transcript is opened.
+    const transcriptToggle = page.getByRole("button", { name: /^Transcript/ });
+    await expect(transcriptToggle).toHaveAttribute("aria-expanded", "false");
+    await transcriptToggle.click();
     await expect(
       page.getByRole("button", { name: "Rename Speaker A, currently Sarah Lee" }).first()
     ).toBeVisible();
@@ -33,8 +36,8 @@ test.describe("Diarized transcript", () => {
     await expect(page.getByText("I will take the migration review.")).toBeVisible();
 
     // The self-assignment in the transcript surfaces as an owner-attributed
-    // suggestion once the facilitator opens the accountability review.
-    await page.getByRole("button", { name: /Review AI suggestions/ }).click();
+    // suggestion, already open in the log's review group with no click.
+    await expect(page.getByRole("button", { name: /Review AI suggestions/ })).toHaveCount(0);
     const region = page.getByRole("region", { name: "AI suggestions" });
     await expect(region).toBeVisible();
 
@@ -54,7 +57,6 @@ test.describe("Diarized transcript", () => {
     await page.emulateMedia({ reducedMotion: "reduce" });
     await gotoDiarizedMeeting(page);
 
-    await page.getByRole("button", { name: /Review AI suggestions/ }).click();
     const card = page
       .locator("[data-suggestion-card]")
       .filter({ hasText: "migration review" })

@@ -194,13 +194,13 @@ test.describe("Context-aware AI suggestions", () => {
         timeout: 20_000,
       });
 
-      // The auto-extracted suggestions surface as a count on the button before
-      // any click: the facilitator sees "3" waiting, not a blank affordance.
-      const reviewButton = page.getByRole("button", { name: /Review AI suggestions/ });
-      await expect(reviewButton).toContainText("3");
-      await reviewButton.click();
+      // The auto-extracted suggestions are already open in the log's review
+      // group before any click: the facilitator sees all three waiting.
+      await expect(page.getByRole("button", { name: /Review AI suggestions/ })).toHaveCount(0);
+      await expect(page.getByText("To review", { exact: true })).toBeVisible();
       const region = page.getByRole("region", { name: "AI suggestions" });
       await expect(region).toBeVisible();
+      await expect(region.locator("[data-suggestion-card]")).toHaveCount(3);
 
       // The three distinct context badges.
       await expect(region.getByLabel("New item")).toBeVisible();

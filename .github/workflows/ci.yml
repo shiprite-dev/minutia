@@ -106,6 +106,9 @@ jobs:
       - name: Verify companion-notes composition
         run: pnpm test:companion-notes
 
+      - name: Verify recap persistence and view rules
+        run: pnpm test:recap
+
       - name: Verify email sender resolution
         run: pnpm test:email-sender
 

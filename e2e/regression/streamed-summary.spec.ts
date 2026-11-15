@@ -102,7 +102,19 @@ async function createSegmentOnlyFixture(request: APIRequestContext) {
   return { seriesId, meetingId };
 }
 
-test("generates a recap that renders as flowing words and announces completion once", async ({ page }) => {
+// The seeded meeting has a transcript and no stored recap, so a manager's first
+// visit writes the recap by itself. Reset it before each test so a recap stored
+// by an earlier run (or a live provider) never suppresses the auto-start.
+test.beforeEach(async ({ request }) => {
+  test.skip(!HAS_SERVICE_ROLE, "Requires service role to reset the seeded recap");
+  await rest(request, `meetings?id=eq.${MEETING_ID}`, {
+    method: "PATCH",
+    headers: serviceHeaders("return=minimal"),
+    data: { recap_markdown: null, recap_generated_at: null, recap_model: null, notes_markdown: "" },
+  });
+});
+
+test("a first visit writes the recap as flowing words and announces completion once", async ({ page }) => {
   await page.route(STREAM_URL, (route) =>
     route.fulfill({
       status: 200,
@@ -112,19 +124,18 @@ test("generates a recap that renders as flowing words and announces completion o
   );
   await gotoMeeting(page);
 
-  await page.getByRole("button", { name: /generate recap/i }).click();
-
   const summary = page.locator("[data-flowing-summary]").first();
   await expect(summary).toContainText("Mike Ross owns the migration review.");
   // Rendered as per-word spans, not one text node.
   expect(await summary.locator("span").count()).toBeGreaterThan(3);
+  await expect(page.getByRole("button", { name: /generate recap/i })).toHaveCount(0);
 
   // The polite completion region is populated exactly once.
   const announce = page.locator("span[aria-live='polite']").filter({ hasText: "Summary ready" });
   await expect(announce).toHaveCount(1);
 });
 
-test("done recap shows a provenance line with the model and timings", async ({ page }) => {
+test("a finished recap carries an AI provenance line naming the model", async ({ page }) => {
   await page.route(STREAM_URL, (route) =>
     route.fulfill({
       status: 200,
@@ -138,19 +149,18 @@ test("done recap shows a provenance line with the model and timings", async ({ p
   );
   await gotoMeeting(page);
 
-  await page.getByRole("button", { name: /generate recap/i }).click();
   await expect(page.locator("[data-flowing-summary]").first()).toContainText(
     "Mike Ross owns it."
   );
 
   const provenance = page.locator("[data-recap-provenance]");
   await expect(provenance).toBeVisible();
-  await expect(provenance).toContainText("Summary ready");
-  await expect(provenance).toContainText("test-model-x");
-  await expect(provenance).toContainText("total");
+  await expect(provenance).toContainText("Written by AI");
+  await expect(provenance).toContainText("just now");
+  await expect(provenance).toHaveAttribute("title", "test-model-x");
 });
 
-test("R replays the recap and is ignored while typing in a field", async ({ page }) => {
+test("R never re-runs the recap, on the page or inside a field", async ({ page }) => {
   let calls = 0;
   await page.route(STREAM_URL, (route) => {
     calls += 1;
@@ -166,41 +176,53 @@ test("R replays the recap and is ignored while typing in a field", async ({ page
   });
   await gotoMeeting(page);
 
-  await page.getByRole("button", { name: /generate recap/i }).click();
   await expect(page.locator("[data-flowing-summary]").first()).toContainText(
     "Mike Ross owns it."
   );
   expect(calls).toBe(1);
 
-  // R inside the notes field types the character; it must not replay.
+  // R inside the notes field types the character.
   const notes = page.getByPlaceholder("Meeting notes...");
   await notes.click();
   await page.keyboard.press("r");
-  await page.waitForTimeout(300);
-  expect(calls).toBe(1);
+  await expect(notes).toHaveValue("r");
 
-  // R on the page body re-runs the recap stream.
+  // R on the page body does nothing either.
   await notes.blur();
   await page.keyboard.press("r");
-  await expect.poll(() => calls, { timeout: 10_000 }).toBe(2);
+  await page.waitForTimeout(800);
+  expect(calls).toBe(1);
+  await expect(page.getByRole("button", { name: "Replay recap" })).toHaveCount(0);
 });
 
-test("Stop halts an in-flight recap without losing arrived text", async ({ page }) => {
+test("Stop halts an in-flight recap and offers to try again", async ({ page }) => {
   // A stream that never completes so the Stop control is meaningful.
+  let calls = 0;
   await page.route(STREAM_URL, async (route) => {
-    await new Promise((r) => setTimeout(r, 30_000));
-    await route.abort();
+    calls += 1;
+    if (calls === 1) {
+      await new Promise((r) => setTimeout(r, 30_000));
+      await route.abort();
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      headers: { "content-type": "text/event-stream", "cache-control": "no-cache, no-transform" },
+      body: sseBody(["Second ", "attempt."]),
+    });
   });
   await gotoMeeting(page);
 
-  await page.getByRole("button", { name: /generate recap/i }).click();
-  const stop = page.getByRole("button", { name: /stop/i });
+  const stop = page.getByRole("button", { name: "Stop" });
   await expect(stop).toBeVisible();
   await stop.click();
 
-  // After Stop, the generating affordance is gone and the Generate control returns.
-  await expect(page.getByText(/generating recap/i)).toHaveCount(0);
-  await expect(page.getByRole("button", { name: /generate recap|regenerate recap/i })).toBeVisible();
+  await expect(page.getByText("Writing recap…")).toHaveCount(0);
+  await expect(page.getByRole("status", { name: "Recap progress" })).toHaveCount(0);
+  await expect(page.getByText("Recap stopped.")).toBeVisible();
+  await page.getByRole("button", { name: "Try again" }).click();
+  await expect(page.locator("[data-flowing-summary]").first()).toContainText("Second attempt.");
+  expect(calls).toBe(2);
 });
 
 test("reduced motion disables the enter animation while words still render", async ({ page }) => {
@@ -214,7 +236,6 @@ test("reduced motion disables the enter animation while words still render", asy
   );
   await gotoMeeting(page);
 
-  await page.getByRole("button", { name: /generate recap/i }).click();
   const summary = page.locator("[data-flowing-summary]").first();
   await expect(summary).toContainText("Recap text still appears.");
 
@@ -228,7 +249,6 @@ test("reduced motion disables the enter animation while words still render", asy
 test("deep token streaming grows the recap incrementally (live provider only)", async ({ page }) => {
   test.skip(!HAS_AI, "Requires a live AI provider (OPENROUTER_API_KEY / AI_API_KEY) for true token streaming.");
   await gotoMeeting(page);
-  await page.getByRole("button", { name: /generate recap/i }).click();
 
   const summary = page.locator("[data-flowing-summary]").first();
   await expect(summary).toBeVisible();
@@ -240,7 +260,7 @@ test("deep token streaming grows the recap incrementally (live provider only)", 
     .toHaveCount(1, { timeout: 30_000 });
 });
 
-test("recap streams from fast segments when no transcript exists", async ({ page, request }) => {
+test("recap streams from fast segments when no transcript exists and is stored", async ({ page, request }) => {
   test.skip(!HAS_SERVICE_ROLE, "Requires service role to seed fast-lane segment rows");
   // The summary/stream route gates on requireAiAccess + hasAiConfigured (503)
   // BEFORE resolving the transcript source, so with no AI provider the segment
@@ -252,19 +272,26 @@ test("recap streams from fast segments when no transcript exists", async ({ page
 
   try {
     // No stream mock: hit the real route so the segment-fallback branch runs.
+    // A segment-only row has no client-visible source, so the page does not
+    // auto-start; drive the route the way the post-recording flow does.
     await page.goto(`/series/${fixture.seriesId}/meetings/${fixture.meetingId}`);
     await waitForApp(page);
+    const response = await page.request.post(
+      `/api/meetings/${fixture.meetingId}/summary/stream`,
+      { timeout: 45_000 }
+    );
+    expect(response.ok()).toBeTruthy();
+    expect(await response.text()).toContain("data: [DONE]");
 
-    await page.getByRole("button", { name: /generate recap/i }).click();
-
-    // The recap streams real text assembled from the completed segment rows.
+    // The stored recap is what the next visit reads.
+    await page.reload();
+    await waitForApp(page);
     const summary = page.locator("[data-flowing-summary]").first();
     await expect(summary).toBeVisible({ timeout: 20_000 });
     await expect
       .poll(async () => (await summary.textContent())?.trim().length ?? 0, { timeout: 30_000 })
       .toBeGreaterThan(0);
-    await expect(page.locator("span[aria-live='polite']").filter({ hasText: "Summary ready" }))
-      .toHaveCount(1, { timeout: 30_000 });
+    await expect(page.locator("[data-recap-provenance]")).toContainText("Written by AI");
   } finally {
     await rest(request, `meeting_audio_segments?meeting_id=eq.${fixture.meetingId}`, {
       method: "DELETE",

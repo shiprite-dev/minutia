@@ -272,8 +272,9 @@ export function resolveTranscriptionView(props: TranscriptionStatusProps): Statu
   }
 }
 
-export function TranscriptionStatus(props: TranscriptionStatusProps) {
-  const { regionRef, ...viewProps } = props;
+export function TranscriptionStatus(props: TranscriptionStatusProps & { tone?: "card" | "quiet" }) {
+  const { regionRef, tone = "card", ...viewProps } = props;
+  const quiet = tone === "quiet";
   const view = resolveTranscriptionView(viewProps);
   const passive = PASSIVE_STATES.includes(viewProps.state);
 
@@ -284,23 +285,39 @@ export function TranscriptionStatus(props: TranscriptionStatusProps) {
         role={view.alert ? "alert" : "status"}
         aria-live={view.alert ? "assertive" : "polite"}
         tabIndex={-1}
-        className="rounded-lg border border-rule bg-card px-4 py-3 shadow-[var(--shadow-raised)] focus:outline-none"
+        className={
+          quiet
+            ? "focus:outline-none"
+            : "rounded-lg border border-rule bg-card px-4 py-3 shadow-[var(--shadow-raised)] focus:outline-none"
+        }
       >
-        <p className="text-sm font-medium text-ink">{view.title}</p>
+        <p className={quiet ? "text-sm text-ink-3" : "text-sm font-medium text-ink"}>{view.title}</p>
         {view.details.map((detail) => (
-          <p key={detail} className="mt-1 text-xs text-ink-3">
+          <p key={detail} className={quiet ? "mt-1 text-xs text-ink-4" : "mt-1 text-xs text-ink-3"}>
             {detail}
           </p>
         ))}
-        {passive && (
+        {passive && !quiet && (
           <p className="mt-1 text-xs text-ink-4">No action needed.</p>
         )}
         {(view.primary || view.secondary) && (
           <div className="mt-3 flex flex-wrap items-center gap-2">
             {view.primary && (
-              <Button type="button" variant="accent" size="sm" onClick={view.primary.onClick}>
-                {view.primary.label}
-              </Button>
+              quiet ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="mt-1 h-auto px-0 text-ink hover:bg-transparent hover:underline"
+                  onClick={view.primary.onClick}
+                >
+                  {view.primary.label}
+                </Button>
+              ) : (
+                <Button type="button" variant="accent" size="sm" onClick={view.primary.onClick}>
+                  {view.primary.label}
+                </Button>
+              )
             )}
             {view.secondary && (
               <Button type="button" variant="outline" size="sm" onClick={view.secondary.onClick}>

@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { SERIES, MEETINGS, ISSUES, waitForApp } from "./seed-data";
+import { SERIES, ISSUES, waitForApp } from "./seed-data";
 
 test.describe("OIL Board card stagger", () => {
   test("issue rows are visible after stagger animation completes", async ({
@@ -88,18 +88,6 @@ test.describe("Copy button morph confirmation", () => {
       await copyBtn.click();
       await expect(page.getByText("Copied")).toBeVisible({ timeout: 3000 });
     }
-  });
-
-  test("completed meeting footer offers the recap replay", async ({ page }) => {
-    await page.goto(
-      `/series/${SERIES.platformStandup}/meetings/${MEETINGS.standup1}`
-    );
-    await waitForApp(page);
-
-    await expect(page.getByText(/Replay the recap/)).toBeVisible();
-    await expect(
-      page.getByRole("button", { name: "Replay recap" })
-    ).toBeVisible();
   });
 });
 
