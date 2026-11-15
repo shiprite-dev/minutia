@@ -6,6 +6,7 @@ export interface TimedText {
   start: number;
   end: number;
   text: string;
+  noSpeechProb?: number | null;
 }
 
 export interface ChannelInput {
@@ -17,6 +18,11 @@ export interface ChannelInput {
 
 const ECHO_TOLERANCE_SECONDS = 0.5;
 const ECHO_WORD_SHARE = 0.6;
+const NO_SPEECH_THRESHOLD = 0.6;
+
+function isSilence(s: TimedText): boolean {
+  return typeof s.noSpeechProb === "number" && s.noSpeechProb > NO_SPEECH_THRESHOLD;
+}
 
 function words(text: string): string[] {
   return text
@@ -66,8 +72,8 @@ export function mergeChannels({
   them: ChannelInput | null;
   offsetSeconds: number;
 }): TranscriptionSegment[] {
-  const themTimed = them ? channelTimed(them) : [];
-  const meTimed = me ? channelTimed(me) : [];
+  const themTimed = (them ? channelTimed(them) : []).filter((s) => !isSilence(s));
+  const meTimed = (me ? channelTimed(me) : []).filter((s) => !isSilence(s));
   const keptMe =
     me?.timed && them?.timed
       ? meTimed.filter((m) => !themTimed.some((t) => isEcho(m, t)))
@@ -92,7 +98,10 @@ export function channelSegmentOutcome(
 ): "speech" | "no_speech" | null {
   if (merged.length > 0) return "speech";
   const present = inputs.filter((i): i is ChannelInput => i != null);
-  return present.length > 0 && present.every((i) => i.outcome === "no_speech")
+  return present.length > 0 &&
+    present.every(
+      (i) => i.outcome === "no_speech" || (!!i.timed?.length && i.timed.every(isSilence))
+    )
     ? "no_speech"
     : null;
 }

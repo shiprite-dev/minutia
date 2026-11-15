@@ -677,3 +677,234 @@ test("the final pass stores the speaker map through speakerMapToStore", () => {
   const route = fs.readFileSync("src/app/api/meetings/[meetingId]/transcribe/route.ts", "utf8");
   assert.ok(route.includes("speakerMapToStore("), "a run that yields no map must not wipe corrections");
 });
+
+// ---------------------------------------------------------------------------
+// Silent channels: whisper invents short lines ("Okay.", "you") on a muted or
+// near-silent channel. Its per-segment no_speech_prob flags them. Probability
+// values below were measured from openai/whisper-1 verbose_json responses.
+// ---------------------------------------------------------------------------
+
+const dual = await load("src/lib/transcription/dual.ts", "dual");
+
+const heard = (start, end, text, noSpeechProb) => ({ start, end, text, noSpeechProb });
+const HALLUCINATED = 0.963;
+const SPOKEN = 0.026;
+
+test("a muted mic's invented lines are dropped while the far side stays in order", () => {
+  const merge = fn(channels, "mergeChannels");
+  const out = merge({
+    me: input("Okay. Okay. Okay. Okay. Okay.", [
+      heard(0, 2, "Okay.", HALLUCINATED),
+      heard(9, 11, "Okay. Okay. Okay. Okay.", HALLUCINATED),
+      heard(29.98, 30, "you", HALLUCINATED),
+    ]),
+    them: input("いつもの意味は何ですか? 英語で説明すると Rarely, Hardly", [
+      heard(1, 4, "いつもの意味は何ですか?", 0.02),
+      heard(10, 14, "英語で説明すると Rarely, Hardly", 0.04),
+    ]),
+    offsetSeconds: 300,
+  });
+  assert.deepEqual(
+    out.map((s) => [s.speaker, s.start, s.text]),
+    [
+      ["them", 301, "いつもの意味は何ですか?"],
+      ["them", 310, "英語で説明すると Rarely, Hardly"],
+    ],
+  );
+});
+
+test("a real spoken Okay. survives even when whisper's decoding confidence is low", () => {
+  const merge = fn(channels, "mergeChannels");
+  const out = merge({
+    me: input("Okay.", [{ ...heard(39.2, 40.6, "Okay.", SPOKEN), avgLogprob: -1.51 }]),
+    them: input("Does that make sense?", [heard(36, 38.5, "Does that make sense?", 0.03)]),
+    offsetSeconds: 0,
+  });
+  assert.deepEqual(
+    out.map((s) => [s.speaker, s.text]),
+    [
+      ["them", "Does that make sense?"],
+      ["me", "Okay."],
+    ],
+  );
+});
+
+test("the them channel is filtered by the same no-speech rule", () => {
+  const merge = fn(channels, "mergeChannels");
+  const out = merge({
+    me: input("I'll send it tonight.", [heard(5, 7, "I'll send it tonight.", 0.05)]),
+    them: input("Thank you. Thank you.", [
+      heard(0, 2, "Thank you.", HALLUCINATED),
+      heard(8, 9, "Thank you.", 0.1),
+    ]),
+    offsetSeconds: 0,
+  });
+  assert.deepEqual(
+    out.map((s) => [s.speaker, s.start, s.text]),
+    [
+      ["me", 5, "I'll send it tonight."],
+      ["them", 8, "Thank you."],
+    ],
+  );
+});
+
+test("the no-speech cutoff is whisper's 0.6: at the threshold a line is kept, above it dropped", () => {
+  const merge = fn(channels, "mergeChannels");
+  const out = merge({
+    me: input("Right. Sure.", [heard(0, 1, "Right.", 0.6), heard(2, 3, "Sure.", 0.61)]),
+    them: null,
+    offsetSeconds: 0,
+  });
+  assert.deepEqual(
+    out.map((s) => s.text),
+    ["Right."],
+  );
+});
+
+test("segments without a no-speech probability are kept (providers that omit it)", () => {
+  const merge = fn(channels, "mergeChannels");
+  const out = merge({
+    me: input("Okay.", [timed(0, 1, "Okay.")]),
+    them: input("Okay. Great.", [timed(2, 3, "Okay. Great."), { ...timed(4, 5, "Next."), noSpeechProb: null }]),
+    offsetSeconds: 0,
+  });
+  assert.deepEqual(
+    out.map((s) => [s.speaker, s.text]),
+    [
+      ["me", "Okay."],
+      ["them", "Okay. Great."],
+      ["them", "Next."],
+    ],
+  );
+});
+
+test("stored segments keep their shape: no provider probabilities leak into storage", () => {
+  const merge = fn(channels, "mergeChannels");
+  const out = merge({
+    me: input("Yes.", [{ ...heard(0, 1, "Yes.", SPOKEN), avgLogprob: -0.2 }]),
+    them: null,
+    offsetSeconds: 0,
+  });
+  assert.deepEqual(out, [{ speaker: "me", start: 0, end: 1, text: "Yes.", confidence: null }]);
+});
+
+test("a segment whose channels held only invented lines is confirmed no_speech", () => {
+  const merge = fn(channels, "mergeChannels");
+  const outcome = fn(channels, "channelSegmentOutcome");
+  const me = input("Okay.", [heard(0, 2, "Okay.", HALLUCINATED)]);
+  const them = input("you", [heard(29.9, 30, "you", 0.91)]);
+  const merged = merge({ me, them, offsetSeconds: 0 });
+  assert.deepEqual(merged, []);
+  assert.equal(outcome(merged, [me, them]), "no_speech");
+  assert.equal(outcome(merged, [me, null]), "no_speech");
+});
+
+test("whisper verbose_json no_speech_prob is carried onto each timed segment", async () => {
+  const transcribeWithOpenRouter = fn(transcription, "transcribeWithOpenRouter");
+  fakeFetch(() =>
+    ok({
+      text: "Okay. Okay.",
+      task: "transcribe",
+      language: "english",
+      duration: 60.03,
+      usage: { seconds: 61 },
+      segments: [
+        {
+          id: 0,
+          seek: 3000,
+          start: 39.22,
+          end: 40.62,
+          text: " Okay.",
+          tokens: [50364, 1033, 13, 51330],
+          temperature: 1,
+          avg_logprob: -1.5055910348892212,
+          compression_ratio: 0.38461539149284363,
+          no_speech_prob: 0.02577107958495617,
+        },
+        {
+          id: 1,
+          seek: 4062,
+          start: 58.6,
+          end: 60,
+          text: " Okay.",
+          tokens: [50364, 1033, 13, 51374],
+          temperature: 1,
+          avg_logprob: -1.594763159751892,
+          compression_ratio: 0.38461539149284363,
+          no_speech_prob: "n/a",
+        },
+      ],
+      words: [
+        { word: "Okay", start: 39.22, end: 40.62 },
+        { word: "Okay", start: 58.6, end: 60 },
+      ],
+    }),
+  );
+  const result = await transcribeWithOpenRouter(blob(), {
+    apiKey: "k",
+    mimeType: "audio/mp4",
+    timestamps: true,
+  });
+  assert.deepEqual(result.timed, [
+    { start: 39.22, end: 40.62, text: "Okay.", noSpeechProb: 0.02577107958495617 },
+    { start: 58.6, end: 60, text: "Okay." },
+  ]);
+});
+
+test("transcribeDualSegment keeps only the far side when the mic was muted", async () => {
+  const transcribeDualSegment = fn(dual, "transcribeDualSegment");
+  const meBytes = new Uint8Array([1, 1, 1, 1]);
+  const themBytes = new Uint8Array([2, 2, 2, 2]);
+  const meKey = Buffer.from(meBytes).toString("base64");
+  const verbose = (segments) =>
+    ok({
+      text: segments.map((s) => s.text).join(""),
+      usage: { seconds: 30 },
+      segments: segments.map((s, id) => ({
+        id,
+        seek: 0,
+        temperature: 0,
+        compression_ratio: 0.4,
+        tokens: [],
+        ...s,
+      })),
+    });
+  fakeFetch((_url, options) =>
+    JSON.parse(options.body).input_audio.data === meKey
+      ? verbose([
+          { start: 0, end: 2, text: " Okay.", avg_logprob: -0.64, no_speech_prob: 0.963 },
+          { start: 12, end: 14, text: " Okay. Okay.", avg_logprob: -0.7, no_speech_prob: 0.94 },
+        ])
+      : verbose([
+          { start: 1, end: 4, text: " いつもの意味は何ですか?", avg_logprob: -0.3, no_speech_prob: 0.02 },
+          { start: 10, end: 14, text: " 英語で説明すると Rarely, Hardly", avg_logprob: -0.4, no_speech_prob: 0.04 },
+        ]),
+  );
+  const saved = { ...process.env };
+  process.env.TRANSCRIPTION_PROVIDER = "openrouter";
+  process.env.OPENROUTER_API_KEY = "k";
+  delete process.env.GROQ_API_KEY;
+  delete process.env.ASSEMBLYAI_API_KEY;
+  delete process.env.TRANSCRIPTION_LOCAL_URL;
+  try {
+    const out = await transcribeDualSegment({
+      meAudio: new Blob([meBytes], { type: "audio/mp4" }),
+      themAudio: new Blob([themBytes], { type: "audio/mp4" }),
+      offsetSeconds: 600,
+      fileName: "seg-2.m4a",
+      mimeType: "audio/mp4",
+      deadlineAt: Date.now() + 60_000,
+    });
+    assert.deepEqual(
+      out.merged.map((s) => [s.speaker, s.start, s.text]),
+      [
+        ["them", 601, "いつもの意味は何ですか?"],
+        ["them", 610, "英語で説明すると Rarely, Hardly"],
+      ],
+    );
+    assert.equal(out.transcriptText.includes("Okay"), false);
+    assert.equal(out.outcome, "speech");
+  } finally {
+    process.env = saved;
+  }
+});
