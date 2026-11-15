@@ -64,7 +64,7 @@ export interface TranscriptionResult {
    * positive evidence of silence, never inferred from a malformed payload. */
   outcome?: "speech" | "no_speech";
   /** Provider segment timings (seconds) when every reported segment is well formed. */
-  timed?: { start: number; end: number; text: string }[];
+  timed?: { start: number; end: number; text: string; noSpeechProb?: number }[];
 }
 
 /** Trusts provider `segments` only when every entry has numeric start/end and string text. */
@@ -73,7 +73,14 @@ function parseTimed(segments: unknown): TranscriptionResult["timed"] {
   const valid = segments.every(
     (s) => typeof s?.start === "number" && typeof s?.end === "number" && typeof s?.text === "string"
   );
-  return valid ? segments.map((s) => ({ start: s.start, end: s.end, text: s.text.trim() })) : undefined;
+  return valid
+    ? segments.map((s) => ({
+        start: s.start,
+        end: s.end,
+        text: s.text.trim(),
+        ...(Number.isFinite(s.no_speech_prob) ? { noSpeechProb: s.no_speech_prob } : {}),
+      }))
+    : undefined;
 }
 
 export type TranscriptionErrorCode =
