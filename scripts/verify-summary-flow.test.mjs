@@ -84,6 +84,14 @@ test("splitWords bolds every word of a multi-word phrase", () => {
   assert.equal(words.map((w) => w.text).join(""), "migration review owner");
 });
 
+test("splitWords with openBold renders a still-open bold span as bold, markers hidden", () => {
+  const words = splitWords("**Mike Ross", { openBold: true });
+  assert.deepEqual(words.map((w) => [w.text, w.bold]), [["Mike ", true], ["Ross", true]]);
+  const closed = splitWords("**Mike Ross:** books it", { openBold: true });
+  assert.deepEqual(closed.slice(0, 2).map((w) => w.bold), [true, true]);
+  assert.equal(closed[2].bold, false);
+});
+
 test("splitWords never injects raw markup and ignores an unterminated opener", () => {
   // Mid-stream a lone opener has not closed yet: no bold, no literal ** leaks.
   const words = splitWords("owns the **mig");
@@ -99,9 +107,9 @@ test("splitWords stays append-stable across a bold phrase closing mid-stream", (
   assert.equal(closed[2].bold, true);
 });
 
-test("materializeClassName drops the class when reduced motion is requested", () => {
-  assert.equal(materializeClassName(false), "materialize");
-  assert.equal(materializeClassName(true), "");
+test("materializeClassName animates only when asked to", () => {
+  assert.equal(materializeClassName(true), "materialize");
+  assert.equal(materializeClassName(false), "");
 });
 
 const { SUMMARY_SYSTEM_PROMPT, buildSummaryPrompt } = await bundle(
@@ -302,8 +310,99 @@ test("an empty heading is kept while streaming and dropped once settled", async 
     { kind: "heading", text: "Next steps" },
     { kind: "list", items: ["Book it."] },
   ]);
-  assert.deepEqual(settled.map((b) => b.key), [0, 1, 2]);
+  const streamed = parseRecap("Lead.\n\n## Decisions\n## Next steps\n- Book it.", { streaming: true });
+  const listKey = (blocks) => blocks.find((b) => b.kind === "list").key;
+  assert.equal(listKey(settled), listKey(streamed), "settling must not move the list onto another key");
+  assert.equal(new Set(settled.map((b) => b.key)).size, settled.length);
 });
+
+test("a blank line between bullets keeps one list", async () => {
+  const { parseRecap, sanitizeRecap } = await structure();
+  const loose = "## Key points\n- First.\n\n- Second.\n\n- Third.\n\nClosing line.";
+  assert.deepEqual(shape(parseRecap(loose)), [
+    { kind: "heading", text: "Key points" },
+    { kind: "list", items: ["First.", "Second.", "Third."] },
+    { kind: "lead", text: "Closing line." },
+  ]);
+  assert.equal(sanitizeRecap(loose), "## Key points\n- First.\n- Second.\n- Third.\n\nClosing line.");
+});
+
+test("an indented line continues the bullet above it", async () => {
+  const { parseRecap, sanitizeRecap } = await structure();
+  const wrapped = "## Key points\n- A long bullet\n  that wraps here\n- Next.";
+  assert.deepEqual(shape(parseRecap(wrapped)), [
+    { kind: "heading", text: "Key points" },
+    { kind: "list", items: ["A long bullet that wraps here", "Next."] },
+  ]);
+  assert.equal(sanitizeRecap(wrapped), "## Key points\n- A long bullet that wraps here\n- Next.");
+});
+
+test("a lead line that starts with a number stays prose", async () => {
+  const { parseRecap, sanitizeRecap } = await structure();
+  assert.deepEqual(shape(parseRecap("2024. was a strong year for the team.")), [
+    { kind: "lead", text: "2024. was a strong year for the team." },
+  ]);
+  assert.equal(sanitizeRecap("2024. was a strong year.\n\n## Next steps\n1. Book it."), "2024. was a strong year.\n\n## Next steps\n- Book it.");
+  assert.deepEqual(shape(parseRecap("- First.\n2. Second.")), [{ kind: "list", items: ["First.", "Second."] }]);
+  assert.equal(sanitizeRecap("## Next\n- A\n\n2024. was big."), "## Next\n- A\n\n2024. was big.");
+  assert.deepEqual(shape(parseRecap("Agreed next steps:\n1. Book vendor.\n2. Ship Friday.")), [
+    { kind: "lead", text: "Agreed next steps:" },
+    { kind: "list", items: ["Book vendor.", "Ship Friday."] },
+  ]);
+});
+
+test("no block flickers when markers arrive one character at a time", async () => {
+  const { parseRecap } = await structure();
+  const fixture = "Lead.\n\n## Next steps\n1. Book it.\n2. Ship it.\n\n## Key points\n- **Mike Ross:** owns it.";
+  let prev = [];
+  for (let i = 1; i <= fixture.length; i++) {
+    const prefix = fixture.slice(0, i);
+    const next = parseRecap(prefix, { streaming: true });
+    const byKey = new Map(next.map((b) => [b.key, b]));
+    for (const b of prev) {
+      const after = byKey.get(b.key);
+      assert.ok(after, `block ${b.key} vanished at ${JSON.stringify(prefix)}`);
+      assert.equal(after.kind, b.kind, `kind changed at ${JSON.stringify(prefix)}`);
+    }
+    prev = next;
+  }
+});
+
+test("an owner name renders bold from its first streamed word", async () => {
+  const { parseRecap } = await structure();
+  const blocks = parseRecap("## Next steps\n- **Mike ", { streaming: true });
+  assert.equal(blocks[1].items[0].words[0].bold, true);
+  const settled = parseRecap("Lead with a stray **marker", { streaming: false });
+  assert.equal(allWords(settled).some((w) => w.bold), false);
+});
+
+for (const [name, fixture] of [
+  ["loose list", "Lead.\n\n## Key points\n- First point.\n\n- Second point.\n\n## Next steps\n- **Mike Ross:** books it."],
+  ["wrapped bullet", "Lead.\n\n## Key points\n- A long bullet\n  that wraps here\n- Next one."],
+  ["heading after heading", "Lead.\n\n## Decisions\n## Next steps\n- Book it."],
+]) {
+  test(`streaming keys and kinds stay stable for a ${name}`, async () => {
+    const { parseRecap } = await structure();
+    const frames = fixture.match(/\S+\s*/g);
+    let prefix = "";
+    let prev = [];
+    for (const frame of frames) {
+      prefix += frame;
+      const next = parseRecap(prefix, { streaming: true });
+      const byKey = new Map(next.map((b) => [b.key, b]));
+      for (const b of prev) {
+        const after = byKey.get(b.key);
+        assert.ok(after, `block ${b.key} vanished at ${JSON.stringify(prefix)}`);
+        assert.equal(after.kind, b.kind, `kind changed at ${JSON.stringify(prefix)}`);
+        if (b.kind === "list") assert.ok(after.items.length >= b.items.length);
+      }
+      prev = next;
+    }
+    const settled = parseRecap(fixture);
+    const byKey = new Map(prev.map((b) => [b.key, b]));
+    for (const b of settled) assert.equal(byKey.get(b.key)?.kind, b.kind, `settle moved block ${b.key}`);
+  });
+}
 
 test("parseRecap tolerates near-miss markdown per the contract table", async () => {
   const { parseRecap } = await structure();

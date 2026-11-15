@@ -1,7 +1,8 @@
 // Pure client helpers. splitWords produces stable index keys so React
 // reconciliation appends only newly arrived spans (earlier words keep their
-// DOM node and do not re-animate). materializeClassName gates the enter
-// animation on the reduced-motion preference; content still renders.
+// DOM node and do not re-animate). materializeClassName returns the enter
+// animation class only when asked to animate (streaming, motion allowed);
+// content always renders.
 
 export interface FlowWord {
   key: number;
@@ -10,10 +11,10 @@ export interface FlowWord {
 }
 
 // Strip **bold** markers to plain text while recording which characters fall
-// inside a closed bold span. An unterminated trailing opener is treated as
-// literal (no bold, no leaked markers) so a mid-stream frame never flashes the
-// wrong emphasis or raw markup; it settles once the closer arrives.
-function stripBold(text: string): { plain: string; bold: boolean[] } {
+// inside a closed bold span. An unterminated trailing opener reverts to
+// non-bold unless openBold is set (streaming), in which case the trailing words
+// stay bold; markers are never leaked.
+function stripBold(text: string, openBold: boolean): { plain: string; bold: boolean[] } {
   let plain = "";
   const bold: boolean[] = [];
   let open = false;
@@ -29,15 +30,15 @@ function stripBold(text: string): { plain: string; bold: boolean[] } {
     bold.push(open);
   }
   // Unterminated opener: revert everything after it to non-bold.
-  if (open && openStart >= 0) {
+  if (!openBold && open && openStart >= 0) {
     for (let i = openStart; i < bold.length; i++) bold[i] = false;
   }
   return { plain, bold };
 }
 
-export function splitWords(text: string): FlowWord[] {
+export function splitWords(text: string, opts?: { openBold?: boolean }): FlowWord[] {
   if (!text) return [];
-  const { plain, bold } = stripBold(text);
+  const { plain, bold } = stripBold(text, !!opts?.openBold);
   const re = /\S+\s*/g;
   const words: FlowWord[] = [];
   let match: RegExpExecArray | null;
@@ -57,6 +58,6 @@ export function splitWords(text: string): FlowWord[] {
   return words;
 }
 
-export function materializeClassName(reducedMotion: boolean): string {
-  return reducedMotion ? "" : "materialize";
+export function materializeClassName(animate: boolean): string {
+  return animate ? "materialize" : "";
 }
