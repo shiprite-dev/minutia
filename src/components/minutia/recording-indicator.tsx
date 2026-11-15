@@ -13,6 +13,7 @@ interface RecordingIndicatorProps {
   isSupported: boolean;
   error?: string | null;
   uploading?: boolean;
+  hideRecord?: boolean;
   onStart: () => void;
   onStop: () => void;
   onPause?: () => void;
@@ -30,6 +31,7 @@ export function RecordingIndicator({
   isSupported,
   error,
   uploading,
+  hideRecord,
   onStart,
   onStop,
   onPause,
@@ -64,7 +66,7 @@ export function RecordingIndicator({
 
       <AnimatePresence mode="wait" initial={false}>
         {!isActive ? (
-          <motion.button
+          hideRecord ? null : <motion.button
             key="record"
             type="button"
             onClick={onStart}

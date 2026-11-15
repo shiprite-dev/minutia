@@ -19,11 +19,12 @@ export const profileKeys = {
 // ---------------------------------------------------------------------------
 // useProfile - fetch the current user's profile
 // ---------------------------------------------------------------------------
-export function useProfile() {
+export function useProfile(options?: { refetchInterval?: number | false }) {
   const supabase = createClient();
 
   return useQuery<Profile>({
     queryKey: profileKeys.current,
+    refetchInterval: options?.refetchInterval,
     queryFn: async () => {
       const {
         data: { user },

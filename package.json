@@ -92,6 +92,7 @@
     "test:errors": "node --test scripts/verify-humanize-error.test.mjs",
     "test:fast-lane": "node scripts/verify-fast-lane.test.mjs",
     "test:finishing": "node --test scripts/verify-finishing.test.mjs",
+    "test:companion-status": "node --test scripts/verify-companion-status.test.mjs",
     "test:optimistic": "node --test scripts/verify-optimistic.test.mjs",
     "test:summary-flow": "node --test scripts/verify-summary-flow.test.mjs",
     "eval:recap-structure": "node scripts/eval-recap-structure.mjs",

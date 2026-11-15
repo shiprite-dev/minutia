@@ -3,25 +3,21 @@
 import * as React from "react";
 import { X, Download } from "lucide-react";
 
-const DISMISS_KEY = "minutia.companion-prompt-dismissed";
+const dismissKey = (userId: string) =>
+  `minutia.companion-prompt-dismissed.${userId}`;
 
-// Inline nudge shown near the recorder when the signed-in user has no companion
-// app checked in yet (companion_last_seen_at is null) and has not dismissed it.
-export function CompanionInstallPrompt({
-  lastSeenAt,
-}: {
-  lastSeenAt: string | null | undefined;
-}) {
+// Inline nudge for a Mac browser whose user has never connected the companion.
+export function CompanionInstallPrompt({ userId }: { userId: string }) {
   const [dismissed, setDismissed] = React.useState(true);
 
   React.useEffect(() => {
-    setDismissed(localStorage.getItem(DISMISS_KEY) === "true");
-  }, []);
+    setDismissed(localStorage.getItem(dismissKey(userId)) === "true");
+  }, [userId]);
 
-  if (lastSeenAt || dismissed) return null;
+  if (dismissed) return null;
 
   function dismiss() {
-    localStorage.setItem(DISMISS_KEY, "true");
+    localStorage.setItem(dismissKey(userId), "true");
     setDismissed(true);
   }
 
