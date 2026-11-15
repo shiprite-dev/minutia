@@ -14,7 +14,7 @@ const inline = (s: string) =>
 
 export function parseRecap(
   text: string,
-  opts?: { streaming?: boolean },
+  opts?: { streaming?: boolean; lines?: boolean },
 ): RecapBlock[] {
   const raws: Raw[] = [];
   let open: Raw | null = null;
@@ -66,7 +66,7 @@ export function parseRecap(
       open.items[open.items.length - 1] += " " + inline(line.trim());
       continue;
     }
-    if (open?.kind === "lead") open.text += " " + inline(line.trim());
+    if (open?.kind === "lead" && !opts?.lines) open.text += " " + inline(line.trim());
     else {
       open = { kind: "lead", text: inline(line.trim()) };
       raws.push(open);
