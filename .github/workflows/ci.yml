@@ -109,6 +109,9 @@ jobs:
       - name: Verify recap persistence and view rules
         run: pnpm test:recap
 
+      - name: Verify recap structure, streaming flow and prompt contract
+        run: pnpm test:summary-flow
+
       - name: Verify email sender resolution
         run: pnpm test:email-sender
 

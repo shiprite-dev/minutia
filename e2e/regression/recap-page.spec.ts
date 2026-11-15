@@ -15,6 +15,17 @@ const TEST_USER_ID = "00000000-0000-0000-0000-000000000001";
 
 const STORED_RECAP =
   "The team agreed to ship the rollout on Friday. **Test User** drafts the rollout plan and Mike Ross books the vendor review.";
+const STRUCTURED_RECAP = [
+  "The team agreed to ship the rollout on Friday.",
+  "",
+  "## Decisions",
+  "- Ship the rollout on Friday behind a flag.",
+  "",
+  "## Next steps",
+  "- **Mike Ross:** books the vendor review (by Friday)",
+  "- **Test User:** drafts the rollout plan.",
+].join("\n");
+const STRUCTURED_FRAMES = STRUCTURED_RECAP.match(/\S+\s*/g) ?? [];
 const ME_THEM_TRANSCRIPT =
   "Test User: I will draft the rollout plan.\nThem: Then I will book the vendor review.";
 const ME_THEM_SEGMENTS = [
@@ -206,6 +217,39 @@ async function countRecapStreams(
     },
   );
   return counter;
+}
+
+async function expectStructuredRecap(page: Page) {
+  const recap = page.locator("[data-recap-section]");
+  const summary = recap.locator("[data-flowing-summary]");
+  await expect(summary).toContainText(
+    "The team agreed to ship the rollout on Friday.",
+    { timeout: 20_000 },
+  );
+  await expect(
+    recap.getByRole("heading", { level: 3, name: "Decisions" }),
+  ).toBeVisible();
+  await expect(
+    recap.getByRole("heading", { level: 3, name: "Next steps" }),
+  ).toBeVisible();
+  await expect(recap.getByRole("heading", { level: 3 })).toHaveCount(2);
+  await expect(summary.getByRole("list")).toHaveCount(2);
+  await expect(summary.getByRole("listitem")).toHaveCount(3);
+  const owner = summary
+    .getByRole("listitem")
+    .filter({ hasText: "books the vendor review" });
+  await expect(owner).toContainText("Mike Ross: books the vendor review (by Friday)");
+  expect(
+    await owner.evaluate((li) =>
+      Array.from(li.querySelectorAll("strong"))
+        .map((el) => el.textContent ?? "")
+        .join("")
+        .trim(),
+    ),
+  ).toBe("Mike Ross:");
+  const shown = (await summary.textContent()) ?? "";
+  expect(shown).not.toContain("##");
+  expect(shown).not.toContain("**");
 }
 
 async function open(page: Page, fixture: Fixture) {
@@ -1287,6 +1331,124 @@ test.describe("Completed meeting recap page", () => {
       await expect(
         page.getByText("Action items could not be created."),
       ).toHaveCount(0);
+    } finally {
+      await deleteFixture(request, fixture);
+    }
+  });
+
+  test("a first visit writes a structured recap as headings and bullets", async ({
+    page,
+    request,
+  }) => {
+    const fixture = await createFixture(request, {
+      transcript_raw:
+        "Test User: Ship the rollout on Friday. Mike Ross: I will book the vendor review.",
+    });
+
+    try {
+      const streams = await countRecapStreams(page, fixture.meetingId, (route) =>
+        route.fulfill(sseResponse(STRUCTURED_FRAMES)),
+      );
+      await open(page, fixture);
+
+      await expectStructuredRecap(page);
+      expect(
+        await page.locator("[data-flowing-summary] span").count(),
+      ).toBeGreaterThan(8);
+      await expect(page.locator("[data-recap-provenance]")).toContainText(
+        "Written by AI",
+      );
+      await expect(
+        page
+          .locator("span[aria-live='polite']")
+          .filter({ hasText: "Summary ready" }),
+      ).toHaveCount(1);
+      expect(streams.calls).toBe(1);
+    } finally {
+      await deleteFixture(request, fixture);
+    }
+  });
+
+  test("reduced motion still renders the structured recap", async ({
+    page,
+    request,
+  }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    const fixture = await createFixture(request, {
+      transcript_raw:
+        "Test User: Ship the rollout on Friday. Mike Ross: I will book the vendor review.",
+    });
+
+    try {
+      await countRecapStreams(page, fixture.meetingId, (route) =>
+        route.fulfill(sseResponse(STRUCTURED_FRAMES)),
+      );
+      await open(page, fixture);
+
+      await expectStructuredRecap(page);
+      const animationName = await page
+        .locator("[data-flowing-summary] span")
+        .first()
+        .evaluate((el) => getComputedStyle(el).animationName);
+      expect(animationName === "none" || animationName === "").toBeTruthy();
+    } finally {
+      await deleteFixture(request, fixture);
+    }
+  });
+
+  test("a structured stored recap reads as sections on return", async ({
+    page,
+    request,
+  }) => {
+    const fixture = await createFixture(request, {
+      transcript_raw: "Test User: Ship the rollout on Friday.",
+      recap_markdown: STRUCTURED_RECAP,
+      recap_generated_at: new Date(Date.now() - 5 * 60_000).toISOString(),
+      recap_model: "test-model-x",
+    });
+
+    try {
+      const streams = await countRecapStreams(page, fixture.meetingId);
+      await open(page, fixture);
+      await expectStructuredRecap(page);
+      await page.reload();
+      await waitForApp(page);
+      await expectStructuredRecap(page);
+      expect(streams.calls).toBe(0);
+    } finally {
+      await deleteFixture(request, fixture);
+    }
+  });
+
+  test("a legacy prose recap still reads as prose", async ({ page, request }) => {
+    const fixture = await createFixture(request, {
+      transcript_raw: "Test User: Ship the rollout on Friday.",
+      recap_markdown: STORED_RECAP,
+      recap_generated_at: new Date(Date.now() - 5 * 60_000).toISOString(),
+      recap_model: "test-model-x",
+    });
+
+    try {
+      const streams = await countRecapStreams(page, fixture.meetingId);
+      await open(page, fixture);
+      const recap = page.locator("[data-recap-section]");
+      const summary = recap.locator("[data-flowing-summary]");
+      await expect(summary).toContainText(
+        "The team agreed to ship the rollout on Friday.",
+        { timeout: 20_000 },
+      );
+      await expect(summary).toContainText("Mike Ross books the vendor review.");
+      await expect(recap.getByRole("heading", { level: 3 })).toHaveCount(0);
+      await expect(recap.getByRole("list")).toHaveCount(0);
+      expect(
+        await summary.evaluate((el) =>
+          Array.from(el.querySelectorAll("strong"))
+            .map((s) => s.textContent ?? "")
+            .join("")
+            .trim(),
+        ),
+      ).toBe("Test User");
+      expect(streams.calls).toBe(0);
     } finally {
       await deleteFixture(request, fixture);
     }
