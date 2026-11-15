@@ -207,7 +207,7 @@ test.describe("AI notes", () => {
       await waitForApp(page);
 
       await expect(page.getByRole("heading", { name: /AI notes session/ })).toBeVisible();
-      await expect(page.getByPlaceholder("Meeting notes...")).toHaveValue(fixture.rawNotes);
+      await expect(page.locator("[data-notes-rendered]").first()).toContainText(fixture.rawNotes.split("\n")[0]);
 
       await page.getByRole("button", { name: "Enhance notes" }).click();
       await expect(page.getByRole("dialog", { name: "AI notes preview" })).toBeVisible();
@@ -225,7 +225,9 @@ test.describe("AI notes", () => {
 
       await page.getByRole("button", { name: "Apply AI notes" }).click();
       await expect(page.getByRole("dialog", { name: "AI notes preview" })).toBeHidden();
-      await expect(page.getByPlaceholder("Meeting notes...")).toHaveValue(/## Summary/);
+      const applied = page.locator("[data-notes-rendered]").first();
+      await expect(applied.getByRole("heading", { name: "Summary" })).toBeVisible();
+      await expect(applied).not.toContainText("##");
 
       const rows = await rest(
         request,
@@ -268,7 +270,7 @@ test.describe("AI notes", () => {
       await expect(page.getByRole("heading", { name: /AI notes session/ })).toBeVisible({ timeout: 20_000 });
       await page.getByRole("button", { name: "Enhance notes" }).click();
       await expect(page.getByText("AI notes are not configured.")).toBeVisible();
-      await expect(page.getByPlaceholder("Meeting notes...")).toHaveValue(fixture.rawNotes);
+      await expect(page.locator("[data-notes-rendered]").first()).toContainText(fixture.rawNotes.split("\n")[0]);
     } finally {
       await deleteSeries(request, fixture.seriesId);
     }

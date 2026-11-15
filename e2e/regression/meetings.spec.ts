@@ -280,14 +280,14 @@ test.describe("Meeting Lifecycle", () => {
       await expect(page.getByText(fixture.actionTitle).first()).toBeVisible();
       await expect(page.getByText(fixture.decisionTitle).first()).toBeVisible();
       await expect(page.getByText(fixture.carriedTitle).first()).toBeVisible();
-      await expect(page.getByPlaceholder("Meeting notes...")).toHaveValue(
+      await expect(page.locator("[data-notes-rendered]").first()).toContainText(
         fixture.noteText
       );
 
       await page.reload();
       await waitForApp(page);
       await expect(page.getByText("Meeting recap")).toBeVisible();
-      await expect(page.getByPlaceholder("Meeting notes...")).toHaveValue(
+      await expect(page.locator("[data-notes-rendered]").first()).toContainText(
         fixture.noteText
       );
 
