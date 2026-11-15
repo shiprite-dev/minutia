@@ -344,6 +344,28 @@ test("a lead line that starts with a number stays prose", async () => {
   ]);
   assert.equal(sanitizeRecap("2024. was a strong year.\n\n## Next steps\n1. Book it."), "2024. was a strong year.\n\n## Next steps\n- Book it.");
   assert.deepEqual(shape(parseRecap("- First.\n2. Second.")), [{ kind: "list", items: ["First.", "Second."] }]);
+  assert.equal(sanitizeRecap("## Next\n- A\n\n2024. was big."), "## Next\n- A\n\n2024. was big.");
+  assert.deepEqual(shape(parseRecap("Agreed next steps:\n1. Book vendor.\n2. Ship Friday.")), [
+    { kind: "lead", text: "Agreed next steps:" },
+    { kind: "list", items: ["Book vendor.", "Ship Friday."] },
+  ]);
+});
+
+test("no block flickers when markers arrive one character at a time", async () => {
+  const { parseRecap } = await structure();
+  const fixture = "Lead.\n\n## Next steps\n1. Book it.\n2. Ship it.\n\n## Key points\n- **Mike Ross:** owns it.";
+  let prev = [];
+  for (let i = 1; i <= fixture.length; i++) {
+    const prefix = fixture.slice(0, i);
+    const next = parseRecap(prefix, { streaming: true });
+    const byKey = new Map(next.map((b) => [b.key, b]));
+    for (const b of prev) {
+      const after = byKey.get(b.key);
+      assert.ok(after, `block ${b.key} vanished at ${JSON.stringify(prefix)}`);
+      assert.equal(after.kind, b.kind, `kind changed at ${JSON.stringify(prefix)}`);
+    }
+    prev = next;
+  }
 });
 
 test("an owner name renders bold from its first streamed word", async () => {

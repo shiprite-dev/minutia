@@ -196,9 +196,6 @@ function sseResponse(words: string[], model = "test-model-x") {
   };
 }
 
-// Counts every recap stream request for the meeting (with or without a query
-// string, so a regenerate is caught too) and answers with a fixed recap, so no
-// test depends on a live AI provider.
 async function countRecapAnimations(page: Page) {
   await page.addInitScript(() => {
     const w = window as unknown as { __recapAnimations: number };
@@ -220,6 +217,9 @@ const recapAnimations = (page: Page) =>
       (window as unknown as { __recapAnimations: number }).__recapAnimations,
   );
 
+// Counts every recap stream request for the meeting (with or without a query
+// string, so a regenerate is caught too) and answers with a fixed recap, so no
+// test depends on a live AI provider.
 async function countRecapStreams(
   page: Page,
   meetingId: string,
@@ -1444,10 +1444,20 @@ test.describe("Completed meeting recap page", () => {
       await countRecapAnimations(page);
       await open(page, fixture);
       await expectStructuredRecap(page);
+      await page.waitForTimeout(500);
       expect(await recapAnimations(page)).toBe(0);
       await page.reload();
       await waitForApp(page);
       await expectStructuredRecap(page);
+      await page.waitForTimeout(500);
+      expect(await recapAnimations(page)).toBe(0);
+      await page.locator("[data-flowing-summary]").evaluate((el) => {
+        const probe = document.createElement("span");
+        probe.className = "materialize";
+        probe.textContent = "probe";
+        el.append(probe);
+      });
+      await expect.poll(() => recapAnimations(page)).toBe(1);
       expect(streams.calls).toBe(0);
     } finally {
       await deleteFixture(request, fixture);
