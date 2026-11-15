@@ -1679,6 +1679,40 @@ test("hand-typed notes keep their line breaks on the web and from the desktop", 
     }
   });
 
+  test("a regenerate cut off mid-stream restores the stored recap and says so", async ({
+    page,
+    request,
+  }) => {
+    const fixture = await createFixture(request, {
+      transcript_raw: "Test User: Ship the rollout on Friday.",
+      recap_markdown: STORED_RECAP,
+      recap_generated_at: new Date().toISOString(),
+      recap_model: "test-model-x",
+    });
+
+    try {
+      await countRecapStreams(page, fixture.meetingId, (route) =>
+        route.fulfill({
+          status: 200,
+          headers: { "content-type": "text/event-stream" },
+          body: ':\n\ndata: {"t":"Half "}\n\ndata: {"t":"a "}\n\n',
+        }),
+      );
+      await open(page, fixture);
+      const summary = page.locator("[data-flowing-summary]");
+      await expect(summary).toContainText("The team agreed to ship the rollout on Friday.");
+
+      await page.getByRole("button", { name: "More actions" }).click();
+      await page.getByRole("menuitem", { name: "Regenerate recap" }).click();
+
+      await expect(page.getByText("The recap could not be regenerated.")).toBeVisible();
+      await expect(summary).toContainText("The team agreed to ship the rollout on Friday.");
+      await expect(summary).not.toContainText("Half a");
+    } finally {
+      await deleteFixture(request, fixture);
+    }
+  });
+
   test("a live recap is stored and served on the next visit (live provider only)", async ({
     page,
     request,

@@ -62,8 +62,9 @@ export function FlowingSummary({
     controllerRef.current?.abort();
     controllerRef.current = null;
     setStreamingState(false);
-    if (!streamedText) setFailure("stopped");
-  }, [setStreamingState, streamedText]);
+    setStreamedText("");
+    setFailure("stopped");
+  }, [setStreamingState]);
 
   // An unmount-cleanup abort (StrictMode mounts twice in dev) must not consume
   // the single auto-start; a user-clicked Stop never unmounts, so it stays latched.
@@ -136,8 +137,13 @@ export function FlowingSummary({
           }
         }
       }
+      setStreamedText("");
+      setFailure("error");
     } catch {
-      if (!controller.signal.aborted && !firstWordSeen) setFailure("error");
+      if (!controller.signal.aborted) {
+        setStreamedText("");
+        setFailure("error");
+      }
     } finally {
       if (controllerRef.current === controller) {
         controllerRef.current = null;
