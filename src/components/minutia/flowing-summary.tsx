@@ -223,6 +223,21 @@ export function FlowingSummary({
         </p>
       )}
 
+      {view === "text" && !!failure && failure !== "stopped" && !!initialText?.trim() && (
+        <p className="mt-3 text-sm text-ink-3">
+          The recap could not be regenerated.{" "}
+          <Button
+            type="button"
+            variant="link"
+            size="sm"
+            className="h-auto px-0 text-ink"
+            onClick={() => void start(true)}
+          >
+            Try again
+          </Button>
+        </p>
+      )}
+
       {(view === "failed" || view === "stopped") && (
         <p className="text-sm text-ink-3">
           {view === "failed" ? "The recap could not be written." : "Recap stopped."}{" "}

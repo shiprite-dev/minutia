@@ -45,7 +45,11 @@ export async function pipeRecap(input: {
   if (input.signal.aborted) return false;
   const row = buildRecapUpdate(text, input.model, new Date());
   if (!row) return false;
-  await input.persist(row).catch(() => undefined);
+  try {
+    await input.persist(row);
+  } catch {
+    return false;
+  }
   return true;
 }
 
