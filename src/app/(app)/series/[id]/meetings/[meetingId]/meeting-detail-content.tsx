@@ -23,7 +23,7 @@ import { useProfile } from "@/lib/hooks/use-profile";
 import { CompanionInstallPrompt } from "@/components/minutia/companion-install-prompt";
 import { isMacPlatform } from "@/lib/companion-links";
 import { companionRecordStatus } from "@/lib/companion/status";
-import { cancelCompanionRecord, requestCompanionRecord } from "@/lib/companion/request";
+import { recordInBrowser, requestCompanionRecord } from "@/lib/companion/request";
 import { CompanionRecordStrip } from "@/components/minutia/companion-record-strip";
 import { useIssues, useCreateIssue, useUpdateIssueStatus, useUpdateIssue, useAssignIssue, issueKeys } from "@/lib/hooks/use-issues";
 import { useCreateDecision, decisionKeys } from "@/lib/hooks/use-decisions";
@@ -971,25 +971,17 @@ export function MeetingDetailContent({
         .userAgentData,
       navigator.userAgent
     );
-  const [dismissedHandoff, setDismissedHandoff] = React.useState<string | null>(null);
-  const rawCompanionStatus =
+  const companionStatus =
     meeting && profile
       ? companionRecordStatus({
           meeting,
           userId: profile.id,
-          lastSeenAt: profile.companion_last_seen_at,
+          checkinAt: profile.companion_checkin_at,
+          legacySeenAt: profile.companion_last_seen_at,
           isMac: isMacClient,
           now: clock,
         })
       : ({ kind: "none" } as const);
-  const handoffKey = meeting
-    ? `${rawCompanionStatus.kind}:${meeting.recording_failed_reason ?? meeting.recording_started_at ?? meeting.record_claimed_at}`
-    : null;
-  const companionStatus =
-    (rawCompanionStatus.kind === "failed" || rawCompanionStatus.kind === "lost") &&
-    handoffKey === dismissedHandoff
-      ? ({ kind: "none" } as const)
-      : rawCompanionStatus;
   const handoffMeetingLive = meeting?.status === "live";
   const handoffStarting = companionStatus.kind === "starting";
 
@@ -1384,19 +1376,13 @@ export function MeetingDetailContent({
   }
 
   async function handleRecordOnMac() {
-    setDismissedHandoff(null);
     await requestCompanionRecord(meetingId);
     await refreshHandoff();
   }
 
-  async function handleRecordHere() {
-    setDismissedHandoff(handoffKey);
-    await cancelCompanionRecord(meetingId);
-    await recorder.start();
-  }
-
   async function handleStartBrowserRecording() {
-    void cancelCompanionRecord(meetingId);
+    await recordInBrowser(meetingId);
+    await refreshHandoff();
     await recorder.start();
   }
 
@@ -1600,10 +1586,11 @@ export function MeetingDetailContent({
 
               <CompanionRecordStrip
                 status={companionStatus}
+                meetingId={meeting.id}
                 canAct={canManageMeeting && hasAccess && recorder.state === "idle"}
                 onRecordOnMac={() => void handleRecordOnMac()}
                 onOpenMac={() => void handleRecordOnMac()}
-                onRecordHere={() => void handleRecordHere()}
+                onRecordHere={() => void handleStartBrowserRecording()}
               />
 
               {recorder.state === "stopped" &&

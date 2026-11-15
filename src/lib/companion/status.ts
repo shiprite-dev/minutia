@@ -1,8 +1,8 @@
 import type { Meeting } from "@/lib/types";
 
 export const COMPANION_ONLINE_MS = 90_000;
-const REQUEST_PICKUP_MS = 10_000;
-const CLAIM_START_MS = 20_000;
+export const REQUEST_WINDOW_MS = 30_000;
+export const CLAIM_START_MS = 20_000;
 
 export type CompanionRecordStatus =
   | { kind: "none" }
@@ -12,6 +12,7 @@ export type CompanionRecordStatus =
   | { kind: "failed" }
   | { kind: "offer_online" }
   | { kind: "offer_open" }
+  | { kind: "offer_legacy" }
   | { kind: "install" };
 
 type StatusMeeting = Pick<
@@ -23,6 +24,7 @@ type StatusMeeting = Pick<
   | "recording_device_name"
   | "record_claimed_at"
   | "recording_started_at"
+  | "recording_seen_at"
   | "recording_failed_reason"
 >;
 
@@ -32,48 +34,61 @@ const age = (value: string | Date, now: number) =>
 export function companionRecordStatus({
   meeting,
   userId,
-  lastSeenAt,
+  checkinAt,
+  legacySeenAt,
   isMac,
   now,
 }: {
   meeting: StatusMeeting;
   userId: string | null | undefined;
-  lastSeenAt: string | null | undefined;
+  checkinAt: string | null | undefined;
+  legacySeenAt: string | null | undefined;
   isMac: boolean;
   now: number;
 }): CompanionRecordStatus {
   if (meeting.status !== "live") return { kind: "none" };
 
-  const online = !!lastSeenAt && age(lastSeenAt, now) <= COMPANION_ONLINE_MS;
+  const holder = meeting.recording_user_id;
+  const mine = !!holder && holder === userId;
 
-  if (meeting.recording_started_at && meeting.recording_user_id) {
-    const mine = meeting.recording_user_id === userId;
-    if (mine && !online) return { kind: "lost" };
-    return {
-      kind: "recording",
-      deviceName: meeting.recording_device_name ?? "a Mac",
-      mine,
-    };
+  if (holder && meeting.recording_started_at) {
+    const fresh =
+      !!meeting.recording_seen_at &&
+      age(meeting.recording_seen_at, now) <= COMPANION_ONLINE_MS;
+    if (fresh) {
+      return {
+        kind: "recording",
+        deviceName: meeting.recording_device_name ?? "a Mac",
+        mine,
+      };
+    }
+    if (mine) return { kind: "lost" };
+  } else if (holder && meeting.record_claimed_at) {
+    const fresh = age(meeting.record_claimed_at, now) <= CLAIM_START_MS;
+    if (mine) return fresh ? { kind: "starting" } : { kind: "lost" };
+    if (fresh) return { kind: "none" };
   }
-
-  if (meeting.record_claimed_at && meeting.recording_user_id) {
-    return age(meeting.record_claimed_at, now) <= CLAIM_START_MS
-      ? { kind: "starting" }
-      : { kind: "lost" };
-  }
-
-  if (meeting.recording_failed_reason) return { kind: "failed" };
 
   if (
-    online &&
+    meeting.recording_failed_reason &&
+    meeting.recording_failed_reason !== "in_browser" &&
+    meeting.record_requested_by === userId
+  ) {
+    return { kind: "failed" };
+  }
+
+  if (
     meeting.record_requested_at &&
     meeting.record_requested_by === userId &&
-    age(meeting.record_requested_at, now) <= REQUEST_PICKUP_MS
+    age(meeting.record_requested_at, now) <= REQUEST_WINDOW_MS
   ) {
     return { kind: "starting" };
   }
 
-  if (online) return { kind: "offer_online" };
-  if (lastSeenAt) return isMac ? { kind: "offer_open" } : { kind: "none" };
+  if (checkinAt) {
+    if (age(checkinAt, now) <= COMPANION_ONLINE_MS) return { kind: "offer_online" };
+    return isMac ? { kind: "offer_open" } : { kind: "none" };
+  }
+  if (legacySeenAt) return isMac ? { kind: "offer_legacy" } : { kind: "none" };
   return isMac ? { kind: "install" } : { kind: "none" };
 }

@@ -30,6 +30,7 @@ export interface Profile {
   current_organization_id: string | null;
   has_full_access: boolean;
   companion_last_seen_at: string | null;
+  companion_checkin_at: string | null;
   created_at: Date;
   updated_at: Date;
 }
@@ -209,6 +210,7 @@ export interface Meeting {
   recording_device_id: string | null;
   recording_device_name: string | null;
   recording_started_at: string | null;
+  recording_seen_at: string | null;
   recording_failed_reason: string | null;
   created_at: Date;
   completed_at: Date | null;

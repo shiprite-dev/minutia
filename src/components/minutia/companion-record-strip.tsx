@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useReducedMotion } from "motion/react";
-import { buildCompanionOpenUrl } from "@/lib/companion-links";
+import { buildCompanionOpenUrl, buildCompanionRecordUrl } from "@/lib/companion-links";
 import type { CompanionRecordStatus } from "@/lib/companion/status";
 import { cn } from "@/lib/utils";
 
@@ -24,12 +24,14 @@ function Dot({ pulse }: { pulse?: boolean }) {
 
 export function CompanionRecordStrip({
   status,
+  meetingId,
   canAct,
   onRecordOnMac,
   onOpenMac,
   onRecordHere,
 }: {
   status: CompanionRecordStatus;
+  meetingId: string;
   canAct: boolean;
   onRecordOnMac: () => void;
   onOpenMac: () => void;
@@ -75,6 +77,12 @@ export function CompanionRecordStrip({
       return (
         <a href={buildCompanionOpenUrl()} onClick={onOpenMac} className={actionClass}>
           Open Minutia on your Mac
+        </a>
+      );
+    case "offer_legacy":
+      return (
+        <a href={buildCompanionRecordUrl(meetingId)} className={actionClass}>
+          Record on your Mac
         </a>
       );
     default:

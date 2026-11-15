@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { parseDevice } from "@/lib/companion/validate";
 
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -11,23 +12,18 @@ export async function POST(request: Request) {
   }
 
   const body = await request.json().catch(() => null);
-  if (
-    !body ||
-    typeof body.device_id !== "string" ||
-    !body.device_id ||
-    typeof body.device_name !== "string" ||
-    typeof body.can_claim !== "boolean"
-  ) {
+  const device = body ? parseDevice(body) : null;
+  if (!device || typeof body.can_claim !== "boolean") {
     return NextResponse.json({ error: "Invalid body" }, { status: 400 });
   }
 
   const { data, error } = await supabase.rpc("companion_checkin", {
-    p_device_id: body.device_id,
-    p_device_name: body.device_name,
+    p_device_id: device.id,
+    p_device_name: device.name,
     p_can_claim: body.can_claim,
   });
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: "Check-in failed" }, { status: 500 });
   }
 
   const row = Array.isArray(data) ? data[0] : data;

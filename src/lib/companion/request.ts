@@ -8,10 +8,8 @@ export async function requestCompanionRecord(meetingId: string) {
   } catch {}
 }
 
-export async function cancelCompanionRecord(meetingId: string) {
+export async function recordInBrowser(meetingId: string) {
   try {
-    await createClient().rpc("cancel_companion_record", {
-      p_meeting_id: meetingId,
-    });
+    await createClient().rpc("record_in_browser", { p_meeting_id: meetingId });
   } catch {}
 }
