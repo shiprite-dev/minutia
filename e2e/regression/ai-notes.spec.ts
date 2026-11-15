@@ -207,7 +207,11 @@ test.describe("AI notes", () => {
       await waitForApp(page);
 
       await expect(page.getByRole("heading", { name: /AI notes session/ })).toBeVisible();
-      await expect(page.locator("[data-notes-rendered]").first()).toContainText(fixture.rawNotes.split("\n")[0]);
+      for (const line of fixture.rawNotes.split("\n")) {
+        await expect(
+          page.locator("[data-notes-rendered]").first().locator("p").filter({ hasText: line }),
+        ).toHaveCount(1);
+      }
 
       await page.getByRole("button", { name: "Enhance notes" }).click();
       await expect(page.getByRole("dialog", { name: "AI notes preview" })).toBeVisible();
@@ -270,7 +274,11 @@ test.describe("AI notes", () => {
       await expect(page.getByRole("heading", { name: /AI notes session/ })).toBeVisible({ timeout: 20_000 });
       await page.getByRole("button", { name: "Enhance notes" }).click();
       await expect(page.getByText("AI notes are not configured.")).toBeVisible();
-      await expect(page.locator("[data-notes-rendered]").first()).toContainText(fixture.rawNotes.split("\n")[0]);
+      for (const line of fixture.rawNotes.split("\n")) {
+        await expect(
+          page.locator("[data-notes-rendered]").first().locator("p").filter({ hasText: line }),
+        ).toHaveCount(1);
+      }
     } finally {
       await deleteSeries(request, fixture.seriesId);
     }

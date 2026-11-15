@@ -9,9 +9,6 @@ type Raw =
   | { kind: "lead" | "heading"; text: string }
   | { kind: "list"; items: string[] };
 
-const inline = (s: string) =>
-  s.replace(/\[([^\]]*)\]\([^)]*\)/g, "$1").replace(/`/g, "");
-
 export function parseRecap(
   text: string,
   opts?: { streaming?: boolean; lines?: boolean },
@@ -20,6 +17,8 @@ export function parseRecap(
   let open: Raw | null = null;
   let blank = false;
   const wordOpts = { openBold: !!opts?.streaming };
+  const inline = (s: string) =>
+    s.replace(/\[([^\]]*)\]\(([^)]*)\)/g, opts?.lines ? "$1 ($2)" : "$1").replace(/`/g, "");
   const lines = text.replace(/\r\n?/g, "\n").split("\n");
   for (let i = 0; i < lines.length; i++) {
     let line = lines[i].trimEnd();
@@ -76,6 +75,7 @@ export function parseRecap(
   raws.forEach((r, key) => {
     if (
       !opts?.streaming &&
+      !opts?.lines &&
       r.kind === "heading" &&
       !(raws[key + 1] && raws[key + 1].kind !== "heading")
     )

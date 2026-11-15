@@ -47,7 +47,10 @@ export function MarkdownBlocks({
     b.kind === "heading" ? (
       <h3
         key={b.key}
-        className="mb-2 text-[15px] font-semibold leading-6 text-ink [&:not(:first-child)]:mt-7"
+        className={cn(
+          "mb-2 text-[15px] font-semibold leading-6 text-ink",
+          dense ? "[&:not(:first-child)]:mt-5" : "mt-7",
+        )}
       >
         <Words words={b.words} animate={animate} />
       </h3>

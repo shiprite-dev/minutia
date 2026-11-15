@@ -5,8 +5,7 @@ import { flushSync } from "react-dom";
 import { MarkdownBlocks } from "@/components/minutia/markdown-blocks";
 import { parseRecap } from "@/lib/summary/structure";
 
-const typography =
-  "max-w-[65ch] font-sans text-[15px] leading-7 text-ink";
+const typography = "max-w-[65ch] font-sans text-[15px] leading-7 text-ink";
 
 export function MeetingNotesSurface({
   webNotes,
@@ -25,10 +24,11 @@ export function MeetingNotesSurface({
   const areaRef = useRef<HTMLTextAreaElement>(null);
 
   function edit() {
+    if (!canEdit) return;
     flushSync(() => setEditing(true));
     const area = areaRef.current;
     if (!area) return;
-    area.focus({ preventScroll: true });
+    area.focus();
     area.setSelectionRange(area.value.length, area.value.length);
   }
 
@@ -51,15 +51,14 @@ export function MeetingNotesSurface({
         role: "group",
         "aria-label": "Edit notes",
         tabIndex: 0,
-        onClick: (e: React.MouseEvent) => {
-          if (
-            window.getSelection()?.isCollapsed !== false &&
-            !(e.target as HTMLElement).closest("a")
-          )
-            edit();
+        onClick: () => {
+          if (window.getSelection()?.isCollapsed !== false) edit();
         },
         onKeyDown: (e: React.KeyboardEvent) => {
-          if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) {
+          if (
+            e.target === e.currentTarget &&
+            (e.key === "Enter" || e.key === " ")
+          ) {
             e.preventDefault();
             edit();
           }
@@ -88,7 +87,10 @@ export function MeetingNotesSurface({
         From your desktop notepad
       </h3>
       <div data-desktop-notes className={typography}>
-        <MarkdownBlocks blocks={parseRecap(companionNotes, { lines: true })} dense />
+        <MarkdownBlocks
+          blocks={parseRecap(companionNotes, { lines: true })}
+          dense
+        />
       </div>
     </div>
   ) : null;

@@ -515,3 +515,17 @@ test("lines mode keeps each hand-typed line its own paragraph", async () => {
   ]);
   assert.deepEqual(shape(parseRecap("Line one\nline two")), [{ kind: "lead", text: "Line one line two" }]);
 });
+
+test("lines mode never drops what was typed", async () => {
+  const { parseRecap } = await structure();
+  assert.deepEqual(shape(parseRecap("Plan.\n## Next steps", { lines: true })), [
+    { kind: "lead", text: "Plan." },
+    { kind: "heading", text: "Next steps" },
+  ]);
+  assert.deepEqual(shape(parseRecap("See [spec](https://example.com/spec) first.", { lines: true })), [
+    { kind: "lead", text: "See spec (https://example.com/spec) first." },
+  ]);
+  assert.deepEqual(shape(parseRecap("See [spec](https://example.com/spec) first.")), [
+    { kind: "lead", text: "See spec first." },
+  ]);
+});
