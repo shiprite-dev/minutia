@@ -161,7 +161,7 @@ test.describe("companion handshake", () => {
     }
   });
 
-  test("install prompt shows for a companion-less user and dismiss persists", async ({
+  test("install prompt shows on a Mac that never connected a companion, and dismiss persists", async ({
     page,
     request,
   }) => {
@@ -170,6 +170,12 @@ test.describe("companion handshake", () => {
 
     await setCompanionLastSeen(request, null);
     const fixture = await createLiveMeetingFixture(request);
+    await page.addInitScript(() => {
+      Object.defineProperty(navigator, "userAgentData", {
+        configurable: true,
+        get: () => ({ platform: "macOS" }),
+      });
+    });
 
     try {
       await page.goto(`/series/${fixture.seriesId}/meetings/${fixture.meetingId}`);
