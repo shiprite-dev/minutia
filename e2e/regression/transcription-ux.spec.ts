@@ -518,6 +518,9 @@ test.describe("Transcription UX states", () => {
         );
 
       await openMeeting(page, fixture.seriesId, fixture.meetingId);
+      // The meeting has loaded without a transcript; a transcript already there on
+      // arrival is not news and must not be announced.
+      await expect(recapProgress(page)).toContainText("Transcribing");
       expect(await announcements()).toBe(0);
 
       // The transcript commits while the page is open: the run leaves processing

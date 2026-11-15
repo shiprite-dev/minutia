@@ -185,8 +185,9 @@ function sseResponse(words: string[], model = "test-model-x") {
   };
 }
 
-// Counts every recap stream request for the meeting and answers with a fixed
-// recap, so no test depends on a live AI provider.
+// Counts every recap stream request for the meeting (with or without a query
+// string, so a regenerate is caught too) and answers with a fixed recap, so no
+// test depends on a live AI provider.
 async function countRecapStreams(
   page: Page,
   meetingId: string,
@@ -196,10 +197,14 @@ async function countRecapStreams(
     ),
 ) {
   const counter = { calls: 0 };
-  await page.route(`**/api/meetings/${meetingId}/summary/stream`, (route) => {
-    counter.calls += 1;
-    return respond(route, counter.calls);
-  });
+  const path = `/api/meetings/${meetingId}/summary/stream`;
+  await page.route(
+    (url) => url.pathname === path,
+    (route) => {
+      counter.calls += 1;
+      return respond(route, counter.calls);
+    },
+  );
   return counter;
 }
 
@@ -682,23 +687,25 @@ test.describe("Completed meeting recap page", () => {
     });
 
     try {
-      const streams = await countRecapStreams(
-        page,
-        fixture.meetingId,
-        (route, call) =>
-          call === 1
-            ? route.fulfill({
-                status: 500,
-                contentType: "application/json",
-                body: "{}",
-              })
-            : route.fulfill(sseResponse(["Recovered ", "recap."])),
+      // Fail until the user retries: a dev-mode remount can send an aborted
+      // first request, so the call count cannot decide which answer fails.
+      let retried = false;
+      const streams = await countRecapStreams(page, fixture.meetingId, (route) =>
+        retried
+          ? route.fulfill(sseResponse(["Recovered ", "recap."]))
+          : route.fulfill({
+              status: 500,
+              contentType: "application/json",
+              body: "{}",
+            }),
       );
       await open(page, fixture);
 
       await expect(
         page.getByText("The recap could not be written."),
       ).toBeVisible();
+      const callsBeforeRetry = streams.calls;
+      retried = true;
       await page.getByRole("button", { name: "Try again" }).click();
       await expect(page.locator("[data-flowing-summary]")).toContainText(
         "Recovered recap.",
@@ -706,7 +713,7 @@ test.describe("Completed meeting recap page", () => {
       await expect(
         page.getByText("The recap could not be written."),
       ).toHaveCount(0);
-      expect(streams.calls).toBe(2);
+      expect(streams.calls).toBe(callsBeforeRetry + 1);
     } finally {
       await deleteFixture(request, fixture);
     }
@@ -729,12 +736,13 @@ test.describe("Completed meeting recap page", () => {
 
       try {
         const urls: string[] = [];
+        let retried = false;
         const streams = await countRecapStreams(
           page,
           fixture.meetingId,
-          (route, call) => {
+          (route) => {
             urls.push(route.request().url());
-            return call === 1
+            return !retried
               ? route.fulfill({
                   status: 200,
                   headers: {
@@ -758,6 +766,8 @@ test.describe("Completed meeting recap page", () => {
             .filter({ hasText: "Summary ready" }),
         ).toHaveCount(0);
 
+        const callsBeforeRetry = streams.calls;
+        retried = true;
         await page.getByRole("button", { name: "Try again" }).click();
         await expect(page.locator("[data-flowing-summary]")).toContainText(
           "Recovered recap.",
@@ -768,7 +778,7 @@ test.describe("Completed meeting recap page", () => {
         await expect(
           page.getByText("The recap could not be written."),
         ).toHaveCount(0);
-        expect(streams.calls).toBe(2);
+        expect(streams.calls).toBe(callsBeforeRetry + 1);
         expect(urls.every((u) => !u.includes("regenerate=1"))).toBe(true);
       } finally {
         await deleteFixture(request, fixture);

@@ -37,8 +37,7 @@ async function createMeetingIssue(
 
 function raisedIssueRow(page: Parameters<Parameters<typeof test>[2]>[0]["page"], title: string) {
   return page
-    .locator("section")
-    .filter({ hasText: "Items raised" })
+    .locator('section[aria-label="Items raised"]')
     .locator("[class*='group']")
     .filter({ hasText: title })
     .first();

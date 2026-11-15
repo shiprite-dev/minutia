@@ -771,7 +771,8 @@ export function MeetingDetailContent({
   const [regenerateNonce, setRegenerateNonce] = React.useState(0);
   const [generatingSuggestions, setGeneratingSuggestions] = React.useState(false);
   const [showReviewed, setShowReviewed] = React.useState(false);
-  const [loopClosedAt, setLoopClosedAt] = React.useState<number | null>(null);
+  const [seenPending, setSeenPending] = React.useState(0);
+  const [loopClosedKey, setLoopClosedKey] = React.useState(0);
   const reducedMotion = useReducedMotion();
 
   // Load already-extracted suggestions (e.g. the ones the transcription
@@ -1455,16 +1456,9 @@ export function MeetingDetailContent({
         return;
       }
       const reviewedSuggestion = payload.suggestion as MeetingAiSuggestion;
-      const next = aiSuggestions.map((item) =>
-        item.id === suggestion.id ? reviewedSuggestion : item
+      setAiSuggestions((current) =>
+        current.map((item) => (item.id === suggestion.id ? reviewedSuggestion : item))
       );
-      setAiSuggestions(next);
-      if (
-        aiSuggestions.some((item) => item.status === "pending") &&
-        !next.some((item) => item.status === "pending")
-      ) {
-        setLoopClosedAt(Date.now());
-      }
       if (action === "accept") {
         await refreshTrackedMeetingData();
       }
@@ -1861,6 +1855,12 @@ export function MeetingDetailContent({
   const pending = aiSuggestions.filter((item) => item.status === "pending");
   const reviewed = aiSuggestions.filter((item) => item.status !== "pending");
   const accepted = reviewed.filter((item) => item.status === "accepted").length;
+  if (pending.length !== seenPending) {
+    setSeenPending(pending.length);
+    if (seenPending > 0 && pending.length === 0 && reviewed.length > 0) {
+      setLoopClosedKey((key) => key + 1);
+    }
+  }
   const storedRecap = meeting.recap_markdown?.trim() || null;
   const companionNotes = (meeting.companion_notes_markdown ?? "").trim();
   const hasSource = !!(
@@ -2272,7 +2272,7 @@ export function MeetingDetailContent({
           />
 
           <section aria-label="Tracked in the log" className="recap-rail @container/log">
-            <SectionHeading title="Tracked in the log" flashKey={loopClosedAt ?? undefined} />
+            <SectionHeading title="Tracked in the log" flashKey={loopClosedKey || undefined} />
             <div className="space-y-6">
               {canManageMeeting && suggestionsError && (
                 <div className="rounded-md border border-warn/30 bg-warn/10 px-3 py-2 text-sm text-ink">
