@@ -214,9 +214,11 @@ test.describe("Recap page opened at stop", () => {
           status: "pending",
         },
       });
-      await expect(page.getByText("Book the vendor review", { exact: true }).first()).toBeVisible({
+      const suggestions = page.getByRole("region", { name: "AI suggestions" });
+      await expect(suggestions.locator("[data-suggestion-card]")).toHaveCount(1, {
         timeout: 10_000,
       });
+      await expect(suggestions).toContainText("I will book the vendor review.");
       expect(streams.calls).toBe(1);
     } finally {
       await deleteFixture(request, fixture);
