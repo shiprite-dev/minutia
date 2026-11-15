@@ -107,7 +107,10 @@ export async function POST(
           persist: async (row) => {
             const update = supabase.from("meetings").update(row).eq("id", meetingId);
             const { error } = await (regenerate ? update : update.is("recap_markdown", null));
-            if (error) console.error(`Recap write failed for meeting ${meetingId}: ${error.message}`);
+            if (error) {
+              console.error(`Recap write failed for meeting ${meetingId}: ${error.message}`);
+              throw error;
+            }
           },
         });
         if (!produced && !upstream.signal.aborted) controller.enqueue(encoder.encode(SSE_ERROR));

@@ -461,8 +461,8 @@ test("pipeRecap reports whether a recap was produced", async () => {
         throw new Error("write failed");
       },
     }),
-    true,
-    "a failed write still counts as a written recap for the stream",
+    false,
+    "a recap that could not be saved is reported as not written",
   );
 });
 

@@ -62,8 +62,9 @@ export function FlowingSummary({
     controllerRef.current?.abort();
     controllerRef.current = null;
     setStreamingState(false);
-    if (!streamedText) setFailure("stopped");
-  }, [setStreamingState, streamedText]);
+    setStreamedText("");
+    setFailure("stopped");
+  }, [setStreamingState]);
 
   // An unmount-cleanup abort (StrictMode mounts twice in dev) must not consume
   // the single auto-start; a user-clicked Stop never unmounts, so it stays latched.
@@ -136,8 +137,13 @@ export function FlowingSummary({
           }
         }
       }
+      setStreamedText("");
+      setFailure("error");
     } catch {
-      if (!controller.signal.aborted && !firstWordSeen) setFailure("error");
+      if (!controller.signal.aborted) {
+        setStreamedText("");
+        setFailure("error");
+      }
     } finally {
       if (controllerRef.current === controller) {
         controllerRef.current = null;
@@ -220,6 +226,21 @@ export function FlowingSummary({
           title={streamModel ?? model ?? undefined}
         >
           Written by AI · {formatRecapAge(writtenAt, new Date())}
+        </p>
+      )}
+
+      {view === "text" && !!failure && failure !== "stopped" && !!initialText?.trim() && (
+        <p className="mt-3 text-sm text-ink-3">
+          The recap could not be regenerated.{" "}
+          <Button
+            type="button"
+            variant="link"
+            size="sm"
+            className="h-auto px-0 text-ink"
+            onClick={() => void start(true)}
+          >
+            Try again
+          </Button>
         </p>
       )}
 
