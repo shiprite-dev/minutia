@@ -12,11 +12,15 @@ const inline = (s: string) => s.replace(/\[([^\]]*)\]\([^)]*\)/g, "$1").replace(
 export function parseRecap(text: string, opts?: { streaming?: boolean }): RecapBlock[] {
   const raws: Raw[] = [];
   let open: Raw | null = null;
+  let blank = false;
+  const wordOpts = { openBold: !!opts?.streaming };
   for (let line of text.replace(/\r\n?/g, "\n").split("\n")) {
     line = line.trimEnd();
     while (/^\s*>\s?/.test(line)) line = line.replace(/^\s*>\s?/, "");
     if (/^\s*```/.test(line) || /^\s*(-{3,}|\*{3,}|_{3,})\s*$/.test(line)) continue;
-    if (!line.trim()) { open = null; continue; }
+    if (!line.trim()) { if (open?.kind === "list") blank = true; else open = null; continue; }
+    const gap = blank;
+    blank = false;
     const h = /^\s*#{1,6}(?:\s+(.*))?$/.exec(line);
     if (h) {
       const t = (h[1] ?? "").replace(/\*\*/g, "").replace(/\s*#+\s*$/, "").replace(/:\s*$/, "").trim();
@@ -24,24 +28,28 @@ export function parseRecap(text: string, opts?: { streaming?: boolean }): RecapB
       if (t) raws.push({ kind: "heading", text: inline(t) });
       continue;
     }
+    const prev = raws[raws.length - 1];
     const b = /^\s*(?:[-*•]|\d+[.)])(?:\s+(.*)|$)/.exec(line);
-    if (b) {
+    const numbered = !!b && /^\s*\d/.test(line);
+    if (b && numbered && !b[1]?.trim()) continue;
+    if (b && (!numbered || prev?.kind === "heading" || prev?.kind === "list")) {
       const t = inline(b[1] ?? "").trim();
       if (!t || !splitWords(t).length) continue;
       if (open?.kind === "list") open.items.push(t);
       else { open = { kind: "list", items: [t] }; raws.push(open); }
       continue;
     }
+    if (gap) open = null;
+    if (open?.kind === "list" && /^\s/.test(line)) { open.items[open.items.length - 1] += " " + inline(line.trim()); continue; }
     if (open?.kind === "lead") open.text += " " + inline(line.trim());
     else { open = { kind: "lead", text: inline(line.trim()) }; raws.push(open); }
   }
-  const kept = opts?.streaming ? raws : raws.filter((r, i) => r.kind !== "heading" || (raws[i + 1] && raws[i + 1].kind !== "heading"));
   const out: RecapBlock[] = [];
-  for (const r of kept) {
-    const key = out.length;
-    if (r.kind === "list") out.push({ kind: "list", key, items: r.items.map((t, i) => ({ key: i, words: splitWords(t) })) });
-    else { const words = splitWords(r.text); if (words.length) out.push({ kind: r.kind, key, words }); }
-  }
+  raws.forEach((r, key) => {
+    if (!opts?.streaming && r.kind === "heading" && !(raws[key + 1] && raws[key + 1].kind !== "heading")) return;
+    if (r.kind === "list") out.push({ kind: "list", key, items: r.items.map((t, i) => ({ key: i, words: splitWords(t, wordOpts) })) });
+    else { const words = splitWords(r.text, wordOpts); if (words.length) out.push({ kind: r.kind, key, words }); }
+  });
   return out;
 }
 
