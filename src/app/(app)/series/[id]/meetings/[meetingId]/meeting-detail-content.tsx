@@ -755,6 +755,7 @@ export function MeetingDetailContent({
   const autoSummaryFiredRef = React.useRef(false);
   const [finishingOpenedAt, setFinishingOpenedAt] = React.useState<number | null>(null);
   const [stopOutcome, setStopOutcome] = React.useState<"completed" | "failed" | null>(null);
+  const [extractionWaitOver, setExtractionWaitOver] = React.useState(false);
   // The upload landed and the transcription request has not been issued yet.
   const [uploadedPending, setUploadedPending] = React.useState(false);
   const [transcriptionFailure, setTranscriptionFailure] = React.useState<TranscriptionFailure | null>(null);
@@ -939,11 +940,17 @@ export function MeetingDetailContent({
     if (stopOutcome !== "completed" || aiSuggestions.length > 0) return;
     const startedAt = Date.now();
     const id = setInterval(() => {
-      if (Date.now() - startedAt > 60_000) return clearInterval(id);
+      if (Date.now() - startedAt > 60_000) {
+        clearInterval(id);
+        setExtractionWaitOver(true);
+        return;
+      }
       void loadSuggestions(true);
     }, 3000);
     return () => clearInterval(id);
   }, [stopOutcome, aiSuggestions.length, loadSuggestions]);
+  const findingSuggestions =
+    loadingSuggestions || (stopOutcome === "completed" && aiSuggestions.length === 0 && !extractionWaitOver);
 
   // The elapsed-time copy needs a moving clock while a run is in flight.
   React.useEffect(() => {
@@ -1910,7 +1917,7 @@ export function MeetingDetailContent({
   const hasAnyNotes = !!notes.trim() || !!companionNotes;
   const canGenerateRecap = canManageMeeting && hasAccess;
   const recapPreparing =
-    finishingOpenedAt !== null ||
+    finishing ||
     (recorder.state === "stopped" &&
       (recorder.fastLane.state === "active" || recorder.fastLane.state === "finalizing")) ||
     (["saving", "saved_pending", "transcribing", "processing_return"] as TranscriptionUiState[]).includes(
@@ -1932,7 +1939,8 @@ export function MeetingDetailContent({
   const autoStartRecap =
     autoStartSummary ||
     (shouldAutoStartRecap({ canGenerate: canGenerateRecap, storedText: storedRecap, hasSource }) &&
-      !recapPreparing);
+      !recapPreparing &&
+      finishingOpenedAt === null);
 
   const HIDDEN_ON_RECAP: TranscriptionUiState[] = [
     "recording",
@@ -1956,7 +1964,7 @@ export function MeetingDetailContent({
   const sendEmphasis =
     !alertShown &&
     ((aiSuggestions.length > 0 && pending.length === 0) ||
-      (aiSuggestions.length === 0 && !loadingSuggestions && logCount > 0))
+      (aiSuggestions.length === 0 && !findingSuggestions && logCount > 0))
       ? "accent"
       : "outline";
   const regen = canGenerateRecap && !!storedRecap;
@@ -2153,7 +2161,7 @@ export function MeetingDetailContent({
       );
     } else if (pending.length > 0) {
       reviewStatus = null;
-    } else if (loadingSuggestions) {
+    } else if (findingSuggestions) {
       reviewStatus = (
         <div>
           <LogGroupLabel label="To review" count={0} tone="accent" />

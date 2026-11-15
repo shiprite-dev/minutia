@@ -214,7 +214,7 @@ test.describe("Recap page opened at stop", () => {
           status: "pending",
         },
       });
-      await expect(page.getByText("Book the vendor review").first()).toBeVisible({
+      await expect(page.getByText("Book the vendor review", { exact: true }).first()).toBeVisible({
         timeout: 10_000,
       });
       expect(streams.calls).toBe(1);
