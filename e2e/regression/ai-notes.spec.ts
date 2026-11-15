@@ -274,17 +274,41 @@ test.describe("AI notes", () => {
     }
   });
 
-  test("shows an empty suggestions state", async ({ page, request }) => {
+  test("an empty review offers to find action items and shows what it finds", async ({ page, request }) => {
     test.skip(!HAS_SERVICE_ROLE, "Requires service role setup for isolated AI notes data");
 
     const fixture = await createAiNotesFixture(request);
 
     try {
       await page.route("**/api/meetings/*/suggestions", async (route) => {
+        const generated = route.request().method() === "POST";
         await route.fulfill({
           status: 200,
           contentType: "application/json",
-          body: JSON.stringify({ suggestions: [] }),
+          body: JSON.stringify({
+            suggestions: generated
+              ? [
+                  {
+                    id: "90000000-0000-0000-0000-0000000000f1",
+                    meeting_id: fixture.meetingId,
+                    series_id: fixture.seriesId,
+                    type: "new_item",
+                    category: "action",
+                    title: "Confirm the launch checklist",
+                    details: "",
+                    owner_name: "",
+                    due_date: null,
+                    confidence: 0.81,
+                    source_excerpt: "",
+                    related_issue_number: null,
+                    suggested_status: null,
+                    status: "pending",
+                    created_at: new Date().toISOString(),
+                    reviewed_at: null,
+                  },
+                ]
+              : [],
+          }),
         });
       });
 
@@ -292,12 +316,15 @@ test.describe("AI notes", () => {
       await waitForApp(page);
       await expect(page.getByRole("heading", { name: /AI notes session/ })).toBeVisible({ timeout: 20_000 });
 
-      await page.getByRole("button", { name: "Review AI suggestions" }).click();
+      await expect(page.getByRole("button", { name: "Review AI suggestions" })).toHaveCount(0);
+      await expect(page.getByText("No suggestions for this meeting.")).toBeVisible();
+      await page.getByRole("button", { name: "Find action items" }).click();
+
       const region = page.getByRole("region", { name: "AI suggestions" });
       await expect(region).toBeVisible();
-      await expect(region.getByText("No AI suggestions yet for this meeting.")).toBeVisible();
-      // The empty state offers an explicit generate action (notes are present).
-      await expect(region.getByRole("button", { name: "Generate suggestions" })).toBeVisible();
+      await expect(region.getByLabel("Suggestion title")).toHaveValue("Confirm the launch checklist");
+      await expect(page.getByText("To review", { exact: true })).toBeVisible();
+      await expect(page.getByText("No suggestions for this meeting.")).toHaveCount(0);
     } finally {
       await deleteSeries(request, fixture.seriesId);
     }

@@ -60,15 +60,3 @@ export function splitWords(text: string): FlowWord[] {
 export function materializeClassName(reducedMotion: boolean): string {
   return reducedMotion ? "" : "materialize";
 }
-
-// The muted provenance timings shown under a finished recap: how long until the
-// first words landed and the total stream duration, each to one decimal second.
-export function formatProvenance(p: {
-  firstWordMs: number | null;
-  totalMs: number | null;
-}): string {
-  const parts: string[] = [];
-  if (p.firstWordMs != null) parts.push(`first words in ${(p.firstWordMs / 1000).toFixed(1)}s`);
-  if (p.totalMs != null) parts.push(`${(p.totalMs / 1000).toFixed(1)}s total`);
-  return parts.join(" · ");
-}

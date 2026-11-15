@@ -63,6 +63,7 @@ interface MeetingFixtureOptions {
   transcription_outcome?: string | null;
   transcription_started_at?: string | null;
   transcript_raw?: string | null;
+  notes_markdown?: string;
 }
 
 async function createMeetingFixture(
@@ -104,7 +105,7 @@ async function createMeetingFixture(
     ...((meeting.status ?? "completed") === "live"
       ? {}
       : {
-          notes_markdown: "Alice owns the onboarding checklist by Friday.",
+          notes_markdown: meeting.notes_markdown ?? "Alice owns the onboarding checklist by Friday.",
           completed_at: new Date().toISOString(),
         }),
   };
@@ -128,6 +129,10 @@ async function createMeetingFixture(
 
 function statusRegion(page: Page) {
   return page.getByRole("region", { name: "Transcription status" });
+}
+
+function recapProgress(page: Page) {
+  return page.getByRole("status", { name: "Recap progress" });
 }
 
 async function openMeeting(page: Page, seriesId: string, meetingId: string) {
@@ -197,7 +202,7 @@ test.describe("Transcription UX states", () => {
 
   test("shows the no-recording state when nothing was ever captured", async ({ page, request }) => {
     test.skip(!HAS_SERVICE_ROLE, "Requires service role for isolated transcription fixtures");
-    const fixture = await createMeetingFixture(request, {});
+    const fixture = await createMeetingFixture(request, { notes_markdown: "" });
 
     try {
       await openMeeting(page, fixture.seriesId, fixture.meetingId);
@@ -207,6 +212,25 @@ test.describe("Transcription UX states", () => {
         region.getByText("No recording or transcript is available for this meeting.")
       ).toBeVisible();
       await expect(region.getByRole("button", { name: "Add notes", exact: true })).toHaveCount(1);
+    } finally {
+      await deleteSeries(request, fixture.seriesId);
+    }
+  });
+
+  test("hides the no-recording note once the meeting has notes", async ({ page, request }) => {
+    test.skip(!HAS_SERVICE_ROLE, "Requires service role for isolated transcription fixtures");
+    const fixture = await createMeetingFixture(request, {});
+
+    try {
+      await openMeeting(page, fixture.seriesId, fixture.meetingId);
+
+      await expect(page.getByPlaceholder("Meeting notes...")).toHaveValue(
+        "Alice owns the onboarding checklist by Friday."
+      );
+      await expect(
+        page.getByText("No recording or transcript is available for this meeting.")
+      ).toHaveCount(0);
+      await expect(statusRegion(page)).toHaveCount(0);
     } finally {
       await deleteSeries(request, fixture.seriesId);
     }
@@ -225,11 +249,12 @@ test.describe("Transcription UX states", () => {
     try {
       await openMeeting(page, fixture.seriesId, fixture.meetingId);
 
-      const region = statusRegion(page);
-      await expect(region.getByText("Still transcribing this recording…")).toBeVisible();
-      await expect(region.getByText(/Started \d+ minutes ago/)).toBeVisible();
-      // A passive state carries no action at all.
-      await expect(region.getByRole("button")).toHaveCount(0);
+      const progress = recapProgress(page);
+      await expect(progress).toContainText("Transcribing");
+      await expect(progress).toContainText(/Started \d+ minutes ago/);
+      // A passive state carries no action at all, and owns the only status line.
+      await expect(progress.getByRole("button")).toHaveCount(0);
+      await expect(statusRegion(page)).toHaveCount(0);
     } finally {
       await deleteSeries(request, fixture.seriesId);
     }
@@ -248,10 +273,11 @@ test.describe("Transcription UX states", () => {
     try {
       await openMeeting(page, fixture.seriesId, fixture.meetingId);
 
-      const region = statusRegion(page);
-      await expect(region.getByText("Still transcribing this recording…")).toBeVisible();
-      await expect(region.getByText(/Started \d+ minutes ago/)).toHaveCount(0);
-      await expect(region.getByRole("button")).toHaveCount(0);
+      const progress = recapProgress(page);
+      await expect(progress).toContainText("Transcribing");
+      await expect(progress.getByText(/Started \d+ minutes ago/)).toHaveCount(0);
+      await expect(progress.getByRole("button")).toHaveCount(0);
+      await expect(statusRegion(page)).toHaveCount(0);
     } finally {
       await deleteSeries(request, fixture.seriesId);
     }
@@ -472,10 +498,30 @@ test.describe("Transcription UX states", () => {
     });
 
     try {
-      await openMeeting(page, fixture.seriesId, fixture.meetingId);
+      // A toast dismisses itself, so count every announcement as it appears.
+      await page.addInitScript((text) => {
+        const seen = new WeakSet<Element>();
+        const w = window as unknown as { __transcriptAnnouncements: number };
+        w.__transcriptAnnouncements = 0;
+        new MutationObserver(() => {
+          for (const el of document.querySelectorAll("[aria-live] [data-sonner-toast]")) {
+            if (!seen.has(el) && el.textContent?.includes(text)) {
+              seen.add(el);
+              w.__transcriptAnnouncements += 1;
+            }
+          }
+        }).observe(document, { childList: true, subtree: true, characterData: true });
+      }, "Transcript ready. Check action items below.");
+      const announcements = () =>
+        page.evaluate(
+          () => (window as unknown as { __transcriptAnnouncements: number }).__transcriptAnnouncements
+        );
 
-      const toasts = page.getByText("Transcript ready. Check action items below.");
-      await expect(toasts).toHaveCount(0);
+      await openMeeting(page, fixture.seriesId, fixture.meetingId);
+      // The meeting has loaded without a transcript; a transcript already there on
+      // arrival is not news and must not be announced.
+      await expect(recapProgress(page)).toContainText("Transcribing");
+      expect(await announcements()).toBe(0);
 
       // The transcript commits while the page is open: the run leaves processing
       // and the committed text lands in one update.
@@ -487,13 +533,16 @@ test.describe("Transcription UX states", () => {
         },
       });
 
-      await expect(toasts).toHaveCount(1, { timeout: 20_000 });
-      // Panel-open behaviour is asserted by the diarized and suggestion suites;
-      // this test owns exactly one promise: the announcement happens once.
+      await expect.poll(announcements, { timeout: 20_000 }).toBe(1);
+      // The landed transcript is evidence: it stays collapsed until asked for.
+      await expect(page.getByRole("button", { name: /^Transcript/ })).toHaveAttribute(
+        "aria-expanded",
+        "false"
+      );
 
-      // Later refreshes must not repeat the toast.
+      // Later refreshes must not repeat the announcement.
       await page.waitForTimeout(6000);
-      await expect(toasts).toHaveCount(1);
+      expect(await announcements()).toBe(1);
     } finally {
       await deleteSeries(request, fixture.seriesId);
     }

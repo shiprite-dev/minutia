@@ -75,9 +75,9 @@ export function AppShell({ profile, organizations, children }: AppShellProps) {
         Skip to content
       </a>
       <AppSidebar profile={profile} organizations={organizations} />
-      <SidebarInset>
+      <SidebarInset className="h-svh">
         <AppHeader />
-        <div className="flex flex-1 overflow-hidden">
+        <div className="flex min-h-0 flex-1 overflow-hidden">
           <main id="main-content" className="flex flex-1 flex-col overflow-y-auto bg-paper">
             {children}
           </main>

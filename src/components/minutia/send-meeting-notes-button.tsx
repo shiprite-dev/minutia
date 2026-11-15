@@ -26,9 +26,10 @@ function extractEmails(values: string[]) {
 type Props = {
   meetingId: string;
   attendees: string[];
+  emphasis?: "accent" | "outline";
 };
 
-export function SendMeetingNotesButton({ meetingId, attendees }: Props) {
+export function SendMeetingNotesButton({ meetingId, attendees, emphasis = "outline" }: Props) {
   const defaultRecipients = React.useMemo(
     () => extractEmails(attendees).join(", "),
     [attendees]
@@ -78,9 +79,14 @@ export function SendMeetingNotesButton({ meetingId, attendees }: Props) {
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
-        <Button variant="outline" className="border-rule bg-paper text-ink hover:bg-paper-2">
+        <Button
+          variant={emphasis === "accent" ? "accent" : "outline"}
+          className={emphasis === "accent" ? undefined : "border-rule bg-paper text-ink hover:bg-paper-2"}
+          aria-label="Send notes"
+          data-emphasis={emphasis}
+        >
           <Mail className="size-4" />
-          Send notes
+          <span className="hidden sm:inline">Send notes</span>
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-lg">

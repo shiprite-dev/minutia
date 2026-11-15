@@ -244,6 +244,49 @@
 .materialize { animation: materialize 350ms ease-out both; }
 @media (prefers-reduced-motion: reduce) { .materialize { animation: none; } }
 
+@keyframes recap-shimmer { from { mask-position: 150% 0; } to { mask-position: -50% 0; } }
+.recap-shimmer {
+  mask-image: linear-gradient(90deg, currentColor 30%, rgb(0 0 0 / 0.45) 50%, currentColor 70%);
+  mask-size: 200% 100%;
+  animation: recap-shimmer 1.6s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) { .recap-shimmer { animation: none; mask-image: none; } }
+
+.recap-grid { display: flex; flex-direction: column; gap: 3rem; }
+.recap-status { max-width: 48rem; }
+
+@container recap (width >= 61rem) {
+  .recap-shell { max-width: 72rem; }
+  .recap-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 22rem;
+    grid-template-rows: auto auto 1fr;
+    column-gap: 3rem;
+    row-gap: 3rem;
+    align-items: start;
+  }
+  .recap-grid > * { grid-column: 1; min-width: 0; }
+  .recap-grid > .recap-rail {
+    grid-column: 2;
+    grid-row: 1 / span 3;
+    position: sticky;
+    top: 2rem;
+    max-height: calc(100dvh - 7rem);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    margin-inline: -0.75rem;
+    padding-inline: 0.75rem;
+  }
+}
+
+@container recap (width >= 72rem) {
+  .recap-shell { max-width: 80rem; }
+  .recap-grid {
+    grid-template-columns: minmax(0, 42rem) minmax(26rem, 1fr);
+    column-gap: 4rem;
+  }
+}
+
 @layer base {
   * {
     @apply border-border;

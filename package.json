@@ -71,6 +71,7 @@
     "test:date": "node --test scripts/verify-date.test.mjs",
     "test:reminders": "node --test scripts/verify-reminders.test.mjs",
     "test:companion-notes": "node --test scripts/verify-companion-notes.test.mjs",
+    "test:recap": "node --test scripts/verify-recap.test.mjs",
     "test:invitations": "node --test scripts/verify-invitations.test.mjs",
     "test:email-sender": "node --test scripts/verify-email-sender.test.mjs",
     "test:email-layout": "node --test scripts/verify-email-layout.test.mjs",

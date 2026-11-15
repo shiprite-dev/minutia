@@ -149,9 +149,10 @@ test("enhance-notes feeds composed notes to the AI but never writes them into ra
 });
 
 test("the meeting page shows companion notes read-only", () => {
-  const src = read(
+  const page = read(
     "src/app/(app)/series/[id]/meetings/[meetingId]/meeting-detail-content.tsx",
   );
-  assert.match(src, /companion_notes_markdown/);
-  assert.match(src, /From your desktop notepad/);
+  const surface = read("src/components/minutia/meeting-notes-surface.tsx");
+  assert.match(page, /companion_notes_markdown/);
+  assert.match(surface, /From your desktop notepad/);
 });

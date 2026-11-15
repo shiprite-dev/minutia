@@ -21,7 +21,7 @@ async function bundle(entry, name) {
 const { formatSseFrame, formatSseMeta, parseSseFrame, SSE_DONE, SSE_HEARTBEAT } = await bundle(
   "src/lib/summary/sse.ts", "sse"
 );
-const { splitWords, materializeClassName, formatProvenance } = await bundle("src/lib/summary/flow.ts", "flow");
+const { splitWords, materializeClassName } = await bundle("src/lib/summary/flow.ts", "flow");
 
 test("formatSseFrame encodes a word as a single SSE data frame", () => {
   assert.equal(formatSseFrame("Hello "), 'data: {"t":"Hello "}\n\n');
@@ -97,19 +97,6 @@ test("splitWords stays append-stable across a bold phrase closing mid-stream", (
   assert.equal(closed[0].key, partial[0].key);
   assert.equal(closed[1].text, partial[1].text);
   assert.equal(closed[2].bold, true);
-});
-
-test("formatProvenance renders first-word and total timings to one decimal", () => {
-  assert.equal(
-    formatProvenance({ firstWordMs: 640, totalMs: 2100 }),
-    "first words in 0.6s · 2.1s total"
-  );
-});
-
-test("formatProvenance omits a missing timing gracefully", () => {
-  assert.equal(formatProvenance({ firstWordMs: null, totalMs: 1500 }), "1.5s total");
-  assert.equal(formatProvenance({ firstWordMs: 900, totalMs: null }), "first words in 0.9s");
-  assert.equal(formatProvenance({ firstWordMs: null, totalMs: null }), "");
 });
 
 test("materializeClassName drops the class when reduced motion is requested", () => {

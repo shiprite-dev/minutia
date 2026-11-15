@@ -106,6 +106,9 @@ jobs:
       - name: Verify companion-notes composition
         run: pnpm test:companion-notes
 
+      - name: Verify recap persistence and view rules
+        run: pnpm test:recap
+
       - name: Verify email sender resolution
         run: pnpm test:email-sender
 
@@ -310,7 +313,7 @@ jobs:
           SITE_URL: http://localhost:3000
 
       - name: Upload Playwright report
-        if: steps.e2e.outcome == 'failure'
+        if: failure() && steps.e2e.outcome == 'failure'
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report-${{ matrix.shard }}

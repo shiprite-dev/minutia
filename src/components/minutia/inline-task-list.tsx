@@ -35,6 +35,7 @@ interface InlineTaskListProps {
   onAssigneeChange?: (issueId: string, payload: AssigneePayload) => void;
   onAddItem?: (title: string, category: IssueCategory) => void;
   readOnly?: boolean;
+  emptyText?: string | null;
 }
 
 const categoryColors: Record<IssueCategory, string> = {
@@ -401,6 +402,7 @@ export function InlineTaskList({
   onAssigneeChange,
   onAddItem,
   readOnly,
+  emptyText = "No items raised yet. Press the button below to add one.",
 }: InlineTaskListProps) {
   const [focusedIndex, setFocusedIndex] = React.useState(-1);
   const [addingItem, setAddingItem] = React.useState(false);
@@ -452,9 +454,9 @@ export function InlineTaskList({
         ))}
       </AnimatePresence>
 
-      {issues.length === 0 && !addingItem && !readOnly && (
+      {issues.length === 0 && !addingItem && !readOnly && emptyText && (
         <p className="text-sm text-ink-4 py-4 text-center">
-          No items raised yet. Press the button below to add one.
+          {emptyText}
         </p>
       )}
 

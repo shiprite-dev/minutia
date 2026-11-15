@@ -37,8 +37,7 @@ async function createMeetingIssue(
 
 function raisedIssueRow(page: Parameters<Parameters<typeof test>[2]>[0]["page"], title: string) {
   return page
-    .locator("section")
-    .filter({ hasText: "Items raised" })
+    .locator('section[aria-label="Items raised"]')
     .locator("[class*='group']")
     .filter({ hasText: title })
     .first();
@@ -89,9 +88,9 @@ test.describe("Meeting Issue Resolution Flow", () => {
         page.getByText("Resolved this meeting").first()
       ).toBeVisible({ timeout: 5000 });
 
-      const resolvedSection = page.locator("section").filter({
-        hasText: "Resolved this meeting",
-      });
+      const resolvedSection = page.locator(
+        'section[aria-label="Resolved this meeting"]'
+      );
       await expect(resolvedSection.getByText(issue.title)).toBeVisible();
     } finally {
       await deleteIssue(request, issue.id).catch(() => undefined);

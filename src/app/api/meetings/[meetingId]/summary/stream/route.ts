@@ -5,7 +5,16 @@ import { getAiConfig } from "@/lib/ai/config";
 import { streamAi } from "@/lib/ai/stream";
 import { paceWords } from "@/lib/ai/word-pacer";
 import { SUMMARY_SYSTEM_PROMPT, buildSummaryPrompt } from "@/lib/summary/prompt";
-import { formatSseFrame, formatSseMeta, SSE_DONE, SSE_HEARTBEAT } from "@/lib/summary/sse";
+import {
+  formatSseFrame,
+  formatSseMeta,
+  SSE_DONE,
+  SSE_ERROR,
+  SSE_HEARTBEAT,
+} from "@/lib/summary/sse";
+import { userManagesSeries } from "@/lib/series/manage-access";
+import { composeMeetingNotes } from "@/lib/ai/companion-notes";
+import { pipeRecap } from "@/lib/summary/recap";
 import { assembleFastTranscript } from "@/lib/transcription/fast-lane";
 
 export const runtime = "nodejs";
@@ -29,7 +38,7 @@ export async function POST(
   const { data: meeting, error } = await supabase
     .from("meetings")
     .select(
-      "title, attendees, notes_markdown, raw_notes_markdown, transcript_raw, series:meeting_series!inner(name)"
+      "series_id, title, attendees, notes_markdown, raw_notes_markdown, companion_notes_markdown, transcript_raw, series:meeting_series!inner(name)"
     )
     .eq("id", meetingId)
     .single();
@@ -38,11 +47,17 @@ export async function POST(
     return NextResponse.json({ error: "Meeting not found" }, { status: 404 });
   }
 
-  let transcript =
-    meeting.transcript_raw?.trim() ||
-    meeting.raw_notes_markdown?.trim() ||
-    meeting.notes_markdown?.trim() ||
-    "";
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user || !(await userManagesSeries(meeting.series_id, user.id))) {
+    return NextResponse.json(
+      { error: "Only series owners and facilitators can write the recap." },
+      { status: 403 }
+    );
+  }
+
+  let transcript = meeting.transcript_raw?.trim() || composeMeetingNotes(meeting).trim();
 
   if (!transcript) {
     const { data: segmentRows } = await supabase
@@ -67,6 +82,7 @@ export async function POST(
     transcript,
   });
 
+  const regenerate = new URL(request.url).searchParams.get("regenerate") === "1";
   const encoder = new TextEncoder();
   const upstream = new AbortController();
   request.signal.addEventListener("abort", () => upstream.abort());
@@ -76,17 +92,25 @@ export async function POST(
       controller.enqueue(encoder.encode(SSE_HEARTBEAT));
       controller.enqueue(encoder.encode(formatSseMeta(model)));
       try {
-        const deltas = streamAi({
-          system: SUMMARY_SYSTEM_PROMPT,
-          prompt,
+        const produced = await pipeRecap({
+          words: paceWords(
+            streamAi({
+              system: SUMMARY_SYSTEM_PROMPT,
+              prompt,
+              signal: upstream.signal,
+              reasoningEffort: "minimal",
+            })
+          ),
+          emit: (word) => controller.enqueue(encoder.encode(formatSseFrame(word))),
           signal: upstream.signal,
-          reasoningEffort: "minimal",
+          model,
+          persist: async (row) => {
+            const update = supabase.from("meetings").update(row).eq("id", meetingId);
+            const { error } = await (regenerate ? update : update.is("recap_markdown", null));
+            if (error) console.error(`Recap write failed for meeting ${meetingId}: ${error.message}`);
+          },
         });
-        for await (const word of paceWords(deltas)) {
-          controller.enqueue(encoder.encode(formatSseFrame(word)));
-        }
-      } catch {
-        // Emit whatever was produced, then settle; the client renders partial text.
+        if (!produced && !upstream.signal.aborted) controller.enqueue(encoder.encode(SSE_ERROR));
       } finally {
         controller.enqueue(encoder.encode(SSE_DONE));
         controller.close();

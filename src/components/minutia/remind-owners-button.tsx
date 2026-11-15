@@ -1,16 +1,19 @@
 "use client";
 
 import * as React from "react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { Bell, BellRing, Check, Loader2 } from "lucide-react";
 
 interface RemindOwnersButtonProps {
   seriesId: string;
+  as?: "button" | "menuitem";
 }
 
 type State = "idle" | "sending" | "done" | "error";
 
-export function RemindOwnersButton({ seriesId }: RemindOwnersButtonProps) {
+export function RemindOwnersButton({ seriesId, as = "button" }: RemindOwnersButtonProps) {
   const [state, setState] = React.useState<State>("idle");
   const [message, setMessage] = React.useState<string>("");
   const timeoutRef = React.useRef<ReturnType<typeof setTimeout>>(null);
@@ -24,6 +27,10 @@ export function RemindOwnersButton({ seriesId }: RemindOwnersButtonProps) {
   function flash(next: State, label: string) {
     setState(next);
     setMessage(label);
+    if (as === "menuitem") {
+      if (next === "error") toast.error(label);
+      else toast(label);
+    }
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
     timeoutRef.current = setTimeout(() => {
       setState("idle");
@@ -64,6 +71,15 @@ export function RemindOwnersButton({ seriesId }: RemindOwnersButtonProps) {
     } catch {
       flash("error", "Could not send");
     }
+  }
+
+  if (as === "menuitem") {
+    return (
+      <DropdownMenuItem onSelect={() => void handleClick()}>
+        <Bell className="size-4" />
+        Remind owners
+      </DropdownMenuItem>
+    );
   }
 
   return (

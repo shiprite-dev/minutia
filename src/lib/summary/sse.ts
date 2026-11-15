@@ -1,9 +1,11 @@
 // Pure SSE framing shared by the summary stream route (encode) and the
 // FlowingSummary client (decode). One word per frame; a [DONE] sentinel ends
-// the stream; a bare comment ":" is a heartbeat the client ignores.
+// the stream; an error frame tells the client the recap failed; a bare
+// comment ":" is a heartbeat the client ignores.
 
 export const SSE_DONE = "data: [DONE]\n\n";
 export const SSE_HEARTBEAT = ":\n\n";
+export const SSE_ERROR = 'data: {"e":"failed"}\n\n';
 
 export function formatSseFrame(word: string): string {
   return `data: ${JSON.stringify({ t: word })}\n\n`;
@@ -16,14 +18,15 @@ export function formatSseMeta(model: string): string {
   return `data: ${JSON.stringify({ m: model })}\n\n`;
 }
 
-export function parseSseFrame(line: string): { word?: string; model?: string; done?: boolean } {
+export function parseSseFrame(line: string): { word?: string; model?: string; done?: boolean; error?: boolean } {
   const trimmed = line.trim();
   if (!trimmed.startsWith("data:")) return {};
   const data = trimmed.slice(5).trim();
   if (data === "[DONE]") return { done: true };
   try {
-    const parsed = JSON.parse(data) as { t?: unknown; m?: unknown };
+    const parsed = JSON.parse(data) as { t?: unknown; m?: unknown; e?: unknown };
     if (typeof parsed.t === "string") return { word: parsed.t };
+    if (typeof parsed.e === "string") return { error: true };
     if (typeof parsed.m === "string" && parsed.m) return { model: parsed.m };
     return {};
   } catch {

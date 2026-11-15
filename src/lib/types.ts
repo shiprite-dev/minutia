@@ -179,6 +179,9 @@ export interface Meeting {
   ai_notes_generated_at: Date | null;
   ai_notes_model: string | null;
   ai_notes_prompt_version: string | null;
+  recap_markdown: string | null;
+  recap_generated_at: Date | null;
+  recap_model: string | null;
   transcript_raw: string | null;
   transcript_segments: TranscriptionSegmentRow[] | null;
   transcript_diarized: boolean;
