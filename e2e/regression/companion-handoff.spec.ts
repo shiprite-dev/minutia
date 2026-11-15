@@ -8,6 +8,15 @@ import {
 import { waitForApp } from "./seed-data";
 
 test.describe.configure({ mode: "serial" });
+test.use({
+  launchOptions: {
+    args: [
+      "--use-fake-ui-for-media-stream",
+      "--use-fake-device-for-media-stream",
+    ],
+  },
+  permissions: ["microphone"],
+});
 
 const SUPABASE_URL =
   process.env.NEXT_PUBLIC_SUPABASE_URL ?? "http://127.0.0.1:54321";
@@ -359,16 +368,7 @@ test.describe("Starting on the web records on the Mac", () => {
 
 test.describe("Recording here instead of on the Mac", () => {
   test.skip(!HAS_SERVICE_ROLE, "Requires service role for isolated fixtures");
-  test.use({
-    userAgent: MAC_UA,
-    launchOptions: {
-      args: [
-        "--use-fake-ui-for-media-stream",
-        "--use-fake-device-for-media-stream",
-      ],
-    },
-    permissions: ["microphone"],
-  });
+  test.use({ userAgent: MAC_UA });
 
   test("a Mac that cannot start hands recording back to the browser", async ({
     page,
