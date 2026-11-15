@@ -118,6 +118,8 @@ export const deferredRoutes = {
   "/api/calendar/watch": "getUser 401 gate; family executed via GET workspace/members; external-integration / write / query-param-branch route deferred",
   "/api/companion/authorize": "getUser 401 gate; family executed via GET workspace/members; external-integration / write / query-param-branch route deferred",
   "/api/companion/heartbeat": "getUser 401 gate; family executed via GET workspace/members; external-integration / write / query-param-branch route deferred",
+  "/api/companion/checkin": "getUser 401 gate; family executed via GET workspace/members; external-integration / write / query-param-branch route deferred",
+  "/api/companion/recording": "getUser 401 gate; family executed via GET workspace/members; external-integration / write / query-param-branch route deferred",
   "/api/workspace/directory": "getUser 401 gate; family executed via GET workspace/members; external-integration / write / query-param-branch route deferred",
 
   // --- API: requireAiAccess family (POST write/stream) ----------------------

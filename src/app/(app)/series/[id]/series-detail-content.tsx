@@ -62,6 +62,7 @@ import {
   useUnlinkCalendar,
 } from "@/lib/hooks/use-google-calendar";
 import Link from "next/link";
+import { requestCompanionRecord } from "@/lib/companion/request";
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -159,6 +160,7 @@ export function SeriesDetailContent({ seriesId }: SeriesDetailContentProps) {
     setStartingMeeting(true);
     try {
       const meeting = await startOrJoinMeeting.mutateAsync(seriesId);
+      if (canManageSeries) await requestCompanionRecord(meeting.id);
       router.push(`/series/${seriesId}/meetings/${meeting.id}`);
     } finally {
       setStartingMeeting(false);

@@ -202,6 +202,14 @@ export interface Meeting {
   gcal_meeting_url: string | null;
   gcal_html_link: string | null;
   gcal_last_synced_at: Date | null;
+  record_requested_at: string | null;
+  record_requested_by: string | null;
+  record_claimed_at: string | null;
+  recording_user_id: string | null;
+  recording_device_id: string | null;
+  recording_device_name: string | null;
+  recording_started_at: string | null;
+  recording_failed_reason: string | null;
   created_at: Date;
   completed_at: Date | null;
 }

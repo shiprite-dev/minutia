@@ -27,6 +27,10 @@ export function buildCompanionRecordUrl(meetingId: string): string {
   return `minutia://record?meeting_id=${id}`;
 }
 
+export function buildCompanionOpenUrl(): string {
+  return "minutia://open";
+}
+
 export function isMacPlatform(
   uaData: { platform?: string } | undefined,
   userAgent: string | undefined

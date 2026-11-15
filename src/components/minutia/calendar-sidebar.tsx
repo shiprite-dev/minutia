@@ -1,5 +1,6 @@
 "use client";
 
+import { requestCompanionRecord } from "@/lib/companion/request";
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -590,7 +591,10 @@ export function CalendarSidebar() {
       return;
     }
     startCalendarEvent.mutate(event.id, {
-      onSuccess: (result) => router.push(result.captureUrl),
+      onSuccess: (result) => {
+        void requestCompanionRecord(result.captureUrl.split("/").pop() ?? "");
+        router.push(result.captureUrl);
+      },
     });
   }
 

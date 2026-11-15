@@ -21,7 +21,10 @@ import {
 import { useSeriesDetail, useSeriesParticipantRole } from "@/lib/hooks/use-series";
 import { useProfile } from "@/lib/hooks/use-profile";
 import { CompanionInstallPrompt } from "@/components/minutia/companion-install-prompt";
-import { buildCompanionRecordUrl, isMacPlatform } from "@/lib/companion-links";
+import { isMacPlatform } from "@/lib/companion-links";
+import { companionRecordStatus } from "@/lib/companion/status";
+import { cancelCompanionRecord, requestCompanionRecord } from "@/lib/companion/request";
+import { CompanionRecordStrip } from "@/components/minutia/companion-record-strip";
 import { useIssues, useCreateIssue, useUpdateIssueStatus, useUpdateIssue, useAssignIssue, issueKeys } from "@/lib/hooks/use-issues";
 import { useCreateDecision, decisionKeys } from "@/lib/hooks/use-decisions";
 import { SyncIndicator } from "@/components/minutia/sync-indicator";
@@ -71,7 +74,7 @@ import { AiUnavailableNotice } from "@/components/minutia/ai-unavailable-notice"
 import { useAiAccess } from "@/lib/hooks/use-ai-access";
 import { composeMeetingNotes } from "@/lib/ai/companion-notes";
 import { humanizeError } from "@/lib/errors";
-import { ArrowLeft, Square, Play, Check, X, Sparkles, Loader2, FileText, CheckSquare, Gavel, AlertTriangle, Ban, RotateCcw, HelpCircle, ChevronDown, Radio, MoreHorizontal } from "lucide-react";
+import { ArrowLeft, Square, Play, Check, X, Sparkles, Loader2, FileText, CheckSquare, Gavel, AlertTriangle, Ban, RotateCcw, HelpCircle, ChevronDown, MoreHorizontal } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatShortDate } from "@/lib/date-utils";
 import type { IssueCategory, IssueStatus, Issue, Decision, Meeting, MeetingAiSuggestion } from "@/lib/types";
@@ -705,7 +708,9 @@ export function MeetingDetailContent({
     !!meetingError && (meetingError as { code?: string }).code === "PGRST116";
   const { data: series } = useSeriesDetail(seriesId);
   const { data: participantRole } = useSeriesParticipantRole(seriesId);
-  const { data: profile } = useProfile();
+  const { data: profile } = useProfile({
+    refetchInterval: meeting?.status === "live" ? 10_000 : false,
+  });
   const { data: seriesIssues } = useIssues(seriesId);
 
   // MIN-121: resolve an OIL number to its issue link so a context badge
@@ -959,6 +964,42 @@ export function MeetingDetailContent({
     return () => clearInterval(id);
   }, [transcribing, meeting?.transcription_status, finishing]);
 
+  const isMacClient =
+    typeof navigator !== "undefined" &&
+    isMacPlatform(
+      (navigator as Navigator & { userAgentData?: { platform?: string } })
+        .userAgentData,
+      navigator.userAgent
+    );
+  const [dismissedHandoff, setDismissedHandoff] = React.useState<string | null>(null);
+  const rawCompanionStatus =
+    meeting && profile
+      ? companionRecordStatus({
+          meeting,
+          userId: profile.id,
+          lastSeenAt: profile.companion_last_seen_at,
+          isMac: isMacClient,
+          now: clock,
+        })
+      : ({ kind: "none" } as const);
+  const handoffKey = meeting
+    ? `${rawCompanionStatus.kind}:${meeting.recording_failed_reason ?? meeting.recording_started_at ?? meeting.record_claimed_at}`
+    : null;
+  const companionStatus =
+    (rawCompanionStatus.kind === "failed" || rawCompanionStatus.kind === "lost") &&
+    handoffKey === dismissedHandoff
+      ? ({ kind: "none" } as const)
+      : rawCompanionStatus;
+  const handoffMeetingLive = meeting?.status === "live";
+  const handoffStarting = companionStatus.kind === "starting";
+
+  // Re-evaluates time-based handoff states against the wall clock.
+  React.useEffect(() => {
+    if (!handoffMeetingLive) return;
+    const id = setInterval(() => setClock(Date.now()), handoffStarting ? 1000 : 5000);
+    return () => clearInterval(id);
+  }, [handoffMeetingLive, handoffStarting]);
+
   // Auto-save notes with debounce
   const saveTimerRef = React.useRef<ReturnType<typeof setTimeout>>(null);
   const handleNotesChange = React.useCallback(
@@ -1210,17 +1251,6 @@ export function MeetingDetailContent({
   const canManageMeeting =
     participantRole === "owner" || participantRole === "facilitator";
 
-  // Hand-off to the desktop companion is offered only when a companion has checked
-  // in for this user and the browser is on macOS (the only companion platform).
-  const companionKnown = Boolean(profile?.companion_last_seen_at);
-  const isMacClient =
-    typeof navigator !== "undefined" &&
-    isMacPlatform(
-      (navigator as Navigator & { userAgentData?: { platform?: string } })
-        .userAgentData,
-      navigator.userAgent
-    );
-  const canOfferCompanionRecord = companionKnown && isMacClient;
 
   const activePresenceLabel =
     presenceUsers.length > 0
@@ -1342,34 +1372,32 @@ export function MeetingDetailContent({
 
   async function handleStartMeeting() {
     const liveMeeting = await startOrJoinMeeting.mutateAsync(seriesId);
-    nudgeCompanionRecord(liveMeeting.id);
+    if (canManageMeeting) await requestCompanionRecord(liveMeeting.id);
     if (liveMeeting.id !== meetingId) {
       router.push(`/series/${seriesId}/meetings/${liveMeeting.id}`);
     }
   }
 
-  // After the starter's own action, ask a known macOS companion to record. Fires
-  // at most once per meeting per browser session; no dialog, no blocking. A
-  // registered scheme handler consumes the hidden-anchor click; if none exists
-  // the click is a harmless no-op.
-  function nudgeCompanionRecord(id: string) {
-    if (!canOfferCompanionRecord || typeof window === "undefined") return;
-    const key = `minutia.record-nudge.${id}`;
-    if (sessionStorage.getItem(key)) return;
-    let url: string;
-    try {
-      url = buildCompanionRecordUrl(id);
-    } catch {
-      return;
-    }
-    sessionStorage.setItem(key, "1");
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.style.display = "none";
-    document.body.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
-    toast("Asking the companion to record");
+  async function refreshHandoff() {
+    setClock(Date.now());
+    await queryClient.invalidateQueries({ queryKey: meetingKeys.detail(meetingId) });
+  }
+
+  async function handleRecordOnMac() {
+    setDismissedHandoff(null);
+    await requestCompanionRecord(meetingId);
+    await refreshHandoff();
+  }
+
+  async function handleRecordHere() {
+    setDismissedHandoff(handoffKey);
+    await cancelCompanionRecord(meetingId);
+    await recorder.start();
+  }
+
+  async function handleStartBrowserRecording() {
+    void cancelCompanionRecord(meetingId);
+    await recorder.start();
   }
 
   function handleTitleChange(issueId: string, title: string) {
@@ -1561,22 +1589,22 @@ export function MeetingDetailContent({
                     isSupported={recorder.isSupported}
                     error={recorder.error}
                     uploading={savingRecording}
-                    onStart={recorder.start}
+                    hideRecord={companionStatus.kind === "starting" || companionStatus.kind === "recording"}
+                    onStart={handleStartBrowserRecording}
                     onStop={handleStopRecording}
                     onPause={recorder.pause}
                     onResume={recorder.resume}
                   />
-                  {canOfferCompanionRecord && recorder.state === "idle" && (
-                    <a
-                      href={buildCompanionRecordUrl(meeting.id)}
-                      className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-rule px-2.5 text-xs font-medium text-ink-2 hover:bg-paper-2 hover:text-ink"
-                    >
-                      <Radio className="size-3.5" aria-hidden />
-                      Record with companion
-                    </a>
-                  )}
                 </div>
               )}
+
+              <CompanionRecordStrip
+                status={companionStatus}
+                canAct={canManageMeeting && hasAccess && recorder.state === "idle"}
+                onRecordOnMac={() => void handleRecordOnMac()}
+                onOpenMac={() => void handleRecordOnMac()}
+                onRecordHere={() => void handleRecordHere()}
+              />
 
               {recorder.state === "stopped" &&
                 (recorder.fastLane.state === "finalizing" ||
@@ -1620,7 +1648,9 @@ export function MeetingDetailContent({
         </div>
 
         {/* Companion app install nudge */}
-        <CompanionInstallPrompt lastSeenAt={profile?.companion_last_seen_at} />
+        {companionStatus.kind === "install" && profile && (
+          <CompanionInstallPrompt userId={profile.id} />
+        )}
 
         {/* Transcription status */}
         {LIVE_STATUS_STATES.includes(transcriptionState) && (
