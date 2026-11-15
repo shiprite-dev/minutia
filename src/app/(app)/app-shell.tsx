@@ -78,7 +78,7 @@ export function AppShell({ profile, organizations, children }: AppShellProps) {
       <SidebarInset className="h-svh">
         <AppHeader />
         <div className="flex min-h-0 flex-1 overflow-hidden">
-          <main id="main-content" className="flex flex-1 flex-col overflow-y-auto bg-paper">
+          <main id="main-content" tabIndex={-1} className="flex flex-1 flex-col overflow-y-auto bg-paper outline-none">
             {children}
           </main>
           <CalendarSidebar />
