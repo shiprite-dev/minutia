@@ -1,3 +1,4 @@
+import { sanitizeRecap } from "@/lib/summary/structure";
 import type { TranscriptionUiState } from "@/components/minutia/transcription-status";
 
 export type RecapUpdate = {
@@ -17,7 +18,7 @@ const TRANSCRIBE_STATES: TranscriptionUiState[] = [
 ];
 
 export function buildRecapUpdate(text: string, model: string, now: Date): RecapUpdate | null {
-  const recap = text.trim();
+  const recap = sanitizeRecap(text);
   if (!recap) return null;
   return { recap_markdown: recap, recap_generated_at: now.toISOString(), recap_model: model };
 }

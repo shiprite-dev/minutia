@@ -5,7 +5,8 @@ import { Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-import { splitWords, materializeClassName } from "@/lib/summary/flow";
+import { materializeClassName, type FlowWord } from "@/lib/summary/flow";
+import { parseRecap } from "@/lib/summary/structure";
 import { parseSseFrame } from "@/lib/summary/sse";
 import {
   formatRecapAge,
@@ -21,6 +22,10 @@ function Word({ text, bold, animate }: { text: string; bold: boolean; animate: b
     onAnimationEnd: () => setClassName(""),
   };
   return bold ? <strong {...props}>{text}</strong> : <span {...props}>{text}</span>;
+}
+
+function Words({ words, animate }: { words: FlowWord[]; animate: boolean }) {
+  return words.map((w) => <Word key={w.key} text={w.text} bold={w.bold} animate={animate} />);
 }
 
 export function FlowingSummary({
@@ -183,7 +188,7 @@ export function FlowingSummary({
   });
   if (view === "hidden") return null;
 
-  const words = splitWords(streamedText || initialText || "");
+  const blocks = parseRecap(streamedText || initialText || "", { streaming });
   const animate = streaming && !prefersReducedMotion;
   const writtenAt = finishedAt ?? generatedAt;
 
@@ -212,16 +217,32 @@ export function FlowingSummary({
       )}
 
       {(view === "text" || view === "streaming") && (
-        <p
-          className="max-w-[65ch] font-sans text-[17px] leading-8 text-ink-2"
+        <div
+          className="max-w-[65ch] font-sans text-[17px] text-ink-2"
           aria-live="off"
           aria-busy={streaming}
           data-flowing-summary
         >
-          {words.map((word) => (
-            <Word key={word.key} text={word.text} bold={word.bold} animate={animate} />
-          ))}
-        </p>
+          {blocks.map((b) =>
+            b.kind === "heading" ? (
+              <h3 key={b.key} className="mt-7 mb-2 text-[15px] font-semibold leading-6 text-ink">
+                <Words words={b.words} animate={animate} />
+              </h3>
+            ) : b.kind === "list" ? (
+              <ul key={b.key} className="list-disc space-y-1.5 pl-5 leading-7 marker:text-ink-4">
+                {b.items.map((item) => (
+                  <li key={item.key}>
+                    <Words words={item.words} animate={animate} />
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p key={b.key} className="leading-8 [&:not(:first-child)]:mt-4">
+                <Words words={b.words} animate={animate} />
+              </p>
+            )
+          )}
+        </div>
       )}
 
       {view === "text" && writtenAt && (

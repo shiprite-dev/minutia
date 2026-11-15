@@ -516,6 +516,24 @@ test("buildRecapUpdate of blank text is null", () => {
   assert.equal(recap.buildRecapUpdate("  \n ", "m-1", new Date()), null);
 });
 
+test("buildRecapUpdate stores the sanitized markdown subset", () => {
+  const now = new Date("2026-11-15T10:00:00.000Z");
+  const row = recap.buildRecapUpdate(
+    "Lead.\n\n### Decisions:\n* Ship on Friday.\n\n## Next steps\n1. **Mike Ross:** books it\n",
+    "m-1",
+    now
+  );
+  assert.equal(
+    row.recap_markdown,
+    "Lead.\n\n## Decisions\n- Ship on Friday.\n\n## Next steps\n- **Mike Ross:** books it"
+  );
+});
+
+test("buildRecapUpdate of marker-only text is null", () => {
+  assert.equal(recap.buildRecapUpdate("## \n- \n**", "m-1", new Date()), null);
+  assert.equal(recap.buildRecapUpdate("```\n---\n```", "m-1", new Date()), null);
+});
+
 test("shouldAutoStartRecap fires only for a manager with a source and no stored recap", () => {
   const base = { canGenerate: true, storedText: null, hasSource: true };
   assert.equal(recap.shouldAutoStartRecap(base), true);

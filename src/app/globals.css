@@ -401,3 +401,11 @@
     overflow-wrap: anywhere;
   }
 }
+
+@media print {
+  [data-slot="sidebar-inset"],
+  #main-content {
+    height: auto;
+    overflow: visible;
+  }
+}
