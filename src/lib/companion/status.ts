@@ -4,6 +4,9 @@ export const COMPANION_ONLINE_MS = 90_000;
 export const REQUEST_WINDOW_MS = 30_000;
 export const CLAIM_START_MS = 20_000;
 
+export const isCompanionOnline = (checkinAt: string | null | undefined) =>
+  !!checkinAt && Date.now() - new Date(checkinAt).getTime() <= COMPANION_ONLINE_MS;
+
 export type CompanionRecordStatus =
   | { kind: "none" }
   | { kind: "recording"; deviceName: string; mine: boolean }
@@ -78,6 +81,15 @@ export function companionRecordStatus({
   }
 
   if (
+    meeting.recording_failed_reason === "in_browser" &&
+    meeting.record_requested_by &&
+    meeting.record_requested_by !== userId
+  ) {
+    return { kind: "none" };
+  }
+
+  if (
+    checkinAt &&
     meeting.record_requested_at &&
     meeting.record_requested_by === userId &&
     age(meeting.record_requested_at, now) <= REQUEST_WINDOW_MS

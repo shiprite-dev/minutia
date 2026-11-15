@@ -91,6 +91,8 @@ begin
     return 'not_live';
   end if;
   if public.companion_slot_fresh(m)
+     or (m.recording_failed_reason = 'in_browser'
+         and m.record_requested_by is distinct from auth.uid())
      or (m.record_requested_by is not null
          and m.record_requested_by <> auth.uid()
          and m.record_requested_at > now() - interval '30 seconds') then
@@ -130,7 +132,8 @@ begin
       recording_seen_at = case when m.recording_user_id = auth.uid() then null else m.recording_seen_at end,
       recording_user_id = case when m.recording_user_id = auth.uid() then null else m.recording_user_id end
   where m.id = p_meeting_id
-    and public.user_can_access_series(m.series_id);
+    and m.status = 'live'
+    and public.user_can_manage_series(m.series_id);
 end;
 $$;
 
@@ -245,7 +248,10 @@ begin
     return 'ok';
   elsif p_event = 'failed' then
     if mine
-       or (m.recording_user_id is null and m.record_requested_by = auth.uid()) then
+       or (m.recording_user_id is null
+           and m.record_requested_by = auth.uid()
+           and m.record_requested_at is not null
+           and m.recording_failed_reason is distinct from 'in_browser') then
       update public.meetings
       set recording_user_id = null,
           recording_device_id = null,

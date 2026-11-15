@@ -22,7 +22,7 @@ import { useSeriesDetail, useSeriesParticipantRole } from "@/lib/hooks/use-serie
 import { useProfile } from "@/lib/hooks/use-profile";
 import { CompanionInstallPrompt } from "@/components/minutia/companion-install-prompt";
 import { isMacPlatform } from "@/lib/companion-links";
-import { companionRecordStatus } from "@/lib/companion/status";
+import { companionRecordStatus, isCompanionOnline } from "@/lib/companion/status";
 import { recordInBrowser, requestCompanionRecord } from "@/lib/companion/request";
 import { CompanionRecordStrip } from "@/components/minutia/companion-record-strip";
 import { useIssues, useCreateIssue, useUpdateIssueStatus, useUpdateIssue, useAssignIssue, issueKeys } from "@/lib/hooks/use-issues";
@@ -1364,7 +1364,9 @@ export function MeetingDetailContent({
 
   async function handleStartMeeting() {
     const liveMeeting = await startOrJoinMeeting.mutateAsync(seriesId);
-    if (canManageMeeting) await requestCompanionRecord(liveMeeting.id);
+    if (canManageMeeting && isCompanionOnline(profile?.companion_checkin_at)) {
+      await requestCompanionRecord(liveMeeting.id);
+    }
     if (liveMeeting.id !== meetingId) {
       router.push(`/series/${seriesId}/meetings/${liveMeeting.id}`);
     }

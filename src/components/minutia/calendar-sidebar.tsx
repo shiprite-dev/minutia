@@ -1,6 +1,8 @@
 "use client";
 
 import { requestCompanionRecord } from "@/lib/companion/request";
+import { isCompanionOnline } from "@/lib/companion/status";
+import { useProfile } from "@/lib/hooks/use-profile";
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -526,6 +528,7 @@ export function CalendarSidebar() {
   const { data: agendaData, isLoading: agendaLoading } =
     useCalendarAgenda(calendarSidebarOpen);
   const startCalendarEvent = useStartCalendarAgendaEvent();
+  const { data: profile } = useProfile();
 
   // Hydrate persisted sidebar state from localStorage after mount
   React.useEffect(() => {
@@ -592,7 +595,9 @@ export function CalendarSidebar() {
     }
     startCalendarEvent.mutate(event.id, {
       onSuccess: (result) => {
-        void requestCompanionRecord(result.captureUrl.split("/").pop() ?? "");
+        if (isCompanionOnline(profile?.companion_checkin_at)) {
+          void requestCompanionRecord(result.captureUrl.split("/").pop() ?? "");
+        }
         router.push(result.captureUrl);
       },
     });

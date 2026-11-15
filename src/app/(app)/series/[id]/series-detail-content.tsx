@@ -63,6 +63,8 @@ import {
 } from "@/lib/hooks/use-google-calendar";
 import Link from "next/link";
 import { requestCompanionRecord } from "@/lib/companion/request";
+import { isCompanionOnline } from "@/lib/companion/status";
+import { useProfile } from "@/lib/hooks/use-profile";
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -98,6 +100,7 @@ export function SeriesDetailContent({ seriesId }: SeriesDetailContentProps) {
   const { data: issues } = useIssues(querySeriesId, validSeriesId);
   const { data: decisions } = useDecisions(undefined, querySeriesId, validSeriesId);
   const { data: participantRole } = useSeriesParticipantRole(querySeriesId);
+  const { data: profile } = useProfile();
 
   useSeriesRealtime(querySeriesId);
   const startOrJoinMeeting = useStartOrJoinMeeting();
@@ -160,7 +163,9 @@ export function SeriesDetailContent({ seriesId }: SeriesDetailContentProps) {
     setStartingMeeting(true);
     try {
       const meeting = await startOrJoinMeeting.mutateAsync(seriesId);
-      if (canManageSeries) await requestCompanionRecord(meeting.id);
+      if (canManageSeries && isCompanionOnline(profile?.companion_checkin_at)) {
+        await requestCompanionRecord(meeting.id);
+      }
       router.push(`/series/${seriesId}/meetings/${meeting.id}`);
     } finally {
       setStartingMeeting(false);

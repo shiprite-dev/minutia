@@ -65,6 +65,9 @@ export function CompanionRecordStrip({
           <button type="button" onClick={onRecordHere} className={actionClass}>
             Record here instead
           </button>
+          <button type="button" onClick={onRecordOnMac} className={actionClass}>
+            Try your Mac again
+          </button>
         </div>
       );
     case "offer_online":
