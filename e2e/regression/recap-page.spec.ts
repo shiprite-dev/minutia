@@ -1629,6 +1629,56 @@ test("hand-typed notes keep their line breaks on the web and from the desktop", 
     await deleteFixture(request, fixture);
   }
 });
+  test("a regenerate that fails keeps the old recap and offers a retry that recovers", async ({
+    page,
+    request,
+  }) => {
+    const fixture = await createFixture(request, {
+      transcript_raw: "Test User: Ship the rollout on Friday.",
+      recap_markdown: STORED_RECAP,
+      recap_generated_at: new Date().toISOString(),
+      recap_model: "test-model-x",
+    });
+
+    try {
+      const urls: string[] = [];
+      const streams = await countRecapStreams(page, fixture.meetingId, (route) => {
+        urls.push(route.request().url());
+        return route.fulfill(
+          urls.length === 1
+            ? {
+                status: 200,
+                headers: { "content-type": "text/event-stream" },
+                body: ':\n\ndata: {"e":"failed"}\n\ndata: [DONE]\n\n',
+              }
+            : sseResponse(["Regenerated ", "recap ", "text."]),
+        );
+      });
+      await open(page, fixture);
+      const summary = page.locator("[data-flowing-summary]");
+      await expect(summary).toContainText("The team agreed to ship the rollout on Friday.");
+      const before = (await summary.innerText()).trim();
+
+      await page.getByRole("button", { name: "More actions" }).click();
+      await page.getByRole("menuitem", { name: "Regenerate recap" }).click();
+
+      const notice = page.getByText("The recap could not be regenerated.");
+      await expect(notice).toBeVisible();
+      await expect(summary).toHaveText(before);
+
+      await page
+        .locator("[data-recap-section]")
+        .getByRole("button", { name: "Try again" })
+        .click();
+      await expect(summary).toContainText("Regenerated recap text.");
+      await expect(notice).toHaveCount(0);
+      expect(streams.calls).toBe(2);
+      expect(urls.every((u) => u.includes("regenerate=1"))).toBe(true);
+    } finally {
+      await deleteFixture(request, fixture);
+    }
+  });
+
   test("a live recap is stored and served on the next visit (live provider only)", async ({
     page,
     request,
