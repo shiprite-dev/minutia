@@ -4,8 +4,7 @@ import * as React from "react";
 import { Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { cn } from "@/lib/utils";
-import { materializeClassName, type FlowWord } from "@/lib/summary/flow";
+import { MarkdownBlocks } from "@/components/minutia/markdown-blocks";
 import { parseRecap } from "@/lib/summary/structure";
 import { parseSseFrame } from "@/lib/summary/sse";
 import {
@@ -14,19 +13,6 @@ import {
   resolveRecapView,
   type RecapFailure,
 } from "@/lib/summary/recap";
-
-function Word({ text, bold, animate }: { text: string; bold: boolean; animate: boolean }) {
-  const [className, setClassName] = React.useState(materializeClassName(animate));
-  const props = {
-    className: cn(className, bold && "font-semibold text-ink"),
-    onAnimationEnd: () => setClassName(""),
-  };
-  return bold ? <strong {...props}>{text}</strong> : <span {...props}>{text}</span>;
-}
-
-function Words({ words, animate }: { words: FlowWord[]; animate: boolean }) {
-  return words.map((w) => <Word key={w.key} text={w.text} bold={w.bold} animate={animate} />);
-}
 
 export function FlowingSummary({
   meetingId,
@@ -223,25 +209,7 @@ export function FlowingSummary({
           aria-busy={streaming}
           data-flowing-summary
         >
-          {blocks.map((b) =>
-            b.kind === "heading" ? (
-              <h3 key={b.key} className="mt-7 mb-2 text-[15px] font-semibold leading-6 text-ink">
-                <Words words={b.words} animate={animate} />
-              </h3>
-            ) : b.kind === "list" ? (
-              <ul key={b.key} className="list-disc space-y-1.5 pl-5 leading-7 marker:text-ink-4">
-                {b.items.map((item) => (
-                  <li key={item.key}>
-                    <Words words={item.words} animate={animate} />
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p key={b.key} className="leading-8 [&:not(:first-child)]:mt-4">
-                <Words words={b.words} animate={animate} />
-              </p>
-            )
-          )}
+          <MarkdownBlocks blocks={blocks} animate={animate} />
         </div>
       )}
 

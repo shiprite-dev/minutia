@@ -194,12 +194,15 @@ test.describe("Meeting Detail (Completed)", () => {
     expect(meetingDecisionRequests).toHaveLength(0);
   });
 
-  test("notes textarea is editable", async ({ page }) => {
+  test("notes open for editing from the completed meeting", async ({ page }) => {
     await page.goto(url);
     await waitForApp(page);
 
-    const textarea = page.locator("textarea").first();
-    await expect(textarea).toBeVisible();
+    const rendered = page.getByRole("group", { name: "Edit notes" });
+    const textarea = page.getByPlaceholder("Meeting notes...");
+    await expect(rendered.or(textarea)).toBeVisible();
+    if (await rendered.isVisible()) await rendered.click();
+    await expect(textarea).toBeFocused();
     await expect(textarea).toBeEditable();
   });
 
@@ -280,14 +283,14 @@ test.describe("Meeting Lifecycle", () => {
       await expect(page.getByText(fixture.actionTitle).first()).toBeVisible();
       await expect(page.getByText(fixture.decisionTitle).first()).toBeVisible();
       await expect(page.getByText(fixture.carriedTitle).first()).toBeVisible();
-      await expect(page.getByPlaceholder("Meeting notes...")).toHaveValue(
+      await expect(page.locator("[data-notes-rendered]").first()).toContainText(
         fixture.noteText
       );
 
       await page.reload();
       await waitForApp(page);
       await expect(page.getByText("Meeting recap")).toBeVisible();
-      await expect(page.getByPlaceholder("Meeting notes...")).toHaveValue(
+      await expect(page.locator("[data-notes-rendered]").first()).toContainText(
         fixture.noteText
       );
 

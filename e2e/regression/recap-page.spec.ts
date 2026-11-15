@@ -1214,10 +1214,9 @@ test.describe("Completed meeting recap page", () => {
       await expect(
         page.getByRole("status", { name: "Recap progress" }),
       ).toHaveCount(0);
-      await expect(page.getByPlaceholder("Meeting notes...")).toHaveJSProperty(
-        "readOnly",
-        true,
-      );
+      await expect(page.locator("[data-notes-rendered]").first()).toContainText("Participant-visible note.");
+      await expect(page.getByPlaceholder("Meeting notes...")).toHaveCount(0);
+      await expect(page.getByRole("group", { name: "Edit notes" })).toHaveCount(0);
 
       await page.getByRole("button", { name: "More actions" }).click();
       await expect(
@@ -1257,10 +1256,9 @@ test.describe("Completed meeting recap page", () => {
       const streams = await countRecapStreams(page, fixture.meetingId);
       await open(page, fixture);
 
-      await expect(page.getByPlaceholder("Meeting notes...")).toHaveJSProperty(
-        "readOnly",
-        true,
-      );
+      await expect(page.locator("[data-notes-rendered]").first()).toContainText("Participant-visible note.");
+      await expect(page.getByPlaceholder("Meeting notes...")).toHaveCount(0);
+      await expect(page.getByRole("group", { name: "Edit notes" })).toHaveCount(0);
       await expect(page.locator("[data-recap-section]")).toHaveCount(0);
       await expect(
         page.getByRole("status", { name: "Recap progress" }),
@@ -1501,6 +1499,136 @@ test.describe("Completed meeting recap page", () => {
     }
   });
 
+test("enhanced notes read as sections, and a click edits the raw text", async ({
+  page,
+  request,
+}) => {
+  const fixture = await createFixture(request, {
+    notes_markdown: [
+      "## Summary",
+      "- Ship the rollout on Friday.",
+      "- **Mike Ross** books the vendor review.",
+      "",
+      "## Risks",
+      "- Support queue may spike.",
+    ].join("\n"),
+  });
+
+  try {
+    await open(page, fixture);
+    const notes = page.locator("[data-notes-rendered]").first();
+    await expect(
+      notes.getByRole("heading", { name: "Summary", level: 3 }),
+    ).toBeVisible();
+    await expect(
+      notes.getByRole("heading", { name: "Risks", level: 3 }),
+    ).toBeVisible();
+    await expect(
+      notes
+        .getByRole("listitem")
+        .filter({ hasText: "Ship the rollout on Friday." }),
+    ).toBeVisible();
+    await expect(
+      notes.locator("strong").filter({ hasText: "Mike" }),
+    ).toBeVisible();
+    await expect(notes).not.toContainText("##");
+    await expect(page.getByPlaceholder("Meeting notes...")).toHaveCount(0);
+
+    await notes
+      .getByRole("listitem")
+      .filter({ hasText: "Support queue" })
+      .click();
+    const editor = page.getByPlaceholder("Meeting notes...");
+    await expect(editor).toBeFocused();
+    await expect(editor).toHaveValue(
+      /^## Summary\n- Ship the rollout on Friday\./,
+    );
+    expect(
+      await editor.evaluate(
+        (el: HTMLTextAreaElement) => el.selectionStart === el.value.length,
+      ),
+    ).toBe(true);
+    await page.keyboard.type("\n- Added on the web.");
+    await page.keyboard.press("Escape");
+
+    const after = page.locator("[data-notes-rendered]").first();
+    await expect(
+      after.getByRole("listitem").filter({ hasText: "Added on the web." }),
+    ).toBeVisible();
+    await expect(page.getByPlaceholder("Meeting notes...")).toHaveCount(0);
+    await expect
+      .poll(
+        async () =>
+          (await readMeeting(request, fixture.meetingId, "notes_markdown"))
+            .notes_markdown,
+        { timeout: 10_000 },
+      )
+      .toContain("- Support queue may spike.\n- Added on the web.");
+  } finally {
+    await deleteFixture(request, fixture);
+  }
+});
+
+test("a keyboard user opens and leaves note editing", async ({
+  page,
+  request,
+}) => {
+  const fixture = await createFixture(request, {
+    notes_markdown: "## Summary\n- Ship the rollout on Friday.",
+  });
+
+  try {
+    await open(page, fixture);
+    const group = page.getByRole("group", { name: "Edit notes" });
+    await group.focus();
+    await page.keyboard.press("Enter");
+    const editor = page.getByPlaceholder("Meeting notes...");
+    await expect(editor).toBeFocused();
+    await expect(editor).toHaveValue(
+      "## Summary\n- Ship the rollout on Friday.",
+    );
+    await page.keyboard.press("Escape");
+    await expect(editor).toHaveCount(0);
+    await expect(group).toBeVisible();
+  } finally {
+    await deleteFixture(request, fixture);
+  }
+});
+
+test("hand-typed notes keep their line breaks on the web and from the desktop", async ({
+  page,
+  request,
+}) => {
+  const fixture = await createFixture(request, {
+    notes_markdown: "mettani - rarely hardly\nmattaku ~ nai - not at all",
+    companion_notes_markdown:
+      "## Desk\n- Ping Sam about the offer.\nCall back at noon.",
+  });
+
+  try {
+    await open(page, fixture);
+    const web = page.locator("[data-notes-rendered]").first();
+    await expect(
+      web.locator("p").filter({ hasText: "mettani - rarely hardly" }),
+    ).toHaveCount(1);
+    await expect(
+      web.locator("p").filter({ hasText: "mettani" }),
+    ).not.toContainText("mattaku");
+    const desktop = page.locator("[data-desktop-notes]");
+    await expect(desktop.getByRole("heading", { name: "Desk" })).toBeVisible();
+    await expect(
+      desktop
+        .getByRole("listitem")
+        .filter({ hasText: "Ping Sam about the offer." }),
+    ).toBeVisible();
+    await expect(
+      desktop.locator("p").filter({ hasText: "Call back at noon." }),
+    ).toHaveCount(1);
+    await expect(desktop).not.toContainText("##");
+  } finally {
+    await deleteFixture(request, fixture);
+  }
+});
   test("a live recap is stored and served on the next visit (live provider only)", async ({
     page,
     request,

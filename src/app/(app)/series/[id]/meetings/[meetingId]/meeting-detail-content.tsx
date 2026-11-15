@@ -763,7 +763,7 @@ export function MeetingDetailContent({
   // The meeting is gone: no late completion may toast or reopen the panel.
   const meetingMissingRef = React.useRef(false);
   const statusRegionRef = React.useRef<HTMLDivElement>(null);
-  const notesAreaRef = React.useRef<HTMLTextAreaElement>(null);
+  const notesAreaRef = React.useRef<{ focus: () => void }>(null);
   const liveNotesAreaRef = React.useRef<HTMLTextAreaElement>(null);
   const transcriptAreaRef = React.useRef<HTMLTextAreaElement>(null);
   const [clock, setClock] = React.useState(() => Date.now());
@@ -1139,7 +1139,8 @@ export function MeetingDetailContent({
 
   const meetingIssues = meeting.issues ?? [];
   const meetingDecisions = meeting.decisions ?? [];
-  const raisedInThisMeeting = meetingIssues;
+  const seriesIssueById = new Map((seriesIssues ?? []).map((issue) => [issue.id, issue]));
+  const raisedInThisMeeting = meetingIssues.map((issue) => seriesIssueById.get(issue.id) ?? issue);
 
   const allCarriedIssues = (seriesIssues ?? []).filter(
     (issue) => issue.raised_in_meeting_id !== meetingId

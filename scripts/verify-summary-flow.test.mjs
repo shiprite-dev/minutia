@@ -501,3 +501,31 @@ test("structure is keyed on syntax, so Japanese headings parse the same way", as
   ]);
   assert.equal(sanitizeRecap(ja), ja);
 });
+
+test("lines mode keeps each hand-typed line its own paragraph", async () => {
+  const { parseRecap } = await structure();
+  assert.deepEqual(shape(parseRecap("mettani - rarely hardly\nmattaku ~ nai - not at all", { lines: true })), [
+    { kind: "lead", text: "mettani - rarely hardly" },
+    { kind: "lead", text: "mattaku ~ nai - not at all" },
+  ]);
+  assert.deepEqual(shape(parseRecap("## Summary\n- Ship it.\nPlain line.", { lines: true })), [
+    { kind: "heading", text: "Summary" },
+    { kind: "list", items: ["Ship it."] },
+    { kind: "lead", text: "Plain line." },
+  ]);
+  assert.deepEqual(shape(parseRecap("Line one\nline two")), [{ kind: "lead", text: "Line one line two" }]);
+});
+
+test("lines mode never drops what was typed", async () => {
+  const { parseRecap } = await structure();
+  assert.deepEqual(shape(parseRecap("Plan.\n## Next steps", { lines: true })), [
+    { kind: "lead", text: "Plan." },
+    { kind: "heading", text: "Next steps" },
+  ]);
+  assert.deepEqual(shape(parseRecap("See [spec](https://example.com/spec) first.", { lines: true })), [
+    { kind: "lead", text: "See spec (https://example.com/spec) first." },
+  ]);
+  assert.deepEqual(shape(parseRecap("See [spec](https://example.com/spec) first.")), [
+    { kind: "lead", text: "See spec first." },
+  ]);
+});

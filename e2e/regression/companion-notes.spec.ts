@@ -143,9 +143,11 @@ test.describe("Companion notepad notes", () => {
         page.getByText("Desk note: ping Sam about the offer letter.").first(),
       ).toBeVisible();
 
-      const webNotes = page.getByPlaceholder("Meeting notes...").first();
+      const webNotes = page.locator("[data-notes-rendered]").first();
       await expect(webNotes).toBeVisible();
-      await expect(webNotes).toHaveValue(WEB_NOTES);
+      for (const line of WEB_NOTES.split("\n")) {
+        await expect(webNotes.locator("p").filter({ hasText: line })).toHaveCount(1);
+      }
 
       const rejected = await request.patch(
         `${SUPABASE_URL}/rest/v1/meetings?id=eq.${meetingId}`,

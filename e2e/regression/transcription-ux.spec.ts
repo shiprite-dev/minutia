@@ -224,7 +224,7 @@ test.describe("Transcription UX states", () => {
     try {
       await openMeeting(page, fixture.seriesId, fixture.meetingId);
 
-      await expect(page.getByPlaceholder("Meeting notes...")).toHaveValue(
+      await expect(page.locator("[data-notes-rendered]").first()).toContainText(
         "Alice owns the onboarding checklist by Friday."
       );
       await expect(
