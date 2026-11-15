@@ -36,6 +36,8 @@ import {
 import { useMeetingRecorder } from "@/lib/hooks/use-meeting-recorder";
 import { uploadMeetingAudio, MEETING_AUDIO_BUCKET } from "@/lib/audio";
 import { createClient } from "@/lib/supabase/client";
+import { useMeetingWindows } from "@/lib/hooks/use-meeting-windows";
+import { isFinishing, shouldAutoStartRecap as shouldAutoStartFinishedRecap } from "@/lib/meetings/finishing";
 import { CaptureInput } from "@/components/minutia/capture-input";
 import { InlineTaskList } from "@/components/minutia/inline-task-list";
 import { IssueCard } from "@/components/minutia/issue-card";
@@ -751,6 +753,8 @@ export function MeetingDetailContent({
   const [transcribing, setTranscribing] = React.useState(false);
   const [autoStartSummary, setAutoStartSummary] = React.useState(false);
   const autoSummaryFiredRef = React.useRef(false);
+  const finishingRecapFiredRef = React.useRef(false);
+  const [finishingOpenedAt, setFinishingOpenedAt] = React.useState<number | null>(null);
   // The upload landed and the transcription request has not been issued yet.
   const [uploadedPending, setUploadedPending] = React.useState(false);
   const [transcriptionFailure, setTranscriptionFailure] = React.useState<TranscriptionFailure | null>(null);
@@ -907,12 +911,56 @@ export function MeetingDetailContent({
     return () => clearInterval(id);
   }, [transcribing, meeting?.transcription_status, meetingId, queryClient]);
 
+  // Syncs with the browser URL: the stop hand-off flag is read once, then removed.
+  React.useEffect(() => {
+    const url = new URL(window.location.href);
+    if (url.searchParams.get("recap") !== "auto") return;
+    setFinishingOpenedAt(Date.now());
+    setTranscriptOpen(true);
+    url.searchParams.delete("recap");
+    window.history.replaceState(window.history.state, "", url);
+  }, []);
+
+  const finishing = isFinishing({
+    autoRecap: finishingOpenedAt !== null,
+    openedAt: finishingOpenedAt ?? 0,
+    now: clock,
+    transcriptRaw: meeting?.transcript_raw ?? null,
+    transcriptionStatus: meeting?.transcription_status ?? null,
+  });
+  const { data: heardWindows = [] } = useMeetingWindows(meetingId, finishing);
+
+  // Syncs with sessionStorage so a reload never starts the recap twice.
+  React.useEffect(() => {
+    if (finishingOpenedAt === null || finishingRecapFiredRef.current) return;
+    const key = `recap-auto:${meetingId}`;
+    let seen = false;
+    try {
+      seen = sessionStorage.getItem(key) !== null;
+    } catch {}
+    if (
+      !shouldAutoStartFinishedRecap({
+        autoRecap: true,
+        transcriptRaw: meeting?.transcript_raw ?? null,
+        transcriptionStatus: meeting?.transcription_status ?? null,
+        hasRecap: !!meeting?.recap_markdown?.trim(),
+        alreadyStarted: seen,
+      })
+    )
+      return;
+    finishingRecapFiredRef.current = true;
+    try {
+      sessionStorage.setItem(key, "1");
+    } catch {}
+    setAutoStartSummary(true);
+  }, [finishingOpenedAt, meetingId, meeting?.transcript_raw, meeting?.transcription_status, meeting?.recap_markdown]);
+
   // The elapsed-time copy needs a moving clock while a run is in flight.
   React.useEffect(() => {
-    if (!transcribing && meeting?.transcription_status !== "processing") return;
+    if (!transcribing && meeting?.transcription_status !== "processing" && !finishing) return;
     const id = setInterval(() => setClock(Date.now()), 1000);
     return () => clearInterval(id);
-  }, [transcribing, meeting?.transcription_status]);
+  }, [transcribing, meeting?.transcription_status, finishing]);
 
   // Auto-save notes with debounce
   const saveTimerRef = React.useRef<ReturnType<typeof setTimeout>>(null);
@@ -1872,6 +1920,7 @@ export function MeetingDetailContent({
   const hasAnyNotes = !!notes.trim() || !!companionNotes;
   const canGenerateRecap = canManageMeeting && hasAccess;
   const recapPreparing =
+    finishing ||
     (recorder.state === "stopped" &&
       (recorder.fastLane.state === "active" || recorder.fastLane.state === "finalizing")) ||
     (["saving", "saved_pending", "transcribing", "processing_return"] as TranscriptionUiState[]).includes(
@@ -1909,6 +1958,7 @@ export function MeetingDetailContent({
   const QUIET: TranscriptionUiState[] = ["no_recording", "empty_unknown", "no_speech"];
   const showStatus =
     canManageMeeting &&
+    !finishing &&
     !HIDDEN_ON_RECAP.includes(transcriptionState) &&
     !(transcriptionState === "no_recording" && hasAnyNotes);
   const alertShown = showStatus && !QUIET.includes(transcriptionState);
@@ -1933,7 +1983,7 @@ export function MeetingDetailContent({
         ? `Me / Them · ${speakerLabel}`
         : speakerLabel;
   const showTranscript =
-    hasDiarizedTranscript || !!transcript.trim() || (canManageMeeting && !meeting.audio_file_path);
+    finishing || hasDiarizedTranscript || !!transcript.trim() || (canManageMeeting && !meeting.audio_file_path);
 
   const renderSuggestion = (suggestion: MeetingAiSuggestion, i: number) => {
     const isReviewed = suggestion.status !== "pending";
@@ -2386,7 +2436,14 @@ export function MeetingDetailContent({
                 />
               </button>
               {transcriptOpen &&
-                (hasDiarizedTranscript ? (
+                (finishing ? (
+                  <div data-finishing-transcript className="mt-3 space-y-3 text-sm text-ink-2">
+                    {heardWindows.map((text, i) => (
+                      <p key={i}>{text}</p>
+                    ))}
+                    <p className="finishing-breath text-ink-3">Catching the last few minutes…</p>
+                  </div>
+                ) : hasDiarizedTranscript ? (
                   <div className="mt-3">
                     <DiarizedTranscript
                       segments={meeting?.transcript_segments ?? []}
