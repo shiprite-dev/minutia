@@ -194,6 +194,8 @@ export interface Meeting {
   transcription_outcome?: "speech" | "no_speech" | null;
   transcription_model: string | null;
   transcription_provider: string | null;
+  transcript_language?: string | null;
+  transcription_source?: Record<string, unknown> | null;
   transcription_started_at: Date | null;
   transcription_completed_at: Date | null;
   gcal_meeting_key: string | null;
