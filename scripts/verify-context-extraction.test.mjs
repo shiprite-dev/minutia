@@ -327,8 +327,9 @@ test("review route applies a status_update to the existing issue with an audit t
 
 test("transcribe route auto-triggers context-aware extraction", () => {
   const transcribe = read("src/app/api/meetings/[meetingId]/transcribe/route.ts");
+  const shared = read("src/lib/transcription/after-transcript.ts");
   assert.ok(
-    transcribe.includes("generateMeetingSuggestions"),
+    /extractSuggestions\(/.test(transcribe) && shared.includes("generateMeetingSuggestions("),
     "completing a transcription must trigger suggestion extraction"
   );
 });
