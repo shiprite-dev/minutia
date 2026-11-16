@@ -1,6 +1,7 @@
 // Contract: src/lib/transcription/device.ts exports DEVICE_TRANSCRIPT_MAX_BYTES (2 * 1024 * 1024), parseDeviceTranscript(body: unknown) => { ok: true, value } | { ok: false, fields: string[] }, assembleDeviceTranscript(value, { recorderName, priorSpeakerMap }) => { segments, speakerMap, transcriptRaw, outcome }.
 import test from "node:test";
 import assert from "node:assert/strict";
+import crypto from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -481,4 +482,15 @@ test("no_speech assembles to an empty transcript with outcome no_speech", () => 
   assert.deepEqual(result.segments, []);
   assert.equal(result.transcriptRaw, "");
   assert.equal(result.outcome, "no_speech");
+});
+
+test("the companion's shared fixture is pinned and parses", () => {
+  const file = path.join(root, "scripts/fixtures/device-transcript.v1.json");
+  const bytes = fs.readFileSync(file);
+  assert.equal(
+    crypto.createHash("sha256").update(bytes).digest("hex"),
+    "0670fce48f9b1e3b76997ccd55a0884a10d5187835e7634be7dabdf5cb143e7f",
+    "edit both repos' copies and both pinned hashes together",
+  );
+  assert.equal(fn("parseDeviceTranscript")(JSON.parse(bytes)).ok, true);
 });
