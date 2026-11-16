@@ -86,6 +86,7 @@ const TITLES = {
   buffered_failed: "Your recording could not be saved on this device. Keep this page open and retry saving.",
   deleted: "This meeting was deleted or is no longer available.",
   waiting_device: "Waiting for the transcript from the recording device.",
+  waiting_device_stale: "Still waiting for the transcript from the recording device.",
 };
 
 for (const [state, title] of Object.entries(TITLES)) {
@@ -125,14 +126,14 @@ test("active states carry exactly one primary action, passive states carry none"
     assert.equal(v.primary.label, label, `${state} primary label`);
   }
 
-  for (const state of ["saving", "saved_pending", "transcribing", "processing_return", "waiting_device"]) {
+  for (const state of ["saving", "saved_pending", "transcribing", "processing_return", "waiting_device", "waiting_device_stale"]) {
     const v = view(state);
     assert.equal(v.primary, undefined, `${state} is passive and must not offer an action`);
   }
 });
 
 test("passive states tell the user no action is needed", () => {
-  for (const state of ["saving", "saved_pending", "transcribing", "processing_return", "waiting_device"]) {
+  for (const state of ["saving", "saved_pending", "transcribing", "processing_return", "waiting_device", "waiting_device_stale"]) {
     const v = view(state);
     const text = [v.title, ...v.details].join(" ").toLowerCase();
     assert.match(
@@ -195,6 +196,16 @@ test("waiting for the device offers no retry and is a polite status", () => {
   assert.deepEqual(v.details, ["The transcript appears here once the device finishes transcribing."]);
 });
 
+test("a device that never sent its transcript stops the wait without offering an audio retry", () => {
+  const v = view("waiting_device_stale", { canDownloadAudio: false });
+  assert.equal(v.primary, undefined);
+  assert.equal(v.secondary, undefined);
+  assert.equal(v.alert, false);
+  assert.deepEqual(v.details, [
+    "It appears here when the device sends it. No action is needed on this page.",
+  ]);
+});
+
 test("a device transcript names where it ran and the model", () => {
   assert.equal(
     transcriptProvenance({
@@ -230,9 +241,12 @@ test("a cloud or unknown transcript carries no device label", () => {
 
 test("new copy stays plain: no dashes, no plan or pricing words", () => {
   const waiting = view("waiting_device");
+  const stale = view("waiting_device_stale");
   const copy = [
     waiting.title,
     ...waiting.details,
+    stale.title,
+    ...stale.details,
     transcriptProvenance({ transcription_provider: "device", transcription_model: "m", transcription_source: null }),
   ].join(" ");
   assert.doesNotMatch(copy, /[\u2013\u2014]/);

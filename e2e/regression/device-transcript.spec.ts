@@ -369,6 +369,100 @@ test.describe("On-device transcript submission", () => {
     }
   });
 
+  for (const transcriptionStatus of ["pending", "failed"] as const) {
+    test(`a device meeting left ${transcriptionStatus} with no audio for over the grace period stops waiting and never offers an audio retry`, async ({
+      page,
+      request,
+    }) => {
+      const { token, userId } = await signIn(request);
+      const auth = headers(token, { "Content-Type": "application/json" });
+      const profile = await request.get(
+        `${SUPABASE_URL}/rest/v1/profiles?id=eq.${userId}&select=current_organization_id`,
+        { headers: auth },
+      );
+      const [{ current_organization_id: organizationId }] = await profile.json();
+      const series = await request.post(
+        `${SUPABASE_URL}/rest/v1/meeting_series?select=id`,
+        {
+          headers: { ...auth, Prefer: "return=representation" },
+          data: {
+            name: `Device Overdue ${transcriptionStatus} ${Date.now()}`,
+            cadence: "weekly",
+            owner_id: userId,
+            organization_id: organizationId,
+          },
+        },
+      );
+      expect(series.ok(), await series.text()).toBeTruthy();
+      const seriesId = (await series.json())[0].id as string;
+
+      try {
+        const started = await request.post(
+          `${SUPABASE_URL}/rest/v1/rpc/start_or_join_meeting`,
+          { headers: auth, data: { target_series_id: seriesId } },
+        );
+        expect(started.ok(), await started.text()).toBeTruthy();
+        const meetingId = (await started.json()).id as string;
+        const ended = await request.patch(
+          `${SUPABASE_URL}/rest/v1/meetings?id=eq.${meetingId}`,
+          {
+            headers: { ...auth, Prefer: "return=minimal" },
+            data: {
+              status: "completed",
+              completed_at: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+              audio_file_path: null,
+              transcription_status: transcriptionStatus,
+              transcription_outcome: null,
+            },
+          },
+        );
+        expect(ended.ok(), await ended.text()).toBeTruthy();
+
+        const transcribeCalls: string[] = [];
+        page.on("request", (req) => {
+          if (/\/api\/meetings\/[^/]+\/transcribe(\?|$)/.test(req.url()))
+            transcribeCalls.push(req.url());
+        });
+
+        await page.goto(`/series/${seriesId}/meetings/${meetingId}`);
+        await waitForApp(page);
+
+        const status = page.getByRole("region", { name: "Transcription status" });
+        await expect(
+          status.getByText(
+            "Still waiting for the transcript from the recording device.",
+          ),
+        ).toBeVisible({ timeout: 20_000 });
+        await expect(
+          page.getByRole("button", { name: "Retry transcription" }),
+        ).toHaveCount(0);
+        await expect(page.getByText("Transcription did not finish.")).toHaveCount(0);
+
+        const submitted = await request.post(
+          `/api/meetings/${meetingId}/transcript`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+            data: deviceTranscript,
+          },
+        );
+        expect(submitted.status(), await submitted.text()).toBe(200);
+        await expect(
+          page.getByText("Transcribed on device · parakeet-tdt-0.6b-v3-coreml"),
+        ).toBeVisible({ timeout: 20_000 });
+        expect(transcribeCalls).toEqual([]);
+      } finally {
+        await request.delete(
+          `${SUPABASE_URL}/rest/v1/meeting_series?id=eq.${seriesId}`,
+          {
+            headers: SERVICE_KEY
+              ? { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` }
+              : headers(token),
+          },
+        );
+      }
+    });
+  }
+
   test("a submission without a session is refused and changes nothing", async ({
     playwright,
   }) => {
