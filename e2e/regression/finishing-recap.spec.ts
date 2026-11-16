@@ -237,6 +237,7 @@ test.describe("Recap page opened at stop", () => {
 
       await patchMeeting(request, fixture.meetingId, {
         transcription_status: "failed",
+        audio_file_path: `${fixture.meetingId}/recording.webm`,
       });
 
       await expect(page.getByText(CATCHING)).toHaveCount(0, {
