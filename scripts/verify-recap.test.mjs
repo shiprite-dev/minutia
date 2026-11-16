@@ -637,6 +637,7 @@ test("recapStep maps the pipeline to one active step", () => {
     "saved_pending",
     "transcribing",
     "processing_return",
+    "waiting_device",
   ]) {
     assert.equal(recap.recapStep(state, false, false), "transcribe", state);
     assert.equal(
@@ -649,6 +650,7 @@ test("recapStep maps the pipeline to one active step", () => {
   assert.equal(recap.recapStep("transcript_ready", true, true), "extract");
   assert.equal(recap.recapStep("transcript_ready", false, true), "recap");
   assert.equal(recap.recapStep("no_recording", false, true), "recap");
+  assert.equal(recap.recapStep("waiting_device_stale", false, true), "recap");
   assert.equal(recap.recapStep("transcript_ready", false, false), null);
   assert.equal(recap.recapStep("no_recording", true, false), null);
   assert.equal(recap.recapStep("extraction_failed", false, false), null);
