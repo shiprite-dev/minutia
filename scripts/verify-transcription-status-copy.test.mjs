@@ -29,7 +29,7 @@ await esbuild.build({
   loader: { ".css": "empty", ".svg": "empty", ".png": "empty" },
 });
 
-const { resolveTranscriptionView } = await import(pathToFileURL(outfile).href);
+const { resolveTranscriptionView, transcriptProvenance } = await import(pathToFileURL(outfile).href);
 
 const noop = () => {};
 const base = {
@@ -85,6 +85,8 @@ const TITLES = {
   buffered_local: "Recording saved on this device. Reopen this meeting on this device to upload it.",
   buffered_failed: "Your recording could not be saved on this device. Keep this page open and retry saving.",
   deleted: "This meeting was deleted or is no longer available.",
+  waiting_device: "Waiting for the transcript from the recording device.",
+  waiting_device_stale: "Still waiting for the transcript from the recording device.",
 };
 
 for (const [state, title] of Object.entries(TITLES)) {
@@ -124,14 +126,14 @@ test("active states carry exactly one primary action, passive states carry none"
     assert.equal(v.primary.label, label, `${state} primary label`);
   }
 
-  for (const state of ["saving", "saved_pending", "transcribing", "processing_return"]) {
+  for (const state of ["saving", "saved_pending", "transcribing", "processing_return", "waiting_device", "waiting_device_stale"]) {
     const v = view(state);
     assert.equal(v.primary, undefined, `${state} is passive and must not offer an action`);
   }
 });
 
 test("passive states tell the user no action is needed", () => {
-  for (const state of ["saving", "saved_pending", "transcribing", "processing_return"]) {
+  for (const state of ["saving", "saved_pending", "transcribing", "processing_return", "waiting_device", "waiting_device_stale"]) {
     const v = view(state);
     const text = [v.title, ...v.details].join(" ").toLowerCase();
     assert.match(
@@ -184,4 +186,69 @@ test("failures are alerts and progress is polite status", () => {
   for (const state of ["recording", "transcribing", "processing_return", "saving"]) {
     assert.equal(view(state).alert, false, `${state} must be polite status`);
   }
+});
+
+test("waiting for the device offers no retry and is a polite status", () => {
+  const v = view("waiting_device", { canDownloadAudio: false });
+  assert.equal(v.primary, undefined);
+  assert.equal(v.secondary, undefined);
+  assert.equal(v.alert, false);
+  assert.deepEqual(v.details, ["The transcript appears here once the device finishes transcribing."]);
+});
+
+test("a device that never sent its transcript stops the wait without offering an audio retry", () => {
+  const v = view("waiting_device_stale", { canDownloadAudio: false });
+  assert.equal(v.primary, undefined);
+  assert.equal(v.secondary, undefined);
+  assert.equal(v.alert, false);
+  assert.deepEqual(v.details, [
+    "It appears here when the device sends it. No action is needed on this page.",
+  ]);
+});
+
+test("a device transcript names where it ran and the model", () => {
+  assert.equal(
+    transcriptProvenance({
+      transcription_provider: "device",
+      transcription_model: "stale-model",
+      transcription_source: { kind: "device", model: "parakeet-tdt-0.6b-v3-coreml", model_revision: "a0cd34f8" },
+    }),
+    "Transcribed on device · parakeet-tdt-0.6b-v3-coreml"
+  );
+  assert.equal(
+    transcriptProvenance({
+      transcription_provider: "device",
+      transcription_model: "parakeet-tdt-0.6b-v3-coreml",
+      transcription_source: null,
+    }),
+    "Transcribed on device · parakeet-tdt-0.6b-v3-coreml"
+  );
+  assert.equal(
+    transcriptProvenance({ transcription_provider: "device", transcription_model: null, transcription_source: {} }),
+    "Transcribed on device"
+  );
+});
+
+test("a cloud or unknown transcript carries no device label", () => {
+  for (const provider of ["groq", "openai", "assemblyai", null, undefined]) {
+    assert.equal(
+      transcriptProvenance({ transcription_provider: provider, transcription_model: "whisper-large-v3-turbo", transcription_source: null }),
+      null,
+      `${provider} must not claim on device`
+    );
+  }
+});
+
+test("new copy stays plain: no dashes, no plan or pricing words", () => {
+  const waiting = view("waiting_device");
+  const stale = view("waiting_device_stale");
+  const copy = [
+    waiting.title,
+    ...waiting.details,
+    stale.title,
+    ...stale.details,
+    transcriptProvenance({ transcription_provider: "device", transcription_model: "m", transcription_source: null }),
+  ].join(" ");
+  assert.doesNotMatch(copy, /[\u2013\u2014]/);
+  assert.doesNotMatch(copy, /\b(plan|pricing|paid|upgrade|premium|cloud|hosted|AI)\b/i);
 });

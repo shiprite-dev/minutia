@@ -34,6 +34,7 @@ import { RecordingIndicator } from "@/components/minutia/recording-indicator";
 import {
   TranscriptionStatus,
   resolveTranscriptionView,
+  transcriptProvenance,
   type TranscriptionUiState,
 } from "@/components/minutia/transcription-status";
 import { useMeetingRecorder } from "@/lib/hooks/use-meeting-recorder";
@@ -124,6 +125,8 @@ const LIVE_STATUS_STATES: TranscriptionUiState[] = [
   "transcribing",
   "transcribing_stale",
   "processing_return",
+  "waiting_device",
+  "waiting_device_stale",
   "transcript_ready",
   "extraction_failed",
   "no_speech",
@@ -964,6 +967,20 @@ export function MeetingDetailContent({
     return () => clearInterval(id);
   }, [transcribing, meeting?.transcription_status, finishing]);
 
+  const awaitingDevice =
+    meeting?.transcription_provider === "device" &&
+    !meeting.audio_file_path &&
+    !meeting.transcript_raw?.trim() &&
+    (meeting.transcription_status === "pending" ||
+      meeting.transcription_status === "failed" ||
+      meeting.transcription_status === "processing");
+  // Syncs with the wall clock so a device wait turns stale without a reload.
+  React.useEffect(() => {
+    if (!awaitingDevice) return;
+    const id = setInterval(() => setClock(Date.now()), 30_000);
+    return () => clearInterval(id);
+  }, [awaitingDevice]);
+
   const isMacClient =
     typeof navigator !== "undefined" &&
     isMacPlatform(
@@ -1045,6 +1062,13 @@ export function MeetingDetailContent({
     startedAtMs != null && Number.isFinite(startedAtMs) ? clock - startedAtMs : null;
   const isProcessing = meeting?.transcription_status === "processing";
   const isStaleRun = runAgeMs != null && runAgeMs > STALE_PROCESSING_MS;
+  const deviceWaitAgeMs = meeting
+    ? clock - new Date(meeting.completed_at ?? meeting.created_at).getTime()
+    : null;
+  const deviceWaitOverdue =
+    deviceWaitAgeMs != null &&
+    Number.isFinite(deviceWaitAgeMs) &&
+    deviceWaitAgeMs > STALE_PROCESSING_MS;
   const hasTranscript = !!meeting?.transcript_raw?.trim();
   const canDownloadAudio = !!meeting?.audio_file_path;
 
@@ -1062,7 +1086,7 @@ export function MeetingDetailContent({
     transcriptionState = "saving";
   } else if (transcribing) {
     transcriptionState = "transcribing";
-  } else if (isProcessing) {
+  } else if (isProcessing && !awaitingDevice) {
     transcriptionState = isStaleRun ? "transcribing_stale" : "processing_return";
   } else if (
     transcriptionFailure &&
@@ -1073,6 +1097,10 @@ export function MeetingDetailContent({
     transcriptionState = transcriptionFailure.kind;
   } else if (hasTranscript) {
     transcriptionState = "transcript_ready";
+  } else if (
+    awaitingDevice
+  ) {
+    transcriptionState = deviceWaitOverdue ? "waiting_device_stale" : "waiting_device";
   } else if (uploadedPending || meeting?.transcription_status === "pending") {
     transcriptionState = "saved_pending";
   } else if (meeting?.transcription_outcome === "no_speech") {
@@ -1939,7 +1967,7 @@ export function MeetingDetailContent({
     finishing ||
     (recorder.state === "stopped" &&
       (recorder.fastLane.state === "active" || recorder.fastLane.state === "finalizing")) ||
-    (["saving", "saved_pending", "transcribing", "processing_return"] as TranscriptionUiState[]).includes(
+    (["saving", "saved_pending", "transcribing", "processing_return", "waiting_device"] as TranscriptionUiState[]).includes(
       transcriptionState
     );
   const step = canManageMeeting
@@ -1993,12 +2021,13 @@ export function MeetingDetailContent({
     ? [...new Set((meeting.transcript_segments ?? []).map((segment) => segment.speaker))]
     : [];
   const speakerLabel = `${speakers.length} ${speakers.length === 1 ? "speaker" : "speakers"}`;
-  const transcriptMeta =
+  const speakerMeta =
     speakers.length === 0
       ? null
       : speakers.every((speaker) => speaker === "me" || speaker === "them")
         ? `Me / Them · ${speakerLabel}`
         : speakerLabel;
+  const transcriptMeta = [speakerMeta, hasTranscript && transcriptProvenance(meeting)].filter(Boolean).join(" · ") || null;
   const showTranscript =
     finishing || hasDiarizedTranscript || !!transcript.trim() || (canManageMeeting && !meeting.audio_file_path);
 
