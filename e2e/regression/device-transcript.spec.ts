@@ -307,6 +307,7 @@ test.describe("On-device transcript submission", () => {
             status: "completed",
             completed_at: new Date().toISOString(),
             audio_file_path: null,
+            transcription_provider: "device",
             transcription_status: "pending",
             transcription_outcome: null,
           },
@@ -411,6 +412,7 @@ test.describe("On-device transcript submission", () => {
               status: "completed",
               completed_at: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
               audio_file_path: null,
+              transcription_provider: "device",
               transcription_status: transcriptionStatus,
               transcription_outcome: null,
               transcription_started_at:
@@ -509,6 +511,7 @@ test.describe("On-device transcript submission", () => {
             status: "completed",
             completed_at: new Date().toISOString(),
             audio_file_path: null,
+            transcription_provider: "device",
             transcription_status: "pending",
             transcription_outcome: null,
           },

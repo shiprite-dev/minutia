@@ -968,7 +968,7 @@ export function MeetingDetailContent({
   }, [transcribing, meeting?.transcription_status, finishing]);
 
   const awaitingDevice =
-    !!meeting &&
+    meeting?.transcription_provider === "device" &&
     !meeting.audio_file_path &&
     !meeting.transcript_raw?.trim() &&
     (meeting.transcription_status === "pending" ||
@@ -1086,7 +1086,7 @@ export function MeetingDetailContent({
     transcriptionState = "saving";
   } else if (transcribing) {
     transcriptionState = "transcribing";
-  } else if (isProcessing && canDownloadAudio) {
+  } else if (isProcessing && !awaitingDevice) {
     transcriptionState = isStaleRun ? "transcribing_stale" : "processing_return";
   } else if (
     transcriptionFailure &&
@@ -1098,11 +1098,7 @@ export function MeetingDetailContent({
   } else if (hasTranscript) {
     transcriptionState = "transcript_ready";
   } else if (
-    (meeting?.transcription_status === "pending" ||
-      meeting?.transcription_status === "failed" ||
-      isProcessing) &&
-    !meeting.audio_file_path &&
-    !uploadedPending
+    awaitingDevice
   ) {
     transcriptionState = deviceWaitOverdue ? "waiting_device_stale" : "waiting_device";
   } else if (uploadedPending || meeting?.transcription_status === "pending") {
