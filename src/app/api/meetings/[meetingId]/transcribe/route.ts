@@ -1,7 +1,6 @@
 import { NextResponse, after, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { requireAiAccess } from "@/lib/ai/access";
-import { generateMeetingSuggestions, isExplicitSkip } from "@/lib/ai/suggestions";
 import { MEETING_AUDIO_BUCKET } from "@/lib/audio";
 import { ownsSegmentRow } from "@/lib/audio/segments";
 import {
@@ -23,8 +22,7 @@ import {
 } from "@/lib/transcription/fast-lane";
 import { assembleChannelTranscript, attributionSource, speakerMapToStore } from "@/lib/transcription/channels";
 import { transcribeDualSegment } from "@/lib/transcription/dual";
-import { getInstanceConfigMap, InstanceConfigReadError } from "@/lib/instance-config";
-import { resolveAudioRetention, shouldDiscardAudio, type ExtractionOutcomeForRetention } from "@/lib/audio/retention";
+import { extractSuggestions, retainAudio } from "@/lib/transcription/after-transcript";
 
 // Transcription is provider-bound and can run for minutes on a long recording.
 export const runtime = "nodejs";
@@ -531,92 +529,12 @@ export async function POST(
       );
     }
 
-    // MIN-121: now that a transcript exists, run context-aware extraction so the
-    // facilitator finds suggestions waiting (deduped against the OIL, with
-    // resolutions and duplicates flagged). Extraction completed or being
-    // explicitly skipped (no AI configured, nothing to extract) gates audio
-    // cleanup; a failed extraction retains the audio for a later retry via the
-    // suggestions endpoint. The transcript itself stays committed either way.
-
-    const extract = async () => {
-      let extraction: ExtractionOutcomeForRetention = "failed";
-      let extractionError: string | null = null;
-      try {
-        const outcome = await generateMeetingSuggestions(supabase, meetingId);
-        if (outcome.ok) {
-          extraction = "completed";
-        } else if (isExplicitSkip(outcome)) {
-          extraction = "skipped";
-        } else {
-          extractionError = outcome.error;
-        }
-      } catch (suggestionError) {
-        // Config read failures land here: never confuse "cannot read config"
-        // with an explicit skip. The transcript stays; audio is retained.
-        extractionError = suggestionError instanceof Error ? suggestionError.message : String(suggestionError);
-      }
-      return { extraction, extractionError };
-    };
-
-    // Audio retention: discard the raw recording only when the instance policy
-    // says so AND the transcript is durably saved AND extraction finished (or
-    // was explicitly skipped). Best-effort per-operation verification: every
-    // phase must succeed before audio_discarded is reported true.
-    const retain = async (extraction: ExtractionOutcomeForRetention) => {
-      let audioDiscarded = false;
-      try {
-        const configMap = await getInstanceConfigMap(["audio_retention"]);
-        const retention = resolveAudioRetention(configMap.audio_retention ?? null);
-        if (shouldDiscardAudio(retention, "completed", extraction)) {
-          // Enumerate every page of the meeting's folder before deleting so a
-          // paginated listing cannot leave objects behind.
-          const paths: string[] = [];
-          const PAGE_SIZE = 100;
-          for (let offset = 0; ; offset += PAGE_SIZE) {
-            const { data: objects, error: listError } = await supabase.storage
-              .from(MEETING_AUDIO_BUCKET)
-              .list(meetingId, { limit: PAGE_SIZE, offset });
-            if (listError) throw listError;
-            const page = objects ?? [];
-            paths.push(...page.map((o) => `${meetingId}/${o.name}`));
-            if (page.length < PAGE_SIZE) break;
-          }
-          if (paths.length) {
-            const { error: removeError } = await supabase.storage.from(MEETING_AUDIO_BUCKET).remove(paths);
-            if (removeError) throw removeError;
-          }
-          const { error: meetingNullError } = await supabase
-            .from("meetings")
-            .update({ audio_file_path: null, audio_file_size_bytes: null })
-            .eq("id", meetingId);
-          if (meetingNullError) throw meetingNullError;
-          const { error: segmentsDeleteError } = await supabase
-            .from("meeting_audio_segments")
-            .delete()
-            .eq("meeting_id", meetingId);
-          if (segmentsDeleteError) throw segmentsDeleteError;
-          // Verified completion: every deletion and pointer clear succeeded.
-          audioDiscarded = true;
-        }
-      } catch (retentionError) {
-        // A failed config read (InstanceConfigReadError) or any failed deletion
-        // phase postpones cleanup: never report discarded, never clear pointers
-        // on a partial delete. A later successful retry completes it idempotently.
-        audioDiscarded = false;
-        const failedRead = retentionError instanceof InstanceConfigReadError;
-        console.error("[transcribe] retention discard failed", {
-          meetingId,
-          requestId,
-          reason: failedRead ? "config_unavailable" : "cleanup_error",
-          error: retentionError instanceof Error ? retentionError.message : String(retentionError),
-        });
-      }
-      return audioDiscarded;
-    };
+    // MIN-121: extraction completed or explicitly skipped gates audio cleanup; a failed
+    // extraction retains the audio for a later retry. The transcript stays committed either way.
 
     if (deferExtraction) {
       after(async () => {
-        const { extraction, extractionError } = await extract();
+        const { extraction, extractionError } = await extractSuggestions(supabase, meetingId);
         if (extraction === "failed") {
           console.error("[transcribe] context-aware suggestion extraction failed", {
             meetingId,
@@ -625,7 +543,7 @@ export async function POST(
           });
           return;
         }
-        await retain(extraction);
+        await retainAudio(supabase, meetingId, requestId, extraction);
       });
       return NextResponse.json({
         status: "completed",
@@ -640,7 +558,7 @@ export async function POST(
       });
     }
 
-    const { extraction, extractionError } = await extract();
+    const { extraction, extractionError } = await extractSuggestions(supabase, meetingId);
     if (extraction === "failed") {
       console.error("[transcribe] context-aware suggestion extraction failed", {
         meetingId,
@@ -661,7 +579,7 @@ export async function POST(
       );
     }
 
-    const audioDiscarded = await retain(extraction);
+    const audioDiscarded = await retainAudio(supabase, meetingId, requestId, extraction);
 
     return NextResponse.json({
       status: "completed",
