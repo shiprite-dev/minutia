@@ -243,7 +243,6 @@ test.describe("Transcription UX states", () => {
     test.skip(!HAS_SERVICE_ROLE, "Requires service role for isolated transcription fixtures");
     const fixture = await createMeetingFixture(request, {
       transcription_status: "processing",
-      audio_file_path: "fixture/recording.webm",
       transcription_started_at: new Date().toISOString(),
     });
 
@@ -268,7 +267,6 @@ test.describe("Transcription UX states", () => {
     test.skip(!HAS_SERVICE_ROLE, "Requires service role for isolated transcription fixtures");
     const fixture = await createMeetingFixture(request, {
       transcription_status: "processing",
-      audio_file_path: "fixture/recording.webm",
       transcription_started_at: null,
     });
 
@@ -289,7 +287,6 @@ test.describe("Transcription UX states", () => {
     test.skip(!HAS_SERVICE_ROLE, "Requires service role for isolated transcription fixtures");
     const fixture = await createMeetingFixture(request, {
       transcription_status: "processing",
-      audio_file_path: "fixture/recording.webm",
       transcription_started_at: new Date(Date.now() - 20 * 60 * 1000).toISOString(),
     });
 
@@ -497,7 +494,6 @@ test.describe("Transcription UX states", () => {
     test.skip(!HAS_SERVICE_ROLE, "Requires service role for isolated transcription fixtures");
     const fixture = await createMeetingFixture(request, {
       transcription_status: "processing",
-      audio_file_path: "fixture/recording.webm",
       transcription_started_at: new Date().toISOString(),
     });
 
