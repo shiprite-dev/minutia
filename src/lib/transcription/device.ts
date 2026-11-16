@@ -42,13 +42,13 @@ const deviceTranscriptSchema = z.strictObject({
 export type DeviceTranscript = z.infer<typeof deviceTranscriptSchema>;
 
 export type DeviceTranscriptParse =
-  | { ok: true; value: DeviceTranscript }
-  | { ok: false; fields: string[] };
+  { ok: true; value: DeviceTranscript } | { ok: false; fields: string[] };
 
 function cleanText(text: string): string {
   return text
     .replace(/[\r\n\t]+/g, " ")
     .replace(/[\u0000-\u001f\u007f-\u009f]/g, "")
+    .replace(/\s+/g, " ")
     .trim();
 }
 
@@ -99,7 +99,7 @@ export function assembleDeviceTranscript(
     }))
     .filter((s) => s.text !== "")
     .sort((a, b) => a.start - b.start);
-  const them = cleaned.filter((s) => s.speaker === "them");
+  const them = cleaned.filter((s) => s.speaker !== "me");
   const segments = cleaned.filter(
     (s) => s.speaker !== "me" || !them.some((t) => isEcho(s, t)),
   );
