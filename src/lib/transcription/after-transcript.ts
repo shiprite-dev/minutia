@@ -1,14 +1,23 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { generateMeetingSuggestions, isExplicitSkip } from "@/lib/ai/suggestions";
+import {
+  generateMeetingSuggestions,
+  isExplicitSkip,
+} from "@/lib/ai/suggestions";
 import { MEETING_AUDIO_BUCKET } from "@/lib/audio";
-import { getInstanceConfigMap, InstanceConfigReadError } from "@/lib/instance-config";
+import {
+  getInstanceConfigMap,
+  InstanceConfigReadError,
+} from "@/lib/instance-config";
 import {
   resolveAudioRetention,
   shouldDiscardAudio,
   type ExtractionOutcomeForRetention,
 } from "@/lib/audio/retention";
 
-export async function extractSuggestions(supabase: SupabaseClient, meetingId: string) {
+export async function extractSuggestions(
+  supabase: SupabaseClient,
+  meetingId: string,
+) {
   let extraction: ExtractionOutcomeForRetention = "failed";
   let extractionError: string | null = null;
   try {
@@ -21,7 +30,10 @@ export async function extractSuggestions(supabase: SupabaseClient, meetingId: st
       extractionError = outcome.error;
     }
   } catch (suggestionError) {
-    extractionError = suggestionError instanceof Error ? suggestionError.message : String(suggestionError);
+    extractionError =
+      suggestionError instanceof Error
+        ? suggestionError.message
+        : String(suggestionError);
   }
   return { extraction, extractionError };
 }
@@ -31,7 +43,7 @@ export async function retainAudio(
   supabase: SupabaseClient,
   meetingId: string,
   requestId: string,
-  extraction: ExtractionOutcomeForRetention
+  extraction: ExtractionOutcomeForRetention,
 ) {
   let audioDiscarded = false;
   try {
@@ -50,7 +62,9 @@ export async function retainAudio(
         if (page.length < PAGE_SIZE) break;
       }
       if (paths.length) {
-        const { error: removeError } = await supabase.storage.from(MEETING_AUDIO_BUCKET).remove(paths);
+        const { error: removeError } = await supabase.storage
+          .from(MEETING_AUDIO_BUCKET)
+          .remove(paths);
         if (removeError) throw removeError;
       }
       const { error: meetingNullError } = await supabase
@@ -70,8 +84,14 @@ export async function retainAudio(
     console.error("[transcribe] retention discard failed", {
       meetingId,
       requestId,
-      reason: retentionError instanceof InstanceConfigReadError ? "config_unavailable" : "cleanup_error",
-      error: retentionError instanceof Error ? retentionError.message : String(retentionError),
+      reason:
+        retentionError instanceof InstanceConfigReadError
+          ? "config_unavailable"
+          : "cleanup_error",
+      error:
+        retentionError instanceof Error
+          ? retentionError.message
+          : String(retentionError),
     });
   }
   return audioDiscarded;

@@ -1,7 +1,10 @@
 import { NextResponse, after, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { hasAiAccess } from "@/lib/ai/access";
-import { extractSuggestions, retainAudio } from "@/lib/transcription/after-transcript";
+import {
+  extractSuggestions,
+  retainAudio,
+} from "@/lib/transcription/after-transcript";
 import {
   assembleDeviceTranscript,
   DEVICE_TRANSCRIPT_MAX_BYTES,
@@ -14,7 +17,7 @@ const STALE_PROCESSING_SECONDS = 15 * 60;
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: Promise<{ meetingId: string }> }
+  { params }: { params: Promise<{ meetingId: string }> },
 ) {
   const requestId = crypto.randomUUID();
   const { meetingId } = await params;
@@ -28,8 +31,14 @@ export async function POST(
   if (!user) return respond({ error: "Not authenticated" }, 401);
 
   const tooLarge = () =>
-    respond({ error: "Transcript is too large.", code: "payload_too_large" }, 413);
-  if (Number(request.headers.get("content-length")) > DEVICE_TRANSCRIPT_MAX_BYTES) return tooLarge();
+    respond(
+      { error: "Transcript is too large.", code: "payload_too_large" },
+      413,
+    );
+  if (
+    Number(request.headers.get("content-length")) > DEVICE_TRANSCRIPT_MAX_BYTES
+  )
+    return tooLarge();
   const raw = await request.text();
   if (Buffer.byteLength(raw) > DEVICE_TRANSCRIPT_MAX_BYTES) return tooLarge();
 
@@ -37,17 +46,23 @@ export async function POST(
   try {
     json = JSON.parse(raw);
   } catch {
-    return respond({ error: "Invalid body.", code: "invalid_body", fields: ["body"] }, 400);
+    return respond(
+      { error: "Invalid body.", code: "invalid_body", fields: ["body"] },
+      400,
+    );
   }
   const parsed = parseDeviceTranscript(json);
   if (!parsed.ok) {
-    return respond({ error: "Invalid body.", code: "invalid_body", fields: parsed.fields }, 400);
+    return respond(
+      { error: "Invalid body.", code: "invalid_body", fields: parsed.fields },
+      400,
+    );
   }
 
   const { data: meeting } = await supabase
     .from("meetings")
     .select(
-      "id, audio_duration_seconds, transcription_status, transcription_outcome, transcription_provider, transcription_model, transcript_raw, speaker_map"
+      "id, audio_duration_seconds, transcription_status, transcription_outcome, transcription_provider, transcription_model, transcript_raw, speaker_map",
     )
     .eq("id", meetingId)
     .single();
@@ -65,17 +80,28 @@ export async function POST(
     });
   }
 
-  const { data: profile } = await supabase.from("profiles").select("name").eq("id", user.id).single();
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("name")
+    .eq("id", user.id)
+    .single();
 
-  const { data: claimed, error: claimError } = await supabase.rpc("claim_meeting_transcription", {
-    p_meeting_id: meetingId,
-    p_stale_seconds: STALE_PROCESSING_SECONDS,
-  });
-  if (claimError) return respond({ error: "Could not save the transcript." }, 500);
+  const { data: claimed, error: claimError } = await supabase.rpc(
+    "claim_meeting_transcription",
+    {
+      p_meeting_id: meetingId,
+      p_stale_seconds: STALE_PROCESSING_SECONDS,
+    },
+  );
+  if (claimError)
+    return respond({ error: "Could not save the transcript." }, 500);
   if (!claimed) {
     return respond(
-      { error: "Transcription is already in progress.", code: "processing_conflict" },
-      409
+      {
+        error: "Transcription is already in progress.",
+        code: "processing_conflict",
+      },
+      409,
     );
   }
 
@@ -108,9 +134,16 @@ export async function POST(
   if (updateError) {
     const { error } = await supabase
       .from("meetings")
-      .update({ transcription_status: "failed", transcription_started_at: null })
+      .update({
+        transcription_status: "failed",
+        transcription_started_at: null,
+      })
       .eq("id", meetingId);
-    if (error) console.error("[transcript] could not mark transcription failed", { meetingId, requestId });
+    if (error)
+      console.error("[transcript] could not mark transcription failed", {
+        meetingId,
+        requestId,
+      });
     return respond({ error: "Transcript could not be saved." }, 500);
   }
 
