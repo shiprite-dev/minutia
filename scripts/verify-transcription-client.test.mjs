@@ -97,7 +97,7 @@ test("transcribeWithGroq posts multipart audio to the OpenAI-compatible endpoint
 
   const form = calls[0].options.body;
   assert.equal(typeof form.get, "function", "body must be FormData");
-  assert.equal(form.get("model"), GROQ_DEFAULT_MODEL);
+  assert.equal(form.get("model"), "whisper-large-v3-turbo");
   assert.ok(form.get("file"), "form must carry the audio file");
 
   assert.deepEqual(result, {

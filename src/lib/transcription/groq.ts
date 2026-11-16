@@ -2,14 +2,14 @@
 // Groq Whisper client (primary provider).
 //
 // Groq exposes an OpenAI-compatible audio endpoint (multipart form-data) and a
-// generous free tier (whisper-large-v3, ~5-7% WER, 25MB/request). `verbose_json`
+// generous free tier (whisper-large-v3-turbo, 25MB/request). `verbose_json`
 // makes the response include a `duration` field.
 // ---------------------------------------------------------------------------
 
 import { sendTranscription, type TranscriptionResult } from "./shared";
 
 export const GROQ_BASE_URL = "https://api.groq.com/openai/v1";
-export const GROQ_DEFAULT_MODEL = "whisper-large-v3";
+export const GROQ_DEFAULT_MODEL = "whisper-large-v3-turbo";
 
 export interface GroqTranscribeOptions {
   apiKey: string;
