@@ -2027,7 +2027,7 @@ export function MeetingDetailContent({
       : speakers.every((speaker) => speaker === "me" || speaker === "them")
         ? `Me / Them · ${speakerLabel}`
         : speakerLabel;
-  const transcriptMeta = [speakerMeta, transcriptProvenance(meeting)].filter(Boolean).join(" · ") || null;
+  const transcriptMeta = [speakerMeta, hasTranscript && transcriptProvenance(meeting)].filter(Boolean).join(" · ") || null;
   const showTranscript =
     finishing || hasDiarizedTranscript || !!transcript.trim() || (canManageMeeting && !meeting.audio_file_path);
 
