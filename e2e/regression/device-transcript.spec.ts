@@ -199,6 +199,9 @@ test.describe("On-device transcript submission", () => {
       await expect(turns.nth(0)).toContainText(/release checklist/i);
       await expect(turns.nth(1)).toContainText(/vendor migration/i);
       await expect(turns.nth(2)).toContainText(/summary/i);
+      await expect(
+        page.getByText("Transcribed on device · parakeet-tdt-0.6b-v3-coreml"),
+      ).toBeVisible();
 
       const replayed = await request.post(
         `/api/meetings/${meetingId}/transcript`,
@@ -219,6 +222,141 @@ test.describe("On-device transcript submission", () => {
       const [unchanged] = await after.json();
       expect(unchanged.transcription_status).toBe("completed");
       expect(unchanged.transcript_raw).toBe(meeting.transcript_raw);
+
+      const correction = page.waitForResponse(
+        (r) =>
+          r.url().includes(`/api/meetings/${meetingId}/speaker-map`) &&
+          r.request().method() === "PATCH",
+      );
+      await page
+        .getByRole("button", { name: "Rename Them, currently Them" })
+        .click();
+      await page.getByLabel("Name for Them").fill("Dana Reyes");
+      await page
+        .getByRole("dialog")
+        .getByRole("button", { name: "Save" })
+        .click();
+      expect((await correction).status()).toBe(200);
+      await expect(
+        page.getByRole("button", { name: "Rename Them, currently Dana Reyes" }),
+      ).toBeVisible();
+      const correctedRow = await request.get(
+        `${SUPABASE_URL}/rest/v1/meetings?id=eq.${meetingId}&select=speaker_map,transcript_raw`,
+        { headers: auth },
+      );
+      const [corrected] = await correctedRow.json();
+      expect(corrected.speaker_map).toEqual({
+        me: recorderName,
+        them: "Dana Reyes",
+      });
+      expect(corrected.transcript_raw).toContain(
+        "Dana Reyes: The vendor migration is still blocked on legal.",
+      );
+    } finally {
+      await request.delete(
+        `${SUPABASE_URL}/rest/v1/meeting_series?id=eq.${seriesId}`,
+        {
+          headers: SERVICE_KEY
+            ? { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` }
+            : headers(token),
+        },
+      );
+    }
+  });
+
+  test("a meeting the companion is still transcribing waits for the device without calling the audio route, then shows the device transcript when it lands", async ({
+    page,
+    request,
+  }) => {
+    const { token, userId } = await signIn(request);
+    const auth = headers(token, { "Content-Type": "application/json" });
+    const profile = await request.get(
+      `${SUPABASE_URL}/rest/v1/profiles?id=eq.${userId}&select=current_organization_id`,
+      { headers: auth },
+    );
+    const [{ current_organization_id: organizationId }] = await profile.json();
+
+    const series = await request.post(
+      `${SUPABASE_URL}/rest/v1/meeting_series?select=id`,
+      {
+        headers: { ...auth, Prefer: "return=representation" },
+        data: {
+          name: `Device Waiting ${Date.now()}`,
+          cadence: "weekly",
+          owner_id: userId,
+          organization_id: organizationId,
+        },
+      },
+    );
+    expect(series.ok(), await series.text()).toBeTruthy();
+    const seriesId = (await series.json())[0].id as string;
+
+    try {
+      const started = await request.post(
+        `${SUPABASE_URL}/rest/v1/rpc/start_or_join_meeting`,
+        { headers: auth, data: { target_series_id: seriesId } },
+      );
+      expect(started.ok(), await started.text()).toBeTruthy();
+      const meetingId = (await started.json()).id as string;
+
+      const ended = await request.patch(
+        `${SUPABASE_URL}/rest/v1/meetings?id=eq.${meetingId}`,
+        {
+          headers: { ...auth, Prefer: "return=minimal" },
+          data: {
+            status: "completed",
+            completed_at: new Date().toISOString(),
+            audio_file_path: null,
+            transcription_status: "pending",
+            transcription_outcome: null,
+          },
+        },
+      );
+      expect(ended.ok(), await ended.text()).toBeTruthy();
+
+      const transcribeCalls: string[] = [];
+      page.on("request", (req) => {
+        if (/\/api\/meetings\/[^/]+\/transcribe(\?|$)/.test(req.url()))
+          transcribeCalls.push(req.url());
+      });
+
+      await page.goto(`/series/${seriesId}/meetings/${meetingId}`);
+      await waitForApp(page);
+
+      const status = page.getByRole("region", { name: "Transcription status" });
+      await expect(
+        status.getByText(
+          "Waiting for the transcript from the recording device.",
+        ),
+      ).toBeVisible({ timeout: 20_000 });
+      await expect(
+        page.getByRole("button", { name: "Retry transcription" }),
+      ).toHaveCount(0);
+      await expect(page.getByText("Transcribed on device")).toHaveCount(0);
+
+      const submitted = await request.post(
+        `/api/meetings/${meetingId}/transcript`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+          data: deviceTranscript,
+        },
+      );
+      expect(submitted.status(), await submitted.text()).toBe(200);
+
+      await expect(
+        page.getByText("Transcribed on device · parakeet-tdt-0.6b-v3-coreml"),
+      ).toBeVisible({ timeout: 20_000 });
+      await expect(
+        page.getByText("Waiting for the transcript from the recording device."),
+      ).toHaveCount(0);
+      await page
+        .getByRole("button", { name: /Transcript/ })
+        .first()
+        .click();
+      await expect(
+        page.getByRole("button", { name: "Rename Them, currently Them" }),
+      ).toHaveCount(1);
+      expect(transcribeCalls).toEqual([]);
     } finally {
       await request.delete(
         `${SUPABASE_URL}/rest/v1/meeting_series?id=eq.${seriesId}`,
