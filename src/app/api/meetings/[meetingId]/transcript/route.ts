@@ -14,6 +14,45 @@ import {
 export const runtime = "nodejs";
 
 const STALE_PROCESSING_SECONDS = 15 * 60;
+const MEETING_COLUMNS =
+  "id, audio_duration_seconds, transcription_status, transcription_outcome, transcription_provider, transcription_model, transcript_raw, speaker_map";
+
+type MeetingReplay = {
+  transcription_outcome: string | null;
+  transcription_provider: string | null;
+  transcription_model: string | null;
+  transcript_raw: string | null;
+};
+
+const replay = (m: MeetingReplay) => ({
+  status: "completed",
+  replay: true,
+  outcome: m.transcription_outcome ?? null,
+  transcript_length: (m.transcript_raw ?? "").length,
+  model: m.transcription_model ?? "",
+  provider: m.transcription_provider ?? "",
+  audio_discarded: false,
+});
+
+async function readCapped(
+  body: ReadableStream<Uint8Array> | null,
+): Promise<string | null> {
+  if (!body) return "";
+  const reader = body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > DEVICE_TRANSCRIPT_MAX_BYTES) {
+      await reader.cancel();
+      return null;
+    }
+    chunks.push(value);
+  }
+  return Buffer.concat(chunks).toString("utf8");
+}
 
 export async function POST(
   request: NextRequest,
@@ -39,8 +78,8 @@ export async function POST(
     Number(request.headers.get("content-length")) > DEVICE_TRANSCRIPT_MAX_BYTES
   )
     return tooLarge();
-  const raw = await request.text();
-  if (Buffer.byteLength(raw) > DEVICE_TRANSCRIPT_MAX_BYTES) return tooLarge();
+  const raw = await readCapped(request.body);
+  if (raw === null) return tooLarge();
 
   let json: unknown;
   try {
@@ -61,24 +100,13 @@ export async function POST(
 
   const { data: meeting } = await supabase
     .from("meetings")
-    .select(
-      "id, audio_duration_seconds, transcription_status, transcription_outcome, transcription_provider, transcription_model, transcript_raw, speaker_map",
-    )
+    .select(MEETING_COLUMNS)
     .eq("id", meetingId)
     .single();
   if (!meeting) return respond({ error: "Meeting not found" }, 404);
 
-  if (meeting.transcription_status === "completed") {
-    return respond({
-      status: "completed",
-      replay: true,
-      outcome: meeting.transcription_outcome ?? null,
-      transcript_length: (meeting.transcript_raw ?? "").length,
-      model: meeting.transcription_model ?? "",
-      provider: meeting.transcription_provider ?? "",
-      audio_discarded: false,
-    });
-  }
+  if (meeting.transcription_status === "completed")
+    return respond(replay(meeting));
 
   const { data: profile } = await supabase
     .from("profiles")
@@ -96,6 +124,13 @@ export async function POST(
   if (claimError)
     return respond({ error: "Could not save the transcript." }, 500);
   if (!claimed) {
+    const { data: current } = await supabase
+      .from("meetings")
+      .select(MEETING_COLUMNS)
+      .eq("id", meetingId)
+      .single();
+    if (current?.transcription_status === "completed")
+      return respond(replay(current));
     return respond(
       {
         error: "Transcription is already in progress.",

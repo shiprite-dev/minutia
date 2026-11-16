@@ -215,6 +215,7 @@ function buildSupabase() {
       S.calls.push(`rpc:${name}`);
       S.rpcCalls.push({ name, args });
       if (name === "claim_meeting_transcription") {
+        S.onClaim?.();
         return Promise.resolve({ data: S.claimResult, error: S.claimError });
       }
       return Promise.resolve({
@@ -343,9 +344,26 @@ function reset(overrides = {}) {
   S.supabase = buildSupabase();
 }
 
-function makeRequest(raw, headers = {}) {
+function textStream(text) {
+  const bytes = new TextEncoder().encode(text);
+  let offset = 0;
+  return new ReadableStream(
+    {
+      pull(controller) {
+        if (offset === 0) S.bodyReads += 1;
+        if (offset >= bytes.length) return controller.close();
+        controller.enqueue(bytes.slice(offset, offset + 65536));
+        offset += 65536;
+      },
+    },
+    { highWaterMark: 0 },
+  );
+}
+
+function makeRequest(raw, headers = {}, body) {
   const text = typeof raw === "string" ? raw : JSON.stringify(raw);
   return {
+    body: body ?? textStream(text),
     url: `https://example.com/api/meetings/${MEETING_ID}/transcript`,
     method: "POST",
     headers: new Headers({
@@ -369,14 +387,14 @@ function makeRequest(raw, headers = {}) {
   };
 }
 
-async function post(raw = validBody(), headers) {
+async function post(raw = validBody(), headers, body) {
   assert.equal(
     route.__buildError,
     undefined,
     `${ROUTE} failed to build: ${route.__buildError}`,
   );
   assert.equal(typeof route.POST, "function", "route must export POST");
-  const res = await route.POST(makeRequest(raw, headers), {
+  const res = await route.POST(makeRequest(raw, headers, body), {
     params: Promise.resolve({ meetingId: MEETING_ID }),
   });
   return { status: res.status, body: await res.json() };
@@ -602,6 +620,23 @@ test("losing the atomic claim race returns 409 processing_conflict", async () =>
   assert.equal(status, 409);
   assert.equal(body.code, "processing_conflict");
   assert.deepEqual(meetingWrites(), []);
+});
+
+test("a duplicate that loses the claim to a submit that completed replays instead of 409", async () => {
+  reset({ claimResult: null });
+  S.onClaim = () => {
+    S.meeting.transcription_status = "completed";
+    S.meeting.transcription_provider = "device";
+    S.meeting.transcription_model = "parakeet-tdt-0.6b-v3-coreml";
+    S.meeting.transcript_raw = "saved by the first request";
+  };
+  const { status, body } = await post();
+  assert.equal(status, 200, JSON.stringify(body));
+  assert.equal(body.replay, true);
+  assert.equal(body.provider, "device");
+  assert.equal(body.transcript_length, "saved by the first request".length);
+  assert.deepEqual(meetingWrites(), []);
+  assert.equal(S.afterTasks.length, 0);
 });
 
 test("a claim error returns 500 without writing", async () => {
@@ -914,4 +949,25 @@ test("both transcript routes share extract and retain from after-transcript.ts",
       `${name} route does not call extraction directly`,
     );
   }
+});
+
+test("an endless body without a Content-Length is cut off at 2 MB and the stream is cancelled", async () => {
+  reset();
+  let pulled = 0;
+  let cancelled = false;
+  const endless = new ReadableStream({
+    pull(controller) {
+      pulled += 65536;
+      controller.enqueue(new Uint8Array(65536).fill(32));
+    },
+    cancel() {
+      cancelled = true;
+    },
+  });
+  const { status, body } = await post("", { "content-length": "" }, endless);
+  assert.equal(status, 413);
+  assert.equal(body.code, "payload_too_large");
+  assert.equal(cancelled, true, "the reader is cancelled");
+  assert.ok(pulled <= 2 * 1024 * 1024 + 2 * 65536, `read ${pulled} bytes`);
+  assert.equal(claimed(), false);
 });
