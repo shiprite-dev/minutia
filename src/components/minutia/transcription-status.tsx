@@ -12,6 +12,7 @@ export type TranscriptionUiState =
   | "transcribing"
   | "transcribing_stale"
   | "processing_return"
+  | "waiting_device"
   | "transcript_ready"
   | "extraction_failed"
   | "no_speech"
@@ -81,6 +82,7 @@ const PASSIVE_STATES: TranscriptionUiState[] = [
   "saved_pending",
   "transcribing",
   "processing_return",
+  "waiting_device",
 ];
 
 const ADMIN_HELP =
@@ -163,6 +165,12 @@ export function resolveTranscriptionView(props: TranscriptionStatusProps): Statu
           typeof startedMinutesAgo === "number"
             ? [`Started ${startedMinutesAgo} minutes ago`]
             : [],
+        alert: false,
+      };
+    case "waiting_device":
+      return {
+        title: "Waiting for the transcript from the recording device.",
+        details: ["The transcript appears here once the device finishes transcribing."],
         alert: false,
       };
     case "transcript_ready":
@@ -270,6 +278,18 @@ export function resolveTranscriptionView(props: TranscriptionStatusProps): Statu
         alert: true,
       };
   }
+}
+
+export function transcriptProvenance(m: {
+  transcription_provider?: string | null;
+  transcription_model?: string | null;
+  transcription_source?: Record<string, unknown> | null;
+}): string | null {
+  if (m.transcription_provider !== "device") return null;
+  const model =
+    (typeof m.transcription_source?.model === "string" && m.transcription_source.model) ||
+    m.transcription_model;
+  return model ? `Transcribed on device · ${model}` : "Transcribed on device";
 }
 
 export function TranscriptionStatus(props: TranscriptionStatusProps & { tone?: "card" | "quiet" }) {
