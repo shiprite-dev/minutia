@@ -126,6 +126,7 @@ const LIVE_STATUS_STATES: TranscriptionUiState[] = [
   "transcribing_stale",
   "processing_return",
   "waiting_device",
+  "waiting_device_stale",
   "transcript_ready",
   "extraction_failed",
   "no_speech",
@@ -1047,6 +1048,13 @@ export function MeetingDetailContent({
     startedAtMs != null && Number.isFinite(startedAtMs) ? clock - startedAtMs : null;
   const isProcessing = meeting?.transcription_status === "processing";
   const isStaleRun = runAgeMs != null && runAgeMs > STALE_PROCESSING_MS;
+  const deviceWaitAgeMs = meeting
+    ? clock - new Date(meeting.completed_at ?? meeting.created_at).getTime()
+    : null;
+  const deviceWaitOverdue =
+    deviceWaitAgeMs != null &&
+    Number.isFinite(deviceWaitAgeMs) &&
+    deviceWaitAgeMs > STALE_PROCESSING_MS;
   const hasTranscript = !!meeting?.transcript_raw?.trim();
   const canDownloadAudio = !!meeting?.audio_file_path;
 
@@ -1076,11 +1084,12 @@ export function MeetingDetailContent({
   } else if (hasTranscript) {
     transcriptionState = "transcript_ready";
   } else if (
-    meeting?.transcription_status === "pending" &&
+    (meeting?.transcription_status === "pending" ||
+      meeting?.transcription_status === "failed") &&
     !meeting.audio_file_path &&
     !uploadedPending
   ) {
-    transcriptionState = "waiting_device";
+    transcriptionState = deviceWaitOverdue ? "waiting_device_stale" : "waiting_device";
   } else if (uploadedPending || meeting?.transcription_status === "pending") {
     transcriptionState = "saved_pending";
   } else if (meeting?.transcription_outcome === "no_speech") {

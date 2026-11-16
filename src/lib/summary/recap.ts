@@ -15,6 +15,7 @@ const TRANSCRIBE_STATES: TranscriptionUiState[] = [
   "saved_pending",
   "transcribing",
   "processing_return",
+  "waiting_device",
 ];
 
 export function buildRecapUpdate(text: string, model: string, now: Date): RecapUpdate | null {
