@@ -967,6 +967,20 @@ export function MeetingDetailContent({
     return () => clearInterval(id);
   }, [transcribing, meeting?.transcription_status, finishing]);
 
+  const awaitingDevice =
+    !!meeting &&
+    !meeting.audio_file_path &&
+    !meeting.transcript_raw?.trim() &&
+    (meeting.transcription_status === "pending" ||
+      meeting.transcription_status === "failed" ||
+      meeting.transcription_status === "processing");
+  // Syncs with the wall clock so a device wait turns stale without a reload.
+  React.useEffect(() => {
+    if (!awaitingDevice) return;
+    const id = setInterval(() => setClock(Date.now()), 30_000);
+    return () => clearInterval(id);
+  }, [awaitingDevice]);
+
   const isMacClient =
     typeof navigator !== "undefined" &&
     isMacPlatform(
@@ -1072,7 +1086,7 @@ export function MeetingDetailContent({
     transcriptionState = "saving";
   } else if (transcribing) {
     transcriptionState = "transcribing";
-  } else if (isProcessing) {
+  } else if (isProcessing && canDownloadAudio) {
     transcriptionState = isStaleRun ? "transcribing_stale" : "processing_return";
   } else if (
     transcriptionFailure &&
@@ -1085,7 +1099,8 @@ export function MeetingDetailContent({
     transcriptionState = "transcript_ready";
   } else if (
     (meeting?.transcription_status === "pending" ||
-      meeting?.transcription_status === "failed") &&
+      meeting?.transcription_status === "failed" ||
+      isProcessing) &&
     !meeting.audio_file_path &&
     !uploadedPending
   ) {
