@@ -41,6 +41,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
 import { CADENCES, CADENCE_LABELS } from "@/lib/constants";
@@ -49,7 +50,9 @@ import { useConfirm } from "@/components/ui/confirm";
 import { ShareButton } from "@/components/minutia/share-button";
 import { RemindOwnersButton } from "@/components/minutia/remind-owners-button";
 import { CsvImportDialog } from "@/components/minutia/csv-import-dialog";
-import { ArrowLeft, Play, Settings, Loader2, Upload, Calendar, X, Sparkles } from "lucide-react";
+import { ArrowLeft, Play, Settings, Loader2, Upload, Calendar, X, Sparkles, UserPlus } from "lucide-react";
+import { InviteForm } from "@/components/minutia/invite-form";
+import { seriesInviteEmails } from "@/lib/invitations";
 import { cn } from "@/lib/utils";
 import type { Cadence, Issue, GoogleCalendarEntry } from "@/lib/types";
 import { AiUnavailableNotice } from "@/components/minutia/ai-unavailable-notice";
@@ -107,6 +110,7 @@ export function SeriesDetailContent({ seriesId }: SeriesDetailContentProps) {
 
   const [settingsOpen, setSettingsOpen] = React.useState(false);
   const [importOpen, setImportOpen] = React.useState(false);
+  const [inviteOpen, setInviteOpen] = React.useState(false);
   const [startingMeeting, setStartingMeeting] = React.useState(false);
   const [askQuestion, setAskQuestion] = React.useState("");
   const [askAnswer, setAskAnswer] = React.useState<AskSeriesAnswer | null>(null);
@@ -244,6 +248,14 @@ export function SeriesDetailContent({ seriesId }: SeriesDetailContentProps) {
               {canManageSeries && (
                 <>
                   <RemindOwnersButton seriesId={seriesId} />
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setInviteOpen(true)}
+                    aria-label="Invite colleagues"
+                  >
+                    <UserPlus className="size-4" />
+                  </Button>
                   <Button
                     variant="ghost"
                     size="icon"
@@ -436,6 +448,17 @@ export function SeriesDetailContent({ seriesId }: SeriesDetailContentProps) {
           meetingId={sortedMeetings[0].id}
         />
       )}
+      <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Invite colleagues</DialogTitle>
+            <DialogDescription>
+              They join your workspace and see {series.name}.
+            </DialogDescription>
+          </DialogHeader>
+          <InviteForm seriesId={seriesId} defaultEmails={seriesInviteEmails(series.default_attendees)} />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

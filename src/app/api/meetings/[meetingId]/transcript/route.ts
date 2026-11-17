@@ -154,6 +154,7 @@ export async function POST(
       transcript_diarized: true,
       speaker_map: assembled.speakerMap,
       transcription_status: "completed",
+      transcription_error_code: null,
       transcription_outcome: assembled.outcome,
       transcription_provider: "device",
       transcription_model: value.source.model,
@@ -172,6 +173,7 @@ export async function POST(
       .update({
         transcription_status: "failed",
         transcription_started_at: null,
+        transcription_error_code: null,
       })
       .eq("id", meetingId);
     if (error)

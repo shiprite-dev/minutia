@@ -25,3 +25,15 @@ export function inviteDelivery({
   if (acceptUrl) return { invited: true, delivery: "link", acceptUrl };
   return { invited: false, error: errorMessage(emailError) };
 }
+
+const EMAIL_PATTERN = /^[^\s@<>,]+@[^\s@<>,]+\.[^\s@<>,]+$/;
+
+/** Emails typed into the invite field, separated by commas or whitespace. */
+export function parseInviteEmails(text: string): string[] {
+  return [...new Set(text.split(/[\s,]+/).map((e) => e.trim().toLowerCase()).filter(Boolean))];
+}
+
+/** Series attendees that are email addresses, ready to prefill the invite field. */
+export function seriesInviteEmails(attendees: string[] | null | undefined): string {
+  return parseInviteEmails((attendees ?? []).filter((a) => EMAIL_PATTERN.test(a.trim())).join(",")).join(", ");
+}

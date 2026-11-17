@@ -63,6 +63,11 @@ export function createMailTransport(smtp: SmtpConfig) {
   });
 }
 
+/** Whether sendMail has any way to deliver: the test outbox, Resend, or SMTP. */
+export async function isEmailConfigured(): Promise<boolean> {
+  return !!(process.env.MINUTIA_TEST_EMAIL_OUTBOX || process.env.RESEND_API_KEY || (await getSmtpConfig()));
+}
+
 export async function sendMail(message: MailMessage) {
   const apiKey = process.env.RESEND_API_KEY;
   const testOutbox = process.env.MINUTIA_TEST_EMAIL_OUTBOX;
