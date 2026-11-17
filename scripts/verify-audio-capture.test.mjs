@@ -185,6 +185,8 @@ test("uploadMeetingAudio uploads to the bucket and stamps the meeting row", asyn
   assert.equal(supabase.calls.update.transcription_status, "pending");
   // A new recording invalidates the previous recording's outcome.
   assert.equal(supabase.calls.update.transcription_outcome, null);
+  // ...and the previous attempt's failure code, so it never mislabels this one.
+  assert.equal(supabase.calls.update.transcription_error_code, null);
 });
 
 test("uploadMeetingAudio throws when the storage upload fails", async () => {

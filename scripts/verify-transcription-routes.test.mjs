@@ -70,11 +70,12 @@ import { TranscriptionError } from "./transcription-shared.mjs";
 export class TError extends TranscriptionError {}
 export { TranscriptionError };
 export function isDiarizingProviderConfigured() { return globalThis.__S.diarizing; }
-export function isTranscriptionConfigured() { return true; }
+export function isTranscriptionConfigured() { return globalThis.__S.configured !== false; }
 export async function transcribeAudio(audio, options = {}) {
   const S = globalThis.__S;
   S.providerCalls += 1;
   S.providerOptions.push(options);
+  if (typeof S.providerError === "string") throw new TranscriptionError(S.providerError, "provider failed");
   if (S.providerError) throw S.providerError;
   if (S.providerErrorCode) throw new TranscriptionError(S.providerErrorCode, "provider failed");
   return S.providerResult;
@@ -265,6 +266,7 @@ function reset(overrides = {}) {
     providerError: null,
     providerErrorCode: null,
     diarizing: false,
+    configured: true,
     extraction: { ok: true, suggestions: [], model: "m" },
     extractionThrow: null,
     __seq: null,
@@ -333,6 +335,50 @@ test("a fresh in-progress run blocks with 409 before any provider call", async (
   const res = await callMeetingRoute();
   assert.equal(res.status, 409);
   assert.equal(S.providerCalls, 0);
+});
+
+// ---------------------------------------------------------------------------
+// Last failure code: a meeting stuck before transcription says why
+// ---------------------------------------------------------------------------
+
+function meetingRowsWith(key) {
+  return S.meetingUpdates.filter((u) => u.table === "meetings" && u.row && key in u.row).map((u) => u.row);
+}
+
+test("an unconfigured instance records why the recording was not transcribed", async () => {
+  reset({ configured: false });
+  const res = await callMeetingRoute();
+  const body = await res.json();
+  assert.equal(res.status, 503);
+  assert.equal(body.code, "TRANSCRIPTION_UNCONFIGURED");
+  assert.deepEqual(
+    meetingRowsWith("transcription_error_code").map((r) => r.transcription_error_code),
+    ["transcription_unconfigured"]
+  );
+  assert.ok(
+    !S.meetingUpdates.some((u) => u.row?.transcription_status === "processing"),
+    "an unconfigured instance never claims the run"
+  );
+});
+
+test("a provider configuration failure records its code with the failed status", async () => {
+  reset({ providerError: "no_api_key" });
+  const res = await callMeetingRoute();
+  assert.equal(res.status, 503);
+  const failed = meetingRowsWith("transcription_error_code");
+  assert.equal(failed.length, 1);
+  assert.equal(failed[0].transcription_status, "failed");
+  assert.equal(failed[0].transcription_error_code, "no_api_key");
+});
+
+test("a successful transcription clears the last failure code", async () => {
+  reset();
+  const res = await callMeetingRoute();
+  assert.equal(res.status, 200);
+  const completed = S.meetingUpdates.find((u) => u.table === "meetings" && u.row?.transcription_status === "completed");
+  assert.ok(completed);
+  assert.ok("transcription_error_code" in completed.row);
+  assert.equal(completed.row.transcription_error_code, null);
 });
 
 // ---------------------------------------------------------------------------

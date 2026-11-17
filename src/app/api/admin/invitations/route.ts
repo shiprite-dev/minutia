@@ -1,13 +1,13 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { absoluteAppUrl, toPublicActionLink } from "@/lib/app-url";
-import { sendMail } from "@/lib/email";
+import { isEmailConfigured, sendMail } from "@/lib/email";
 import {
   buildExistingUserOrganizationInviteEmail,
   buildNewUserOrganizationInviteEmail,
 } from "@/lib/organization-invite-email";
 import { rejectCrossOrigin } from "@/lib/request-origin";
-import { requireCurrentOrgAdmin } from "@/lib/supabase/org-auth";
+import { requireCurrentOrgAdmin, requireSeriesInviter } from "@/lib/supabase/org-auth";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { isMemberInviteAllowed } from "@/lib/feature-access";
 import { inviteDelivery } from "@/lib/invitations";
@@ -16,9 +16,15 @@ import type { MailMessage } from "@/lib/email";
 const INVITE_UPGRADE_REQUIRED =
   "Inviting teammates requires an upgraded workspace.";
 
+const EMAIL_UNAVAILABLE = {
+  error: "Email is not set up on this workspace.",
+  code: "INVITE_EMAIL_UNAVAILABLE",
+};
+
 const inviteSchema = z.object({
   email: z.string().email(),
   role: z.enum(["admin", "member"]).default("member"),
+  series_id: z.guid().optional(),
 });
 
 const revokeInvitationSchema = z.object({
@@ -75,11 +81,6 @@ export async function POST(request: NextRequest) {
   const jsonBody = requireJsonBody(request);
   if (jsonBody) return jsonBody;
 
-  const auth = await requireCurrentOrgAdmin();
-  if (!auth.authorized) {
-    return NextResponse.json({ error: auth.error }, { status: auth.status });
-  }
-
   let body: unknown;
   try {
     body = await request.json();
@@ -95,9 +96,18 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  const seriesId = parsed.data.series_id;
+  const auth = seriesId ? await requireSeriesInviter(seriesId) : await requireCurrentOrgAdmin();
+  if (!auth.authorized) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status });
+  }
+
   const supabase = createServiceRoleClient();
   const email = parsed.data.email.toLowerCase();
   const role = parsed.data.role;
+  if (role === "admin" && "isOrgAdmin" in auth && !auth.isOrgAdmin) {
+    return NextResponse.json({ error: "Only workspace admins can invite admins." }, { status: 403 });
+  }
 
   // Free workspaces are solo: adding a member requires the full-access
   // entitlement. No-op when feature gating is off (the self-host default).
@@ -108,7 +118,7 @@ export async function POST(request: NextRequest) {
     .single();
   if (!isMemberInviteAllowed(inviter?.has_full_access === true)) {
     return NextResponse.json(
-      { error: INVITE_UPGRADE_REQUIRED },
+      { error: INVITE_UPGRADE_REQUIRED, code: "INVITE_UPGRADE_REQUIRED" },
       { status: 403 }
     );
   }
@@ -116,10 +126,37 @@ export async function POST(request: NextRequest) {
   const { data: existingProfile } = await supabase
     .from("profiles")
     .select("id")
-    .ilike("email", email)
+    .ilike("email", email.replace(/[\\%_]/g, "\\$&"))
     .maybeSingle();
 
-  if (existingProfile?.id) {
+  // A series inviter who is not an org admin may only add members: existing
+  // memberships and invitations are never changed, people outside the
+  // workspace only get a pending invitation, and the accept link stays private.
+  const restricted = "isOrgAdmin" in auth && !auth.isOrgAdmin;
+  const writeMode = restricted ? { ignoreDuplicates: true } : {};
+
+  if (restricted && existingProfile?.id) {
+    const { data: membership } = await supabase
+      .from("organization_members")
+      .select("role")
+      .eq("organization_id", auth.organizationId)
+      .eq("user_id", existingProfile.id)
+      .maybeSingle();
+    if (membership) {
+      const participantError = await addSeriesParticipant(supabase, seriesId!, existingProfile.id, auth.userId);
+      if (participantError) return NextResponse.json({ error: participantError }, { status: 500 });
+      return NextResponse.json({ invited: true, delivery: "added" });
+    }
+  }
+
+  // Nothing is provisioned for a series inviter unless the invite can be emailed.
+  if (restricted && !(await isEmailConfigured())) {
+    return NextResponse.json(EMAIL_UNAVAILABLE, { status: 503 });
+  }
+
+  const directMember = existingProfile?.id && !restricted;
+
+  if (directMember) {
     const { error: memberError } = await supabase
       .from("organization_members")
       .upsert(
@@ -144,12 +181,12 @@ export async function POST(request: NextRequest) {
         organization_id: auth.organizationId,
         email,
         role,
-        status: existingProfile ? "accepted" : "pending",
+        status: directMember ? "accepted" : "pending",
         invited_by: auth.userId,
-        accepted_by: existingProfile?.id ?? null,
-        accepted_at: existingProfile ? new Date().toISOString() : null,
+        accepted_by: directMember ? existingProfile.id : null,
+        accepted_at: directMember ? new Date().toISOString() : null,
       },
-      { onConflict: "organization_id,email" }
+      { onConflict: "organization_id,email", ...writeMode }
     );
 
   if (invitationError) {
@@ -168,8 +205,10 @@ export async function POST(request: NextRequest) {
 
   let acceptUrl: string;
   let emailMessage: Omit<MailMessage, "to">;
+  let inviteeId: string | null = null;
 
   if (existingProfile?.id) {
+    if (directMember) inviteeId = existingProfile.id;
     acceptUrl = absoluteAppUrl(request.url, "/settings");
     emailMessage = buildExistingUserOrganizationInviteEmail({
       organizationName: organization.name,
@@ -198,6 +237,7 @@ export async function POST(request: NextRequest) {
     if (!data.user?.id) {
       return NextResponse.json({ error: "Failed to create invite user" }, { status: 500 });
     }
+    inviteeId = data.user.id;
 
     const { error: memberError } = await supabase
       .from("organization_members")
@@ -208,7 +248,7 @@ export async function POST(request: NextRequest) {
           role,
           invited_by: auth.userId,
         },
-        { onConflict: "organization_id,user_id" }
+        { onConflict: "organization_id,user_id", ...writeMode }
       );
 
     if (memberError) {
@@ -229,9 +269,15 @@ export async function POST(request: NextRequest) {
     });
   }
 
+  if (seriesId && inviteeId) {
+    const participantError = await addSeriesParticipant(supabase, seriesId, inviteeId, auth.userId);
+    if (participantError) return NextResponse.json({ error: participantError }, { status: 500 });
+  }
+
   // The invite is already provisioned at this point. Email delivery is best-effort:
   // when it fails (e.g. no SMTP/Resend on a fresh self-host), hand the admin the
   // accept link to share directly rather than 500ing over a half-sent invite.
+  // Only an org admin ever sees that link.
   let emailError: unknown = null;
   try {
     await sendMail({ to: email, ...emailMessage });
@@ -239,11 +285,27 @@ export async function POST(request: NextRequest) {
     emailError = error;
   }
 
+  if (emailError && restricted) {
+    return NextResponse.json(EMAIL_UNAVAILABLE, { status: 503 });
+  }
   const delivery = inviteDelivery({ emailError, acceptUrl });
   if (!delivery.invited) {
     return NextResponse.json({ error: delivery.error }, { status: 500 });
   }
   return NextResponse.json(delivery);
+}
+
+async function addSeriesParticipant(
+  supabase: ReturnType<typeof createServiceRoleClient>,
+  seriesId: string,
+  userId: string,
+  invitedBy: string
+): Promise<string | null> {
+  const { error } = await supabase.from("series_participants").upsert(
+    { series_id: seriesId, user_id: userId, role: "participant", invited_by: invitedBy },
+    { onConflict: "series_id,user_id", ignoreDuplicates: true }
+  );
+  return error?.message ?? null;
 }
 
 export async function DELETE(request: NextRequest) {

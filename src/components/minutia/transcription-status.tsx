@@ -41,6 +41,8 @@ export interface TranscriptionStatusProps {
   startedMinutesAgo?: number | null;
   /** Humanized failure reason, already safe to show. */
   reason?: string | null;
+  /** True when needs_admin comes from an earlier attempt that may since be fixed. */
+  retryable?: boolean;
   /** True when a retrievable recording still exists. */
   canDownloadAudio?: boolean;
   /** Focus target for the "View status" action. */
@@ -239,6 +241,9 @@ export function resolveTranscriptionView(props: TranscriptionStatusProps): Statu
         title: ADMIN_HELP,
         details: [],
         primary: { label: "Contact administrator", onClick: props.onContactAdmin },
+        secondary: props.retryable
+          ? { label: "Retry transcription", onClick: props.onRetryTranscription }
+          : undefined,
         alert: true,
       };
     case "needs_signin":
