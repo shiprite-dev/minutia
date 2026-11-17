@@ -58,6 +58,7 @@ export interface OrganizationOption {
   name: string;
   slug: string;
   role: OrganizationRole;
+  memberCount: number;
 }
 
 export interface OrganizationInvitation {

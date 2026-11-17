@@ -22,7 +22,9 @@ export default async function AppLayout({
 
   let profile = null;
   let organizations: OrganizationOption[] = [];
+  let signupName: string | null = null;
   if (user) {
+    signupName = user.user_metadata?.full_name ?? null;
     const { data } = await supabase
       .from("profiles")
       .select("*")
@@ -32,7 +34,7 @@ export default async function AppLayout({
 
     const { data: memberships } = await supabase
       .from("organization_members")
-      .select("role, organizations(id, name, slug)")
+      .select("role, organizations(id, name, slug, organization_members(count))")
       .eq("user_id", user.id)
       .order("joined_at", { ascending: true });
 
@@ -47,9 +49,10 @@ export default async function AppLayout({
           name: organization.name,
           slug: organization.slug,
           role: membership.role as "admin" | "member",
+          memberCount: organization.organization_members[0]?.count ?? 1,
         }];
       });
   }
 
-  return <AppShell profile={profile} organizations={organizations}>{children}</AppShell>;
+  return <AppShell profile={profile} organizations={organizations} signupName={signupName}>{children}</AppShell>;
 }

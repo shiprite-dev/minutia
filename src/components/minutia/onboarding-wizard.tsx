@@ -2,526 +2,151 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { motion, AnimatePresence, useReducedMotion } from "motion/react";
-import { ArrowRight, ChevronRight, Sparkles } from "lucide-react";
+import { CalendarDays, Check, Laptop } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { MinutiaCadenceIcon } from "@/components/minutia/minutia-icons";
-import { cn } from "@/lib/utils";
-import { useUpdateProfile } from "@/lib/hooks/use-profile";
-import { useCompleteOnboarding } from "@/lib/hooks/use-profile";
-import { useCreateSeries } from "@/lib/hooks/use-series";
-import { CADENCES, CADENCE_LABELS } from "@/lib/constants";
-import type { Cadence } from "@/lib/types";
-
-const TOTAL_STEPS = 3;
+import { createClient } from "@/lib/supabase/client";
+import {
+  useCompleteOnboarding,
+  useUpdateProfile,
+} from "@/lib/hooks/use-profile";
+import { useGoogleCalendarStatus } from "@/lib/hooks/use-google-calendar";
+import { setStoredState as setTourState } from "@/components/minutia/first-run-tour";
+import type { OrganizationOption, Profile } from "@/lib/types";
 
 interface OnboardingWizardProps {
-  userName: string | null;
-  userEmail: string;
+  profile: Profile;
+  signupName: string | null;
+  workspace: OrganizationOption | undefined;
 }
 
-export function OnboardingWizard({ userName }: OnboardingWizardProps) {
+export function OnboardingWizard({
+  profile,
+  signupName,
+  workspace,
+}: OnboardingWizardProps) {
   const router = useRouter();
-  const [step, setStep] = React.useState(0);
-  const [direction, setDirection] = React.useState(1);
-  const [confirming, setConfirming] = React.useState(false);
-  const reducedMotion = useReducedMotion();
-  const nameInputRef = React.useRef<HTMLInputElement>(null);
-
-  const [name, setName] = React.useState(userName ?? "");
-  const [seriesName, setSeriesName] = React.useState("");
-  const [cadence, setCadence] = React.useState<Cadence>("weekly");
-  const [attendees, setAttendees] = React.useState("");
-  const [createdSeriesId, setCreatedSeriesId] = React.useState<string | null>(null);
-
+  const knownName =
+    profile.name && profile.name !== profile.email.split("@")[0]
+      ? profile.name
+      : signupName;
+  const [name, setName] = React.useState("");
+  const [pending, setPending] = React.useState(false);
+  const { data: calendar } = useGoogleCalendarStatus();
   const updateProfile = useUpdateProfile();
-  const createSeries = useCreateSeries();
   const completeOnboarding = useCompleteOnboarding();
 
-  // A fresh post-signup arrival (auth callback appends ?confirmed=1 for new
-  // accounts) gets a brief confirmation beat that collapses into the name step.
-  // The param is stripped so a refresh never replays it.
-  React.useEffect(() => {
-    if (typeof window === "undefined") return;
-    const params = new URLSearchParams(window.location.search);
-    if (params.get("confirmed") !== "1") return;
-    setConfirming(true);
-    params.delete("confirmed");
-    const qs = params.toString();
-    window.history.replaceState(
-      null,
-      "",
-      `${window.location.pathname}${qs ? `?${qs}` : ""}`,
-    );
-    const timer = window.setTimeout(() => setConfirming(false), 2500);
-    return () => window.clearTimeout(timer);
-  }, []);
-
-  function goNext() {
-    setDirection(1);
-    setStep((s) => Math.min(s + 1, TOTAL_STEPS - 1));
-  }
-
-  async function handleFinishStep0() {
-    const fieldValue = nameInputRef.current?.value ?? name;
-    const trimmedName = fieldValue.trim();
-    if (!trimmedName) return;
-    if (fieldValue !== name) setName(fieldValue);
-
-    if (trimmedName !== userName) {
-      await updateProfile.mutateAsync({ name: trimmedName });
-    }
-    goNext();
-  }
-
-  async function handleFinishStep1() {
-    if (seriesName.trim()) {
-      const attendeeList = attendees
-        .split(",")
-        .map((s) => s.trim())
-        .filter(Boolean);
-      const series = await createSeries.mutateAsync({
-        name: seriesName.trim(),
-        cadence,
-        default_attendees: attendeeList,
-      });
-      setCreatedSeriesId(series.id);
-    }
-    goNext();
-  }
-
-  async function handleComplete() {
-    await completeOnboarding.mutateAsync();
-    if (createdSeriesId) {
-      router.push(`/series/${createdSeriesId}`);
-    } else {
+  async function finish() {
+    setPending(true);
+    const finalName = (knownName ?? name).trim();
+    try {
+      if (finalName && finalName !== profile.name) {
+        await updateProfile.mutateAsync({ name: finalName });
+        if (workspace?.name === `${profile.name}'s workspace`) {
+          await createClient()
+            .from("organizations")
+            .update({ name: `${finalName}'s workspace` })
+            .eq("id", workspace.id);
+        }
+      }
+      setTourState(profile.id, "dismissed");
+      await completeOnboarding.mutateAsync();
       router.push("/");
+      router.refresh();
+    } catch {
+      setPending(false);
     }
-    router.refresh();
   }
-
-  async function handleSkip() {
-    await completeOnboarding.mutateAsync();
-    router.push("/");
-    router.refresh();
-  }
-
-  const variants = {
-    enter: (d: number) => ({ x: d > 0 ? 80 : -80, opacity: 0 }),
-    center: { x: 0, opacity: 1 },
-    exit: (d: number) => ({ x: d > 0 ? -80 : 80, opacity: 0 }),
-  };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-paper">
-      <div className="w-full max-w-lg px-6">
-        {/* Progress dots */}
-        <div className="flex items-center justify-center gap-2 mb-8">
-          {Array.from({ length: TOTAL_STEPS }).map((_, i) => (
-            <div
-              key={i}
-              className={cn(
-                "h-1.5 rounded-full transition-all duration-300",
-                i === step ? "w-8 bg-accent" : i < step ? "w-4 bg-accent/40" : "w-4 bg-rule"
-              )}
+    <div
+      data-testid="setup-screen"
+      className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-paper px-4 py-10"
+    >
+      <div className="w-full max-w-md">
+        <div className="text-center">
+          <span className="inline-flex size-12 items-center justify-center rounded-full bg-accent/10 font-display text-xl font-bold text-accent">
+            m
+          </span>
+          <h1 className="mt-4 font-display text-2xl font-semibold text-ink">
+            {knownName
+              ? `Welcome to Minutia, ${knownName}`
+              : "Welcome to Minutia"}
+          </h1>
+          <p className="mt-1 text-sm text-ink-3">
+            Two optional steps and you are ready.
+          </p>
+        </div>
+
+        {!knownName && (
+          <div className="mt-8 space-y-2">
+            <Label htmlFor="setup-name" className="text-ink-2">
+              What should we call you?
+            </Label>
+            <Input
+              id="setup-name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Your name"
+              autoFocus
+              className="h-11 rounded-xl"
             />
-          ))}
-        </div>
+          </div>
+        )}
 
-        {/* Step content */}
-        <div className="relative overflow-hidden rounded-2xl border border-rule bg-card p-8 min-h-[360px]">
-          <AnimatePresence mode="wait" custom={direction}>
-            {confirming && (
-              <motion.div
-                key="confirm"
-                initial={{ opacity: 1 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0, y: -8 }}
-                transition={{ duration: 0.22, ease: [0.2, 0.8, 0.2, 1] }}
-              >
-                <ConfirmationBeat reducedMotion={reducedMotion} />
-              </motion.div>
+        <ul className="mt-8 divide-y divide-rule rounded-2xl border border-rule bg-card">
+          <li className="flex flex-wrap items-center gap-x-4 gap-y-3 p-4">
+            <CalendarDays className="size-5 shrink-0 text-ink-3" />
+            <div className="min-w-0 flex-1 basis-48">
+              <p className="text-sm font-medium text-ink">Google Calendar</p>
+              <p className="text-xs text-ink-3">
+                {calendar?.connected
+                  ? "Google Calendar connected"
+                  : "Brings in your meetings so you never set them up by hand."}
+              </p>
+            </div>
+            {calendar?.connected ? (
+              <Check aria-hidden className="size-5 text-accent" />
+            ) : (
+              <Button asChild variant="outline" size="sm">
+                <a href="/api/auth/google">Connect Google Calendar</a>
+              </Button>
             )}
+          </li>
+          <li className="flex flex-wrap items-center gap-x-4 gap-y-3 p-4">
+            <Laptop className="size-5 shrink-0 text-ink-3" />
+            <div className="min-w-0 flex-1 basis-48">
+              <p className="text-sm font-medium text-ink">Get the Mac app</p>
+              <p className="text-xs text-ink-3">
+                Records your meetings and transcribes them on your Mac.
+              </p>
+            </div>
+            <Button asChild variant="accent" size="sm">
+              <a href="/download" target="_blank" rel="noreferrer">
+                Download for Mac
+              </a>
+            </Button>
+          </li>
+        </ul>
 
-            {!confirming && step === 0 && (
-              <motion.div
-                key="step-0"
-                custom={direction}
-                variants={variants}
-                initial="enter"
-                animate="center"
-                exit="exit"
-                transition={{ duration: 0.3, ease: [0.2, 0.8, 0.2, 1] }}
-              >
-                <StepWelcome
-                  name={name}
-                  inputRef={nameInputRef}
-                  onNameChange={setName}
-                  onNext={handleFinishStep0}
-                  isPending={updateProfile.isPending}
-                />
-              </motion.div>
-            )}
-
-            {step === 1 && (
-              <motion.div
-                key="step-1"
-                custom={direction}
-                variants={variants}
-                initial="enter"
-                animate="center"
-                exit="exit"
-                transition={{ duration: 0.3, ease: [0.2, 0.8, 0.2, 1] }}
-              >
-                <StepCreateSeries
-                  seriesName={seriesName}
-                  onSeriesNameChange={setSeriesName}
-                  cadence={cadence}
-                  onCadenceChange={setCadence}
-                  attendees={attendees}
-                  onAttendeesChange={setAttendees}
-                  onNext={handleFinishStep1}
-                  onSkip={goNext}
-                  isPending={createSeries.isPending}
-                />
-              </motion.div>
-            )}
-
-            {step === 2 && (
-              <motion.div
-                key="step-2"
-                custom={direction}
-                variants={variants}
-                initial="enter"
-                animate="center"
-                exit="exit"
-                transition={{ duration: 0.3, ease: [0.2, 0.8, 0.2, 1] }}
-              >
-                <StepTour
-                  onComplete={handleComplete}
-                  isPending={completeOnboarding.isPending}
-                />
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-
-        {/* Skip link */}
-        <div className="mt-4 text-center">
-          <button
-            onClick={handleSkip}
-            className="text-xs text-ink-4 hover:text-ink-3 transition-colors"
-          >
-            Skip setup
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Post-signup confirmation beat (precedes step 0 on a fresh ?confirmed=1 arrival)
-// ---------------------------------------------------------------------------
-
-function ConfirmationBeat({
-  reducedMotion,
-}: {
-  reducedMotion: boolean | null;
-}) {
-  return (
-    <div className="space-y-6 text-center" data-testid="onboarding-confirmation">
-      <motion.div
-        initial={false}
-        animate={reducedMotion === true ? {} : { scale: [1, 1.18, 1] }}
-        transition={{ duration: 0.5, ease: [0.2, 0.8, 0.2, 1] }}
-        className="inline-flex items-center justify-center size-12 rounded-full bg-accent/10"
-      >
-        <span className="font-display text-xl font-bold text-accent">m</span>
-      </motion.div>
-      <div>
-        <div className="overflow-hidden">
-          <motion.h2
-            initial={reducedMotion === true ? false : { clipPath: "inset(0 100% 0 0)" }}
-            animate={{ clipPath: "inset(0 0% 0 0)" }}
-            transition={{ delay: 0.08, duration: 0.38, ease: [0.2, 0.8, 0.2, 1] }}
-            className="font-display text-xl font-semibold text-ink"
-          >
-            Account confirmed.
-          </motion.h2>
-        </div>
-        <motion.p
-          initial={reducedMotion === true ? false : { opacity: 0, y: 6 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.22, duration: 0.3, ease: [0.2, 0.8, 0.2, 1] }}
-          className="text-sm text-ink-3 mt-1"
-        >
-          Every issue your team raised just got a place to live.
-        </motion.p>
-      </div>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Step 0: Welcome + Name
-// ---------------------------------------------------------------------------
-
-function StepWelcome({
-  name,
-  inputRef,
-  onNameChange,
-  onNext,
-  isPending,
-}: {
-  name: string;
-  inputRef: React.RefObject<HTMLInputElement | null>;
-  onNameChange: (v: string) => void;
-  onNext: () => void;
-  isPending: boolean;
-}) {
-  return (
-    <div className="space-y-6">
-      <div className="text-center">
-        <motion.div
-          initial={{ scale: 0.8, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          transition={{ delay: 0.1, duration: 0.4, ease: [0.2, 0.8, 0.2, 1] }}
-          className="inline-flex items-center justify-center size-12 rounded-full bg-accent/10 mb-4"
-        >
-          <span className="font-display text-xl font-bold text-accent">m</span>
-        </motion.div>
-        <h2 className="font-display text-xl font-semibold text-ink">
-          Welcome to Minutia
-        </h2>
-        <p className="text-sm text-ink-3 mt-1">
-          Stop losing track of what was said, decided, and owed.
-        </p>
-      </div>
-
-      <div className="space-y-2">
-        <Label htmlFor="onboard-name" className="text-ink-2">
-          What should we call you?
-        </Label>
-        <Input
-          ref={inputRef}
-          id="onboard-name"
-          value={name}
-          onChange={(e) => onNameChange(e.target.value)}
-          onInput={(e) => onNameChange(e.currentTarget.value)}
-          placeholder="Your name"
-          autoFocus
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && name.trim()) onNext();
-          }}
-          className="h-11 rounded-xl"
-        />
-      </div>
-
-      <Button variant="accent"
-        onClick={onNext}
-        disabled={!name.trim() || isPending}
-        className="w-full h-11 rounded-xl"
-      >
-        Continue
-        <ArrowRight className="size-4 ml-1" />
-      </Button>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Step 1: Create first series
-// ---------------------------------------------------------------------------
-
-function StepCreateSeries({
-  seriesName,
-  onSeriesNameChange,
-  cadence,
-  onCadenceChange,
-  attendees,
-  onAttendeesChange,
-  onNext,
-  onSkip,
-  isPending,
-}: {
-  seriesName: string;
-  onSeriesNameChange: (v: string) => void;
-  cadence: Cadence;
-  onCadenceChange: (v: Cadence) => void;
-  attendees: string;
-  onAttendeesChange: (v: string) => void;
-  onNext: () => void;
-  onSkip: () => void;
-  isPending: boolean;
-}) {
-  return (
-    <div className="space-y-5">
-      <div>
-        <h2 className="font-display text-xl font-semibold text-ink">
-          Create your first series
-        </h2>
-        <p className="text-sm text-ink-3 mt-1">
-          A series is a recurring meeting you want to track issues for.
-        </p>
-      </div>
-
-      <div className="space-y-2">
-        <Label htmlFor="onboard-series" className="text-ink-2">
-          Meeting name
-        </Label>
-        <Input
-          id="onboard-series"
-          value={seriesName}
-          onChange={(e) => onSeriesNameChange(e.target.value)}
-          placeholder="e.g. Weekly Standup, Vendor Sync, 1:1 with Alex"
-          autoFocus
-          className="h-11 rounded-xl"
-        />
-      </div>
-
-      <div className="space-y-2">
-        <Label className="text-ink-2">How often?</Label>
-        <div className="flex flex-wrap gap-1.5">
-          {CADENCES.map((c) => (
-            <button
-              key={c}
-              type="button"
-              className={cn(
-                "inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors",
-                cadence === c
-                  ? "bg-ink text-paper"
-                  : "bg-paper-2 text-ink-3 hover:text-ink-2 hover:bg-paper-3"
-              )}
-              onClick={() => onCadenceChange(c)}
-            >
-              <MinutiaCadenceIcon cadence={c} className="size-3 text-current" />
-              {CADENCE_LABELS[c]}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="space-y-2">
-        <Label htmlFor="onboard-attendees" className="text-ink-2">
-          Attendees <span className="text-ink-4 font-normal">(optional)</span>
-        </Label>
-        <Input
-          id="onboard-attendees"
-          value={attendees}
-          onChange={(e) => onAttendeesChange(e.target.value)}
-          placeholder="alice@co.com, bob@co.com"
-          className="h-11 rounded-xl"
-        />
-        <p className="text-[10px] text-ink-4">Comma-separated emails</p>
-      </div>
-
-      <div className="flex gap-3">
         <Button
-          variant="ghost"
-          onClick={onSkip}
-          className="flex-1 h-11 rounded-xl text-ink-3"
+          variant="accent"
+          onClick={finish}
+          disabled={pending || (!knownName && !name.trim())}
+          className="mt-6 h-11 w-full rounded-xl"
         >
-          Skip for now
+          Continue
         </Button>
-        <Button variant="accent"
-          onClick={onNext}
-          disabled={!seriesName.trim() || isPending}
-          className="flex-1 h-11 rounded-xl"
+        <button
+          type="button"
+          onClick={finish}
+          disabled={pending}
+          className="mx-auto mt-3 block text-xs text-ink-4 transition-colors hover:text-ink-3"
         >
-          {isPending ? "Creating..." : "Create series"}
-          {!isPending && <ArrowRight className="size-4 ml-1" />}
-        </Button>
+          Skip
+        </button>
       </div>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Step 2: Quick tour
-// ---------------------------------------------------------------------------
-
-const features = [
-  {
-    title: "OIL Board",
-    desc: "Your dashboard for all outstanding issues across every series.",
-    shortcut: "J/K",
-  },
-  {
-    title: "Live Capture",
-    desc: "Start a meeting and raise issues in real-time with type prefixes.",
-    shortcut: "N",
-  },
-  {
-    title: "Pre-Meeting Brief",
-    desc: "Auto-generated summary of pending items before your next meeting.",
-  },
-  {
-    title: "Keyboard First",
-    desc: "Navigate, update status, and add items without touching the mouse.",
-    shortcut: "?",
-  },
-];
-
-function StepTour({
-  onComplete,
-  isPending,
-}: {
-  onComplete: () => void;
-  isPending: boolean;
-}) {
-  return (
-    <div className="space-y-5">
-      <div>
-        <h2 className="font-display text-xl font-semibold text-ink">
-          You're all set
-        </h2>
-        <p className="text-sm text-ink-3 mt-1">
-          Here's what you can do with Minutia.
-        </p>
-      </div>
-
-      <div className="space-y-2.5">
-        {features.map((f, i) => (
-          <motion.div
-            key={f.title}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{
-              delay: 0.1 + i * 0.08,
-              duration: 0.3,
-              ease: [0.2, 0.8, 0.2, 1],
-            }}
-            className="flex items-start gap-3 rounded-lg border border-rule p-3"
-          >
-            <div className="mt-0.5 flex items-center justify-center size-5 rounded-full bg-accent/10 shrink-0">
-              <ChevronRight className="size-3 text-accent" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2">
-                <p className="text-sm font-medium text-ink">{f.title}</p>
-                {f.shortcut && (
-                  <kbd className="rounded bg-paper-2 px-1.5 py-0.5 text-[10px] font-mono text-ink-4">
-                    {f.shortcut}
-                  </kbd>
-                )}
-              </div>
-              <p className="text-xs text-ink-3 mt-0.5">{f.desc}</p>
-            </div>
-          </motion.div>
-        ))}
-      </div>
-
-      <Button variant="accent"
-        onClick={onComplete}
-        disabled={isPending}
-        className="w-full h-11 rounded-xl"
-      >
-        {isPending ? "Getting ready..." : "Start tracking"}
-        {!isPending && <Sparkles className="size-4 ml-1" />}
-      </Button>
     </div>
   );
 }

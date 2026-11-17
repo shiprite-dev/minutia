@@ -19,10 +19,11 @@ import type { OrganizationOption, Profile } from "@/lib/types";
 interface AppShellProps {
   profile: Profile | null;
   organizations: OrganizationOption[];
+  signupName: string | null;
   children: ReactNode;
 }
 
-export function AppShell({ profile, organizations, children }: AppShellProps) {
+export function AppShell({ profile, organizations, signupName, children }: AppShellProps) {
   const shellRef = React.useRef<HTMLDivElement>(null);
   const pathname = usePathname();
   const openQuickAddDialog = useUIStore((s) => s.openQuickAddDialog);
@@ -55,7 +56,11 @@ export function AppShell({ profile, organizations, children }: AppShellProps) {
         data-minutia-app-shell
         data-hydrated="false"
       >
-        <OnboardingWizard userName={profile.name} userEmail={profile.email} />
+        <OnboardingWizard
+          profile={profile}
+          signupName={signupName}
+          workspace={organizations.find((o) => o.id === profile.current_organization_id)}
+        />
       </div>
     );
   }
