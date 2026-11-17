@@ -9,6 +9,7 @@ import {
 import { createClient } from "@/lib/supabase/client";
 import { applyOptimistic, patch } from "@/lib/optimistic";
 import { patchSeriesFields, isListCache } from "@/lib/optimistic-updates";
+import { MEETING_LIST_COLUMNS } from "@/lib/types";
 import type { MeetingSeries, SeriesParticipantRole, SeriesWithMeetings } from "@/lib/types";
 import type { CreateSeriesInput } from "@/lib/schemas";
 
@@ -22,6 +23,8 @@ export const seriesKeys = {
   detail: (id: string) => ["series", id] as const,
   role: (id: string) => ["series", id, "participant-role"] as const,
 };
+
+const OPEN_ISSUE_STATUSES = "(open,in_progress,pending)";
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -44,6 +47,7 @@ export function useSeries(enabled = true) {
       const { data, error } = await supabase
         .from("meeting_series")
         .select("*, issues(count)")
+        .filter("issues.status", "in", OPEN_ISSUE_STATUSES)
         .order("updated_at", { ascending: false });
 
       if (error) throw error;
@@ -72,7 +76,8 @@ export function useSeriesDetail(id: string) {
 
       const { data, error } = await supabase
         .from("meeting_series")
-        .select("*, meetings(*), issues(count)")
+        .select(`*, meetings(${MEETING_LIST_COLUMNS}), issues(count)`)
+        .filter("issues.status", "in", OPEN_ISSUE_STATUSES)
         .eq("id", id)
         .maybeSingle();
 

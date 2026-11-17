@@ -165,6 +165,22 @@ export interface TranscriptionSegmentRow {
   confidence: number | null;
 }
 
+export const MEETING_LIST_COLUMNS =
+  "id, series_id, sequence_number, title, date, status, attendees, created_at, completed_at, " +
+  "ai_notes_generated_at, ai_notes_model, ai_notes_prompt_version, recap_generated_at, recap_model, " +
+  "transcript_diarized, transcript_language, audio_file_path, audio_duration_seconds, audio_file_size_bytes, " +
+  "transcription_status, transcription_outcome, transcription_model, transcription_provider, " +
+  "transcription_started_at, transcription_completed_at, transcription_error_code, " +
+  "gcal_meeting_key, gcal_calendar_id, gcal_event_id, gcal_original_start_time, gcal_meeting_url, " +
+  "gcal_html_link, gcal_last_synced_at, record_requested_at, record_requested_by, record_claimed_at, " +
+  "recording_user_id, recording_device_id, recording_device_name, recording_started_at, " +
+  "recording_seen_at, recording_failed_reason";
+
+export const MEETING_DETAIL_COLUMNS =
+  MEETING_LIST_COLUMNS +
+  ", notes_markdown, raw_notes_markdown, companion_notes_markdown, ai_notes_markdown, recap_markdown, " +
+  "speaker_map, transcription_source";
+
 export interface Meeting {
   id: string;
   series_id: string;

@@ -15,6 +15,17 @@ assert(
   "Series detail realtime must not poll every few seconds"
 );
 
+const useMeetings = fs.readFileSync("src/lib/hooks/use-meetings.ts", "utf8");
+assert(
+  !/from\("meetings"\)\s*\.select\("\*(?:"\)|,)/.test(useMeetings) && !useSeries.includes("meetings(*)"),
+  "Meeting reads must select MEETING_LIST_COLUMNS/MEETING_DETAIL_COLUMNS, never * (transcripts are large)"
+);
+assert(
+  (useSeries.match(/issues\(count\)/g) ?? []).length ===
+    (useSeries.match(/\.filter\("issues\.status", "in", OPEN_ISSUE_STATUSES\)/g) ?? []).length,
+  "open_issues_count must count only open statuses"
+);
+
 // Self-host PostgREST ignores .or()/.and() on UPDATE/DELETE (0 rows); use an RPC.
 function walk(dir) {
   return fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => {

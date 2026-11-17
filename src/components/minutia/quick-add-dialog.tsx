@@ -38,7 +38,7 @@ export function QuickAddDialog() {
 
   const createIssue = useCreateIssue();
   const { data: seriesList = [] } = useSeries(open);
-  const { data: allMeetings = [] } = useAllMeetings();
+  const { data: allMeetings = [] } = useAllMeetings(open);
 
   const latestMeetingId = React.useMemo(() => {
     if (!seriesId) return null;

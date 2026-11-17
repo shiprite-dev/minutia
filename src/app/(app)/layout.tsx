@@ -23,18 +23,15 @@ export default async function AppLayout({
   let profile = null;
   let organizations: OrganizationOption[] = [];
   if (user) {
-    const { data } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("id", user.id)
-      .single();
+    const [{ data }, { data: memberships }] = await Promise.all([
+      supabase.from("profiles").select("*").eq("id", user.id).single(),
+      supabase
+        .from("organization_members")
+        .select("role, organizations(id, name, slug)")
+        .eq("user_id", user.id)
+        .order("joined_at", { ascending: true }),
+    ]);
     profile = data;
-
-    const { data: memberships } = await supabase
-      .from("organization_members")
-      .select("role, organizations(id, name, slug)")
-      .eq("user_id", user.id)
-      .order("joined_at", { ascending: true });
 
     organizations = (memberships ?? [])
       .flatMap((membership) => {
