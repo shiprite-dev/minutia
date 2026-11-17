@@ -86,9 +86,14 @@ export function providerSupportsLanguage(
 ): boolean {
   const normalized = normalizeLanguageHint(lang);
   if (!normalized) return false;
-  const modelLanguages = MODEL_LANGUAGES[`${provider}:${providerModel(provider, env)}`];
+  const modelLanguages = declaredModelLanguages(provider, env);
   if (modelLanguages) return modelLanguages.includes(normalized);
   return LANGUAGE_SETS.get(provider)?.has(normalized) ?? false;
+}
+
+function declaredModelLanguages(provider: TranscriptionProvider, env: Env): string[] | undefined {
+  const model = providerModel(provider, env)?.toLowerCase().split(":")[0];
+  return model ? MODEL_LANGUAGES[`${provider}:${model}`] : undefined;
 }
 
 /**
@@ -102,7 +107,9 @@ export function selectChainForLanguage(
 ): TranscriptionProvider[] {
   const language = normalizeLanguageHint(hint);
   if (!language) return chain;
-  return chain.filter((provider) => providerSupportsLanguage(provider, language, env));
+  const remaining = chain.filter((provider) => !declaredModelLanguages(provider, env)?.every((l) => l !== language));
+  const supported = remaining.filter((provider) => providerSupportsLanguage(provider, language, env));
+  return supported.length > 0 ? supported : remaining;
 }
 
 /** Diagnostics only: what each provider claims and whether it has a credential. */

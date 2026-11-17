@@ -65,6 +65,7 @@ function statusForCode(code: TranscriptionErrorCode): number {
     case "no_api_key":
     case "provider_not_configured":
     case "auth_error":
+    case "unsupported_language":
       return 503;
     default:
       return 502;
@@ -106,7 +107,8 @@ export async function POST(
   // transcript. Legacy callers send {} => expectedSegments null => full file.
   let body: Record<string, unknown> = {};
   try {
-    body = (await request.json()) as Record<string, unknown>;
+    const parsed: unknown = await request.json();
+    body = parsed && typeof parsed === "object" && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : {};
   } catch {
     body = {};
   }

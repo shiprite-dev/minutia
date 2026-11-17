@@ -22,6 +22,7 @@ export type TranscriptionUiState =
   | "failed"
   | "failed_unknown"
   | "needs_admin"
+  | "unsupported_language"
   | "needs_signin"
   | "already_running"
   | "input_mismatch"
@@ -89,6 +90,8 @@ const PASSIVE_STATES: TranscriptionUiState[] = [
 
 const ADMIN_HELP =
   "This workspace has not been set up for transcription yet. Ask your administrator.";
+const UNSUPPORTED_LANGUAGE_HELP =
+  "Transcription isn't available for this meeting's language on this workspace. Ask your administrator to add a provider that supports it.";
 const SIGNIN_HELP = "Your session expired. Please sign in again.";
 
 /** Pure state to copy/action mapping, exported so the copy contract can be
@@ -237,6 +240,13 @@ export function resolveTranscriptionView(props: TranscriptionStatusProps): Statu
     case "needs_admin":
       return {
         title: ADMIN_HELP,
+        details: [],
+        primary: { label: "Contact administrator", onClick: props.onContactAdmin },
+        alert: true,
+      };
+    case "unsupported_language":
+      return {
+        title: UNSUPPORTED_LANGUAGE_HELP,
         details: [],
         primary: { label: "Contact administrator", onClick: props.onContactAdmin },
         alert: true,

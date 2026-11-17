@@ -33,10 +33,11 @@ export const GROQ_DEFAULT_MODEL = "whisper-large-v3-turbo";
 export const OPENROUTER_STT_DEFAULT_MODEL = "openai/whisper-1";
 export const NO_SPEECH_THRESHOLD = 0.6;
 
-/** Model a provider runs on when it is not the local sidecar or AssemblyAI. */
-export function providerModel(provider: TranscriptionProvider, env: TranscriptionEnv): string {
+/** Model an OpenRouter or Groq request runs on; other providers pick their own. */
+export function providerModel(provider: TranscriptionProvider, env: TranscriptionEnv): string | undefined {
   if (provider === "openrouter") return env.OPENROUTER_STT_MODEL?.trim() || OPENROUTER_STT_DEFAULT_MODEL;
-  return GROQ_DEFAULT_MODEL;
+  if (provider === "groq") return GROQ_DEFAULT_MODEL;
+  return undefined;
 }
 
 /** Whether a provider has the credential it needs: a URL for local, an API key otherwise. */
@@ -104,6 +105,7 @@ export type TranscriptionErrorCode =
   | "unsupported_format"
   | "auth_error"
   | "provider_error"
+  | "unsupported_language"
   // Reserved for a recording revision or input-identity mismatch (durable
   // worker, PR 3). No current route emits it; the code exists so clients can
   // map it without a later protocol change.
@@ -302,6 +304,10 @@ export async function sendTranscription({
       timed = undefined;
       outcome = "no_speech";
     }
+  }
+  if (text === "") {
+    outcome = "no_speech";
+    timed = undefined;
   }
   return {
     text,

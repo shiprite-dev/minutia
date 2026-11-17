@@ -33,6 +33,7 @@ import {
   type TranscriptionResult,
 } from "./shared";
 
+export { providerModel } from "./shared";
 export {
   GROQ_BASE_URL,
   GROQ_DEFAULT_MODEL,
@@ -268,7 +269,7 @@ export async function transcribeAudio(
   const chain = selectChainForLanguage(baseChain, options.languageHint, env);
   if (chain.length === 0) {
     throw new TranscriptionError(
-      "provider_not_configured",
+      "unsupported_language",
       `No configured transcription provider supports ${normalizeLanguageHint(options.languageHint)}`
     );
   }
