@@ -2,7 +2,6 @@
 
 import * as React from "react";
 import {
-  keepPreviousData,
   useQuery,
   useMutation,
   useQueryClient,
@@ -19,6 +18,8 @@ import { seriesKeys } from "./use-series";
 // ---------------------------------------------------------------------------
 // Query key factory
 // ---------------------------------------------------------------------------
+type MeetingTranscript = Pick<Meeting, "transcript_raw" | "transcript_segments">;
+
 export const meetingKeys = {
   all: ["meetings"] as const,
   list: (seriesId: string) => ["meetings", seriesId] as const,
@@ -53,6 +54,18 @@ export function useMeetings(seriesId: string) {
 // ---------------------------------------------------------------------------
 export function useMeeting(id: string) {
   const supabase = createClient();
+  const queryClient = useQueryClient();
+
+  const fetchTranscript = async () => {
+    const { data, error } = await supabase
+      .from("meetings")
+      .select("transcript_raw, transcript_segments")
+      .eq("id", id)
+      .single();
+
+    if (error) throw error;
+    return data as MeetingTranscript;
+  };
 
   const detail = useQuery<
     Meeting & { issues: import("@/lib/types").Issue[]; decisions: import("@/lib/types").Decision[] }
@@ -70,6 +83,17 @@ export function useMeeting(id: string) {
       // Hide grace-window-deleted issues so the 2s poll cannot resurrect a row
       // the user just deleted while its Undo toast is still up.
       const meeting = data as any;
+      // The polled row leaves the transcript out. When the transcription state
+      // moves, the new transcript is cached before the new status is returned,
+      // so the page never sees a finished status next to the old transcript.
+      const previous = queryClient.getQueryData<Meeting>(meetingKeys.detail(id));
+      if (
+        previous &&
+        (previous.transcription_status !== meeting.transcription_status ||
+          previous.transcription_completed_at !== meeting.transcription_completed_at)
+      ) {
+        queryClient.setQueryData(meetingKeys.transcript(id), await fetchTranscript());
+      }
       return {
         ...meeting,
         issues: (meeting.issues ?? []).filter(
@@ -79,33 +103,18 @@ export function useMeeting(id: string) {
     },
   });
 
-  // The transcript is the heaviest part of the row, so the polled detail query
-  // leaves it out and it is refetched only when the transcription state moves.
-  const status = detail.data?.transcription_status ?? null;
-  const completedAt = detail.data?.transcription_completed_at ?? null;
-  const transcript = useQuery<Pick<Meeting, "transcript_raw" | "transcript_segments">>({
-    queryKey: [...meetingKeys.transcript(id), status, completedAt],
-    enabled: !!id && !!detail.data,
+  const transcript = useQuery<MeetingTranscript>({
+    queryKey: meetingKeys.transcript(id),
+    enabled: !!id,
     staleTime: Infinity,
-    placeholderData: keepPreviousData,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("meetings")
-        .select("transcript_raw, transcript_segments")
-        .eq("id", id)
-        .single();
-
-      if (error) throw error;
-      return data as Pick<Meeting, "transcript_raw" | "transcript_segments">;
-    },
+    queryFn: fetchTranscript,
   });
 
-  const ready = !!detail.data && (!!transcript.data || transcript.isError);
   const data = React.useMemo(
-    () => (ready ? { ...detail.data!, ...transcript.data } : undefined),
-    [ready, detail.data, transcript.data]
+    () => (detail.data && transcript.data ? { ...detail.data, ...transcript.data } : undefined),
+    [detail.data, transcript.data]
   );
-  return { ...detail, data, isLoading: detail.isLoading || (!!detail.data && !ready) };
+  return { ...detail, data, isLoading: detail.isLoading || (!!detail.data && !transcript.data) };
 }
 
 // ---------------------------------------------------------------------------
@@ -218,6 +227,8 @@ export function useStartOrJoinMeeting() {
 // ---------------------------------------------------------------------------
 const LIVE_POLL_MS = 2_000;
 const SETTLED_POLL_MS = 30_000;
+const JUST_ENDED_MS = 10 * 60_000;
+const RECORDING_WAIT_MS = 60 * 60_000;
 
 export function subscribeMeetingRefresh(
   queryClient: QueryClient,
@@ -233,6 +244,9 @@ export function subscribeMeetingRefresh(
     void queryClient.invalidateQueries({ queryKey: meetingKeys.detail(meetingId) });
     void queryClient.invalidateQueries({ queryKey: issueKeys.list(seriesId) });
     void queryClient.invalidateQueries({ queryKey: ["decisions"] });
+    if (queryClient.getQueryState(meetingKeys.transcript(meetingId))?.status === "error") {
+      void queryClient.invalidateQueries({ queryKey: meetingKeys.transcript(meetingId) });
+    }
   };
   let rowChangedWhileHidden = false;
   const refreshMeetingRow = () => {
@@ -241,19 +255,38 @@ export function subscribeMeetingRefresh(
     else void queryClient.invalidateQueries({ queryKey: meetingKeys.transcript(meetingId) });
   };
 
-  // A completed meeting with no transcription in flight changes rarely, so it
-  // polls slowly; anything else keeps the 2s loop the live page renders from.
-  let timer: number | undefined;
-  const schedule = () => {
+  // A completed meeting polls slowly only once nothing is on its way: no
+  // transcription in flight and no transcript still expected from a recording
+  // or a meeting that just ended. Anything else keeps the 2s loop.
+  const isSettled = () => {
     const meeting = queryClient.getQueryData<Meeting>(meetingKeys.detail(meetingId));
-    const settled =
-      meeting?.status === "completed" &&
-      meeting.transcription_status !== "pending" &&
-      meeting.transcription_status !== "processing";
+    const transcript = queryClient.getQueryState<MeetingTranscript>(meetingKeys.transcript(meetingId));
+    if (meeting?.status !== "completed" || transcript?.status !== "success") return false;
+    if (meeting.transcription_status === "pending" || meeting.transcription_status === "processing") {
+      return false;
+    }
+    if (transcript.data?.transcript_raw?.trim()) return true;
+    const sinceEnd = Date.now() - (meeting.completed_at ? Date.parse(String(meeting.completed_at)) : 0);
+    const recorded =
+      !!meeting.record_claimed_at ||
+      !!meeting.recording_started_at ||
+      !!meeting.audio_file_path ||
+      meeting.transcription_provider === "device";
+    return sinceEnd > JUST_ENDED_MS && !(recorded && sinceEnd < RECORDING_WAIT_MS);
+  };
+  let timer: number | undefined;
+  let settled = false;
+  const schedule = () => {
+    settled = isSettled();
     timer = window.setTimeout(tick, settled ? SETTLED_POLL_MS : LIVE_POLL_MS);
   };
   const tick = () => {
     refreshMeeting();
+    // The series detail feeds the page's live-meeting banner; refresh it on
+    // the slow cadence only, where a new live meeting is the likely change.
+    if (settled && visible()) {
+      void queryClient.invalidateQueries({ queryKey: seriesKeys.detail(seriesId), exact: true });
+    }
     schedule();
   };
   const onVisibilityChange = () => {
@@ -284,11 +317,18 @@ export function subscribeMeetingRefresh(
       refreshMeeting
     )
     .subscribe();
+  // Several mutations refresh the meeting only through this loop, so a write
+  // reconciles as soon as it settles instead of waiting for the next tick.
+  const unsubscribeMutations = queryClient.getMutationCache().subscribe((event) => {
+    if (event.type !== "updated") return;
+    if (event.action.type === "success" || event.action.type === "error") refreshMeeting();
+  });
   document.addEventListener("visibilitychange", onVisibilityChange);
   if (visible()) schedule();
 
   return () => {
     window.clearTimeout(timer);
+    unsubscribeMutations();
     document.removeEventListener("visibilitychange", onVisibilityChange);
     void supabase.removeChannel(channel);
   };

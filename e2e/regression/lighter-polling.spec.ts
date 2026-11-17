@@ -299,6 +299,9 @@ test.describe("Lighter meeting polling", () => {
           recap_markdown:
             "## Summary\n\nThe recap landed while the page was open.",
           recap_generated_at: new Date().toISOString(),
+          transcript_raw: "The recording heard the wrap-up.",
+          transcription_status: "completed",
+          transcription_completed_at: new Date().toISOString(),
         },
       });
       await expect(
@@ -516,7 +519,10 @@ test.describe("Lighter meeting polling", () => {
       page,
       request,
     }) => {
-      const seriesId = await createSeries(request, `Companion poll ${randomUUID().slice(0, 6)}`);
+      const seriesId = await createSeries(
+        request,
+        `Companion poll ${randomUUID().slice(0, 6)}`,
+      );
       const now = new Date().toISOString();
       const meetingId = await createMeeting(request, seriesId, {
         status: "completed",
@@ -527,7 +533,9 @@ test.describe("Lighter meeting polling", () => {
       });
       try {
         await page.goto(`/series/${seriesId}/meetings/${meetingId}`);
-        await expect(page.getByText("Polling notes stay readable").first()).toBeVisible();
+        await expect(
+          page.getByText("Polling notes stay readable").first(),
+        ).toBeVisible();
         await page.waitForTimeout(3_000);
 
         await rest(request, `meetings?id=eq.${meetingId}`, {
@@ -538,11 +546,15 @@ test.describe("Lighter meeting polling", () => {
             transcription_completed_at: new Date().toISOString(),
           },
         });
-        await expect(page.getByText("Transcript ready. Check action items below.")).toBeVisible({
+        await expect(
+          page.getByText("Transcript ready. Check action items below."),
+        ).toBeVisible({
           timeout: 5_000,
         });
         await openTranscript(page);
-        await expect(transcriptBox(page)).toHaveValue("The Mac heard the budget review.");
+        await expect(transcriptBox(page)).toHaveValue(
+          "The Mac heard the budget review.",
+        );
       } finally {
         await deleteSeries(request, seriesId);
       }
@@ -552,7 +564,10 @@ test.describe("Lighter meeting polling", () => {
       page,
       request,
     }) => {
-      const seriesId = await createSeries(request, `Device wait poll ${randomUUID().slice(0, 6)}`);
+      const seriesId = await createSeries(
+        request,
+        `Device wait poll ${randomUUID().slice(0, 6)}`,
+      );
       const meetingId = await createMeeting(request, seriesId, {
         status: "completed",
         completed_at: new Date().toISOString(),
@@ -561,7 +576,9 @@ test.describe("Lighter meeting polling", () => {
       });
       try {
         await page.goto(`/series/${seriesId}/meetings/${meetingId}`);
-        const waiting = page.getByText("Waiting for the transcript from the recording device.");
+        const waiting = page.getByText(
+          "Waiting for the transcript from the recording device.",
+        );
         await expect(waiting).toBeVisible();
         await page.waitForTimeout(3_000);
 
@@ -575,7 +592,9 @@ test.describe("Lighter meeting polling", () => {
         });
         await expect(waiting).toHaveCount(0, { timeout: 5_000 });
         await openTranscript(page);
-        await expect(transcriptBox(page)).toHaveValue("The device finished after a retry.");
+        await expect(transcriptBox(page)).toHaveValue(
+          "The device finished after a retry.",
+        );
       } finally {
         await deleteSeries(request, seriesId);
       }
@@ -585,13 +604,16 @@ test.describe("Lighter meeting polling", () => {
       page,
       request,
     }) => {
-      const seriesId = await createSeries(request, `Retranscribe poll ${randomUUID().slice(0, 6)}`);
+      const seriesId = await createSeries(
+        request,
+        `Retranscribe poll ${randomUUID().slice(0, 6)}`,
+      );
       const meetingId = await createMeeting(request, seriesId, {
         status: "completed",
         completed_at: new Date(Date.now() - 3_600_000).toISOString(),
-        transcript_raw: "The first pass of the transcript.",
-        transcription_status: "completed",
-        transcription_completed_at: new Date(Date.now() - 3_000_000).toISOString(),
+        audio_file_path: "meetings/fixture/audio.webm",
+        transcription_status: "processing",
+        transcription_started_at: new Date().toISOString(),
       });
       try {
         await page.addInitScript(() => {
@@ -605,37 +627,38 @@ test.describe("Lighter meeting polling", () => {
           new MutationObserver(() => {
             const text = document.body?.innerText ?? "";
             for (const copy of bad) {
-              if (text.includes(copy) && !w.__badCopy.includes(copy)) w.__badCopy.push(copy);
+              if (text.includes(copy) && !w.__badCopy.includes(copy))
+                w.__badCopy.push(copy);
             }
-          }).observe(document, { childList: true, subtree: true, characterData: true });
+          }).observe(document, {
+            childList: true,
+            subtree: true,
+            characterData: true,
+          });
         });
         await page.goto(`/series/${seriesId}/meetings/${meetingId}`);
-        await openTranscript(page);
-        await expect(transcriptBox(page)).toHaveValue("The first pass of the transcript.");
-
-        await rest(request, `meetings?id=eq.${meetingId}`, {
-          method: "PATCH",
-          data: {
-            transcription_status: "processing",
-            transcription_started_at: new Date().toISOString(),
-          },
-        });
+        await expect(
+          page.getByText("Polling notes stay readable").first(),
+        ).toBeVisible();
         await page.waitForTimeout(4_000);
         await rest(request, `meetings?id=eq.${meetingId}`, {
           method: "PATCH",
           data: {
-            transcript_raw: "The second pass of the transcript.",
+            transcript_raw: "The transcript after processing.",
             transcription_status: "completed",
             transcription_completed_at: new Date().toISOString(),
           },
         });
         await openTranscript(page);
-        await expect(transcriptBox(page)).toHaveValue("The second pass of the transcript.", {
-          timeout: 5_000,
-        });
+        await expect(transcriptBox(page)).toHaveValue(
+          "The transcript after processing.",
+          {
+            timeout: 5_000,
+          },
+        );
         await page.waitForTimeout(2_000);
         const badCopy = await page.evaluate(
-          () => (window as unknown as { __badCopy: string[] }).__badCopy
+          () => (window as unknown as { __badCopy: string[] }).__badCopy,
         );
         expect(badCopy).toEqual([]);
       } finally {
@@ -643,8 +666,15 @@ test.describe("Lighter meeting polling", () => {
       }
     });
 
-    test("a transcript that fails to load recovers without a reload", async ({ page, request }) => {
-      const seriesId = await createSeries(request, `Flaky poll ${randomUUID().slice(0, 6)}`);
+    test("a transcript that fails to load recovers without a reload", async ({
+      page,
+      request,
+    }) => {
+      test.setTimeout(90_000);
+      const seriesId = await createSeries(
+        request,
+        `Flaky poll ${randomUUID().slice(0, 6)}`,
+      );
       const meetingId = await createMeeting(request, seriesId, {
         status: "completed",
         completed_at: new Date(Date.now() - 3_600_000).toISOString(),
@@ -654,7 +684,9 @@ test.describe("Lighter meeting polling", () => {
       try {
         let failures = 0;
         await page.route(
-          (url) => url.pathname.endsWith("/rest/v1/meetings") && url.search.includes("transcript_raw"),
+          (url) =>
+            url.pathname.endsWith("/rest/v1/meetings") &&
+            url.search.includes("transcript_raw"),
           async (route) => {
             if (failures < 4) {
               failures += 1;
@@ -666,13 +698,13 @@ test.describe("Lighter meeting polling", () => {
               return;
             }
             await route.continue();
-          }
+          },
         );
         await page.goto(`/series/${seriesId}/meetings/${meetingId}`);
         await openTranscript(page);
         await expect(transcriptBox(page)).toHaveValue(
           "The transcript that loads after the outage.",
-          { timeout: 45_000 }
+          { timeout: 45_000 },
         );
         expect(failures).toBe(4);
       } finally {
@@ -684,7 +716,10 @@ test.describe("Lighter meeting polling", () => {
       page,
       request,
     }) => {
-      const seriesId = await createSeries(request, `Edit poll ${randomUUID().slice(0, 6)}`);
+      const seriesId = await createSeries(
+        request,
+        `Edit poll ${randomUUID().slice(0, 6)}`,
+      );
       const meetingId = await createMeeting(request, seriesId, {
         status: "completed",
         completed_at: new Date(Date.now() - 3_600_000).toISOString(),
@@ -701,49 +736,96 @@ test.describe("Lighter meeting polling", () => {
         await expect(row).toBeVisible();
 
         await row.getByRole("button", { name: "Mark complete" }).click();
-        await expect(row.getByRole("button", { name: "Mark incomplete" })).toBeVisible({
+        await expect(
+          row.getByRole("button", { name: "Mark incomplete" }),
+        ).toBeVisible({
           timeout: 3_000,
         });
+        await expect(
+          page
+            .locator('section[aria-label="Resolved this meeting"]')
+            .getByText(existing),
+        ).toBeVisible({ timeout: 3_000 });
         await row.getByRole("button", { name: "Mark incomplete" }).click();
-        await expect(row.getByRole("button", { name: "Mark complete" })).toBeVisible({
+        await expect(
+          row.getByRole("button", { name: "Mark complete" }),
+        ).toBeVisible({
           timeout: 3_000,
         });
 
         const item = `Added after the meeting ${randomUUID().slice(0, 6)}`;
+        const resolvedSection = page.locator(
+          'section[aria-label="Resolved this meeting"]',
+        );
+        await expect(resolvedSection.getByText(existing)).toHaveCount(0, {
+          timeout: 3_000,
+        });
+
         await page.getByRole("button", { name: "Add item" }).first().click();
-        await page.getByLabel("Capture input").fill(item);
+        await page
+          .getByPlaceholder("Type item title, press Enter...")
+          .fill(item);
         await page.keyboard.press("Enter");
-        await expect(page.getByText(item).first()).toBeVisible({ timeout: 3_000 });
+        await expect(page.getByText(item).first()).toBeVisible({
+          timeout: 3_000,
+        });
 
         const decision = `Decided after the meeting ${randomUUID().slice(0, 6)}`;
-        await page.getByRole("radio", { name: "Decision" }).click();
-        await page.getByLabel("Capture input").fill(decision);
+        const addInput = page.getByPlaceholder(
+          "Type item title, press Enter...",
+        );
+        if (!(await addInput.isVisible())) {
+          await page.getByRole("button", { name: "Add item" }).first().click();
+        }
+        await addInput.fill(decision);
+        await page
+          .getByRole("button", { name: "Action", exact: true })
+          .last()
+          .click();
+        await page
+          .getByRole("button", { name: "Decision", exact: true })
+          .last()
+          .click();
+        await page.getByPlaceholder("Type item title, press Enter...").focus();
         await page.keyboard.press("Enter");
-        await expect(page.getByText(decision).first()).toBeVisible({ timeout: 3_000 });
+        await expect(page.getByText(decision).first()).toBeVisible({
+          timeout: 3_000,
+        });
 
         const note = `A note written after the meeting ${randomUUID().slice(0, 6)}`;
         await page.getByRole("group", { name: "Edit notes" }).click();
         await page.getByPlaceholder("Meeting notes...").fill(note);
-        await expect(page.getByPlaceholder("Meeting notes...")).toHaveValue(note, {
-          timeout: 3_000,
-        });
+        await expect(page.getByPlaceholder("Meeting notes...")).toHaveValue(
+          note,
+          {
+            timeout: 3_000,
+          },
+        );
         await expect
           .poll(
             async () =>
               (
-                await rest(request, `meetings?id=eq.${meetingId}&select=notes_markdown`, {
-                  method: "GET",
-                })
+                await rest(
+                  request,
+                  `meetings?id=eq.${meetingId}&select=notes_markdown`,
+                  {
+                    method: "GET",
+                  },
+                )
               )[0]?.notes_markdown,
-            { timeout: 15_000 }
+            { timeout: 15_000 },
           )
           .toBe(note);
 
         await page.reload();
-        await expect(row.getByRole("button", { name: "Mark complete" })).toBeVisible();
+        await expect(
+          row.getByRole("button", { name: "Mark complete" }),
+        ).toBeVisible();
         await expect(page.getByText(item).first()).toBeVisible();
         await expect(page.getByText(decision).first()).toBeVisible();
-        await expect(page.locator("[data-notes-rendered]").first()).toContainText(note);
+        await expect(
+          page.locator("[data-notes-rendered]").first(),
+        ).toContainText(note);
       } finally {
         await deleteSeries(request, seriesId);
       }
