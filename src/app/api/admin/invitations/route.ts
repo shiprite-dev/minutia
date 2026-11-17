@@ -7,7 +7,7 @@ import {
   buildNewUserOrganizationInviteEmail,
 } from "@/lib/organization-invite-email";
 import { rejectCrossOrigin } from "@/lib/request-origin";
-import { requireCurrentOrgAdmin } from "@/lib/supabase/org-auth";
+import { requireCurrentOrgAdmin, requireSeriesInviter } from "@/lib/supabase/org-auth";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { isMemberInviteAllowed } from "@/lib/feature-access";
 import { inviteDelivery } from "@/lib/invitations";
@@ -19,6 +19,7 @@ const INVITE_UPGRADE_REQUIRED =
 const inviteSchema = z.object({
   email: z.string().email(),
   role: z.enum(["admin", "member"]).default("member"),
+  series_id: z.guid().optional(),
 });
 
 const revokeInvitationSchema = z.object({
@@ -75,11 +76,6 @@ export async function POST(request: NextRequest) {
   const jsonBody = requireJsonBody(request);
   if (jsonBody) return jsonBody;
 
-  const auth = await requireCurrentOrgAdmin();
-  if (!auth.authorized) {
-    return NextResponse.json({ error: auth.error }, { status: auth.status });
-  }
-
   let body: unknown;
   try {
     body = await request.json();
@@ -95,9 +91,18 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  const seriesId = parsed.data.series_id;
+  const auth = seriesId ? await requireSeriesInviter(seriesId) : await requireCurrentOrgAdmin();
+  if (!auth.authorized) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status });
+  }
+
   const supabase = createServiceRoleClient();
   const email = parsed.data.email.toLowerCase();
   const role = parsed.data.role;
+  if (role === "admin" && "isOrgAdmin" in auth && !auth.isOrgAdmin) {
+    return NextResponse.json({ error: "Only workspace admins can invite admins." }, { status: 403 });
+  }
 
   // Free workspaces are solo: adding a member requires the full-access
   // entitlement. No-op when feature gating is off (the self-host default).
@@ -108,7 +113,7 @@ export async function POST(request: NextRequest) {
     .single();
   if (!isMemberInviteAllowed(inviter?.has_full_access === true)) {
     return NextResponse.json(
-      { error: INVITE_UPGRADE_REQUIRED },
+      { error: INVITE_UPGRADE_REQUIRED, code: "INVITE_UPGRADE_REQUIRED" },
       { status: 403 }
     );
   }
@@ -168,8 +173,10 @@ export async function POST(request: NextRequest) {
 
   let acceptUrl: string;
   let emailMessage: Omit<MailMessage, "to">;
+  let inviteeId: string;
 
   if (existingProfile?.id) {
+    inviteeId = existingProfile.id;
     acceptUrl = absoluteAppUrl(request.url, "/settings");
     emailMessage = buildExistingUserOrganizationInviteEmail({
       organizationName: organization.name,
@@ -198,6 +205,7 @@ export async function POST(request: NextRequest) {
     if (!data.user?.id) {
       return NextResponse.json({ error: "Failed to create invite user" }, { status: 500 });
     }
+    inviteeId = data.user.id;
 
     const { error: memberError } = await supabase
       .from("organization_members")
@@ -227,6 +235,16 @@ export async function POST(request: NextRequest) {
       invitedEmail: email,
       acceptUrl,
     });
+  }
+
+  if (seriesId) {
+    const { error: participantError } = await supabase.from("series_participants").upsert(
+      { series_id: seriesId, user_id: inviteeId, role: "participant", invited_by: auth.userId },
+      { onConflict: "series_id,user_id", ignoreDuplicates: true }
+    );
+    if (participantError) {
+      return NextResponse.json({ error: participantError.message }, { status: 500 });
+    }
   }
 
   // The invite is already provisioned at this point. Email delivery is best-effort:
