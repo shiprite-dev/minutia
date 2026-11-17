@@ -32,7 +32,16 @@ export function daysSince(date: Date | string): number {
   return daysBetween(date, new Date());
 }
 
+function localDay(date: Date | string): Date {
+  if (typeof date === "string") {
+    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(date);
+    if (m) return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  }
+  const d = new Date(date);
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+
 export function isDateOverdue(date: Date | string | null): boolean {
   if (!date) return false;
-  return new Date(date) < new Date();
+  return localDay(date) < localDay(new Date());
 }

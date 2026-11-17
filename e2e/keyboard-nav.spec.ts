@@ -53,6 +53,7 @@ test.describe("Global key guard", () => {
     await expect(row).toHaveCount(1);
     const chip = row.getByRole("combobox", { name: /Status:/ });
     const before = (await chip.getAttribute("aria-label"))!;
+    const title = (await row.getByRole("link").first().textContent())!.trim();
 
     for (let i = 0; i < 80; i++) {
       if (await chip.evaluate((el) => el === document.activeElement)) break;
@@ -69,9 +70,22 @@ test.describe("Global key guard", () => {
     expect(page.url()).not.toContain("/issues/");
     await expect(chip).not.toHaveAttribute("aria-label", before);
 
-    await chip.click();
-    await row.getByRole("option", { name: before.replace("Status: ", ""), exact: true }).click();
-    await expect(chip).toHaveAttribute("aria-label", before);
+    await page.reload();
+    await expect(page.getByText("Outstanding items")).toBeVisible();
+    const reloaded = page.locator('[aria-label*=","]').filter({ hasText: title }).first();
+    await expect(reloaded.getByRole("combobox", { name: /Status:/ })).not.toHaveAttribute("aria-label", before);
+
+    if (process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      await fetch(`${process.env.SUPABASE_URL ?? "http://127.0.0.1:54321"}/rest/v1/issues?title=eq.${encodeURIComponent(title)}`, {
+        method: "PATCH",
+        headers: {
+          apikey: process.env.SUPABASE_SERVICE_ROLE_KEY,
+          Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ status: before.replace("Status: ", "").toLowerCase().replace(" ", "_") }),
+      });
+    }
   });
 
   test("Esc closes the due-date popover first and only a second Esc leaves the issue", async ({ page }) => {

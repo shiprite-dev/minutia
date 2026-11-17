@@ -59,7 +59,9 @@ import {
 import { HintTooltip } from "@/components/minutia/hint-tooltip";
 import { cn } from "@/lib/utils";
 import { formatShortDate, daysBetween } from "@/lib/date-utils";
-import { isOpen, isOverdue, byManualOrder } from "@/lib/issue-utils";
+import { isOpen, isOverdue, byManualOrder, formatIssueKey } from "@/lib/issue-utils";
+import { shouldIgnoreGlobalKey } from "@/lib/keyboard";
+import { LoadError, failedQueries } from "@/components/minutia/load-error";
 import { isEditableTarget } from "@/components/minutia/command-palette";
 import { useWidgetStore } from "@/lib/stores/widget-store";
 import { useUIStore } from "@/lib/stores/ui-store";
@@ -145,7 +147,7 @@ function outstandingListSort(a: Issue, b: Issue): number {
 function matchesQuery(issue: Issue, query: string): boolean {
   const needle = query.trim().toLowerCase();
   if (!needle) return true;
-  const key = `MIN-${issue.issue_number}`;
+  const key = formatIssueKey(issue);
   return (
     issue.title.toLowerCase().includes(needle) ||
     key.toLowerCase().includes(needle) ||
@@ -237,7 +239,7 @@ function HeroWidget({
             </p>
             {avgLife > 0 && (
               <p className="text-xs text-ink-4">
-                avg life <span className="font-semibold text-ink-2">{avgLife} days</span>
+                <span className="font-semibold text-ink-2">{avgLife}</span> logged per open item
               </p>
             )}
           </div>
@@ -324,7 +326,7 @@ function NextMeetingWidget({
       <div className="flex items-center gap-2 mb-4">
         <span className="inline-flex items-center gap-1.5 text-xs font-medium text-accent">
           <span className="size-1.5 rounded-full bg-accent animate-pulse" />
-          Next meeting
+          {eventTime ? "Next meeting" : "Latest series"}
         </span>
       </div>
       <h3 className="font-display text-lg font-semibold text-ink mb-1 break-words">
@@ -352,7 +354,7 @@ function NextMeetingWidget({
       )}
       {nextSeries.open_issues_count > 0 && (
         <p className="text-sm text-ink-2 mb-5">
-          <span className="text-accent font-medium"><span className="font-mono">{nextSeries.open_issues_count}</span> items pending</span> from last meeting.
+          <span className="text-accent font-medium"><span className="font-mono">{nextSeries.open_issues_count}</span> open items</span> in this series.
         </p>
       )}
       <div className="flex items-center gap-3">
@@ -450,8 +452,7 @@ function OutstandingWidget({
 
   React.useEffect(() => {
     function handleKey(e: KeyboardEvent) {
-      const tag = (e.target as HTMLElement).tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      if (shouldIgnoreGlobalKey(e)) return;
       // Don't let j/k/arrow nav fight a keyboard drag-reorder in progress.
       if (activeId) return;
 
@@ -864,7 +865,7 @@ function IssueRow({
         ref={ref}
         initial={{ opacity: 0, x: 20 }}
         animate={{ opacity: 1, x: 0 }}
-        transition={{ delay: index * 0.06, duration: 0.32, ease: [0.2, 0.8, 0.2, 1] }}
+        transition={{ delay: Math.min(index, 8) * 0.06, duration: 0.32, ease: [0.2, 0.8, 0.2, 1] }}
         data-focused={focused || undefined}
         aria-label={`${issue.title}, ${STATUS_CONFIG[issue.status].label}${overdue ? ", overdue" : ""}`}
         className={cn(
@@ -1313,9 +1314,13 @@ function WidgetRenderer({
 
 export default function Dashboard() {
   const router = useRouter();
-  const { data: issues, isLoading: issuesLoading } = useIssues();
-  const { data: seriesList, isLoading: seriesLoading } = useSeries();
-  const { data: meetings, isLoading: meetingsLoading } = useAllMeetings();
+  const issuesQuery = useIssues();
+  const seriesQuery = useSeries();
+  const meetingsQuery = useAllMeetings();
+  const { data: issues, isLoading: issuesLoading } = issuesQuery;
+  const { data: seriesList, isLoading: seriesLoading } = seriesQuery;
+  const { data: meetings, isLoading: meetingsLoading } = meetingsQuery;
+  const failed = failedQueries(issuesQuery, seriesQuery, meetingsQuery);
   const { data: allDecisions } = useDecisions(undefined, undefined, true, 5);
   const updateStatus = useUpdateIssueStatus();
   const widgets = useWidgetStore((s) => s.widgets);
@@ -1362,7 +1367,8 @@ export default function Dashboard() {
   };
 
   const widgetIds = React.useMemo(() => widgets.map((w) => w.id), [widgets]);
-  const isFirstRun = !isLoading && (seriesList?.length ?? 0) === 0 && (issues?.length ?? 0) === 0;
+  const isFirstRun =
+    !isLoading && failed.length === 0 && !!seriesList && !!issues && seriesList.length === 0 && issues.length === 0;
 
   return (
     <div className="min-h-screen bg-paper" data-tour="oil-board">
@@ -1379,7 +1385,9 @@ export default function Dashboard() {
             <AddWidgetButton />
           </div>
         )}
-        {isLoading ? (
+        {failed.length > 0 ? (
+          <LoadError onRetry={() => failed.forEach((q) => q.refetch())} />
+        ) : isLoading ? (
           <DashboardSkeleton />
         ) : isFirstRun ? (
           <Empty className="mt-12">

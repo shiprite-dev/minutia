@@ -59,6 +59,7 @@ export function CaptureInput({ onSubmit, onCancel }: CaptureInputProps) {
     }
     if (e.key === "Escape") {
       e.preventDefault();
+      setText("");
       onCancel?.();
     }
   }

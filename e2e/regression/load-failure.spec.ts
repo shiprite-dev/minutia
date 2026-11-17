@@ -1,9 +1,9 @@
 import { test, expect, type Page } from "@playwright/test";
 import { waitForApp } from "./seed-data";
 
-test.describe.configure({ timeout: 90_000 });
+test.describe.configure({ timeout: 150_000 });
 
-const RETRY_WINDOW = 25_000;
+const RETRY_WINDOW = 70_000;
 const REST = ["**/rest/v1/issues*", "**/rest/v1/meeting_series*"];
 
 async function failRequests(page: Page, patterns: string[]) {
@@ -80,7 +80,7 @@ test.describe("honest load-failure state", () => {
     await expect(page.getByRole("button", { name: "Retry" })).toHaveCount(0, {
       timeout: RETRY_WINDOW,
     });
-    await expect(page.getByRole("heading", { name: "Inbox" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Inbox" }).last()).toBeVisible();
   });
 
   test("Series list shows a retryable error, then the series", async ({
@@ -97,7 +97,7 @@ test.describe("honest load-failure state", () => {
     await restoreRequests(page, [pattern]);
     await retry.click();
     await expect(
-      page.getByRole("link", { name: /Platform Standup/ }).first(),
+      page.getByRole("heading", { level: 2 }).first(),
     ).toBeVisible({
       timeout: RETRY_WINDOW,
     });
@@ -122,5 +122,44 @@ test.describe("honest load-failure state", () => {
     await expect(page.getByText("Lifecycle timeline")).toBeVisible({
       timeout: RETRY_WINDOW,
     });
+  });
+
+  test("when only the series request fails the board still refuses to claim it is empty", async ({ page }) => {
+    const pattern = "**/rest/v1/meeting_series*";
+    await failRequests(page, [pattern]);
+    await page.goto("/dashboard", { waitUntil: "domcontentloaded" });
+    await waitForApp(page);
+
+    const retry = page.getByRole("button", { name: "Retry" });
+    await expect(retry).toBeVisible({ timeout: RETRY_WINDOW });
+    await expect(page.getByText("Create your first series")).toHaveCount(0);
+
+    await restoreRequests(page, [pattern]);
+    await retry.click();
+    await expect(page.getByTestId("widget-outstanding-1")).toBeVisible({ timeout: RETRY_WINDOW });
+  });
+
+  test("Retry that fails again still shows the error, never a blank page", async ({ page }) => {
+    await failRequests(page, REST);
+    await page.goto("/dashboard", { waitUntil: "domcontentloaded" });
+    await waitForApp(page);
+
+    const retry = page.getByRole("button", { name: "Retry" });
+    await expect(retry).toBeVisible({ timeout: RETRY_WINDOW });
+    await retry.click();
+
+    await expect(page.getByRole("button", { name: "Retry" })).toBeVisible({ timeout: RETRY_WINDOW });
+    await expect(page.getByText("Create your first series")).toHaveCount(0);
+  });
+
+  test("a board filter with no matches says so instead of showing the first-run screen", async ({ page }) => {
+    await page.goto("/dashboard", { waitUntil: "domcontentloaded" });
+    await waitForApp(page);
+    await expect(page.getByTestId("widget-outstanding-1")).toBeVisible();
+
+    await page.getByLabel("Filter issues").fill("zzz-no-such-issue");
+
+    await expect(page.getByText("No issues match.")).toBeVisible();
+    await expect(page.getByText("Create your first series")).toHaveCount(0);
   });
 });

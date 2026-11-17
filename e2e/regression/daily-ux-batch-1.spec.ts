@@ -113,7 +113,7 @@ test.describe("daily UX batch 1", () => {
     await expect(page.getByText("from last meeting")).toHaveCount(0);
     await expect(page.getByText("Next meeting")).toHaveCount(0);
     await expect(page.getByText("Latest series").first()).toBeVisible();
-    await expect(page.getByText(/raised per open item/).first()).toBeVisible();
+    await expect(page.getByText(/logged per open item/).first()).toBeVisible();
   });
 
   test("Esc in live capture clears the typed text", async ({

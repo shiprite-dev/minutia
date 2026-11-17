@@ -1,5 +1,7 @@
 "use client";
 
+import { shouldIgnoreGlobalKey } from "@/lib/keyboard";
+import { LoadError, failedQueries } from "@/components/minutia/load-error";
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
@@ -231,6 +233,14 @@ function InlineEditText({
 // Issue Detail Content
 // ---------------------------------------------------------------------------
 
+const NOT_FOUND_CODES = ["PGRST116", "22P02"];
+
+function historyDepth(): number {
+  const nav = (window as unknown as { navigation?: { canGoBack: boolean } }).navigation;
+  if (nav) return nav.canGoBack ? 1 : 0;
+  return window.history.length - 1;
+}
+
 interface IssueDetailContentProps {
   issueId: string;
 }
@@ -238,7 +248,11 @@ interface IssueDetailContentProps {
 export function IssueDetailContent({ issueId }: IssueDetailContentProps) {
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { data: issue, isLoading, isError } = useIssue(issueId);
+  const issueQuery = useIssue(issueId);
+  const { data: issue, isLoading, isError } = issueQuery;
+  const loadFailed =
+    failedQueries(issueQuery).length > 0 &&
+    !NOT_FOUND_CODES.includes((issueQuery.error as { code?: string } | null)?.code ?? "");
   const updateIssue = useUpdateIssue();
   const updateIssueStatus = useUpdateIssueStatus();
   const deleteIssue = useDeleteIssue();
@@ -253,8 +267,7 @@ export function IssueDetailContent({ issueId }: IssueDetailContentProps) {
 
   React.useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
-      const tag = (e.target as HTMLElement).tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      if (shouldIgnoreGlobalKey(e)) return;
       if (e.metaKey || e.ctrlKey || e.altKey) return;
 
       switch (e.key) {
@@ -264,7 +277,8 @@ export function IssueDetailContent({ issueId }: IssueDetailContentProps) {
           break;
         case "Escape":
           e.preventDefault();
-          router.back();
+          if (historyDepth() > 0) router.back();
+          else router.push("/dashboard");
           break;
         case "r":
           if (issue) {
@@ -318,6 +332,14 @@ export function IssueDetailContent({ issueId }: IssueDetailContentProps) {
             <Skeleton className="h-16 w-full" />
           </div>
         </div>
+      </div>
+    );
+  }
+
+  if (loadFailed) {
+    return (
+      <div className="min-h-full bg-paper">
+        <LoadError onRetry={() => issueQuery.refetch()} />
       </div>
     );
   }
@@ -749,7 +771,7 @@ function TimelineUpdateNode({
       animate={{ opacity: 1, y: 0 }}
       transition={{
         duration: 0.4,
-        delay: index * 0.09,
+        delay: Math.min(index, 8) * 0.09,
         ease: [0.2, 0.8, 0.2, 1],
       }}
       className="relative pl-8 pb-8"
