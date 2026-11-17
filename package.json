@@ -53,6 +53,7 @@
     "test:audio-segments": "node scripts/verify-audio-segments.test.mjs",
     "test:transcription": "node --test scripts/verify-transcription-client.test.mjs",
     "test:transcription-budget": "node --test scripts/verify-transcription-budget.test.mjs",
+    "test:transcription-language": "node --test scripts/verify-transcription-language-routing.test.mjs",
     "test:diarization": "node --test scripts/verify-diarization.test.mjs",
     "test:channels": "node --test scripts/verify-channels.test.mjs",
     "test:context-extraction": "node --test scripts/verify-context-extraction.test.mjs",
