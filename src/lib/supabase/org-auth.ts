@@ -73,7 +73,10 @@ export async function requireSeriesInviter(seriesId: string): Promise<SeriesInvi
     .select("role")
     .eq("organization_id", organizationId)
     .eq("user_id", user.id)
-    .single();
+    .maybeSingle();
+  if (!membership && profile?.role !== "admin") {
+    return { authorized: false, status: 403, error: "Not a member of this workspace" };
+  }
   const isOrgAdmin = membership?.role === "admin" || profile?.role === "admin";
   if (!isOrgAdmin && !(await userManagesSeries(seriesId, user.id))) {
     return { authorized: false, status: 403, error: "Only people who run this series can invite to it" };

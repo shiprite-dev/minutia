@@ -81,6 +81,19 @@ test.describe("Login Page", () => {
     await expect(page.getByRole("link", { name: /GitHub/i })).toBeVisible();
   });
 
+  test("declining Google consent returns to sign in with a clear message", async ({ page }) => {
+    await page.goto(
+      "/auth/callback?error=access_denied&error_description=The+user+denied+access&next=/"
+    );
+    await page.waitForURL(/\/login/);
+    await expect(
+      page.getByRole("alert").filter({
+        hasText: "Google sign-in was cancelled or failed. Try again, or use your email.",
+      })
+    ).toBeVisible();
+    await expect(page.getByLabel("Email address")).toBeVisible();
+  });
+
   test("password auth controls require credentials", async ({ page }) => {
     await page.goto("/login");
     const signInButton = page.getByRole("button", { name: "Sign in", exact: true });
@@ -186,16 +199,15 @@ test.describe("Login Page", () => {
   });
 });
 
-// Public sign-up is gated by NEXT_PUBLIC_ENABLE_PUBLIC_SIGNUP (managed cloud
-// only). When off (self-host default, and CI), the dedicated /signup screen is
-// unreachable and the login page exposes no sign-up entry point.
+// Public sign-up and Google auth are managed-cloud only. This server runs the
+// self-host defaults; managed-cloud-signup.spec.ts covers the flags-on surface.
 const PUBLIC_SIGNUP_ENABLED =
   process.env.NEXT_PUBLIC_ENABLE_PUBLIC_SIGNUP === "true";
 
 test.describe("Sign Up", () => {
   test.use({ storageState: { cookies: [], origins: [] } });
 
-  test("self-host: /signup is unreachable and login shows no sign-up entry", async ({
+  test("self-host: /signup is unreachable and login shows no sign-up or Google entry", async ({
     page,
   }) => {
     test.skip(PUBLIC_SIGNUP_ENABLED, "Public sign-up is enabled in this env");
@@ -203,78 +215,19 @@ test.describe("Sign Up", () => {
     await page.goto("/signup");
     await page.waitForURL(/\/login/, { timeout: 10000 });
 
+    await expect(page.getByLabel("Email address")).toBeVisible();
     await expect(
       page.getByRole("link", { name: /create an account/i })
     ).toHaveCount(0);
     await expect(
       page.getByRole("button", { name: "Create account" })
     ).toHaveCount(0);
-  });
-
-  test("managed cloud: prominent sign-up link opens a dedicated screen", async ({
-    page,
-  }) => {
-    test.skip(!PUBLIC_SIGNUP_ENABLED, "Public sign-up is disabled in this env");
-
-    await page.goto("/login");
-    const signUpLink = page.getByRole("link", { name: /create an account/i });
-    await expect(signUpLink).toBeVisible();
-    await signUpLink.click();
-
-    await page.waitForURL(/\/signup/, { timeout: 10000 });
-    await expect(page.getByRole("heading", { name: "minutia" })).toBeVisible();
-    await expect(page.getByLabel("Name")).toBeVisible();
-    await expect(page.getByLabel("Email address")).toBeVisible();
-    await expect(page.getByLabel("Password")).toBeVisible();
     await expect(
-      page.getByRole("button", { name: "Create account" })
-    ).toBeVisible();
-
-    // Back link returns to login.
-    await page.getByRole("link", { name: /sign in/i }).click();
-    await page.waitForURL(/\/login/, { timeout: 10000 });
-  });
-
-  test("managed cloud: create account requires a valid email + 8-char password", async ({
-    page,
-  }) => {
-    test.skip(!PUBLIC_SIGNUP_ENABLED, "Public sign-up is disabled in this env");
-
-    await page.goto("/signup");
-    const createButton = page.getByRole("button", { name: "Create account" });
-    await expect(createButton).toBeDisabled();
-
-    await page.getByLabel("Email address").fill("new-user@example.com");
-    await expect(createButton).toBeDisabled();
-
-    await page.getByLabel("Password").fill("short");
-    await expect(createButton).toBeDisabled();
-
-    await page.getByLabel("Password").fill("password123");
-    await expect(createButton).toBeEnabled();
-  });
-
-  test("managed cloud: signup reaches Supabase auth without a fetch failure", async ({
-    page,
-  }) => {
-    test.skip(!PUBLIC_SIGNUP_ENABLED, "Public sign-up is disabled in this env");
-
-    const signupFailures: string[] = [];
-    page.on("requestfailed", (request) => {
-      if (request.url().includes("/auth/v1/signup")) {
-        signupFailures.push(request.failure()?.errorText ?? "unknown failure");
-      }
-    });
-
-    await page.goto("/signup");
-    await page.getByLabel("Email address").fill(`signup-${Date.now()}@example.com`);
-    await page.getByLabel("Password").fill("password123");
-    await page.getByRole("button", { name: "Create account" }).click();
-
-    // Either auto-confirm redirect or the "check your email" beat, but never a
-    // browser-level fetch failure.
-    await expect(page.getByText("Failed to fetch")).toHaveCount(0);
-    expect(signupFailures).toEqual([]);
+      page.getByRole("button", { name: "Continue with Google" })
+    ).toHaveCount(0);
+    await expect(page.getByText("Also connects your calendar")).toHaveCount(0);
+    await expect(page.getByText("or", { exact: true })).toHaveCount(0);
+    await expect(page.getByText("or continue with")).toHaveCount(0);
   });
 });
 

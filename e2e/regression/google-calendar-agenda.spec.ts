@@ -1,7 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { test, expect, type APIRequestContext } from "@playwright/test";
 import { waitForApp } from "./seed-data";
-import { syncCalendarAgenda } from "../../src/lib/google-calendar-agenda-sync";
+import { startCalendarAgendaEvent, syncCalendarAgenda } from "../../src/lib/google-calendar-agenda-sync";
+import { syncCalendarAgendaForUser } from "../../src/lib/google-calendar-agenda-service";
+import { storeTokens } from "../../src/lib/google-calendar";
 import type { NormalizedGoogleCalendarEvent } from "../../src/lib/google-calendar-sync";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "http://127.0.0.1:54321";
@@ -357,6 +359,180 @@ test.describe("Google Calendar agenda", () => {
       await rest(request, `meeting_series?id=eq.${seriesId}`, {
         method: "DELETE",
       }).catch(() => undefined);
+    }
+  });
+});
+test.describe("Google Calendar agenda sync", () => {
+  test("one-off meetings stay in the agenda and startable, and a cancelled recurring instance leaves the agenda while its meeting and items stay", async ({
+    request,
+  }) => {
+
+    process.env.GOOGLE_TOKEN_ENCRYPTION_KEY ??= Buffer.alloc(32, 7).toString(
+      "base64",
+    );
+    const orgId = await getSeedWorkspaceId(request);
+    const runId = randomUUID().slice(0, 8);
+    const createdRes = await request.post(
+      `${SUPABASE_URL}/auth/v1/admin/users`,
+      {
+        headers: serviceHeaders(),
+        data: {
+          email: `agenda-${runId}@example.com`,
+          password: "password123",
+          email_confirm: true,
+        },
+      },
+    );
+    expect(createdRes.ok()).toBeTruthy();
+    const created = await createdRes.json();
+    const userId = (created.id ?? created.user?.id) as string;
+
+    const at = (days: number, hour: number) => {
+      const date = new Date(Date.now() + days * 86_400_000);
+      date.setUTCHours(hour, 0, 0, 0);
+      return date.toISOString();
+    };
+    const oneOff = {
+      id: `oneoff-${runId}`,
+      summary: `Coffee with Sam ${runId}`,
+      status: "confirmed",
+      start: { dateTime: at(1, 10) },
+      end: { dateTime: at(1, 11) },
+    };
+    const weeklyInstance = {
+      id: `weekly-${runId}_1`,
+      recurringEventId: `weekly-${runId}`,
+      originalStartTime: { dateTime: at(2, 10) },
+      summary: `Weekly sync ${runId}`,
+      status: "confirmed",
+      start: { dateTime: at(2, 10) },
+      end: { dateTime: at(2, 11) },
+    };
+
+    const nextWeekInstance = {
+      ...weeklyInstance,
+      id: `weekly-${runId}_2`,
+      originalStartTime: { dateTime: at(9, 10) },
+      start: { dateTime: at(9, 10) },
+      end: { dateTime: at(9, 11) },
+    };
+
+    let googleEvents: unknown[] = [oneOff, weeklyInstance, nextWeekInstance];
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) =>
+      String(input).startsWith("https://www.googleapis.com/calendar/v3/")
+        ? new Response(JSON.stringify({ items: googleEvents }), { status: 200 })
+        : realFetch(input, init)) as typeof fetch;
+
+    try {
+      await storeTokens(userId, "access", "refresh", 3600, "solo@example.com", [
+        "https://www.googleapis.com/auth/calendar.readonly",
+      ]);
+
+      const first = await syncCalendarAgendaForUser({
+        userId,
+        organizationId: orgId,
+      });
+      const titles = first.events.map((event) => event.title);
+      expect(titles).toContain(oneOff.summary);
+      expect(titles).toContain(weeklyInstance.summary);
+
+      const coffee = first.events.find(
+        (event) => event.title === oneOff.summary,
+      )!;
+      const started = await startCalendarAgendaEvent({
+        userId,
+        calendarEventId: coffee.id,
+      });
+      expect(started.captureUrl).toBe(
+        `/series/${coffee.seriesId}/meetings/${coffee.meetingId}`,
+      );
+      const [live] = await rest(
+        request,
+        `meetings?id=eq.${coffee.meetingId}&select=status`,
+      );
+      expect(live.status).toBe("live");
+
+      const weekly = first.events.find(
+        (event) => event.title === weeklyInstance.summary,
+      )!;
+      const nextWeek = first.events.find(
+        (event) => Date.parse(event.startAt) === Date.parse(nextWeekInstance.start.dateTime)
+      )!;
+      await rest(request, "issues", {
+        method: "POST",
+        data: {
+          series_id: nextWeek.seriesId,
+          raised_in_meeting_id: nextWeek.meetingId,
+          title: `Bring the roadmap ${runId}`,
+          category: "action",
+          status: "open",
+        },
+      });
+
+      googleEvents = [
+        { ...weeklyInstance, status: "cancelled" },
+        { ...nextWeekInstance, status: "cancelled" },
+      ];
+      const second = await syncCalendarAgendaForUser({
+        userId,
+        organizationId: orgId,
+      });
+
+      expect(second.events.map((event) => event.title)).toEqual([
+        oneOff.summary,
+      ]);
+      const kept = await rest(
+        request,
+        `meetings?id=in.(${weekly.meetingId},${nextWeek.meetingId})&select=id`,
+      );
+      expect(kept).toHaveLength(2);
+      const keptItems = await rest(
+        request,
+        `issues?raised_in_meeting_id=eq.${nextWeek.meetingId}&select=title`
+      );
+      expect(keptItems).toEqual([{ title: `Bring the roadmap ${runId}` }]);
+
+      const [{ series_id: weeklySeriesId }] = await rest(
+        request,
+        `meetings?id=eq.${weekly.meetingId}&select=series_id`,
+      );
+      await rest(request, "meetings", {
+        method: "POST",
+        data: {
+          series_id: weeklySeriesId,
+          sequence_number: 4,
+          title: `Ad hoc catch-up ${runId}`,
+          date: at(3, 0).slice(0, 10),
+          status: "completed",
+          notes_markdown: "",
+        },
+      });
+      const thirdInstance = {
+        ...weeklyInstance,
+        id: `weekly-${runId}_3`,
+        originalStartTime: { dateTime: at(11, 10) },
+        start: { dateTime: at(11, 10) },
+        end: { dateTime: at(11, 11) },
+      };
+      googleEvents = [thirdInstance];
+      const third = await syncCalendarAgendaForUser({
+        userId,
+        organizationId: orgId,
+      });
+      expect(
+        third.events.some(
+          (event) => Date.parse(event.startAt) === Date.parse(thirdInstance.start.dateTime),
+        ),
+      ).toBe(true);
+    } finally {
+      globalThis.fetch = realFetch;
+      await rest(request, `meeting_series?owner_id=eq.${userId}`, {
+        method: "DELETE",
+      }).catch(() => undefined);
+      await request.delete(`${SUPABASE_URL}/auth/v1/admin/users/${userId}`, {
+        headers: serviceHeaders(),
+      });
     }
   });
 });

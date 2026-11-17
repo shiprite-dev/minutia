@@ -156,23 +156,14 @@ export default function SettingsPage() {
                 </div>
                 <div>
                   <p className="text-sm font-medium text-ink">Google Workspace</p>
-                  {gcalStatus?.connected ? (
-                    <>
-                      <p className="text-xs text-ink-3">{gcalStatus.googleEmail}</p>
-                      {!gcalStatus.directoryConnected && (
-                        <p className="text-xs text-ink-3">
-                          Reconnect to enable directory assignment.
-                        </p>
-                      )}
-                    </>
-                  ) : (
-                    <p className="text-xs text-ink-3">
-                      Sync calendar meetings and directory assignees.
-                    </p>
-                  )}
+                  <p className="text-xs text-ink-3">
+                    {gcalStatus?.connected
+                      ? gcalStatus.googleEmail
+                      : "Sync your recurring calendar meetings."}
+                  </p>
                 </div>
               </div>
-              {gcalStatus?.connected && gcalStatus.directoryConnected ? (
+              {gcalStatus?.connected ? (
                 <Button
                   variant="outline"
                   size="sm"
@@ -181,10 +172,6 @@ export default function SettingsPage() {
                 >
                   <Unplug className="size-3.5" />
                   {disconnectGoogle.isPending ? "Disconnecting..." : "Disconnect"}
-                </Button>
-              ) : gcalStatus?.connected ? (
-                <Button variant="outline" size="sm" asChild>
-                  <a href="/api/auth/google">Reconnect</a>
                 </Button>
               ) : (
                 <Button variant="outline" size="sm" asChild>
