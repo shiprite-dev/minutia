@@ -153,6 +153,7 @@ export interface GoogleCalendarAgendaItem {
 }
 
 export interface GoogleCalendarStatus {
+  configured: boolean;
   connected: boolean;
   directoryConnected: boolean;
   googleEmail: string | null;

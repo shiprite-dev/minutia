@@ -69,7 +69,7 @@ export function OnboardingWizard({
           <span className="inline-flex size-12 items-center justify-center rounded-full bg-accent/10 font-display text-xl font-bold text-accent">
             m
           </span>
-          <h1 className="mt-4 font-display text-2xl font-semibold text-ink">
+          <h1 className="mt-4 font-display text-2xl font-semibold break-words text-ink">
             {knownName
               ? `Welcome to Minutia, ${knownName}`
               : "Welcome to Minutia"}
@@ -89,6 +89,7 @@ export function OnboardingWizard({
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Your name"
+              maxLength={100}
               autoFocus
               className="h-11 rounded-xl"
             />
@@ -96,27 +97,29 @@ export function OnboardingWizard({
         )}
 
         <ul className="mt-8 divide-y divide-rule rounded-2xl border border-rule bg-card">
-          <li className="flex flex-wrap items-center gap-x-4 gap-y-3 p-4">
-            <CalendarDays className="size-5 shrink-0 text-ink-3" />
-            <div className="min-w-0 flex-1 basis-48">
-              <p className="text-sm font-medium text-ink">Google Calendar</p>
-              <p className="text-xs text-ink-3">
-                {calendar?.connected
-                  ? "Google Calendar connected"
-                  : "Brings in your meetings so you never set them up by hand."}
-              </p>
-            </div>
-            {calendar?.connected ? (
-              <Check aria-hidden className="size-5 text-accent" />
-            ) : (
-              <Button asChild variant="outline" size="sm">
-                <a href="/api/auth/google">Connect Google Calendar</a>
-              </Button>
-            )}
-          </li>
+          {calendar?.configured && (
+            <li className="flex flex-wrap items-center gap-x-4 gap-y-3 p-4">
+              <CalendarDays className="size-5 shrink-0 text-ink-3" />
+              <div className="min-w-0 flex-1 basis-40">
+                <p className="text-sm font-medium text-ink">Google Calendar</p>
+                <p className="text-xs text-ink-3">
+                  {calendar.connected
+                    ? "Google Calendar connected"
+                    : "Brings in your meetings so you never set them up by hand."}
+                </p>
+              </div>
+              {calendar.connected ? (
+                <Check aria-hidden className="size-5 text-accent" />
+              ) : (
+                <Button asChild variant="outline" size="sm">
+                  <a href="/api/auth/google">Connect Google Calendar</a>
+                </Button>
+              )}
+            </li>
+          )}
           <li className="flex flex-wrap items-center gap-x-4 gap-y-3 p-4">
             <Laptop className="size-5 shrink-0 text-ink-3" />
-            <div className="min-w-0 flex-1 basis-48">
+            <div className="min-w-0 flex-1 basis-40">
               <p className="text-sm font-medium text-ink">Get the Mac app</p>
               <p className="text-xs text-ink-3">
                 Records your meetings and transcribes them on your Mac.
@@ -136,7 +139,7 @@ export function OnboardingWizard({
           disabled={pending || (!knownName && !name.trim())}
           className="mt-6 h-11 w-full rounded-xl"
         >
-          Continue
+          {pending ? "Finishing..." : "Continue"}
         </Button>
         <button
           type="button"

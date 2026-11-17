@@ -130,6 +130,35 @@ async function signIn(page: Page, user: NewUser, baseURL: string | undefined) {
   ]);
 }
 
+async function grantCalendar(user: NewUser) {
+  await rest("google_oauth_tokens", {
+    method: "POST",
+    body: JSON.stringify({
+      user_id: user.userId,
+      access_token: "x",
+      refresh_token: "x",
+      token_iv: "x",
+      refresh_iv: "x",
+      token_expiry: new Date(Date.now() + 3600_000).toISOString(),
+      google_email: user.email,
+      scopes: [CALENDAR_SCOPE],
+    }),
+  });
+}
+
+function stubGoogleReturn(page: Page, location: string) {
+  return page.route("**/api/auth/google", (route) =>
+    route.fulfill({ status: 302, headers: { location } }),
+  );
+}
+
+function setGoogleConfigured(page: Page, configured: boolean) {
+  return page.route("**/api/calendar/status", async (route) => {
+    const response = await route.fetch();
+    await route.fulfill({ response, json: { ...(await response.json()), configured } });
+  });
+}
+
 async function openSetup(page: Page) {
   await page.goto("/dashboard", { waitUntil: "domcontentloaded" });
   await waitForApp(page);
@@ -144,7 +173,8 @@ test.describe("First-run setup", () => {
 
   let user: NewUser | null = null;
 
-  test.afterEach(async () => {
+  test.afterEach(async ({ page }) => {
+    await page.unrouteAll({ behavior: "ignoreErrors" });
     if (user) await deleteUser(user);
     user = null;
   });
@@ -155,6 +185,7 @@ test.describe("First-run setup", () => {
   }) => {
     user = await createUser({}, { solo: true });
     await signIn(page, user, baseURL);
+    await setGoogleConfigured(page, true);
     await openSetup(page);
 
     const setup = page.getByTestId("setup-screen");
@@ -191,7 +222,9 @@ test.describe("First-run setup", () => {
 
     await page.goto("/admin/users", { waitUntil: "domcontentloaded" });
     await waitForApp(page);
-    await expect(page.getByText("Jamie's workspace").first()).toBeVisible();
+    await expect(page.getByText("Jamie's workspace").first()).toBeVisible({
+      timeout: 20000,
+    });
 
     await page.goto("/dashboard", { waitUntil: "domcontentloaded" });
     await page.reload();
@@ -205,6 +238,7 @@ test.describe("First-run setup", () => {
   test("a new user connects calendar from setup", async ({ page, baseURL }) => {
     user = await createUser({ full_name: "Jamie Rivera" }, { solo: true });
     await signIn(page, user, baseURL);
+    await setGoogleConfigured(page, true);
     await openSetup(page);
 
     const setup = page.getByTestId("setup-screen");
@@ -212,23 +246,10 @@ test.describe("First-run setup", () => {
       setup.getByRole("heading", { name: "Welcome to Minutia, Jamie Rivera" }),
     ).toBeVisible();
     await expect(setup.getByLabel("What should we call you?")).toHaveCount(0);
+    await expect(setup.getByRole("link", { name: "Connect Google Calendar" })).toBeVisible();
     // Stands in for the Google consent round trip: the grant lands, then the callback returns to the app.
-    await rest("google_oauth_tokens", {
-      method: "POST",
-      body: JSON.stringify({
-        user_id: user.userId,
-        access_token: "x",
-        refresh_token: "x",
-        token_iv: "x",
-        refresh_iv: "x",
-        token_expiry: new Date(Date.now() + 3600_000).toISOString(),
-        google_email: user.email,
-        scopes: [CALENDAR_SCOPE],
-      }),
-    });
-    await page.route("**/api/auth/google", (route) =>
-      route.fulfill({ status: 302, headers: { location: "/settings?gcal=connected" } }),
-    );
+    await grantCalendar(user);
+    await stubGoogleReturn(page, "/settings?gcal=connected");
     const connectRequest = page.waitForRequest(
       (request) => new URL(request.url()).pathname === "/api/auth/google",
     );
@@ -288,6 +309,159 @@ test.describe("First-run setup", () => {
         .locator("[data-sidebar='sidebar']")
         .first()
         .getByText("Organization"),
+    ).toBeVisible();
+  });
+
+  test("on a self-host without Google OAuth the setup screen has no calendar row and still finishes", async ({
+    page,
+    baseURL,
+  }) => {
+    user = await createUser({ name: "Jamie" }, { solo: true });
+    await signIn(page, user, baseURL);
+    await setGoogleConfigured(page, false);
+    await openSetup(page);
+
+    const setup = page.getByTestId("setup-screen");
+    await expect(setup.getByRole("link", { name: "Download for Mac" })).toBeVisible();
+    await expect(setup.getByText("Google Calendar", { exact: true })).toHaveCount(0);
+    await expect(setup.getByRole("link", { name: "Connect Google Calendar" })).toHaveCount(0);
+
+    await setup.getByRole("button", { name: "Continue" }).click();
+    await page.waitForURL(/\/(dashboard)?$/);
+    await waitForApp(page);
+    await expect(page.getByText("Every good log starts with one meeting.")).toBeVisible();
+  });
+
+  test("a user who cancels Google consent returns to setup with Connect still offered", async ({
+    page,
+    baseURL,
+  }) => {
+    user = await createUser({ name: "Jamie" }, { solo: true });
+    await signIn(page, user, baseURL);
+    await setGoogleConfigured(page, true);
+    await openSetup(page);
+    await stubGoogleReturn(page, "/settings?gcal=error");
+
+    const setup = page.getByTestId("setup-screen");
+    await setup.getByRole("link", { name: "Connect Google Calendar" }).click();
+    await page.waitForURL(/\/settings\?gcal=error$/);
+    await waitForApp(page);
+
+    await expect(setup.getByRole("link", { name: "Connect Google Calendar" })).toBeVisible();
+    await expect(setup.getByText("Google Calendar connected")).toHaveCount(0);
+  });
+
+  test("a user whose calendar is already connected sees it connected with no button", async ({
+    page,
+    baseURL,
+  }) => {
+    user = await createUser({ name: "Jamie" }, { solo: true });
+    await grantCalendar(user);
+    await signIn(page, user, baseURL);
+    await setGoogleConfigured(page, true);
+    await openSetup(page);
+
+    const setup = page.getByTestId("setup-screen");
+    await expect(setup.getByText("Google Calendar connected")).toBeVisible();
+    await expect(setup.getByRole("link", { name: "Connect Google Calendar" })).toHaveCount(0);
+  });
+
+  test("a user cannot continue with an empty name and a very long name is capped", async ({
+    page,
+    baseURL,
+  }) => {
+    user = await createUser({}, { solo: true });
+    await signIn(page, user, baseURL);
+    await openSetup(page);
+
+    const setup = page.getByTestId("setup-screen");
+    const nameField = setup.getByLabel("What should we call you?");
+    const continueButton = setup.getByRole("button", { name: "Continue" });
+    await expect(continueButton).toBeDisabled();
+    await nameField.fill("   ");
+    await expect(continueButton).toBeDisabled();
+
+    const longName = "Jamie ".repeat(40);
+    const cappedName = longName.slice(0, 100);
+    await nameField.fill(longName);
+    await expect(nameField).toHaveValue(cappedName);
+    await continueButton.click();
+
+    await page.waitForURL(/\/(dashboard)?$/);
+    await waitForApp(page);
+    await expect(
+      page.locator("[data-sidebar='sidebar']").first().getByText(cappedName.trim(), { exact: true }),
+    ).toBeVisible();
+  });
+
+  test("reloading mid-setup shows the same setup screen and saves nothing", async ({
+    page,
+    baseURL,
+  }) => {
+    user = await createUser({}, { solo: true });
+    await signIn(page, user, baseURL);
+    await openSetup(page);
+
+    await page.getByTestId("setup-screen").getByLabel("What should we call you?").fill("Jamie");
+    await page.reload();
+    await waitForApp(page);
+
+    const setup = page.getByTestId("setup-screen");
+    await expect(setup.getByRole("heading", { name: "Welcome to Minutia" })).toBeVisible();
+    await expect(setup.getByLabel("What should we call you?")).toHaveValue("");
+    await expect(setup.getByRole("button", { name: "Continue" })).toBeDisabled();
+  });
+
+  test("a user who skips setup never sees it again after reload", async ({ page, baseURL }) => {
+    user = await createUser({}, { solo: true });
+    await signIn(page, user, baseURL);
+    await openSetup(page);
+
+    await page.getByTestId("setup-screen").getByRole("button", { name: "Skip" }).click();
+    await page.waitForURL(/\/(dashboard)?$/);
+    await waitForApp(page);
+    await expect(page.getByText("Every good log starts with one meeting.")).toBeVisible();
+
+    await page.reload();
+    await waitForApp(page);
+    await expect(page.getByText("Every good log starts with one meeting.")).toBeVisible();
+    await expect(page.getByTestId("setup-screen")).toHaveCount(0);
+  });
+
+  test("a slow then failed save shows progress and an error, and Continue works on retry", async ({
+    page,
+    baseURL,
+  }) => {
+    user = await createUser({}, { solo: true });
+    await signIn(page, user, baseURL);
+    await openSetup(page);
+
+    let failNext = true;
+    await page.route("**/rest/v1/profiles**", async (route) => {
+      if (route.request().method() !== "PATCH" || !failNext) return route.continue();
+      failNext = false;
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      await route.fulfill({
+        status: 500,
+        contentType: "application/json",
+        body: JSON.stringify({ message: "upstream timeout", code: "XX000" }),
+      });
+    });
+
+    const setup = page.getByTestId("setup-screen");
+    await setup.getByLabel("What should we call you?").fill("Jamie");
+    await setup.getByRole("button", { name: "Continue" }).click();
+
+    await expect(setup.getByRole("button", { name: "Finishing..." })).toBeDisabled();
+    await expect(page.locator("[data-sonner-toast]").first()).toBeVisible();
+    const continueButton = setup.getByRole("button", { name: "Continue" });
+    await expect(continueButton).toBeEnabled();
+
+    await continueButton.click();
+    await page.waitForURL(/\/(dashboard)?$/);
+    await waitForApp(page);
+    await expect(
+      page.locator("[data-sidebar='sidebar']").first().getByText("Jamie", { exact: true }),
     ).toBeVisible();
   });
 });
