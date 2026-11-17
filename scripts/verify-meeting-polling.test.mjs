@@ -109,44 +109,50 @@ function setup({ status, visibility = "visible" } = {}) {
   return { queryClient, calls, cleanup, detailRefreshes };
 }
 
+// mock.timers.tick does not fire timers scheduled by a callback within the same
+// tick, so advance in small steps like a real clock.
+function advance(ms) {
+  for (let left = ms; left > 0; left -= Math.min(left, 500)) mock.timers.tick(Math.min(left, 500));
+}
+
 test.afterEach(() => mock.timers.reset());
 
 test("a live meeting still refreshes every 2s", () => {
   const { detailRefreshes, cleanup } = setup({ status: "live" });
-  mock.timers.tick(10_000);
+  advance(10_000);
   assert.equal(detailRefreshes(), 5);
   cleanup();
 });
 
 test("a meeting with no cached status keeps the live 2s cadence", () => {
   const { detailRefreshes, cleanup } = setup();
-  mock.timers.tick(10_000);
+  advance(10_000);
   assert.equal(detailRefreshes(), 5);
   cleanup();
 });
 
 test("a completed meeting polls every 30s, not every 2s", () => {
   const { detailRefreshes, cleanup } = setup({ status: "completed" });
-  mock.timers.tick(29_999);
+  advance(29_999);
   assert.equal(detailRefreshes(), 0);
-  mock.timers.tick(1);
+  advance(1);
   assert.equal(detailRefreshes(), 1);
-  mock.timers.tick(30_000);
+  advance(30_000);
   assert.equal(detailRefreshes(), 2);
   cleanup();
 });
 
 test("a meeting that ends while open drops to the slow cadence", () => {
   const { queryClient, detailRefreshes, cleanup } = setup({ status: "live" });
-  mock.timers.tick(2_000);
+  advance(2_000);
   assert.equal(detailRefreshes(), 1);
   queryClient.setQueryData(meetingKeys.detail(MEETING), {
     id: MEETING,
     status: "completed",
   });
-  mock.timers.tick(2_000);
+  advance(2_000);
   assert.equal(detailRefreshes(), 2);
-  mock.timers.tick(10_000);
+  advance(10_000);
   assert.equal(detailRefreshes(), 2);
   cleanup();
 });
@@ -154,13 +160,13 @@ test("a meeting that ends while open drops to the slow cadence", () => {
 test("a hidden tab makes zero poll requests, and returning visible refreshes once", () => {
   const { calls, detailRefreshes, cleanup } = setup({ status: "live" });
   document.setVisibility("hidden");
-  mock.timers.tick(20_000);
+  advance(20_000);
   assert.equal(calls.length, 0);
   document.setVisibility("visible");
   assert.equal(detailRefreshes(), 1);
-  mock.timers.tick(1_999);
+  advance(1_999);
   assert.equal(detailRefreshes(), 1);
-  mock.timers.tick(1);
+  advance(1);
   assert.equal(detailRefreshes(), 2);
   cleanup();
 });
@@ -170,7 +176,7 @@ test("a page opened in a background tab waits for visibility before polling", ()
     status: "live",
     visibility: "hidden",
   });
-  mock.timers.tick(10_000);
+  advance(10_000);
   assert.equal(calls.length, 0);
   document.setVisibility("visible");
   assert.equal(detailRefreshes(), 1);
@@ -179,7 +185,7 @@ test("a page opened in a background tab waits for visibility before polling", ()
 
 test("a tick refreshes only the meeting, its issues and decisions", () => {
   const { calls, cleanup } = setup({ status: "live" });
-  mock.timers.tick(2_000);
+  advance(2_000);
   assert.deepEqual(
     new Set(calls),
     new Set([
@@ -194,7 +200,7 @@ test("a tick refreshes only the meeting, its issues and decisions", () => {
 test("a tick never refetches the transcript; a realtime meeting change does", () => {
   const { calls, cleanup } = setup({ status: "live" });
   const transcriptKey = JSON.stringify(meetingKeys.transcript(MEETING));
-  mock.timers.tick(10_000);
+  advance(10_000);
   assert.equal(calls.filter((k) => k === transcriptKey).length, 0);
   const meetingHandler = globalThis.__channels[0].handlers.find(
     (h) => h.table === "meetings",
@@ -204,10 +210,25 @@ test("a tick never refetches the transcript; a realtime meeting change does", ()
   cleanup();
 });
 
+test("a meeting row change while hidden refetches the transcript once on return", () => {
+  const { calls, cleanup } = setup({ status: "live" });
+  const transcriptKey = JSON.stringify(meetingKeys.transcript(MEETING));
+  const meetingHandler = globalThis.__channels[0].handlers.find((h) => h.table === "meetings");
+  document.setVisibility("hidden");
+  meetingHandler.handler();
+  assert.equal(calls.length, 0);
+  document.setVisibility("visible");
+  assert.equal(calls.filter((k) => k === transcriptKey).length, 1);
+  document.setVisibility("hidden");
+  document.setVisibility("visible");
+  assert.equal(calls.filter((k) => k === transcriptKey).length, 1);
+  cleanup();
+});
+
 test("a tick is skipped while a mutation is in flight", () => {
   const { queryClient, calls, cleanup } = setup({ status: "live" });
   queryClient.isMutating = () => 1;
-  mock.timers.tick(4_000);
+  advance(4_000);
   assert.equal(calls.length, 0);
   cleanup();
 });
@@ -215,7 +236,7 @@ test("a tick is skipped while a mutation is in flight", () => {
 test("cleanup stops the poll, the visibility listener and the channel", () => {
   const { calls, cleanup } = setup({ status: "live" });
   cleanup();
-  mock.timers.tick(10_000);
+  advance(10_000);
   assert.equal(calls.length, 0);
   assert.equal(document.listenerCount(), 0);
   assert.equal(globalThis.__removed.length, 1);

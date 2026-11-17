@@ -177,6 +177,100 @@ test.describe("Lighter meeting polling", () => {
     }
   });
 
+  test("a live meeting that loses its network catches up on reconnect without losing issues", async ({
+    page,
+    context,
+    request,
+  }) => {
+    const seriesId = await createSeries(request, `Offline polling ${randomUUID().slice(0, 6)}`);
+    const meetingId = await createMeeting(request, seriesId, { status: "live" });
+    try {
+      await page.goto(`/series/${seriesId}/meetings/${meetingId}`);
+      await expect(page.getByText("Polling notes stay readable").first()).toBeVisible();
+
+      await context.setOffline(true);
+      const first = `Raised offline A ${randomUUID().slice(0, 6)}`;
+      const second = `Raised offline B ${randomUUID().slice(0, 6)}`;
+      await raiseIssue(request, seriesId, meetingId, first);
+      await raiseIssue(request, seriesId, meetingId, second);
+      await page.waitForTimeout(5_000);
+      await context.setOffline(false);
+
+      await expect(page.getByText(first).first()).toBeVisible({ timeout: 8_000 });
+      await expect(page.getByText(second).first()).toBeVisible();
+    } finally {
+      await context.setOffline(false);
+      await deleteSeries(request, seriesId);
+    }
+  });
+
+  test("a meeting completed elsewhere while open shows its recap, then polls slowly", async ({
+    page,
+    request,
+  }) => {
+    const seriesId = await createSeries(request, `Ending polling ${randomUUID().slice(0, 6)}`);
+    const meetingId = await createMeeting(request, seriesId, { status: "live" });
+    try {
+      const tracked = trackMeetingRequests(page, meetingId);
+      await page.goto(`/series/${seriesId}/meetings/${meetingId}`);
+      await expect(page.getByText("Polling notes stay readable").first()).toBeVisible();
+
+      await rest(request, `meetings?id=eq.${meetingId}`, {
+        method: "PATCH",
+        data: {
+          status: "completed",
+          completed_at: new Date().toISOString(),
+          recap_markdown: "## Summary\n\nThe recap landed while the page was open.",
+          recap_generated_at: new Date().toISOString(),
+        },
+      });
+      await expect(page.getByText("The recap landed while the page was open.").first()).toBeVisible({
+        timeout: 8_000,
+      });
+
+      await page.waitForTimeout(3_000);
+      const settled = tracked.polls().length;
+      await page.waitForTimeout(8_000);
+      expect(tracked.polls().length - settled).toBe(0);
+    } finally {
+      await deleteSeries(request, seriesId);
+    }
+  });
+
+  test("a 3-hour transcript still shows and the page stays responsive", async ({ page, request }) => {
+    const seriesId = await createSeries(request, `Long polling ${randomUUID().slice(0, 6)}`);
+    const sentence = "We reviewed the migration plan and agreed on next steps for the release. ";
+    const longTranscript = `${sentence.repeat(2_400)}End of the three hour meeting.`;
+    const meetingId = await createMeeting(request, seriesId, {
+      status: "completed",
+      completed_at: new Date().toISOString(),
+      transcript_raw: longTranscript,
+    });
+    try {
+      const tracked = trackMeetingRequests(page, meetingId);
+      await page.goto(`/series/${seriesId}/meetings/${meetingId}`);
+      await expect(page.getByText("Polling notes stay readable").first()).toBeVisible();
+
+      await page.getByRole("button", { name: /^Transcript/ }).click();
+      const transcriptBox = page.getByPlaceholder("Paste transcript...");
+      await expect(transcriptBox).toHaveValue(/End of the three hour meeting\.$/, { timeout: 5_000 });
+
+      await page.waitForTimeout(6_000);
+      const started = Date.now();
+      await page.getByRole("button", { name: /^Transcript/ }).click();
+      await expect(transcriptBox).toBeHidden();
+      expect(Date.now() - started).toBeLessThan(2_000);
+      // Opening a completed meeting may write its recap once, which changes the row.
+      expect(tracked.transcriptFetches().length).toBeLessThanOrEqual(2);
+      for (const poll of tracked.polls()) {
+        const response = await poll.response();
+        expect((await response?.text())?.length ?? 0).toBeLessThan(20_000);
+      }
+    } finally {
+      await deleteSeries(request, seriesId);
+    }
+  });
+
   test("a completed meeting stays readable and stops polling every 2 seconds", async ({
     page,
     request,
@@ -191,6 +285,8 @@ test.describe("Lighter meeting polling", () => {
       const tracked = trackMeetingRequests(page, meetingId);
       await page.goto(`/series/${seriesId}/meetings/${meetingId}`);
       await expect(page.getByText("Polling notes stay readable").first()).toBeVisible();
+      // Opening the page settles first (the first tick, a recap attempt).
+      await page.waitForTimeout(3_000);
       const settled = tracked.polls().length;
       await page.waitForTimeout(10_000);
       expect(tracked.polls().length - settled).toBe(0);
@@ -250,7 +346,7 @@ test.describe("Lighter meeting polling", () => {
       await raiseIssue(request, seriesId, meetingId, "Dropped item", "dropped");
 
       await page.goto("/series");
-      const card = page.getByRole("link").filter({ hasText: name }).first();
+      const card = page.locator(`a[href="/series/${seriesId}"]:has(h2)`);
       await expect(card).toContainText("2 open issues");
 
       await rest(request, `issues?series_id=eq.${seriesId}&title=eq.Open item`, {
@@ -258,9 +354,8 @@ test.describe("Lighter meeting polling", () => {
         data: { status: "resolved" },
       });
       await page.reload();
-      await expect(page.getByRole("link").filter({ hasText: name }).first()).toContainText(
-        "1 open issue"
-      );
+      await expect(card).toContainText("1 open issue");
+      await expect(card).not.toContainText("1 open issues");
     } finally {
       await deleteSeries(request, seriesId);
     }

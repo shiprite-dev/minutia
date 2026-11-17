@@ -2,12 +2,15 @@
 
 import * as React from "react";
 import {
+  keepPreviousData,
   useQuery,
   useMutation,
   useQueryClient,
+  type QueryClient,
 } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
 import { isPendingDelete } from "@/lib/pending-delete";
+import { MEETING_DETAIL_COLUMNS, MEETING_LIST_COLUMNS } from "@/lib/types";
 import type { Meeting } from "@/lib/types";
 import type { CreateMeetingInput } from "@/lib/schemas";
 import { issueKeys } from "./use-issues";
@@ -20,6 +23,7 @@ export const meetingKeys = {
   all: ["meetings"] as const,
   list: (seriesId: string) => ["meetings", seriesId] as const,
   detail: (id: string) => ["meetings", "detail", id] as const,
+  transcript: (id: string) => ["meetings", "transcript", id] as const,
 };
 
 // ---------------------------------------------------------------------------
@@ -34,12 +38,12 @@ export function useMeetings(seriesId: string) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("meetings")
-        .select("*")
+        .select(MEETING_LIST_COLUMNS)
         .eq("series_id", seriesId)
         .order("date", { ascending: false });
 
       if (error) throw error;
-      return data as Meeting[];
+      return data as unknown as Meeting[];
     },
   });
 }
@@ -50,7 +54,7 @@ export function useMeetings(seriesId: string) {
 export function useMeeting(id: string) {
   const supabase = createClient();
 
-  return useQuery<
+  const detail = useQuery<
     Meeting & { issues: import("@/lib/types").Issue[]; decisions: import("@/lib/types").Decision[] }
   >({
     queryKey: meetingKeys.detail(id),
@@ -58,7 +62,7 @@ export function useMeeting(id: string) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("meetings")
-        .select("*, issues:issues!raised_in_meeting_id(*), decisions(*)")
+        .select(`${MEETING_DETAIL_COLUMNS}, issues:issues!raised_in_meeting_id(*), decisions(*)`)
         .eq("id", id)
         .single();
 
@@ -74,6 +78,34 @@ export function useMeeting(id: string) {
       };
     },
   });
+
+  // The transcript is the heaviest part of the row, so the polled detail query
+  // leaves it out and it is refetched only when the transcription state moves.
+  const status = detail.data?.transcription_status ?? null;
+  const completedAt = detail.data?.transcription_completed_at ?? null;
+  const transcript = useQuery<Pick<Meeting, "transcript_raw" | "transcript_segments">>({
+    queryKey: [...meetingKeys.transcript(id), status, completedAt],
+    enabled: !!id && !!detail.data,
+    staleTime: Infinity,
+    placeholderData: keepPreviousData,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("meetings")
+        .select("transcript_raw, transcript_segments")
+        .eq("id", id)
+        .single();
+
+      if (error) throw error;
+      return data as Pick<Meeting, "transcript_raw" | "transcript_segments">;
+    },
+  });
+
+  const ready = !!detail.data && (!!transcript.data || transcript.isError);
+  const data = React.useMemo(
+    () => (ready ? { ...detail.data!, ...transcript.data } : undefined),
+    [ready, detail.data, transcript.data]
+  );
+  return { ...detail, data, isLoading: detail.isLoading || (!!detail.data && !ready) };
 }
 
 // ---------------------------------------------------------------------------
@@ -184,71 +216,91 @@ export function useStartOrJoinMeeting() {
 // ---------------------------------------------------------------------------
 // useMeetingRealtime - live query refresh for meeting collaboration
 // ---------------------------------------------------------------------------
+const LIVE_POLL_MS = 2_000;
+const SETTLED_POLL_MS = 30_000;
+
+export function subscribeMeetingRefresh(
+  queryClient: QueryClient,
+  meetingId: string,
+  seriesId: string
+) {
+  const supabase = createClient();
+  const visible = () => document.visibilityState === "visible";
+  const refreshMeeting = () => {
+    // Skip a tick while any mutation is in flight so the poll cannot overwrite
+    // an optimistic write before it commits; the next tick reconciles.
+    if (!visible() || queryClient.isMutating()) return;
+    void queryClient.invalidateQueries({ queryKey: meetingKeys.detail(meetingId) });
+    void queryClient.invalidateQueries({ queryKey: issueKeys.list(seriesId) });
+    void queryClient.invalidateQueries({ queryKey: ["decisions"] });
+  };
+  let rowChangedWhileHidden = false;
+  const refreshMeetingRow = () => {
+    refreshMeeting();
+    if (!visible()) rowChangedWhileHidden = true;
+    else void queryClient.invalidateQueries({ queryKey: meetingKeys.transcript(meetingId) });
+  };
+
+  // A completed meeting with no transcription in flight changes rarely, so it
+  // polls slowly; anything else keeps the 2s loop the live page renders from.
+  let timer: number | undefined;
+  const schedule = () => {
+    const meeting = queryClient.getQueryData<Meeting>(meetingKeys.detail(meetingId));
+    const settled =
+      meeting?.status === "completed" &&
+      meeting.transcription_status !== "pending" &&
+      meeting.transcription_status !== "processing";
+    timer = window.setTimeout(tick, settled ? SETTLED_POLL_MS : LIVE_POLL_MS);
+  };
+  const tick = () => {
+    refreshMeeting();
+    schedule();
+  };
+  const onVisibilityChange = () => {
+    window.clearTimeout(timer);
+    if (!visible()) return;
+    if (rowChangedWhileHidden) {
+      rowChangedWhileHidden = false;
+      refreshMeetingRow();
+    } else refreshMeeting();
+    schedule();
+  };
+
+  const channel = supabase
+    .channel(`meeting:${meetingId}:changes`)
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "meetings", filter: `id=eq.${meetingId}` },
+      refreshMeetingRow
+    )
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "issues", filter: `series_id=eq.${seriesId}` },
+      refreshMeeting
+    )
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "decisions", filter: `meeting_id=eq.${meetingId}` },
+      refreshMeeting
+    )
+    .subscribe();
+  document.addEventListener("visibilitychange", onVisibilityChange);
+  if (visible()) schedule();
+
+  return () => {
+    window.clearTimeout(timer);
+    document.removeEventListener("visibilitychange", onVisibilityChange);
+    void supabase.removeChannel(channel);
+  };
+}
+
 export function useMeetingRealtime(meetingId: string, seriesId: string) {
   const queryClient = useQueryClient();
 
+  // Syncs with Supabase realtime, a poll timer and document visibility.
   React.useEffect(() => {
     if (!meetingId || !seriesId) return;
-
-    const supabase = createClient();
-    const refreshMeeting = () => {
-      // Skip a tick while any mutation is in flight so the poll cannot overwrite
-      // an optimistic write before it commits; the next tick (2s) reconciles.
-      if (queryClient.isMutating()) return;
-      void queryClient.invalidateQueries({
-        queryKey: meetingKeys.detail(meetingId),
-      });
-      void queryClient.invalidateQueries({
-        queryKey: meetingKeys.list(seriesId),
-      });
-      void queryClient.invalidateQueries({
-        queryKey: issueKeys.list(seriesId),
-      });
-      void queryClient.invalidateQueries({ queryKey: ["decisions"] });
-      void queryClient.invalidateQueries({
-        queryKey: seriesKeys.detail(seriesId),
-      });
-    };
-
-    const channel = supabase
-      .channel(`meeting:${meetingId}:changes`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "meetings",
-          filter: `id=eq.${meetingId}`,
-        },
-        refreshMeeting
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "issues",
-          filter: `series_id=eq.${seriesId}`,
-        },
-        refreshMeeting
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "decisions",
-          filter: `meeting_id=eq.${meetingId}`,
-        },
-        refreshMeeting
-      )
-      .subscribe();
-    const interval = window.setInterval(refreshMeeting, 2000);
-
-    return () => {
-      window.clearInterval(interval);
-      void supabase.removeChannel(channel);
-    };
+    return subscribeMeetingRefresh(queryClient, meetingId, seriesId);
   }, [meetingId, queryClient, seriesId]);
 }
 
@@ -331,15 +383,18 @@ export function useMeetingPresence(meetingId: string) {
 // ---------------------------------------------------------------------------
 // useAllMeetings - recent meetings across all series (for dashboard charts)
 // ---------------------------------------------------------------------------
-export function useAllMeetings() {
+export function useAllMeetings(enabled = true) {
   const supabase = createClient();
 
   return useQuery<(Meeting & { issues_raised: number; issues_resolved: number })[]>({
     queryKey: [...meetingKeys.all, "dashboard"],
+    enabled,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("meetings")
-        .select("*, raised_issues:issues!raised_in_meeting_id(count), resolved_issues:issues!resolved_in_meeting_id(count)")
+        .select(
+          `${MEETING_LIST_COLUMNS}, raised_issues:issues!raised_in_meeting_id(count), resolved_issues:issues!resolved_in_meeting_id(count)`
+        )
         .order("date", { ascending: true })
         .limit(20);
 
@@ -372,7 +427,7 @@ export function useMeetingsByMonth(year: number, month: number, enabled = true) 
 
       const { data, error } = await supabase
         .from("meetings")
-        .select("*, series:meeting_series!inner(name)")
+        .select(`${MEETING_LIST_COLUMNS}, series:meeting_series!inner(name)`)
         .gte("date", start.toISOString())
         .lte("date", end.toISOString())
         .order("date", { ascending: true });
@@ -433,6 +488,9 @@ export function useUpdateMeetingTranscript() {
       queryClient.invalidateQueries({
         queryKey: meetingKeys.detail(variables.meetingId),
       });
+      queryClient.invalidateQueries({
+        queryKey: meetingKeys.transcript(variables.meetingId),
+      });
     },
   });
 }
@@ -467,6 +525,9 @@ export function useUpdateSpeakerMap() {
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({
         queryKey: meetingKeys.detail(variables.meetingId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: meetingKeys.transcript(variables.meetingId),
       });
     },
     meta: { successMessage: "Speaker renamed." },
@@ -543,6 +604,7 @@ export function useEndMeeting() {
       queryClient.invalidateQueries({
         queryKey: meetingKeys.list(data.series_id),
       });
+      queryClient.invalidateQueries({ queryKey: seriesKeys.detail(data.series_id) });
       // Refresh issues since meeting end may affect OIL board
       queryClient.invalidateQueries({ queryKey: issueKeys.all });
     },
