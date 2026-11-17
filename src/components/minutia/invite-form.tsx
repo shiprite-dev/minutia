@@ -89,6 +89,7 @@ export function InviteForm({
 
     const links: InviteLink[] = [];
     let sent = 0;
+    let added = 0;
     for (const email of parseInviteEmails(inviteEmail)) {
       const res = await fetch("/api/admin/invitations", {
         method: "POST",
@@ -117,6 +118,7 @@ export function InviteForm({
         return;
       }
       sent += 1;
+      if (data.delivery === "added") added += 1;
       if (data.delivery === "link" && data.acceptUrl)
         links.push({ email, url: data.acceptUrl });
     }
@@ -124,10 +126,15 @@ export function InviteForm({
     setInviteState("sent");
     setInviteEmail("");
     setInviteLinks(links);
-    if (links.length < sent)
-      setInviteMessage(
-        sent > 1 ? `Invitation sent to ${sent} people.` : "Invitation sent.",
-      );
+    const emailed = sent - added - links.length;
+    setInviteMessage(
+      [
+        emailed > 0 && (emailed > 1 ? `Invitation sent to ${emailed} people.` : "Invitation sent."),
+        added > 0 && (added > 1 ? `${added} teammates added to this series.` : "Teammate added to this series."),
+      ]
+        .filter(Boolean)
+        .join(" "),
+    );
     await onInvited?.();
   }
 

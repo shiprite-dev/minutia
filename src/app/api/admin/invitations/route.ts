@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { absoluteAppUrl, toPublicActionLink } from "@/lib/app-url";
-import { sendMail } from "@/lib/email";
+import { isEmailConfigured, sendMail } from "@/lib/email";
 import {
   buildExistingUserOrganizationInviteEmail,
   buildNewUserOrganizationInviteEmail,
@@ -15,6 +15,11 @@ import type { MailMessage } from "@/lib/email";
 
 const INVITE_UPGRADE_REQUIRED =
   "Inviting teammates requires an upgraded workspace.";
+
+const EMAIL_UNAVAILABLE = {
+  error: "Email is not set up on this workspace.",
+  code: "INVITE_EMAIL_UNAVAILABLE",
+};
 
 const inviteSchema = z.object({
   email: z.string().email(),
@@ -121,7 +126,7 @@ export async function POST(request: NextRequest) {
   const { data: existingProfile } = await supabase
     .from("profiles")
     .select("id")
-    .ilike("email", email)
+    .ilike("email", email.replace(/[\\%_]/g, "\\$&"))
     .maybeSingle();
 
   // A series inviter who is not an org admin may only add members: existing
@@ -142,6 +147,11 @@ export async function POST(request: NextRequest) {
       if (participantError) return NextResponse.json({ error: participantError }, { status: 500 });
       return NextResponse.json({ invited: true, delivery: "added" });
     }
+  }
+
+  // Nothing is provisioned for a series inviter unless the invite can be emailed.
+  if (restricted && !(await isEmailConfigured())) {
+    return NextResponse.json(EMAIL_UNAVAILABLE, { status: 503 });
   }
 
   const directMember = existingProfile?.id && !restricted;
@@ -276,10 +286,7 @@ export async function POST(request: NextRequest) {
   }
 
   if (emailError && restricted) {
-    return NextResponse.json(
-      { error: "Email is not set up on this workspace.", code: "INVITE_EMAIL_UNAVAILABLE" },
-      { status: 503 }
-    );
+    return NextResponse.json(EMAIL_UNAVAILABLE, { status: 503 });
   }
   const delivery = inviteDelivery({ emailError, acceptUrl });
   if (!delivery.invited) {

@@ -149,6 +149,7 @@ export async function uploadMeetingAudio(
       audio_file_size_bytes: blob.size,
       transcription_status: "pending",
       transcription_outcome: null,
+      transcription_error_code: null,
     })
     .eq("id", meetingId);
   if (updateError) throw updateError;

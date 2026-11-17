@@ -1197,6 +1197,7 @@ export function MeetingDetailContent({
           : undefined,
     startedMinutesAgo: runAgeMs != null ? Math.floor(runAgeMs / 60000) : null,
     reason: transcriptionFailure?.reason ?? null,
+    retryable: transcriptionState === "needs_admin" && !transcriptionFailure,
     canDownloadAudio,
     regionRef: statusRegionRef,
     onStop: handleStopRecording,
