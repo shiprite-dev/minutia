@@ -15,7 +15,7 @@ export function toLocalISODate(date: Date): string {
 }
 
 export function formatShortDate(date: Date | string): string {
-  return new Date(date).toLocaleDateString("en-US", {
+  return localDay(date).toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
   });
@@ -32,7 +32,7 @@ export function daysSince(date: Date | string): number {
   return daysBetween(date, new Date());
 }
 
-function localDay(date: Date | string): Date {
+export function localDay(date: Date | string): Date {
   if (typeof date === "string") {
     const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(date);
     if (m) return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
@@ -44,4 +44,11 @@ function localDay(date: Date | string): Date {
 export function isDateOverdue(date: Date | string | null): boolean {
   if (!date) return false;
   return localDay(date) < localDay(new Date());
+}
+
+export function daysUntil(date: Date | string): number {
+  const msPerDay = 1000 * 60 * 60 * 24;
+  return Math.round(
+    (localDay(date).getTime() - localDay(new Date()).getTime()) / msPerDay
+  );
 }

@@ -55,36 +55,38 @@ test.describe("Global key guard", () => {
     const before = (await chip.getAttribute("aria-label"))!;
     const title = (await row.getByRole("link").first().textContent())!.trim();
 
-    for (let i = 0; i < 80; i++) {
-      if (await chip.evaluate((el) => el === document.activeElement)) break;
-      await page.keyboard.press("Tab");
-    }
-    await expect(chip).toBeFocused();
+    try {
+      for (let i = 0; i < 80; i++) {
+        if (await chip.evaluate((el) => el === document.activeElement)) break;
+        await page.keyboard.press("Tab");
+      }
+      await expect(chip).toBeFocused();
 
-    await page.keyboard.press("Enter");
-    await expect(chip).toHaveAttribute("aria-expanded", "true");
-    expect(page.url()).not.toContain("/issues/");
+      await page.keyboard.press("Enter");
+      await expect(chip).toHaveAttribute("aria-expanded", "true");
+      expect(page.url()).not.toContain("/issues/");
 
-    await page.keyboard.press("ArrowRight");
-    await page.keyboard.press("Enter");
-    expect(page.url()).not.toContain("/issues/");
-    await expect(chip).not.toHaveAttribute("aria-label", before);
+      await page.keyboard.press("ArrowRight");
+      await page.keyboard.press("Enter");
+      expect(page.url()).not.toContain("/issues/");
+      await expect(chip).not.toHaveAttribute("aria-label", before);
 
-    await page.reload();
-    await expect(page.getByText("Outstanding items")).toBeVisible();
-    const reloaded = page.locator('[aria-label*=","]').filter({ hasText: title }).first();
-    await expect(reloaded.getByRole("combobox", { name: /Status:/ })).not.toHaveAttribute("aria-label", before);
-
-    if (process.env.SUPABASE_SERVICE_ROLE_KEY) {
-      await fetch(`${process.env.SUPABASE_URL ?? "http://127.0.0.1:54321"}/rest/v1/issues?title=eq.${encodeURIComponent(title)}`, {
-        method: "PATCH",
-        headers: {
-          apikey: process.env.SUPABASE_SERVICE_ROLE_KEY,
-          Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ status: before.replace("Status: ", "").toLowerCase().replace(" ", "_") }),
-      });
+      await page.reload();
+      await expect(page.getByText("Outstanding items")).toBeVisible();
+      const reloaded = page.locator('[aria-label*=","]').filter({ hasText: title }).first();
+      await expect(reloaded.getByRole("combobox", { name: /Status:/ })).not.toHaveAttribute("aria-label", before);
+    } finally {
+      if (process.env.SUPABASE_SERVICE_ROLE_KEY) {
+        await fetch(`${process.env.SUPABASE_URL ?? "http://127.0.0.1:54321"}/rest/v1/issues?title=eq.${encodeURIComponent(title)}`, {
+          method: "PATCH",
+          headers: {
+            apikey: process.env.SUPABASE_SERVICE_ROLE_KEY,
+            Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ status: before.replace("Status: ", "").toLowerCase().replace(" ", "_") }),
+        });
+      }
     }
   });
 
@@ -123,5 +125,18 @@ test.describe("Global key guard", () => {
     await page.keyboard.type("gs");
     await expect(filter).toHaveValue("gs");
     expect(new URL(page.url()).pathname).not.toBe("/series");
+  });
+
+  test("j still moves through rows after clicking a filter chip, and g then s still navigates", async ({ page }) => {
+    await page.goto("/");
+    await expect(page.getByText("Outstanding items")).toBeVisible();
+
+    await page.getByRole("tab", { name: "Overdue" }).click();
+    await page.keyboard.press("j");
+    await expect(page.locator("[data-focused]")).toHaveCount(1);
+
+    await page.keyboard.press("g");
+    await page.keyboard.press("s");
+    await expect(page).toHaveURL(/\/series$/);
   });
 });

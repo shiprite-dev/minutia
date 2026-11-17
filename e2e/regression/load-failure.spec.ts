@@ -4,6 +4,7 @@ import { waitForApp } from "./seed-data";
 test.describe.configure({ timeout: 150_000 });
 
 const RETRY_WINDOW = 70_000;
+const FIRST_FEEDBACK = 15_000;
 const REST = ["**/rest/v1/issues*", "**/rest/v1/meeting_series*"];
 
 async function failRequests(page: Page, patterns: string[]) {
@@ -23,9 +24,10 @@ test.describe("honest load-failure state", () => {
     await waitForApp(page);
 
     const retry = page.getByRole("button", { name: "Retry" });
-    await expect(retry).toBeVisible({ timeout: RETRY_WINDOW });
+    await expect(retry).toBeVisible({ timeout: FIRST_FEEDBACK });
     await expect(page.getByText("Create your first series")).toHaveCount(0);
 
+    await expect(retry).toBeEnabled({ timeout: RETRY_WINDOW });
     await restoreRequests(page, REST);
     await retry.click();
 
@@ -46,9 +48,10 @@ test.describe("honest load-failure state", () => {
     await waitForApp(page);
 
     const retry = page.getByRole("button", { name: "Retry" });
-    await expect(retry).toBeVisible({ timeout: RETRY_WINDOW });
+    await expect(retry).toBeVisible({ timeout: FIRST_FEEDBACK });
     await expect(page.getByText(/owe nobody anything/i)).toHaveCount(0);
 
+    await expect(retry).toBeEnabled({ timeout: RETRY_WINDOW });
     await restoreRequests(page, REST);
     await retry.click();
 
@@ -72,9 +75,10 @@ test.describe("honest load-failure state", () => {
     await waitForApp(page);
 
     const retry = page.getByRole("button", { name: "Retry" });
-    await expect(retry).toBeVisible({ timeout: RETRY_WINDOW });
+    await expect(retry).toBeVisible({ timeout: FIRST_FEEDBACK });
     await expect(page.getByText("All caught up.")).toHaveCount(0);
 
+    await expect(retry).toBeEnabled({ timeout: RETRY_WINDOW });
     await restoreRequests(page, [pattern]);
     await retry.click();
     await expect(page.getByRole("button", { name: "Retry" })).toHaveCount(0, {
@@ -92,8 +96,9 @@ test.describe("honest load-failure state", () => {
     await waitForApp(page);
 
     const retry = page.getByRole("button", { name: "Retry" });
-    await expect(retry).toBeVisible({ timeout: RETRY_WINDOW });
+    await expect(retry).toBeVisible({ timeout: FIRST_FEEDBACK });
 
+    await expect(retry).toBeEnabled({ timeout: RETRY_WINDOW });
     await restoreRequests(page, [pattern]);
     await retry.click();
     await expect(
@@ -114,9 +119,10 @@ test.describe("honest load-failure state", () => {
     await waitForApp(page);
 
     const retry = page.getByRole("button", { name: "Retry" });
-    await expect(retry).toBeVisible({ timeout: RETRY_WINDOW });
+    await expect(retry).toBeVisible({ timeout: FIRST_FEEDBACK });
     await expect(page.getByText("Issue not found.")).toHaveCount(0);
 
+    await expect(retry).toBeEnabled({ timeout: RETRY_WINDOW });
     await restoreRequests(page, [pattern]);
     await retry.click();
     await expect(page.getByText("Lifecycle timeline")).toBeVisible({
@@ -131,9 +137,10 @@ test.describe("honest load-failure state", () => {
     await waitForApp(page);
 
     const retry = page.getByRole("button", { name: "Retry" });
-    await expect(retry).toBeVisible({ timeout: RETRY_WINDOW });
+    await expect(retry).toBeVisible({ timeout: FIRST_FEEDBACK });
     await expect(page.getByText("Create your first series")).toHaveCount(0);
 
+    await expect(retry).toBeEnabled({ timeout: RETRY_WINDOW });
     await restoreRequests(page, [pattern]);
     await retry.click();
     await expect(page.getByTestId("widget-outstanding-1")).toBeVisible({ timeout: RETRY_WINDOW });
@@ -145,10 +152,12 @@ test.describe("honest load-failure state", () => {
     await waitForApp(page);
 
     const retry = page.getByRole("button", { name: "Retry" });
-    await expect(retry).toBeVisible({ timeout: RETRY_WINDOW });
+    await expect(retry).toBeVisible({ timeout: FIRST_FEEDBACK });
+    await expect(retry).toBeEnabled({ timeout: RETRY_WINDOW });
     await retry.click();
+    await expect(page.getByRole("button", { name: /Retrying/ })).toBeDisabled();
 
-    await expect(page.getByRole("button", { name: "Retry" })).toBeVisible({ timeout: RETRY_WINDOW });
+    await expect(page.getByRole("button", { name: "Retry", exact: true })).toBeEnabled({ timeout: RETRY_WINDOW });
     await expect(page.getByText("Create your first series")).toHaveCount(0);
   });
 
@@ -161,5 +170,12 @@ test.describe("honest load-failure state", () => {
 
     await expect(page.getByText("No issues match.")).toBeVisible();
     await expect(page.getByText("Create your first series")).toHaveCount(0);
+  });
+
+  test("a real not-found issue says so quickly instead of retrying", async ({ page }) => {
+    await page.goto("/issues/30000000-0000-0000-0000-00000000ffff", { waitUntil: "domcontentloaded" });
+    await waitForApp(page);
+    await expect(page.getByText("Issue not found.")).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByRole("button", { name: /Retry/ })).toHaveCount(0);
   });
 });

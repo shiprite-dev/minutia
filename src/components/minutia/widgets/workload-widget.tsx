@@ -1,5 +1,6 @@
 "use client";
 
+import { daysUntil, formatShortDate } from "@/lib/date-utils";
 import * as React from "react";
 import { WidgetShell } from "./widget-shell";
 import { StatusChip } from "@/components/minutia/status-chip";
@@ -196,7 +197,7 @@ export function WorkloadWidget({
                       const over = isOverdue(issue);
                       return (
                         <span className={cn("text-xs font-mono tabular-nums shrink-0", over ? "text-accent font-medium" : "text-ink-4")}>
-                          {over ? `Overdue ${Math.abs(Math.round((new Date(issue.due_date).getTime() - Date.now()) / 86400000))}d` : `Due ${new Date(issue.due_date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}`}
+                          {over ? `Overdue ${Math.abs(daysUntil(issue.due_date))}d` : `Due ${formatShortDate(issue.due_date)}`}
                         </span>
                       );
                     })()}

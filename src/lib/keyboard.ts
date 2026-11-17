@@ -9,7 +9,9 @@ export function shouldIgnoreGlobalKey(e: KeyboardEvent): boolean {
   const target = e.target;
   if (target instanceof HTMLElement) {
     if (target.isContentEditable || target.closest(EDITABLE)) return true;
-    if (e.key !== "Escape" && target.closest(CONTROL)) return true;
+    if ((e.key === "Enter" || e.key === " ") && target.closest(CONTROL)) {
+      return true;
+    }
   }
   return document.querySelector(OPEN_LAYER) !== null;
 }

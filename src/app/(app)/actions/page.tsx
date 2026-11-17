@@ -111,7 +111,7 @@ function ActionRow({
     <motion.div
       initial={{ opacity: 0, x: -16 }}
       animate={{ opacity: 1, x: 0 }}
-      transition={{ delay: Math.min(index, 8) * 0.04, duration: 0.28, ease: [0.2, 0.8, 0.2, 1] }}
+      transition={{ delay: Math.min(index, 6) * 0.04, duration: 0.28, ease: [0.2, 0.8, 0.2, 1] }}
       className="group flex h-12 items-center gap-3 rounded-lg px-3 transition-colors hover:bg-paper-2"
     >
       <button
@@ -311,7 +311,7 @@ export default function MyActionsPage() {
         </div>
 
         {failed.length > 0 && (
-          <LoadError onRetry={() => failed.forEach((q) => q.refetch())} />
+          <LoadError failed={failed} />
         )}
 
         {/* Loading skeleton */}

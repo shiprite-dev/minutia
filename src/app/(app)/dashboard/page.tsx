@@ -58,7 +58,7 @@ import {
 } from "@/components/ui/empty";
 import { HintTooltip } from "@/components/minutia/hint-tooltip";
 import { cn } from "@/lib/utils";
-import { formatShortDate, daysBetween } from "@/lib/date-utils";
+import { formatShortDate, daysBetween, daysUntil } from "@/lib/date-utils";
 import { isOpen, isOverdue, byManualOrder, formatIssueKey } from "@/lib/issue-utils";
 import { shouldIgnoreGlobalKey } from "@/lib/keyboard";
 import { LoadError, failedQueries } from "@/components/minutia/load-error";
@@ -90,11 +90,7 @@ import type {
 // ---------------------------------------------------------------------------
 
 function formatRelativeDue(date: Date | string): { label: string; overdue: boolean } {
-  const now = new Date();
-  now.setHours(0, 0, 0, 0);
-  const due = new Date(date);
-  due.setHours(0, 0, 0, 0);
-  const diffDays = Math.round((due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+  const diffDays = daysUntil(date);
 
   if (diffDays < 0) {
     const absDays = Math.abs(diffDays);
@@ -865,7 +861,7 @@ function IssueRow({
         ref={ref}
         initial={{ opacity: 0, x: 20 }}
         animate={{ opacity: 1, x: 0 }}
-        transition={{ delay: Math.min(index, 8) * 0.06, duration: 0.32, ease: [0.2, 0.8, 0.2, 1] }}
+        transition={{ delay: Math.min(index, 6) * 0.06, duration: 0.32, ease: [0.2, 0.8, 0.2, 1] }}
         data-focused={focused || undefined}
         aria-label={`${issue.title}, ${STATUS_CONFIG[issue.status].label}${overdue ? ", overdue" : ""}`}
         className={cn(
@@ -1386,7 +1382,7 @@ export default function Dashboard() {
           </div>
         )}
         {failed.length > 0 ? (
-          <LoadError onRetry={() => failed.forEach((q) => q.refetch())} />
+          <LoadError failed={failed} />
         ) : isLoading ? (
           <DashboardSkeleton />
         ) : isFirstRun ? (
