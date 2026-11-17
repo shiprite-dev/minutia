@@ -703,12 +703,12 @@ test("selectChainForLanguage leaves the chain unchanged without a hint", () => {
   assert.deepEqual(selectChainForLanguage(chain, "auto", {}), chain);
 });
 
-test("selectChainForLanguage filters to supporting providers and leaves nothing for an unsupported language", () => {
+test("selectChainForLanguage filters to supporting providers and never returns an empty chain", () => {
   assert.deepEqual(selectChainForLanguage(["assemblyai", "groq"], "cy", {}), ["groq"]);
   assert.deepEqual(
     selectChainForLanguage(["assemblyai"], "cy", {}),
-    [],
-    "a provider that does not claim the language is never run"
+    ["assemblyai"],
+    "an empty filter falls back to the original chain"
   );
 });
 

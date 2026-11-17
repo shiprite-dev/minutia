@@ -23,6 +23,7 @@ await esbuild.build({
 const {
   getProviderChain,
   normalizeLanguageHint,
+  providerModel,
   providerSupportsLanguage,
   selectChainForLanguage,
   transcribeAudio,
@@ -166,7 +167,7 @@ test("a 503 from the primary falls through to Groq", async () => {
   assert.ok(isGroq(calls.at(-1).url));
 });
 
-test("a language no configured provider supports fails as unconfigured without calling any provider", async () => {
+test("a language every configured model explicitly excludes fails as unsupported without calling any provider", async () => {
   const calls = fakeFetch(() => ok({ text: "garbage" }));
   await assert.rejects(
     transcribeAudio(audioBlob(), {
@@ -175,7 +176,7 @@ test("a language no configured provider supports fails as unconfigured without c
     }),
     (err) => {
       assert.ok(err instanceof TranscriptionError);
-      assert.equal(err.code, "provider_not_configured");
+      assert.equal(err.code, "unsupported_language");
       return true;
     },
   );
@@ -227,6 +228,74 @@ test("an all-silence recording returns no speech instead of a hallucinated line"
         { start: 0, end: 30, text: " Thank you.", no_speech_prob: 0.95 },
       ],
     }),
+  );
+  const result = await transcribeWithGroq(audioBlob(), { apiKey: "g" });
+  assert.equal(result.text, "");
+  assert.equal(result.outcome, "no_speech");
+  assert.ok(!result.timed?.length);
+});
+
+test("only a declared model language list hard-excludes; the broad table still falls back", () => {
+  assert.deepEqual(
+    selectChainForLanguage(["assemblyai", "openrouter"], "cy", OPENROUTER_ENGLISH_ONLY),
+    ["assemblyai"]
+  );
+  assert.deepEqual(selectChainForLanguage(["assemblyai"], "sv-SE", {}), ["assemblyai"]);
+});
+
+test("an AssemblyAI-only workspace still transcribes a Swedish meeting on AssemblyAI", async () => {
+  const calls = fakeFetch(() => fail(500));
+  await assert.rejects(
+    transcribeAudio(audioBlob(), {
+      env: { TRANSCRIPTION_PROVIDER: "assemblyai", ASSEMBLYAI_API_KEY: "a" },
+      languageHint: "sv-SE",
+      deadlineAt: Date.now() + 250,
+    }),
+    (err) => {
+      assert.ok(err instanceof TranscriptionError);
+      assert.notEqual(err.code, "unsupported_language");
+      assert.notEqual(err.code, "provider_not_configured");
+      return true;
+    }
+  );
+  assert.ok(calls.length > 0);
+  assert.ok(calls[0].url.includes("assemblyai"));
+});
+
+test("without a language hint the English-only primary keeps the unchanged chain", async () => {
+  const calls = fakeFetch((url) =>
+    isOpenRouter(url) ? ok({ text: "hello", usage: { seconds: 1 } }) : fail(500)
+  );
+  const result = await transcribeAudio(audioBlob(), { env: WITH_GROQ });
+  assert.equal(result.provider, "openrouter");
+  assert.equal(calls.length, 1);
+});
+
+test("model language keys ignore case and a routing suffix", () => {
+  const env = { OPENROUTER_API_KEY: "o", OPENROUTER_STT_MODEL: "moondream/Parakeet-Ultra:nitro" };
+  assert.equal(providerSupportsLanguage("openrouter", "ja", env), false);
+  assert.equal(providerSupportsLanguage("openrouter", "en", env), true);
+});
+
+test("providerModel names a model only for OpenRouter and Groq", () => {
+  assert.equal(providerModel("openrouter", {}), "openai/whisper-1");
+  assert.equal(providerModel("openrouter", { OPENROUTER_STT_MODEL: ENGLISH_ONLY_MODEL }), ENGLISH_ONLY_MODEL);
+  assert.equal(providerModel("groq", {}), "whisper-large-v3-turbo");
+  assert.equal(providerModel("assemblyai", {}), undefined);
+  assert.equal(providerModel("local", {}), undefined);
+  assert.equal(providerModel("deepgram", {}), undefined);
+});
+
+test("a rebuild that leaves only empty text is no speech with no timings", async () => {
+  fakeFetch(() =>
+    ok({
+      text: " Thank you.",
+      duration: 10,
+      segments: [
+        { start: 0, end: 5, text: " Thank you.", no_speech_prob: 0.9 },
+        { start: 5, end: 10, text: "" },
+      ],
+    })
   );
   const result = await transcribeWithGroq(audioBlob(), { apiKey: "g" });
   assert.equal(result.text, "");
