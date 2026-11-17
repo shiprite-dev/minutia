@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { storeTokens } from "@/lib/google-calendar";
 import { googleCalendarSettingsRedirectUrl } from "@/lib/google-oauth-redirect";
-import { GOOGLE_WORKSPACE_SCOPES } from "@/lib/google-oauth-scopes";
+import { GOOGLE_CALENDAR_SCOPE, GOOGLE_WORKSPACE_SCOPES } from "@/lib/google-oauth-scopes";
 
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 const GOOGLE_USERINFO_URL = "https://www.googleapis.com/oauth2/v2/userinfo";
@@ -64,6 +64,14 @@ export async function GET(request: NextRequest) {
   });
   const userinfo = userinfoRes.ok ? await userinfoRes.json() : { email: "unknown" };
 
+  const scopes: string[] =
+    typeof tokens.scope === "string"
+      ? tokens.scope.split(/\s+/).filter(Boolean)
+      : GOOGLE_WORKSPACE_SCOPES.split(" ");
+  if (!scopes.includes(GOOGLE_CALENDAR_SCOPE)) {
+    return redirectToSettings(request, "/settings?gcal=error&reason=calendar_not_granted");
+  }
+
   try {
     await storeTokens(
       userId,
@@ -71,9 +79,7 @@ export async function GET(request: NextRequest) {
       tokens.refresh_token,
       tokens.expires_in,
       userinfo.email,
-      typeof tokens.scope === "string"
-        ? tokens.scope.split(/\s+/).filter(Boolean)
-        : GOOGLE_WORKSPACE_SCOPES.split(" ")
+      scopes
     );
   } catch (err) {
     console.error("Failed to store Google tokens:", err);

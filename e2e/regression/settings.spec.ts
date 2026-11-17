@@ -50,6 +50,21 @@ test.describe("Settings Page", () => {
     ).toBeVisible();
   });
 
+  test("a user whose Google calendar is not connected is offered Connect, never a directory reconnect", async ({
+    page,
+  }) => {
+    await page.goto("/settings");
+    await waitForApp(page);
+
+    await expect(page.getByText("Sync your recurring calendar meetings.")).toBeVisible();
+    await expect(page.getByRole("link", { name: "Connect", exact: true })).toHaveAttribute(
+      "href",
+      "/api/auth/google"
+    );
+    await expect(page.getByText(/directory/i)).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "Reconnect" })).toHaveCount(0);
+  });
+
   test("display name is pre-filled with user name", async ({ page }) => {
     await page.goto("/settings");
     await waitForApp(page);

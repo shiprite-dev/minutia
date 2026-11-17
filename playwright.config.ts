@@ -8,6 +8,9 @@ const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3000";
 const serverURL = new URL(baseURL);
 const serverHost = serverURL.hostname;
 const serverPort = serverURL.port || "3000";
+const managedCloud =
+  process.env.NEXT_PUBLIC_ENABLE_PUBLIC_SIGNUP === "true" &&
+  process.env.NEXT_PUBLIC_ENABLE_GOOGLE_AUTH === "true";
 
 export default defineConfig({
   testDir: "./e2e",
@@ -45,7 +48,17 @@ export default defineConfig({
         storageState: "e2e/.auth/user.json",
       },
       dependencies: ["setup"],
+      testIgnore: /managed-cloud-signup\.spec\.ts/,
     },
+    ...(managedCloud
+      ? [
+          {
+            name: "managed-cloud",
+            testMatch: /managed-cloud-signup\.spec\.ts/,
+            use: devices["Desktop Chrome"],
+          },
+        ]
+      : []),
   ],
   webServer: {
     command: `MINUTIA_TEST_EMAIL_OUTBOX=test-results/meeting-notes-email-outbox.jsonl pnpm dev --hostname ${serverHost} --port ${serverPort}`,

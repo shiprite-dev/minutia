@@ -66,18 +66,7 @@ export function FlowingSummary({
     setFailure("stopped");
   }, [setStreamingState]);
 
-  // An unmount-cleanup abort (StrictMode mounts twice in dev) must not consume
-  // the single auto-start; a user-clicked Stop never unmounts, so it stays latched.
-  React.useEffect(
-    () => () => {
-      if (controllerRef.current) {
-        controllerRef.current.abort();
-        controllerRef.current = null;
-        autoFiredRef.current = false;
-      }
-    },
-    []
-  );
+  React.useEffect(() => () => controllerRef.current?.abort(), []);
 
   const start = React.useCallback(async (overwrite = false) => {
     if (streaming) return;
@@ -152,12 +141,16 @@ export function FlowingSummary({
     }
   }, [meetingId, streaming, setStreamingState, onRecapWritten]);
 
-  // Auto-start the recap once when the parent flips `autoStart` true. Ref-guarded
-  // to a single fire.
+  // Auto-start the recap once when the parent flips `autoStart` true. Deferred a
+  // tick so StrictMode's simulated unmount cancels the timer instead of aborting
+  // (and re-issuing) a request the server has already started generating.
   React.useEffect(() => {
     if (!autoStart || autoFiredRef.current || !canGenerate || streaming || done) return;
-    autoFiredRef.current = true;
-    void start();
+    const id = setTimeout(() => {
+      autoFiredRef.current = true;
+      void start();
+    });
+    return () => clearTimeout(id);
   }, [autoStart, canGenerate, streaming, done, start]);
 
   // Regenerate: the parent bumps `regenerateNonce` (More actions menu) to re-run

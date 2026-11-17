@@ -1,6 +1,8 @@
 "use client";
 
 import { motion } from "motion/react";
+import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
 
 /** Only allow same-origin relative redirects to avoid open-redirect abuse. */
 export function getSafeNext(value: string | null) {
@@ -34,7 +36,7 @@ export function LoadingDots() {
   );
 }
 
-export function GoogleIcon() {
+function GoogleIcon() {
   return (
     <svg
       width="18"
@@ -61,5 +63,29 @@ export function GoogleIcon() {
         fill="#EA4335"
       />
     </svg>
+  );
+}
+
+export function ContinueWithGoogle({ onClick }: { onClick: () => void }) {
+  return (
+    <>
+      <Button
+        type="button"
+        variant="outline"
+        onClick={onClick}
+        className="h-11 w-full rounded-[12px] border-rule bg-paper font-sans font-medium text-ink hover:bg-paper-3"
+      >
+        <GoogleIcon />
+        Continue with Google
+      </Button>
+      <p className="mt-2 text-center font-sans text-xs text-ink-4">
+        Also connects your calendar
+      </p>
+      <div className="relative my-6 flex items-center">
+        <Separator className="flex-1 bg-rule" />
+        <span className="px-3 font-sans text-xs text-ink-4">or</span>
+        <Separator className="flex-1 bg-rule" />
+      </div>
+    </>
   );
 }

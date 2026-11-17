@@ -195,6 +195,34 @@ test("R never re-runs the recap, on the page or inside a field", async ({ page }
   await expect(page.getByRole("button", { name: "Replay recap" })).toHaveCount(0);
 });
 
+test("a first visit asks for the recap exactly once, even while the meeting refreshes", async ({ page }) => {
+  await page.addInitScript((path) => {
+    const w = window as unknown as { recapRequests: number };
+    const original = window.fetch;
+    w.recapRequests = 0;
+    window.fetch = (input, init) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      if (url.includes(path)) w.recapRequests += 1;
+      return original(input, init);
+    };
+  }, `/api/meetings/${MEETING_ID}/summary/stream`);
+  await page.route(STREAM_URL, async (route) => {
+    await new Promise((r) => setTimeout(r, 4_500));
+    await route.fulfill({
+      status: 200,
+      headers: { "content-type": "text/event-stream", "cache-control": "no-cache, no-transform" },
+      body: sseBody(["Mike ", "Ross ", "owns ", "it."]),
+    });
+  });
+  await gotoMeeting(page);
+
+  await expect(page.locator("[data-flowing-summary]").first()).toContainText("Mike Ross owns it.");
+  await page.waitForTimeout(2_500);
+  expect(
+    await page.evaluate(() => (window as unknown as { recapRequests: number }).recapRequests)
+  ).toBe(1);
+});
+
 test("Stop halts an in-flight recap and offers to try again", async ({ page }) => {
   // A stream that never completes so the Stop control is meaningful.
   let calls = 0;

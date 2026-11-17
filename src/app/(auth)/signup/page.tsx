@@ -7,11 +7,10 @@ import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
 import { Mail, ArrowRight } from "lucide-react";
 import { motion } from "motion/react";
-import { GOOGLE_WORKSPACE_SCOPES } from "@/lib/google-oauth-scopes";
-import { getSafeNext, buildCallbackUrl, LoadingDots, GoogleIcon } from "../_shared";
+import { GOOGLE_OAUTH_QUERY_PARAMS, GOOGLE_WORKSPACE_SCOPES } from "@/lib/google-oauth-scopes";
+import { getSafeNext, buildCallbackUrl, LoadingDots, ContinueWithGoogle } from "../_shared";
 
 type FormState = "idle" | "loading" | "sent" | "error";
 
@@ -41,7 +40,6 @@ function SignUpForm() {
     process.env.NEXT_PUBLIC_ENABLE_MAGIC_LINK === "true";
   const googleAuthEnabled =
     process.env.NEXT_PUBLIC_ENABLE_GOOGLE_AUTH === "true";
-  const secondaryAuthEnabled = magicLinkEnabled || googleAuthEnabled;
 
   const nextPath = getSafeNext(searchParams.get("next"));
   const loginHref = `/login${nextPath !== "/" ? `?next=${encodeURIComponent(nextPath)}` : ""}`;
@@ -108,7 +106,7 @@ function SignUpForm() {
       options: {
         redirectTo: callbackUrl,
         scopes: GOOGLE_WORKSPACE_SCOPES,
-        queryParams: { access_type: "offline", prompt: "consent" },
+        queryParams: GOOGLE_OAUTH_QUERY_PARAMS,
       },
     });
 
@@ -168,6 +166,7 @@ function SignUpForm() {
           </motion.div>
         ) : (
           <>
+            {googleAuthEnabled && <ContinueWithGoogle onClick={handleGoogleSignUp} />}
             <form onSubmit={handleCreateAccount} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="name" className="font-sans text-ink-2">
@@ -247,38 +246,16 @@ function SignUpForm() {
               </Button>
             </form>
 
-            {secondaryAuthEnabled && (
-              <div className="relative my-6 flex items-center">
-                <Separator className="flex-1 bg-rule" />
-                <span className="px-3 font-sans text-xs text-ink-4">
-                  or continue with
-                </span>
-                <Separator className="flex-1 bg-rule" />
-              </div>
-            )}
-
             {magicLinkEnabled && (
               <Button
                 type="button"
                 variant="outline"
                 onClick={handleMagicLink}
                 disabled={formState === "loading" || !email.trim()}
-                className="mb-3 h-10 w-full rounded-[12px] border-rule bg-paper font-sans font-medium text-ink hover:bg-paper-3"
+                className="mt-3 h-10 w-full rounded-[12px] border-rule bg-paper font-sans font-medium text-ink hover:bg-paper-3"
               >
                 <Mail className="mr-2 h-4 w-4" />
                 Email magic link
-              </Button>
-            )}
-
-            {googleAuthEnabled && (
-              <Button
-                type="button"
-                variant="outline"
-                onClick={handleGoogleSignUp}
-                className="h-10 w-full rounded-[12px] border-rule bg-paper font-sans font-medium text-ink hover:bg-paper-3"
-              >
-                <GoogleIcon />
-                Google
               </Button>
             )}
 
