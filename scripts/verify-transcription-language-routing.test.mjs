@@ -167,24 +167,67 @@ test("a 503 from the primary falls through to Groq", async () => {
   assert.ok(isGroq(calls.at(-1).url));
 });
 
-test("a language every configured model explicitly excludes fails as unsupported without calling any provider", async () => {
-  const calls = fakeFetch(() => ok({ text: "garbage" }));
-  await assert.rejects(
-    transcribeAudio(audioBlob(), {
-      env: OPENROUTER_ENGLISH_ONLY,
-      languageHint: "ja",
-    }),
-    (err) => {
-      assert.ok(err instanceof TranscriptionError);
-      assert.equal(err.code, "unsupported_language");
-      return true;
-    },
+test("a language the only configured model excludes still transcribes on it rather than failing", async () => {
+  const calls = fakeFetch(() => ok({ text: "garbage", usage: { seconds: 1 } }));
+  const result = await transcribeAudio(audioBlob(), {
+    env: OPENROUTER_ENGLISH_ONLY,
+    languageHint: "ja",
+  });
+  assert.equal(result.provider, "openrouter");
+  assert.equal(calls.length, 1);
+  assert.ok(isOpenRouter(calls[0].url));
+  assert.deepEqual(selectChainForLanguage(["openrouter"], "ja", OPENROUTER_ENGLISH_ONLY), ["openrouter"]);
+});
+
+test("an unconfigured provider never wins the language filter over a configured one", async () => {
+  const calls = fakeFetch((url) =>
+    isOpenRouter(url) ? ok({ text: "bonjour", usage: { seconds: 1 } }) : fail(500)
   );
-  assert.equal(calls.length, 0);
-  assert.deepEqual(
-    selectChainForLanguage(["openrouter"], "ja", OPENROUTER_ENGLISH_ONLY),
-    [],
+  const result = await transcribeAudio(audioBlob(), {
+    env: { OPENROUTER_API_KEY: "o", OPENROUTER_STT_MODEL: ENGLISH_ONLY_MODEL },
+    languageHint: "fr",
+  });
+  assert.equal(result.provider, "openrouter");
+  assert.equal(calls.length, 1);
+  assert.ok(isOpenRouter(calls[0].url));
+});
+
+test("the language hint never empties a non-empty chain", () => {
+  for (const [chain, hint, env] of [
+    [["openrouter"], "ja", OPENROUTER_ENGLISH_ONLY],
+    [["assemblyai"], "cy", {}],
+    [["openrouter", "assemblyai"], "cy", OPENROUTER_ENGLISH_ONLY],
+    [["groq"], "xx", {}],
+  ]) {
+    assert.ok(selectChainForLanguage(chain, hint, env).length > 0, `${chain} with ${hint}`);
+  }
+});
+
+test("whitespace-only provider text with nothing dropped is no speech with no timings", async () => {
+  fakeFetch(() =>
+    ok({
+      text: "   ",
+      duration: 5,
+      segments: [{ start: 0, end: 5, text: "  ", no_speech_prob: 0.1 }],
+    })
   );
+  const result = await transcribeWithGroq(audioBlob(), { apiKey: "g" });
+  assert.equal(result.text.trim(), "");
+  assert.equal(result.outcome, "no_speech");
+  assert.ok(!result.timed?.length);
+});
+
+test("no source path emits a distinct unsupported-language outcome", () => {
+  const hits = [];
+  const walk = (dir) => {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) walk(full);
+      else if (/\.(ts|tsx)$/.test(entry.name) && fs.readFileSync(full, "utf8").includes("unsupported_language")) hits.push(full);
+    }
+  };
+  walk(path.join(root, "src"));
+  assert.deepEqual(hits, []);
 });
 
 test("zero-config default transcribes a Japanese meeting on Groq", async () => {
@@ -253,7 +296,6 @@ test("an AssemblyAI-only workspace still transcribes a Swedish meeting on Assemb
     }),
     (err) => {
       assert.ok(err instanceof TranscriptionError);
-      assert.notEqual(err.code, "unsupported_language");
       assert.notEqual(err.code, "provider_not_configured");
       return true;
     }

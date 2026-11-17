@@ -556,18 +556,6 @@ test("the meeting's language reaches the provider chain for a live segment", asy
   assert.equal(S.providerOptions[0].languageHint, "ja");
 });
 
-test("a language no workspace model supports maps to 503 with its own code on both routes", async () => {
-  reset({ providerErrorCode: "unsupported_language" });
-  const meeting = await callMeetingRoute({ language: "ja" });
-  assert.equal(meeting.status, 503);
-  assert.equal((await meeting.json()).code, "unsupported_language");
-
-  reset({ claimResult: true, providerErrorCode: "unsupported_language" });
-  const segment = await callSegmentRoute(0, { path: `${MEETING_ID}/segments/0.webm`, language: "ja" });
-  assert.equal(segment.status, 503);
-  assert.equal((await segment.json()).code, "unsupported_language");
-});
-
 test("a JSON body of literal null is treated as an empty body", async () => {
   reset();
   const res = await callMeetingRoute(null);

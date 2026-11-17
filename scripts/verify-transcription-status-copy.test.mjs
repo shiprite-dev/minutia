@@ -252,22 +252,3 @@ test("new copy stays plain: no dashes, no plan or pricing words", () => {
   assert.doesNotMatch(copy, /[\u2013\u2014]/);
   assert.doesNotMatch(copy, /\b(plan|pricing|paid|upgrade|premium|cloud|hosted|AI)\b/i);
 });
-
-const UNSUPPORTED_LANGUAGE_COPY =
-  "Transcription isn't available for this meeting's language on this workspace. Ask your administrator to add a provider that supports it.";
-
-test("a meeting language no workspace provider supports asks for an administrator with its own copy", () => {
-  const v = view("unsupported_language", { reason: "Transcription took too long. Try again." });
-  assert.equal(v.title, UNSUPPORTED_LANGUAGE_COPY);
-  assert.equal(v.primary?.label, "Contact administrator");
-  assert.equal(v.alert, true);
-  assert.doesNotMatch(v.title, /[\u2013\u2014]/);
-});
-
-test("the meeting page routes the unsupported_language code to its own state", () => {
-  const source = fs.readFileSync(
-    path.join(root, "src/app/(app)/series/[id]/meetings/[meetingId]/meeting-detail-content.tsx"),
-    "utf8"
-  );
-  assert.match(source, /kind: "unsupported_language"/);
-});

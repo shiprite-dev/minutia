@@ -102,8 +102,6 @@ test("maps transcription codes to plain, non-technical, actionable copy", () => 
     input_mismatch: "This recording changed. Refresh to see its current status.",
     extraction_failed: "Your transcript is ready, but action items could not be created.",
     download_failed: "The recording could not be downloaded. Try again.",
-    unsupported_language:
-      "Transcription isn't available for this meeting's language on this workspace. Ask your administrator to add a provider that supports it.",
   };
   for (const [code, copy] of Object.entries(cases)) {
     assert.equal(humanizeError({ error: "Transcription failed.", code }), copy, `body shape for ${code}`);
