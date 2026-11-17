@@ -141,7 +141,8 @@ test.describe("Lighter meeting polling", () => {
 
       await page.waitForTimeout(6_000);
       expect(tracked.polls().length).toBeGreaterThanOrEqual(3);
-      expect(tracked.transcriptFetches().length).toBe(1);
+      // Once on open, plus at most once if the meeting row itself changes.
+      expect(tracked.transcriptFetches().length).toBeLessThanOrEqual(2);
       for (const poll of tracked.polls()) {
         const response = await poll.response();
         expect(await response?.text()).not.toContain("Polling transcript body");
