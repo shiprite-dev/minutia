@@ -94,6 +94,9 @@ jobs:
       - name: Verify instance-config read contracts
         run: pnpm test:instance-config
 
+      - name: Verify Google onboarding contracts
+        run: pnpm test:google-onboarding
+
       - name: Verify feature-access gate
         run: pnpm test:feature-access
 
@@ -324,8 +327,18 @@ jobs:
           MINUTIA_SETUP_TOKEN: ci-setup-token
           SITE_URL: http://localhost:3000
 
+      - name: Run managed-cloud sign-up E2E
+        id: managed_cloud_e2e
+        if: matrix.shard == 1
+        run: rm -rf .next && pnpm test:e2e --project=managed-cloud
+        env:
+          CI: true
+          SITE_URL: http://localhost:3000
+          NEXT_PUBLIC_ENABLE_PUBLIC_SIGNUP: "true"
+          NEXT_PUBLIC_ENABLE_GOOGLE_AUTH: "true"
+
       - name: Upload Playwright report
-        if: failure() && steps.e2e.outcome == 'failure'
+        if: failure() && (steps.e2e.outcome == 'failure' || steps.managed_cloud_e2e.outcome == 'failure')
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report-${{ matrix.shard }}
