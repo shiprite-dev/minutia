@@ -28,10 +28,12 @@ import {
   localSidecarUrl,
   providerApiKey,
   providerConfigured,
+  providerModel,
   type TranscriptionProvider,
   type TranscriptionResult,
 } from "./shared";
 
+export { providerModel } from "./shared";
 export {
   GROQ_BASE_URL,
   GROQ_DEFAULT_MODEL,
@@ -112,6 +114,7 @@ export function getProviderChain(env: Env = process.env): TranscriptionProvider[
   const chain: TranscriptionProvider[] = [primary];
   if (primary === "local" && !allowsCloudFallback(env)) return chain;
   if (primary !== "openrouter" && providerApiKey("openrouter", env)) chain.push("openrouter");
+  if (primary === "openrouter" && providerApiKey("groq", env)) chain.push("groq");
   return chain;
 }
 
@@ -187,7 +190,8 @@ function runProvider(
   provider: TranscriptionProvider,
   audio: Blob,
   credential: string,
-  options: TranscribeAudioOptions
+  options: TranscribeAudioOptions,
+  env: Env
 ): Promise<TranscriptionResult> {
   if (provider === "assemblyai") {
     return transcribeWithAssemblyAI(audio, {
@@ -218,6 +222,7 @@ function runProvider(
   }
   return transcribeWithOpenRouter(audio, {
     apiKey: credential,
+    model: providerModel("openrouter", env),
     mimeType: options.mimeType,
     timeoutMs: options.timeoutMs,
     signal: options.signal,
@@ -261,7 +266,8 @@ export async function transcribeAudio(
   }
 
   const baseChain = options.preferFast ? orderChainPreferFast(getProviderChain(env), env) : getProviderChain(env);
-  const chain = selectChainForLanguage(baseChain, options.languageHint, env);
+  const usable = baseChain.filter((p) => IMPLEMENTED_PROVIDERS.has(p) && providerConfigured(p, env));
+  const chain = selectChainForLanguage(usable, options.languageHint, env);
   const budget = options.budget ?? createRunBudget();
 
   let firstError: unknown;
@@ -271,10 +277,6 @@ export async function transcribeAudio(
   while (index < chain.length) {
     if (options.signal?.aborted) break;
     const provider = chain[index];
-    if (!IMPLEMENTED_PROVIDERS.has(provider)) {
-      index += 1;
-      continue;
-    }
     const credential = provider === "local" ? localSidecarUrl(env) : providerApiKey(provider, env);
     if (!credential) {
       index += 1;
@@ -283,7 +285,7 @@ export async function transcribeAudio(
 
     recordAttempt(budget, provider, attemptKind);
     try {
-      return await runProvider(provider, audio, credential, options);
+      return await runProvider(provider, audio, credential, options, env);
     } catch (error) {
       if (firstError === undefined) firstError = error;
       // A cancelled caller gets no retry and no fallback.

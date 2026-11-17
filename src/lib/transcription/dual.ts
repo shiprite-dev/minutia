@@ -10,6 +10,7 @@ export async function transcribeDualSegment({
   fileName,
   mimeType,
   deadlineAt,
+  languageHint,
 }: {
   meAudio: Blob;
   themAudio: Blob | null;
@@ -17,9 +18,10 @@ export async function transcribeDualSegment({
   fileName: string;
   mimeType: string;
   deadlineAt: number;
+  languageHint?: string;
 }) {
   const run = (audio: Blob) =>
-    transcribeAudio(audio, { fileName, mimeType, preferFast: true, timestamps: true, deadlineAt });
+    transcribeAudio(audio, { fileName, mimeType, preferFast: true, timestamps: true, deadlineAt, languageHint });
   const [me, them] = await Promise.all([run(meAudio), themAudio ? run(themAudio) : null]);
   const merged = mergeChannels({ me, them, offsetSeconds });
   return {

@@ -54,7 +54,7 @@ function isAbortLike(error: unknown): boolean {
  */
 export function classifyFailure(error: unknown): FailureClass {
   if (error instanceof TranscriptionError) {
-    if (AUTH_CODES.has(error.code)) return "auth_or_config";
+    if (AUTH_CODES.has(error.code) || error.status === 402) return "auth_or_config";
     if (INVALID_CODES.has(error.code)) return "invalid_input";
     return "transient";
   }

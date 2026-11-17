@@ -74,7 +74,9 @@ export function isTranscriptionConfigured() { return true; }
 export async function transcribeAudio(audio, options = {}) {
   const S = globalThis.__S;
   S.providerCalls += 1;
+  S.providerOptions.push(options);
   if (S.providerError) throw S.providerError;
+  if (S.providerErrorCode) throw new TranscriptionError(S.providerErrorCode, "provider failed");
   return S.providerResult;
 }
 export async function assembleDiarizedTranscript() { return { transcriptRaw: "", segments: null, speakerMap: null }; }
@@ -259,7 +261,9 @@ function reset(overrides = {}) {
     removeError: null,
     providerResult: { text: "hello world", model: "m", provider: "groq", durationSeconds: 1, diarized: false, outcome: "speech" },
     providerCalls: 0,
+    providerOptions: [],
     providerError: null,
+    providerErrorCode: null,
     diarizing: false,
     extraction: { ok: true, suggestions: [], model: "m" },
     extractionThrow: null,
@@ -484,9 +488,9 @@ test("a transcript-save failure prevents extraction and cleanup", async () => {
 // Segment route replay
 // ---------------------------------------------------------------------------
 
-async function callSegmentRoute(seq = 0) {
+async function callSegmentRoute(seq = 0, body = {}) {
   S.__pendingSeq = seq;
-  return segmentRoute.POST(request(), {
+  return segmentRoute.POST(request(body), {
     params: Promise.resolve({ meetingId: MEETING_ID, seq: String(seq) }),
   });
 }
@@ -530,4 +534,31 @@ test("a successful segment transcription persists the outcome", async () => {
   const body = await res.json();
   assert.equal(res.status, 200);
   assert.equal(body.transcript_length, 0);
+});
+
+// ---------------------------------------------------------------------------
+// Meeting language reaches the provider chain
+// ---------------------------------------------------------------------------
+
+test("the meeting's language reaches the provider chain on the full-file path", async () => {
+  reset();
+  const res = await callMeetingRoute({ language: "ja" });
+  assert.equal(res.status, 200);
+  assert.ok(S.providerOptions.length > 0);
+  assert.ok(S.providerOptions.every((options) => options.languageHint === "ja"));
+});
+
+test("the meeting's language reaches the provider chain for a live segment", async () => {
+  reset({ claimResult: true });
+  const res = await callSegmentRoute(0, { path: `${MEETING_ID}/segments/0.webm`, language: "ja" });
+  assert.equal(res.status, 200);
+  assert.equal(S.providerOptions.length, 1);
+  assert.equal(S.providerOptions[0].languageHint, "ja");
+});
+
+test("a JSON body of literal null is treated as an empty body", async () => {
+  reset();
+  const res = await callMeetingRoute(null);
+  assert.equal(res.status, 200);
+  assert.equal(S.providerCalls > 0, true);
 });

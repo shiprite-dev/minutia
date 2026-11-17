@@ -29,6 +29,17 @@ export function providerApiKey(provider: TranscriptionProvider, env: Transcripti
   return null;
 }
 
+export const GROQ_DEFAULT_MODEL = "whisper-large-v3-turbo";
+export const OPENROUTER_STT_DEFAULT_MODEL = "openai/whisper-1";
+export const NO_SPEECH_THRESHOLD = 0.6;
+
+/** Model an OpenRouter or Groq request runs on; other providers pick their own. */
+export function providerModel(provider: TranscriptionProvider, env: TranscriptionEnv): string | undefined {
+  if (provider === "openrouter") return env.OPENROUTER_STT_MODEL?.trim() || OPENROUTER_STT_DEFAULT_MODEL;
+  if (provider === "groq") return GROQ_DEFAULT_MODEL;
+  return undefined;
+}
+
 /** Whether a provider has the credential it needs: a URL for local, an API key otherwise. */
 export function providerConfigured(provider: TranscriptionProvider, env: TranscriptionEnv): boolean {
   if (provider === "local") return localSidecarUrl(env) != null;
@@ -68,17 +79,20 @@ export interface TranscriptionResult {
 }
 
 /** Trusts provider `segments` only when every entry has numeric start/end and string text. */
-function parseTimed(segments: unknown): TranscriptionResult["timed"] {
+function parseTimed(segments: unknown): { raw: string; seg: NonNullable<TranscriptionResult["timed"]>[number] }[] | undefined {
   if (!Array.isArray(segments) || segments.length === 0) return undefined;
   const valid = segments.every(
     (s) => typeof s?.start === "number" && typeof s?.end === "number" && typeof s?.text === "string"
   );
   return valid
     ? segments.map((s) => ({
-        start: s.start,
-        end: s.end,
-        text: s.text.trim(),
-        ...(Number.isFinite(s.no_speech_prob) ? { noSpeechProb: s.no_speech_prob } : {}),
+        raw: s.text as string,
+        seg: {
+          start: s.start,
+          end: s.end,
+          text: s.text.trim(),
+          ...(Number.isFinite(s.no_speech_prob) ? { noSpeechProb: s.no_speech_prob } : {}),
+        },
       }))
     : undefined;
 }
@@ -279,7 +293,28 @@ export async function sendTranscription({
 
   // An empty transcript from a completed provider job is confirmed silence,
   // not a failure: persist it as no_speech so silence completes once.
-  const outcome = record.text.trim() === "" ? "no_speech" : "speech";
-  const timed = parseTimed(record.segments);
-  return { text: record.text, model, provider, durationSeconds, diarized: false, outcome, ...(timed ? { timed } : {}) };
+  let text = record.text;
+  let outcome: "speech" | "no_speech" = text.trim() === "" ? "no_speech" : "speech";
+  let timed = parseTimed(record.segments);
+  if (timed?.some(({ seg }) => (seg.noSpeechProb ?? 0) >= NO_SPEECH_THRESHOLD)) {
+    timed = timed.filter(({ seg }) => (seg.noSpeechProb ?? 0) < NO_SPEECH_THRESHOLD);
+    text = timed.map((t) => t.raw).join("").trim();
+    if (timed.length === 0) {
+      timed = undefined;
+      outcome = "no_speech";
+    }
+  }
+  if (text.trim() === "") {
+    outcome = "no_speech";
+    timed = undefined;
+  }
+  return {
+    text,
+    model,
+    provider,
+    durationSeconds,
+    diarized: false,
+    outcome,
+    ...(timed ? { timed: timed.map((t) => t.seg) } : {}),
+  };
 }

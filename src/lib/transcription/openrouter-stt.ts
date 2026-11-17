@@ -7,10 +7,16 @@
 // The model and endpoint are env-overridable.
 // ---------------------------------------------------------------------------
 
-import { sendTranscription, TranscriptionError, type TranscriptionResult } from "./shared";
+import {
+  OPENROUTER_STT_DEFAULT_MODEL,
+  sendTranscription,
+  TranscriptionError,
+  type TranscriptionResult,
+} from "./shared";
 
 export const OPENROUTER_STT_URL = "https://openrouter.ai/api/v1/audio/transcriptions";
-export const OPENROUTER_STT_DEFAULT_MODEL = "openai/whisper-1";
+
+export { OPENROUTER_STT_DEFAULT_MODEL };
 
 // supabase-swift stores the macOS companion's AAC-in-MP4 upload under a mime
 // derived from the ".m4a" extension, not the explicit FileOptions content
