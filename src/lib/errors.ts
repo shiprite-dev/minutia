@@ -56,8 +56,6 @@ const TRANSCRIPTION_CODE_COPY: Record<string, string> = {
     "This workspace has not been set up for transcription yet. Ask your administrator.",
   transcription_unconfigured:
     "This workspace has not been set up for transcription yet. Ask your administrator.",
-  unsupported_language:
-    "Transcription isn't available for this meeting's language on this workspace. Ask your administrator to add a provider that supports it.",
   unsupported_format: "This recording format is not supported. Try uploading the recording again.",
   provider_error: "Transcription failed. Try again.",
   processing_conflict: "This recording is already being transcribed.",

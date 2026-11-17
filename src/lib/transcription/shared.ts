@@ -105,7 +105,6 @@ export type TranscriptionErrorCode =
   | "unsupported_format"
   | "auth_error"
   | "provider_error"
-  | "unsupported_language"
   // Reserved for a recording revision or input-identity mismatch (durable
   // worker, PR 3). No current route emits it; the code exists so clients can
   // map it without a later protocol change.
@@ -305,7 +304,7 @@ export async function sendTranscription({
       outcome = "no_speech";
     }
   }
-  if (text === "") {
+  if (text.trim() === "") {
     outcome = "no_speech";
     timed = undefined;
   }

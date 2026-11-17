@@ -90,7 +90,6 @@ type TranscriptionFailureKind =
   | "failed"
   | "failed_unknown"
   | "needs_admin"
-  | "unsupported_language"
   | "needs_signin"
   | "already_running"
   | "input_mismatch"
@@ -134,7 +133,6 @@ const LIVE_STATUS_STATES: TranscriptionUiState[] = [
   "failed",
   "failed_unknown",
   "needs_admin",
-  "unsupported_language",
   "needs_signin",
   "already_running",
   "input_mismatch",
@@ -154,7 +152,6 @@ function mapTranscriptionFailure(
   if (rawCode === "extraction_failed") return { kind: "extraction_failed" };
   if (rawCode === "processing_conflict") return { kind: "already_running" };
   if (rawCode === "input_mismatch") return { kind: "input_mismatch" };
-  if (rawCode === "unsupported_language") return { kind: "unsupported_language" };
   if (ADMIN_CODES.has(rawCode)) return { kind: "needs_admin" };
   if (status === 401) return { kind: "needs_signin" };
   if (status === 404) return { kind: "deleted" };

@@ -109,7 +109,8 @@ export function selectChainForLanguage(
   if (!language) return chain;
   const remaining = chain.filter((provider) => !declaredModelLanguages(provider, env)?.every((l) => l !== language));
   const supported = remaining.filter((provider) => providerSupportsLanguage(provider, language, env));
-  return supported.length > 0 ? supported : remaining;
+  if (supported.length > 0) return supported;
+  return remaining.length > 0 ? remaining : chain;
 }
 
 /** Diagnostics only: what each provider claims and whether it has a credential. */

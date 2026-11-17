@@ -21,7 +21,7 @@ import {
   recordAttempt,
   type RunBudget,
 } from "./budget";
-import { normalizeLanguageHint, selectChainForLanguage } from "./capabilities";
+import { selectChainForLanguage } from "./capabilities";
 import {
   DIARIZING_PROVIDERS,
   TranscriptionError,
@@ -266,13 +266,8 @@ export async function transcribeAudio(
   }
 
   const baseChain = options.preferFast ? orderChainPreferFast(getProviderChain(env), env) : getProviderChain(env);
-  const chain = selectChainForLanguage(baseChain, options.languageHint, env);
-  if (chain.length === 0) {
-    throw new TranscriptionError(
-      "unsupported_language",
-      `No configured transcription provider supports ${normalizeLanguageHint(options.languageHint)}`
-    );
-  }
+  const usable = baseChain.filter((p) => IMPLEMENTED_PROVIDERS.has(p) && providerConfigured(p, env));
+  const chain = selectChainForLanguage(usable, options.languageHint, env);
   const budget = options.budget ?? createRunBudget();
 
   let firstError: unknown;

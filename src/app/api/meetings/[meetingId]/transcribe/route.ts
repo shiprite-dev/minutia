@@ -65,7 +65,6 @@ function statusForCode(code: TranscriptionErrorCode): number {
     case "no_api_key":
     case "provider_not_configured":
     case "auth_error":
-    case "unsupported_language":
       return 503;
     default:
       return 502;
