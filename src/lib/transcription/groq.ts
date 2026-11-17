@@ -6,10 +6,11 @@
 // makes the response include a `duration` field.
 // ---------------------------------------------------------------------------
 
-import { sendTranscription, type TranscriptionResult } from "./shared";
+import { GROQ_DEFAULT_MODEL, sendTranscription, type TranscriptionResult } from "./shared";
 
 export const GROQ_BASE_URL = "https://api.groq.com/openai/v1";
-export const GROQ_DEFAULT_MODEL = "whisper-large-v3-turbo";
+
+export { GROQ_DEFAULT_MODEL };
 
 export interface GroqTranscribeOptions {
   apiKey: string;

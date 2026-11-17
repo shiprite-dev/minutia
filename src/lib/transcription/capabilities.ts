@@ -7,7 +7,7 @@
 // unrecognized hint leaves the provider chain untouched.
 // ---------------------------------------------------------------------------
 
-import { DIARIZING_PROVIDERS, providerConfigured, type TranscriptionProvider } from "./shared";
+import { DIARIZING_PROVIDERS, providerConfigured, providerModel, type TranscriptionProvider } from "./shared";
 
 type Env = Record<string, string | undefined>;
 
@@ -42,6 +42,10 @@ const PROVIDER_LANGUAGES: Record<TranscriptionProvider, string[]> = {
   deepgram: [],
 };
 
+export const MODEL_LANGUAGES: Record<string, string[]> = {
+  "openrouter:moondream/parakeet-ultra": ["en"],
+};
+
 const ALIASES: Record<string, string> = {
   eng: "en",
   spa: "es",
@@ -68,33 +72,37 @@ const LANGUAGE_SETS = new Map(
 /** Normalize an explicit hint to ISO-639-1, or null when it is not supported. */
 export function normalizeLanguageHint(raw: string | null | undefined): string | null {
   if (typeof raw !== "string") return null;
-  const value = raw.trim().toLowerCase();
+  const value = raw.trim().toLowerCase().split(/[-_]/)[0];
   if (!value) return null;
   const alias = ALIASES[value];
   if (alias) return alias;
   return SUPPORTED_LANGUAGES.has(value) ? value : null;
 }
 
-export function providerSupportsLanguage(provider: TranscriptionProvider, lang: string): boolean {
+export function providerSupportsLanguage(
+  provider: TranscriptionProvider,
+  lang: string,
+  env: Env = process.env
+): boolean {
   const normalized = normalizeLanguageHint(lang);
   if (!normalized) return false;
+  const modelLanguages = MODEL_LANGUAGES[`${provider}:${providerModel(provider, env)}`];
+  if (modelLanguages) return modelLanguages.includes(normalized);
   return LANGUAGE_SETS.get(provider)?.has(normalized) ?? false;
 }
 
 /**
- * Narrow the chain to providers that claim the hinted language. An empty
- * result falls back to the original chain so the caller always has something
- * to run; a null hint is a no-op.
+ * Narrow the chain to providers that claim the hinted language; the result
+ * may be empty. A missing or unrecognized hint is a no-op.
  */
 export function selectChainForLanguage(
   chain: TranscriptionProvider[],
   hint: string | null | undefined,
-  _env: Env = process.env
+  env: Env = process.env
 ): TranscriptionProvider[] {
   const language = normalizeLanguageHint(hint);
   if (!language) return chain;
-  const filtered = chain.filter((provider) => providerSupportsLanguage(provider, language));
-  return filtered.length > 0 ? filtered : chain;
+  return chain.filter((provider) => providerSupportsLanguage(provider, language, env));
 }
 
 /** Diagnostics only: what each provider claims and whether it has a credential. */

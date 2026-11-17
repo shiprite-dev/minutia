@@ -115,6 +115,7 @@ export async function POST(
       ? (body.expected_segments as number)
       : null;
   const deferExtraction = body.defer_extraction === true;
+  const languageHint = typeof body.language === "string" ? body.language : undefined;
 
   const aiDenied = await requireAiAccess();
   if (aiDenied) {
@@ -253,6 +254,7 @@ export async function POST(
         mimeType,
         speakersExpected: attendees.length || undefined,
         deadlineAt,
+        languageHint,
       });
       providerOutcomes = [result.outcome];
       model = result.model;
@@ -350,6 +352,7 @@ export async function POST(
                 fileName: row.storage_path.split("/").pop() ?? `seg-${row.seq}.m4a`,
                 mimeType: segData.type || mimeFromPath(row.storage_path),
                 deadlineAt,
+                languageHint,
               });
               result = dual;
               text = dual.transcriptText;
@@ -360,6 +363,7 @@ export async function POST(
                 fileName: `seg-${row.seq}.webm`,
                 mimeType: segData.type || "audio/webm",
                 deadlineAt,
+                languageHint,
               });
               result = single;
               text = single.text.trim();
@@ -481,6 +485,7 @@ export async function POST(
             fileName: `meeting-${meetingId}.webm`,
             mimeType,
             deadlineAt,
+            languageHint,
           });
           providerOutcomes.push(result.outcome);
           texts.push(result.text.trim());

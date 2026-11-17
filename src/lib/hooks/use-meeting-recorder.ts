@@ -173,7 +173,7 @@ export function useMeetingRecorder(meetingId: string): MeetingRecorder {
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ path }),
+            body: JSON.stringify({ path, language: navigator.language }),
           }
         );
         return {

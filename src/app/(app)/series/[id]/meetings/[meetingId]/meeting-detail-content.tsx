@@ -817,10 +817,10 @@ export function MeetingDetailContent({
       setUploadedPending(false);
       setTranscribing(true);
       transcribeStartedAtRef.current = Date.now();
-      const body =
-        lane.state === "ready" && lane.segmentsTotal > 0
-          ? JSON.stringify({ expected_segments: lane.segmentsTotal })
-          : "{}";
+      const body = JSON.stringify({
+        language: navigator.language,
+        ...(lane.state === "ready" && lane.segmentsTotal > 0 ? { expected_segments: lane.segmentsTotal } : {}),
+      });
       const response = await fetch(`/api/meetings/${meetingId}/transcribe`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },

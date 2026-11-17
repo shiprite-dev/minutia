@@ -62,6 +62,8 @@ export async function POST(
     body = undefined;
   }
   const path = (body as { path?: unknown } | null | undefined)?.path;
+  const language = (body as { language?: unknown } | null | undefined)?.language;
+  const languageHint = typeof language === "string" ? language : undefined;
   const channel = parseChannelSegmentBody(meetingId, seq, body);
   const parsed = channel ? { ext: channel.ext } : parseSegmentPath(meetingId, seq, path);
   if (!parsed) {
@@ -215,6 +217,7 @@ export async function POST(
         fileName,
         mimeType,
         deadlineAt,
+        languageHint,
       });
       result = dual;
       transcript = dual.transcriptText;
@@ -224,7 +227,7 @@ export async function POST(
         size_bytes: audioData.size + (themAudio?.size ?? 0),
       };
     } else {
-      const single = await transcribeAudio(audioData, { fileName, mimeType, preferFast: true, deadlineAt });
+      const single = await transcribeAudio(audioData, { fileName, mimeType, preferFast: true, deadlineAt, languageHint });
       result = single;
       transcript = single.text.trim();
       saved = {

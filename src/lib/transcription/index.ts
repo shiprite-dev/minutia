@@ -21,13 +21,14 @@ import {
   recordAttempt,
   type RunBudget,
 } from "./budget";
-import { selectChainForLanguage } from "./capabilities";
+import { normalizeLanguageHint, selectChainForLanguage } from "./capabilities";
 import {
   DIARIZING_PROVIDERS,
   TranscriptionError,
   localSidecarUrl,
   providerApiKey,
   providerConfigured,
+  providerModel,
   type TranscriptionProvider,
   type TranscriptionResult,
 } from "./shared";
@@ -112,6 +113,7 @@ export function getProviderChain(env: Env = process.env): TranscriptionProvider[
   const chain: TranscriptionProvider[] = [primary];
   if (primary === "local" && !allowsCloudFallback(env)) return chain;
   if (primary !== "openrouter" && providerApiKey("openrouter", env)) chain.push("openrouter");
+  if (primary === "openrouter" && providerApiKey("groq", env)) chain.push("groq");
   return chain;
 }
 
@@ -187,7 +189,8 @@ function runProvider(
   provider: TranscriptionProvider,
   audio: Blob,
   credential: string,
-  options: TranscribeAudioOptions
+  options: TranscribeAudioOptions,
+  env: Env
 ): Promise<TranscriptionResult> {
   if (provider === "assemblyai") {
     return transcribeWithAssemblyAI(audio, {
@@ -218,6 +221,7 @@ function runProvider(
   }
   return transcribeWithOpenRouter(audio, {
     apiKey: credential,
+    model: providerModel("openrouter", env),
     mimeType: options.mimeType,
     timeoutMs: options.timeoutMs,
     signal: options.signal,
@@ -262,6 +266,12 @@ export async function transcribeAudio(
 
   const baseChain = options.preferFast ? orderChainPreferFast(getProviderChain(env), env) : getProviderChain(env);
   const chain = selectChainForLanguage(baseChain, options.languageHint, env);
+  if (chain.length === 0) {
+    throw new TranscriptionError(
+      "provider_not_configured",
+      `No configured transcription provider supports ${normalizeLanguageHint(options.languageHint)}`
+    );
+  }
   const budget = options.budget ?? createRunBudget();
 
   let firstError: unknown;
@@ -283,7 +293,7 @@ export async function transcribeAudio(
 
     recordAttempt(budget, provider, attemptKind);
     try {
-      return await runProvider(provider, audio, credential, options);
+      return await runProvider(provider, audio, credential, options, env);
     } catch (error) {
       if (firstError === undefined) firstError = error;
       // A cancelled caller gets no retry and no fallback.
