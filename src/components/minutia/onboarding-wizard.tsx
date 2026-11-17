@@ -1,18 +1,14 @@
 "use client";
 
 import * as React from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useMutation } from "@tanstack/react-query";
 import { CalendarDays, Check, Laptop } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { createClient } from "@/lib/supabase/client";
-import {
-  useCompleteOnboarding,
-  useUpdateProfile,
-} from "@/lib/hooks/use-profile";
 import { useGoogleCalendarStatus } from "@/lib/hooks/use-google-calendar";
-import { setStoredState as setTourState } from "@/components/minutia/first-run-tour";
 import type { OrganizationOption, Profile } from "@/lib/types";
 
 interface OnboardingWizardProps {
@@ -27,36 +23,68 @@ export function OnboardingWizard({
   workspace,
 }: OnboardingWizardProps) {
   const router = useRouter();
+  const calendarCancelled = useSearchParams().get("gcal") === "error";
   const knownName =
     profile.name && profile.name !== profile.email.split("@")[0]
       ? profile.name
       : signupName;
   const [name, setName] = React.useState("");
-  const [pending, setPending] = React.useState(false);
   const { data: calendar } = useGoogleCalendarStatus();
-  const updateProfile = useUpdateProfile();
-  const completeOnboarding = useCompleteOnboarding();
 
-  async function finish() {
-    setPending(true);
-    const finalName = (knownName ?? name).trim();
-    try {
+  const save = useMutation({
+    mutationFn: async (complete: boolean) => {
+      const supabase = createClient();
+      const finalName = (knownName ?? name).trim();
       if (finalName && finalName !== profile.name) {
-        await updateProfile.mutateAsync({ name: finalName });
-        if (workspace?.name === `${profile.name}'s workspace`) {
-          await createClient()
+        const { error } = await supabase
+          .from("profiles")
+          .update({ name: finalName })
+          .eq("id", profile.id);
+        if (error) throw error;
+        if (
+          workspace?.memberCount === 1 &&
+          workspace.name === `${profile.name}'s workspace`
+        ) {
+          const { error: renameError } = await supabase
             .from("organizations")
             .update({ name: `${finalName}'s workspace` })
             .eq("id", workspace.id);
+          if (renameError) throw renameError;
         }
       }
-      setTourState(profile.id, "dismissed");
-      await completeOnboarding.mutateAsync();
-      router.push("/");
-      router.refresh();
-    } catch {
-      setPending(false);
-    }
+      const { error: metadataError } = await supabase.auth.updateUser({
+        data: {
+          ...(finalName && { name: finalName }),
+          ...(complete && { setup_completed: true }),
+        },
+      });
+      if (metadataError) throw metadataError;
+      if (complete) {
+        const { error: completeError } = await supabase
+          .from("profiles")
+          .update({ has_completed_onboarding: true })
+          .eq("id", profile.id);
+        if (completeError) throw completeError;
+      }
+    },
+  });
+  const pending = save.isPending || save.isSuccess;
+
+  function finish() {
+    save.mutate(true, {
+      onSuccess: () => {
+        router.push("/");
+        router.refresh();
+      },
+    });
+  }
+
+  function connectCalendar(e: React.MouseEvent<HTMLAnchorElement>) {
+    if (knownName || !name.trim()) return;
+    e.preventDefault();
+    save.mutate(false, {
+      onSuccess: () => window.location.assign("/api/auth/google"),
+    });
   }
 
   return (
@@ -64,7 +92,13 @@ export function OnboardingWizard({
       data-testid="setup-screen"
       className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-paper px-4 py-10"
     >
-      <div className="w-full max-w-md">
+      <form
+        className="w-full max-w-md"
+        onSubmit={(e) => {
+          e.preventDefault();
+          finish();
+        }}
+      >
         <div className="text-center">
           <span className="inline-flex size-12 items-center justify-center rounded-full bg-accent/10 font-display text-xl font-bold text-accent">
             m
@@ -75,7 +109,9 @@ export function OnboardingWizard({
               : "Welcome to Minutia"}
           </h1>
           <p className="mt-1 text-sm text-ink-3">
-            Two optional steps and you are ready.
+            {calendar?.configured
+              ? "Two optional steps and you are ready."
+              : "One optional step and you are ready."}
           </p>
         </div>
 
@@ -105,14 +141,18 @@ export function OnboardingWizard({
                 <p className="text-xs text-ink-3">
                   {calendar.connected
                     ? "Google Calendar connected"
-                    : "Brings in your meetings so you never set them up by hand."}
+                    : calendarCancelled
+                      ? "Google Calendar was not connected. Try again or skip it for now."
+                      : "Brings in your meetings so you never set them up by hand."}
                 </p>
               </div>
               {calendar.connected ? (
                 <Check aria-hidden className="size-5 text-accent" />
               ) : (
                 <Button asChild variant="outline" size="sm">
-                  <a href="/api/auth/google">Connect Google Calendar</a>
+                  <a href="/api/auth/google" onClick={connectCalendar}>
+                    Connect Google Calendar
+                  </a>
                 </Button>
               )}
             </li>
@@ -134,8 +174,8 @@ export function OnboardingWizard({
         </ul>
 
         <Button
+          type="submit"
           variant="accent"
-          onClick={finish}
           disabled={pending || (!knownName && !name.trim())}
           className="mt-6 h-11 w-full rounded-xl"
         >
@@ -149,7 +189,7 @@ export function OnboardingWizard({
         >
           Skip
         </button>
-      </div>
+      </form>
     </div>
   );
 }

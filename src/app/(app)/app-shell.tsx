@@ -20,10 +20,17 @@ interface AppShellProps {
   profile: Profile | null;
   organizations: OrganizationOption[];
   signupName: string | null;
+  setupCompleted: boolean;
   children: ReactNode;
 }
 
-export function AppShell({ profile, organizations, signupName, children }: AppShellProps) {
+export function AppShell({
+  profile,
+  organizations,
+  signupName,
+  setupCompleted,
+  children,
+}: AppShellProps) {
   const shellRef = React.useRef<HTMLDivElement>(null);
   const pathname = usePathname();
   const openQuickAddDialog = useUIStore((s) => s.openQuickAddDialog);
@@ -93,7 +100,7 @@ export function AppShell({ profile, organizations, signupName, children }: AppSh
       <KeyboardShortcutsDialog />
       <QuickAddDialog />
       <GotoShortcuts />
-      {profile && <FirstRunTour userId={profile.id} />}
+      {profile && !setupCompleted && <FirstRunTour userId={profile.id} />}
       </SidebarProvider>
     </div>
   );

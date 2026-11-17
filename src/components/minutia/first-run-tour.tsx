@@ -63,7 +63,7 @@ function getStoredState(userId: string): TourState | null {
   }
 }
 
-export function setStoredState(userId: string, value: TourState) {
+function setStoredState(userId: string, value: TourState) {
   try {
     window.localStorage.setItem(storageKey(userId), value);
     window.dispatchEvent(new Event(TOUR_STATE_CHANGE_EVENT));

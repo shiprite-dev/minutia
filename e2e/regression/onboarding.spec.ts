@@ -40,23 +40,28 @@ async function setHostedMode(enabled: boolean) {
   });
 }
 
+async function workspaceOf(userId: string): Promise<string> {
+  const [profile] = await rest(
+    `profiles?id=eq.${userId}&select=current_organization_id`,
+  );
+  return profile.current_organization_id;
+}
+
 async function createUser(
-  metadata: Record<string, string>,
-  options: { solo: boolean },
+  metadata: Record<string, string> | ((emailPrefix: string) => Record<string, string>),
+  options: { solo: boolean; inviteTo?: string; role?: "admin" | "member"; emailPrefix?: string },
 ): Promise<NewUser> {
   const userId = randomUUID();
-  const email = `setup-${userId.slice(0, 8)}@example.com`;
+  const emailPrefix = options.emailPrefix ?? `setup-${userId.slice(0, 8)}`;
+  const email = `${emailPrefix}@example.com`;
 
   if (!options.solo) {
-    const [seed] = await rest(
-      `profiles?id=eq.${TEST_USER_ID}&select=current_organization_id`,
-    );
     await rest("organization_invitations", {
       method: "POST",
       body: JSON.stringify({
-        organization_id: seed.current_organization_id,
+        organization_id: options.inviteTo ?? (await workspaceOf(TEST_USER_ID)),
         email,
-        role: "member",
+        role: options.role ?? "member",
         status: "pending",
         invited_by: TEST_USER_ID,
       }),
@@ -73,7 +78,7 @@ async function createUser(
         email,
         password: PASSWORD,
         email_confirm: true,
-        user_metadata: metadata,
+        user_metadata: typeof metadata === "function" ? metadata(emailPrefix) : metadata,
       }),
     });
     expect(created.ok).toBeTruthy();
@@ -172,11 +177,14 @@ test.describe("First-run setup", () => {
   test.skip(!SERVICE_KEY, "Requires the service role to create fresh accounts");
 
   let user: NewUser | null = null;
+  let inviter: NewUser | null = null;
 
   test.afterEach(async ({ page }) => {
     await page.unrouteAll({ behavior: "ignoreErrors" });
     if (user) await deleteUser(user);
+    if (inviter) await deleteUser(inviter);
     user = null;
+    inviter = null;
   });
 
   test("a new solo user finishes setup in one screen and lands on the dashboard", async ({
@@ -204,10 +212,12 @@ test.describe("First-run setup", () => {
     await expect(setup.getByText(/attendee/i)).toHaveCount(0);
     await expect(setup.getByText(/your team/i)).toHaveCount(0);
 
+    await expect(page).toHaveURL(/\/dashboard$/);
     await setup.getByLabel("What should we call you?").fill("Jamie");
     await setup.getByRole("button", { name: "Continue" }).click();
 
     await page.waitForURL(/\/(dashboard)?$/);
+    expect(new URL(page.url()).search).toBe("");
     await waitForApp(page);
     await expect(
       page.getByText("Every good log starts with one meeting."),
@@ -463,5 +473,147 @@ test.describe("First-run setup", () => {
     await expect(
       page.locator("[data-sidebar='sidebar']").first().getByText("Jamie", { exact: true }),
     ).toBeVisible();
+  });
+
+  test("a user finishes setup with the keyboard alone", async ({ page, baseURL }) => {
+    user = await createUser({}, { solo: true });
+    await signIn(page, user, baseURL);
+    await openSetup(page);
+
+    await expect(page.getByTestId("setup-screen").getByLabel("What should we call you?")).toBeFocused();
+    await page.keyboard.type("Jamie");
+    await page.keyboard.press("Enter");
+
+    await page.waitForURL(/\/(dashboard)?$/);
+    await waitForApp(page);
+    await expect(
+      page.locator("[data-sidebar='sidebar']").first().getByText("Jamie", { exact: true }),
+    ).toBeVisible();
+  });
+
+  test("an admin invitee finishing setup never renames the inviter's workspace", async ({
+    page,
+    baseURL,
+  }) => {
+    const inviteePrefix = `invitee-${randomUUID().slice(0, 8)}`;
+    inviter = await createUser({ name: inviteePrefix }, { solo: true });
+    const sharedWorkspace = await workspaceOf(inviter.userId);
+    user = await createUser({}, {
+      solo: false,
+      inviteTo: sharedWorkspace,
+      role: "admin",
+      emailPrefix: inviteePrefix,
+    });
+    await signIn(page, user, baseURL);
+    await openSetup(page);
+
+    await page.getByTestId("setup-screen").getByLabel("What should we call you?").fill("Bob");
+    await page.getByTestId("setup-screen").getByRole("button", { name: "Continue" }).click();
+    await page.waitForURL(/\/(dashboard)?$/);
+    await waitForApp(page);
+
+    const sidebar = page.locator("[data-sidebar='sidebar']").first();
+    await expect(sidebar.getByText(`${inviteePrefix}'s workspace`)).toBeVisible();
+    await expect(sidebar.getByText("Bob's workspace")).toHaveCount(0);
+  });
+
+  test("a failed workspace rename shows an error and Continue succeeds on retry", async ({
+    page,
+    baseURL,
+  }) => {
+    user = await createUser({}, { solo: true });
+    await signIn(page, user, baseURL);
+    await openSetup(page);
+
+    let failNext = true;
+    await page.route("**/rest/v1/organizations**", async (route) => {
+      if (route.request().method() !== "PATCH" || !failNext) return route.continue();
+      failNext = false;
+      await route.fulfill({
+        status: 500,
+        contentType: "application/json",
+        body: JSON.stringify({ message: "upstream timeout", code: "XX000" }),
+      });
+    });
+
+    const setup = page.getByTestId("setup-screen");
+    await setup.getByLabel("What should we call you?").fill("Jamie");
+    await setup.getByRole("button", { name: "Continue" }).click();
+
+    await expect(page.locator("[data-sonner-toast]").first()).toBeVisible();
+    await expect(setup.getByRole("button", { name: "Continue" })).toBeEnabled();
+    await setup.getByRole("button", { name: "Continue" }).click();
+
+    await page.waitForURL(/\/(dashboard)?$/);
+    await page.goto("/admin/users", { waitUntil: "domcontentloaded" });
+    await waitForApp(page);
+    await expect(page.getByText("Jamie's workspace").first()).toBeVisible({ timeout: 20000 });
+  });
+
+  test("a cancelled Google consent shows a note and keeps the typed name", async ({
+    page,
+    baseURL,
+  }) => {
+    user = await createUser({}, { solo: true });
+    await signIn(page, user, baseURL);
+    await setGoogleConfigured(page, true);
+    await openSetup(page);
+    await stubGoogleReturn(page, "/settings?gcal=error");
+
+    const setup = page.getByTestId("setup-screen");
+    await setup.getByLabel("What should we call you?").fill("Jamie");
+    await setup.getByRole("link", { name: "Connect Google Calendar" }).click();
+    await page.waitForURL(/\/settings\?gcal=error$/);
+    await waitForApp(page);
+
+    await expect(setup.getByText("Google Calendar was not connected.")).toBeVisible();
+    await expect(setup.getByRole("heading", { name: "Welcome to Minutia, Jamie" })).toBeVisible();
+    await expect(setup.getByRole("link", { name: "Connect Google Calendar" })).toBeVisible();
+  });
+
+  test("the tour is not offered on another browser after setup", async ({ page, baseURL }) => {
+    user = await createUser({}, { solo: true });
+    await signIn(page, user, baseURL);
+    await openSetup(page);
+
+    await page.getByTestId("setup-screen").getByLabel("What should we call you?").fill("Jamie");
+    await page.getByTestId("setup-screen").getByRole("button", { name: "Continue" }).click();
+    await page.waitForURL(/\/(dashboard)?$/);
+    await waitForApp(page);
+    await expect(page.getByText("Every good log starts with one meeting.")).toBeVisible();
+
+    await page.evaluate(() => localStorage.clear());
+    await page.reload();
+    await waitForApp(page);
+    await expect(page.getByText("Every good log starts with one meeting.")).toBeVisible();
+    await expect(page.getByText("We recommend you start the tour first.")).toHaveCount(0);
+  });
+
+  test("the subtitle counts one step when the calendar is unavailable", async ({
+    page,
+    baseURL,
+  }) => {
+    user = await createUser({ name: "Jamie" }, { solo: true });
+    await signIn(page, user, baseURL);
+    await setGoogleConfigured(page, false);
+    await openSetup(page);
+
+    const setup = page.getByTestId("setup-screen");
+    await expect(setup.getByText("One optional step and you are ready.")).toBeVisible();
+    await expect(setup.getByText(/Two optional steps/)).toHaveCount(0);
+  });
+
+  test("a user whose chosen name equals their email prefix is not asked again", async ({
+    page,
+    baseURL,
+  }) => {
+    user = await createUser((emailPrefix) => ({ name: emailPrefix }), { solo: true });
+    await signIn(page, user, baseURL);
+    await openSetup(page);
+
+    const setup = page.getByTestId("setup-screen");
+    const prefix = user.email.split("@")[0];
+    await expect(setup.getByRole("heading", { name: `Welcome to Minutia, ${prefix}` })).toBeVisible();
+    await expect(setup.getByLabel("What should we call you?")).toHaveCount(0);
   });
 });

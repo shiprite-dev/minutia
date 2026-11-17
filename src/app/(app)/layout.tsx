@@ -23,8 +23,10 @@ export default async function AppLayout({
   let profile = null;
   let organizations: OrganizationOption[] = [];
   let signupName: string | null = null;
+  let setupCompleted = false;
   if (user) {
-    signupName = user.user_metadata?.full_name ?? null;
+    signupName = user.user_metadata?.full_name ?? user.user_metadata?.name ?? null;
+    setupCompleted = user.user_metadata?.setup_completed === true;
     const { data } = await supabase
       .from("profiles")
       .select("*")
@@ -54,5 +56,14 @@ export default async function AppLayout({
       });
   }
 
-  return <AppShell profile={profile} organizations={organizations} signupName={signupName}>{children}</AppShell>;
+  return (
+    <AppShell
+      profile={profile}
+      organizations={organizations}
+      signupName={signupName}
+      setupCompleted={setupCompleted}
+    >
+      {children}
+    </AppShell>
+  );
 }
