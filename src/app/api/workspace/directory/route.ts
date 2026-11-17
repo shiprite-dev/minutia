@@ -27,10 +27,7 @@ export async function GET(request: NextRequest) {
 
   const scopes = Array.isArray(data?.scopes) ? data.scopes : [];
   if (!scopes.includes(GOOGLE_DIRECTORY_SCOPE)) {
-    return NextResponse.json(
-      { error: "Google Workspace directory access not connected" },
-      { status: 403 }
-    );
+    return NextResponse.json({ people: [] });
   }
 
   try {

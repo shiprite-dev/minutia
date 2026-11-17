@@ -90,6 +90,7 @@
     "test:rate-limit": "node --test scripts/verify-rate-limit.test.mjs",
     "test:csv": "node --test scripts/verify-csv-injection.test.mjs",
     "test:calendar-draft": "node --test scripts/verify-calendar-draft.test.mjs",
+    "test:google-onboarding": "node --test scripts/verify-google-onboarding.test.mjs",
     "test:errors": "node --test scripts/verify-humanize-error.test.mjs",
     "test:fast-lane": "node scripts/verify-fast-lane.test.mjs",
     "test:finishing": "node --test scripts/verify-finishing.test.mjs",

@@ -280,19 +280,22 @@ async function ensureMeeting({
     return data;
   }
 
-  const { count, error: countError } = await supabase
+  const { data: last, error: lastError } = await supabase
     .from("meetings")
-    .select("id", { count: "exact", head: true })
-    .eq("series_id", seriesId);
+    .select("sequence_number")
+    .eq("series_id", seriesId)
+    .order("sequence_number", { ascending: false })
+    .limit(1)
+    .maybeSingle<{ sequence_number: number }>();
 
-  if (countError) throw countError;
+  if (lastError) throw lastError;
 
   const { data, error } = await supabase
     .from("meetings")
     .insert({
       ...payload,
       series_id: seriesId,
-      sequence_number: (count ?? 0) + 1,
+      sequence_number: (last?.sequence_number ?? 0) + 1,
       status: "upcoming",
       notes_markdown: event.description ?? "",
     })

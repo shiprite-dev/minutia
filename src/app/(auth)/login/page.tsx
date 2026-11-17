@@ -10,8 +10,8 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Mail, ArrowRight, ExternalLink } from "lucide-react";
 import { motion } from "motion/react";
-import { GOOGLE_WORKSPACE_SCOPES } from "@/lib/google-oauth-scopes";
-import { getSafeNext, buildCallbackUrl, LoadingDots, GoogleIcon } from "../_shared";
+import { GOOGLE_OAUTH_QUERY_PARAMS, GOOGLE_WORKSPACE_SCOPES } from "@/lib/google-oauth-scopes";
+import { getSafeNext, buildCallbackUrl, LoadingDots, ContinueWithGoogle } from "../_shared";
 
 type FormState = "idle" | "loading" | "sent" | "error";
 type InviteState = "idle" | "loading" | "sent" | "error";
@@ -83,11 +83,11 @@ function LoginForm() {
     process.env.NEXT_PUBLIC_ENABLE_GOOGLE_AUTH === "true";
   const guestLoginEnabled =
     process.env.NEXT_PUBLIC_ENABLE_GUEST_LOGIN === "true";
-  const secondaryAuthEnabled =
-    magicLinkEnabled || googleAuthEnabled || guestLoginEnabled;
+  const secondaryAuthEnabled = magicLinkEnabled || guestLoginEnabled;
   const canSignIn = email.trim().length > 0 && password.length > 0;
   const nextPath = getSafeNext(searchParams.get("next"));
   const callbackUrl = buildCallbackUrl(nextPath);
+  const oauthFailed = searchParams.get("error") === "auth";
 
   async function handlePasswordLogin(e: React.FormEvent) {
     e.preventDefault();
@@ -171,10 +171,7 @@ function LoginForm() {
       options: {
         redirectTo: callbackUrl,
         scopes: GOOGLE_WORKSPACE_SCOPES,
-        queryParams: {
-          access_type: "offline",
-          prompt: "consent",
-        },
+        queryParams: GOOGLE_OAUTH_QUERY_PARAMS,
       },
     });
 
@@ -277,6 +274,12 @@ function LoginForm() {
           </motion.div>
         ) : (
           <>
+            {oauthFailed && formState !== "error" && (
+              <p role="alert" className="mb-4 font-sans text-sm text-danger">
+                Google sign-in was cancelled or failed. Try again, or use your email.
+              </p>
+            )}
+            {googleAuthEnabled && <ContinueWithGoogle onClick={handleGoogleLogin} />}
             <form onSubmit={handlePasswordLogin} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="email" className="font-sans text-ink-2">
@@ -381,18 +384,6 @@ function LoginForm() {
                   Email magic link
                 </Button>
               </form>
-            )}
-
-            {googleAuthEnabled && (
-              <Button
-                type="button"
-                variant="outline"
-                onClick={handleGoogleLogin}
-                className="h-10 w-full rounded-[12px] border-rule bg-paper font-sans font-medium text-ink hover:bg-paper-3"
-              >
-                <GoogleIcon />
-                Google
-              </Button>
             )}
 
             {guestLoginEnabled && (
