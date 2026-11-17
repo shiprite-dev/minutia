@@ -452,3 +452,12 @@ test("an email with LIKE wildcards matches only that exact user", async () => {
   assert.equal(S.links.length, 1, "a_b@ is a new user, not axb@");
   assert.ok(!S.writes.some((w) => w.row.user_id === lookalike));
 });
+
+test("someone removed from the workspace can no longer invite to a series they ran", async () => {
+  reset({ caller: OWNER });
+  S.tables.organization_members = S.tables.organization_members.filter((m) => m.user_id !== OWNER);
+  const res = await invite({ email: "new@example.com", series_id: SERIES_A });
+  assert.equal(res.status, 403, JSON.stringify(res.body));
+  assert.equal(S.writes.length, 0, "nothing is provisioned");
+  assert.equal(S.mail.length, 0, "no invitation is sent");
+});
