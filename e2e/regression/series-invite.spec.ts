@@ -138,6 +138,9 @@ test.describe("Invite colleagues from a series", () => {
         await invitee.getByRole("button", { name: "Set password" }).click();
         await expect(invitee).toHaveURL(`${APP_URL}/dashboard`);
 
+        await waitForApp(invitee);
+        await invitee.getByText("Skip setup").click();
+        await expect(invitee.getByText("Welcome to Minutia")).toHaveCount(0);
         await invitee.goto("/series");
         await waitForApp(invitee);
         await invitee.getByText(series.name).first().click();
