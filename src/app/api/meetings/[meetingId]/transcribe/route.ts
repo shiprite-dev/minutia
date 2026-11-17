@@ -179,6 +179,10 @@ export async function POST(
   // Verify a provider is configured before claiming the row, so a misconfigured
   // instance never leaves a meeting stuck mid-transcription.
   if (!isTranscriptionConfigured()) {
+    await supabase
+      .from("meetings")
+      .update({ transcription_error_code: "transcription_unconfigured" })
+      .eq("id", meetingId);
     return NextResponse.json(
       { error: "Transcription is not configured.", code: "TRANSCRIPTION_UNCONFIGURED", request_id: requestId },
       { status: 503 }
@@ -204,10 +208,10 @@ export async function POST(
     );
   }
 
-  const markFailed = async () => {
+  const markFailed = async (code: string | null = null) => {
     const { error } = await supabase
       .from("meetings")
-      .update({ transcription_status: "failed", transcription_started_at: null })
+      .update({ transcription_status: "failed", transcription_started_at: null, transcription_error_code: code })
       .eq("id", meetingId);
     // A failed reset would silently strand the row in 'processing' (until the
     // staleness window above reclaims it), so surface it rather than swallow it.
@@ -511,6 +515,7 @@ export async function POST(
       .update({
         transcript_raw: transcript,
         transcription_status: "completed",
+        transcription_error_code: null,
         transcription_model: model,
         transcription_provider: provider,
         transcription_completed_at: new Date().toISOString(),
@@ -598,7 +603,7 @@ export async function POST(
       request_id: requestId,
     });
   } catch (error) {
-    await markFailed();
+    await markFailed(error instanceof TranscriptionError ? error.code : null);
     if (error instanceof TranscriptionError) {
       return NextResponse.json(
         { error: "Transcription failed.", code: error.code, request_id: requestId },

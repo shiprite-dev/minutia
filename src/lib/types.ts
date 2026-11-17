@@ -198,6 +198,7 @@ export interface Meeting {
   transcription_source?: Record<string, unknown> | null;
   transcription_started_at: Date | null;
   transcription_completed_at: Date | null;
+  transcription_error_code?: string | null;
   gcal_meeting_key: string | null;
   gcal_calendar_id: string | null;
   gcal_event_id: string | null;

@@ -75,6 +75,7 @@ import { AiUnavailableNotice } from "@/components/minutia/ai-unavailable-notice"
 import { useAiAccess } from "@/lib/hooks/use-ai-access";
 import { composeMeetingNotes } from "@/lib/ai/companion-notes";
 import { humanizeError } from "@/lib/errors";
+import { ADMIN_TRANSCRIPTION_CODES, stalledTranscriptionState } from "@/lib/transcription/stall";
 import { ArrowLeft, Square, Play, Check, X, Sparkles, Loader2, FileText, CheckSquare, Gavel, AlertTriangle, Ban, RotateCcw, HelpCircle, ChevronDown, MoreHorizontal } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatShortDate } from "@/lib/date-utils";
@@ -106,13 +107,6 @@ interface TranscriptionFailure {
 // The server reclaims a processing row after this window, so a client may only
 // offer a retry once the claim is actually stale.
 const STALE_PROCESSING_MS = 15 * 60 * 1000;
-
-const ADMIN_CODES = new Set([
-  "auth_error",
-  "no_api_key",
-  "provider_not_configured",
-  "transcription_unconfigured",
-]);
 
 // A live meeting has nothing to report until something was recorded, so the
 // two "nothing here" states stay out of the live view.
@@ -152,7 +146,7 @@ function mapTranscriptionFailure(
   if (rawCode === "extraction_failed") return { kind: "extraction_failed" };
   if (rawCode === "processing_conflict") return { kind: "already_running" };
   if (rawCode === "input_mismatch") return { kind: "input_mismatch" };
-  if (ADMIN_CODES.has(rawCode)) return { kind: "needs_admin" };
+  if (ADMIN_TRANSCRIPTION_CODES.has(rawCode)) return { kind: "needs_admin" };
   if (status === 401) return { kind: "needs_signin" };
   if (status === 404) return { kind: "deleted" };
   if (rawCode) {
@@ -962,7 +956,13 @@ export function MeetingDetailContent({
 
   // The elapsed-time copy needs a moving clock while a run is in flight.
   React.useEffect(() => {
-    if (!transcribing && meeting?.transcription_status !== "processing" && !finishing) return;
+    if (
+      !transcribing &&
+      meeting?.transcription_status !== "processing" &&
+      meeting?.transcription_status !== "pending" &&
+      !finishing
+    )
+      return;
     const id = setInterval(() => setClock(Date.now()), 1000);
     return () => clearInterval(id);
   }, [transcribing, meeting?.transcription_status, finishing]);
@@ -1070,6 +1070,7 @@ export function MeetingDetailContent({
     Number.isFinite(deviceWaitAgeMs) &&
     deviceWaitAgeMs > STALE_PROCESSING_MS;
   const hasTranscript = !!meeting?.transcript_raw?.trim();
+  const stalledState = meeting ? stalledTranscriptionState(meeting, clock) : null;
   const canDownloadAudio = !!meeting?.audio_file_path;
 
   // One derived state drives the whole status region. The order is the
@@ -1101,6 +1102,8 @@ export function MeetingDetailContent({
     awaitingDevice
   ) {
     transcriptionState = deviceWaitOverdue ? "waiting_device_stale" : "waiting_device";
+  } else if (!uploadedPending && stalledState) {
+    transcriptionState = stalledState;
   } else if (uploadedPending || meeting?.transcription_status === "pending") {
     transcriptionState = "saved_pending";
   } else if (meeting?.transcription_outcome === "no_speech") {
