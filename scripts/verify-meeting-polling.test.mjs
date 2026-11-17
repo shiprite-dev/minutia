@@ -85,7 +85,7 @@ function fakeDocument(visibilityState = "visible") {
   };
 }
 
-function setup({ status, visibility = "visible" } = {}) {
+function setup({ status, visibility = "visible", transcript = "Transcript", meeting = {} } = {}) {
   mock.timers.enable({ apis: ["setTimeout", "setInterval"] });
   globalThis.window = globalThis;
   globalThis.document = fakeDocument(visibility);
@@ -96,6 +96,12 @@ function setup({ status, visibility = "visible" } = {}) {
     queryClient.setQueryData(meetingKeys.detail(MEETING), {
       id: MEETING,
       status,
+      ...meeting,
+    });
+  if (transcript !== undefined)
+    queryClient.setQueryData(meetingKeys.transcript(MEETING), {
+      transcript_raw: transcript,
+      transcript_segments: null,
     });
   const calls = [];
   queryClient.invalidateQueries = (filters) => {
@@ -154,6 +160,72 @@ test("a meeting that ends while open drops to the slow cadence", () => {
   assert.equal(detailRefreshes(), 2);
   advance(10_000);
   assert.equal(detailRefreshes(), 2);
+  cleanup();
+});
+
+test("a just-ended meeting still waiting for its transcript keeps the 2s cadence", () => {
+  const { detailRefreshes, cleanup } = setup({
+    status: "completed",
+    transcript: null,
+    meeting: { completed_at: new Date().toISOString() },
+  });
+  advance(10_000);
+  assert.equal(detailRefreshes(), 5);
+  cleanup();
+});
+
+test("a device recording without a transcript keeps the 2s cadence for the first hour", () => {
+  const { detailRefreshes, cleanup } = setup({
+    status: "completed",
+    transcript: null,
+    meeting: {
+      completed_at: new Date(Date.now() - 20 * 60_000).toISOString(),
+      transcription_provider: "device",
+      transcription_status: "failed",
+    },
+  });
+  advance(10_000);
+  assert.equal(detailRefreshes(), 5);
+  cleanup();
+});
+
+test("an old meeting that never had a recording settles to the slow cadence", () => {
+  const { detailRefreshes, cleanup } = setup({
+    status: "completed",
+    transcript: null,
+    meeting: { completed_at: new Date(Date.now() - 3 * 3_600_000).toISOString() },
+  });
+  advance(10_000);
+  assert.equal(detailRefreshes(), 0);
+  cleanup();
+});
+
+test("a slow tick also refreshes the series so a new live meeting is noticed", () => {
+  const { calls, cleanup } = setup({ status: "completed" });
+  advance(30_000);
+  assert.ok(calls.includes(JSON.stringify(["series", SERIES])));
+  cleanup();
+});
+
+test("a transcript that failed to load is retried by the next tick", () => {
+  const { queryClient, calls, cleanup } = setup({ status: "completed" });
+  const transcriptKey = JSON.stringify(meetingKeys.transcript(MEETING));
+  queryClient
+    .getQueryCache()
+    .build(queryClient, { queryKey: meetingKeys.transcript(MEETING) })
+    .setState({ status: "error", error: new Error("boom") });
+  advance(30_000);
+  assert.equal(calls.filter((k) => k === transcriptKey).length, 1);
+  cleanup();
+});
+
+test("a write that settles refreshes the meeting without waiting for the slow tick", async () => {
+  const { queryClient, detailRefreshes, cleanup } = setup({ status: "completed" });
+  await queryClient
+    .getMutationCache()
+    .build(queryClient, { mutationFn: () => Promise.resolve("ok") })
+    .execute(undefined);
+  assert.equal(detailRefreshes(), 1);
   cleanup();
 });
 
