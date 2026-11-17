@@ -22,6 +22,7 @@ const ADMIN = "10000000-0000-0000-0000-000000000001";
 const OWNER = "10000000-0000-0000-0000-000000000002";
 const MEMBER = "10000000-0000-0000-0000-000000000003";
 const EXISTING = "10000000-0000-0000-0000-000000000004";
+const OUTSIDER = "10000000-0000-0000-0000-000000000006";
 const NEW_USER = "10000000-0000-0000-0000-000000000005";
 const SERIES_A = "20000000-0000-0000-0000-00000000000a";
 const SERIES_B = "20000000-0000-0000-0000-00000000000b";
@@ -29,9 +30,10 @@ const SERIES_B = "20000000-0000-0000-0000-00000000000b";
 const S = {};
 globalThis.__S = S;
 
-function reset({ caller = ADMIN, fullAccess = true, gating = false } = {}) {
+function reset({ caller = ADMIN, fullAccess = true, gating = false, emailFails = false } = {}) {
   Object.assign(S, {
     caller,
+    emailFails,
     writes: [],
     links: [],
     mail: [],
@@ -65,11 +67,20 @@ function reset({ caller = ADMIN, fullAccess = true, gating = false } = {}) {
           role: "user",
           has_full_access: true,
         },
+        {
+          id: OUTSIDER,
+          email: "outsider@example.com",
+          current_organization_id: ORG_B,
+          role: "user",
+          has_full_access: true,
+        },
       ],
       organization_members: [
         { organization_id: ORG_A, user_id: ADMIN, role: "admin" },
         { organization_id: ORG_A, user_id: OWNER, role: "member" },
         { organization_id: ORG_A, user_id: MEMBER, role: "member" },
+        { organization_id: ORG_A, user_id: EXISTING, role: "member" },
+        { organization_id: ORG_B, user_id: OUTSIDER, role: "admin" },
       ],
       meeting_series: [
         { id: SERIES_A, owner_id: OWNER, organization_id: ORG_A },
@@ -149,7 +160,10 @@ fs.writeFileSync(
   path.join(stubDir, "email.mjs"),
   `
 export function escapeHtml(value) { return String(value); }
-export async function sendMail(message) { globalThis.__S.mail.push(message); }
+export async function sendMail(message) {
+  if (globalThis.__S.emailFails) throw new Error("Email is not configured.");
+  globalThis.__S.mail.push(message);
+}
 `,
 );
 fs.writeFileSync(
@@ -350,4 +364,63 @@ test("seriesInviteEmails prefills only attendee entries that are email addresses
   );
   assert.equal(seriesInviteEmails([]), "");
   assert.equal(seriesInviteEmails(undefined), "");
+});
+
+test("a series owner inviting an org admin never touches their membership or invitation", async () => {
+  reset({ caller: OWNER });
+  const res = await invite({ email: "admin@example.com", series_id: SERIES_A });
+  assert.equal(res.status, 200, JSON.stringify(res.body));
+  assert.equal(writesTo("organization_members").length, 0, "an existing role is never overwritten");
+  assert.equal(writesTo("organization_invitations").length, 0);
+  assert.equal(writesTo("series_participants")[0].row.user_id, ADMIN);
+});
+
+test("a series owner inviting a new colleague never overwrites an existing membership or invitation", async () => {
+  reset({ caller: OWNER });
+  const res = await invite({ email: "new@example.com", series_id: SERIES_A });
+  assert.equal(res.status, 200, JSON.stringify(res.body));
+  for (const table of ["organization_members", "organization_invitations"]) {
+    for (const write of writesTo(table)) {
+      assert.equal(write.opts?.ignoreDuplicates, true, table);
+      assert.equal(write.row.role, "member", table);
+    }
+  }
+});
+
+test("a series owner never receives the accept link when email is unavailable", async () => {
+  reset({ caller: OWNER, emailFails: true });
+  const res = await invite({ email: "new@example.com", series_id: SERIES_A });
+  assert.equal(res.status, 503);
+  assert.equal(res.body.code, "INVITE_EMAIL_UNAVAILABLE");
+  assert.ok(!("acceptUrl" in res.body), "the raw accept link is admin-only");
+  assert.ok(!JSON.stringify(res.body).includes("/auth/v1/verify"));
+});
+
+test("an org admin still gets the accept link to share when email is unavailable", async () => {
+  reset({ caller: ADMIN, emailFails: true });
+  const res = await invite({ email: "new@example.com", series_id: SERIES_A });
+  assert.equal(res.status, 200, JSON.stringify(res.body));
+  assert.equal(res.body.delivery, "link");
+  assert.ok(res.body.acceptUrl.includes("/auth/v1/verify"));
+});
+
+test("a series owner cannot pull a user from another workspace into this one", async () => {
+  reset({ caller: OWNER });
+  const res = await invite({ email: "outsider@example.com", series_id: SERIES_A });
+  assert.equal(res.status, 200, JSON.stringify(res.body));
+  assert.equal(writesTo("organization_members").length, 0);
+  assert.equal(writesTo("series_participants").length, 0);
+  const [invitation] = writesTo("organization_invitations");
+  assert.equal(invitation.row.status, "pending");
+  assert.equal(invitation.row.role, "member");
+  assert.equal(invitation.row.accepted_by ?? null, null);
+  assert.equal(invitation.opts.ignoreDuplicates, true);
+});
+
+test("an org admin can still add an existing user from elsewhere directly", async () => {
+  reset({ caller: ADMIN });
+  const res = await invite({ email: "outsider@example.com", series_id: SERIES_A });
+  assert.equal(res.status, 200, JSON.stringify(res.body));
+  assert.equal(writesTo("organization_members")[0].row.user_id, OUTSIDER);
+  assert.equal(writesTo("series_participants")[0].row.user_id, OUTSIDER);
 });
