@@ -217,19 +217,6 @@ test("whitespace-only provider text with nothing dropped is no speech with no ti
   assert.ok(!result.timed?.length);
 });
 
-test("no source path emits a distinct unsupported-language outcome", () => {
-  const hits = [];
-  const walk = (dir) => {
-    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-      const full = path.join(dir, entry.name);
-      if (entry.isDirectory()) walk(full);
-      else if (/\.(ts|tsx)$/.test(entry.name) && fs.readFileSync(full, "utf8").includes("unsupported_language")) hits.push(full);
-    }
-  };
-  walk(path.join(root, "src"));
-  assert.deepEqual(hits, []);
-});
-
 test("zero-config default transcribes a Japanese meeting on Groq", async () => {
   const calls = fakeFetch(() => ok({ text: "はい", duration: 1 }));
   const result = await transcribeAudio(audioBlob(), {

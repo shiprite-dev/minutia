@@ -277,10 +277,6 @@ export async function transcribeAudio(
   while (index < chain.length) {
     if (options.signal?.aborted) break;
     const provider = chain[index];
-    if (!IMPLEMENTED_PROVIDERS.has(provider)) {
-      index += 1;
-      continue;
-    }
     const credential = provider === "local" ? localSidecarUrl(env) : providerApiKey(provider, env);
     if (!credential) {
       index += 1;
