@@ -2,7 +2,6 @@
 
 import * as React from "react";
 import { motion, AnimatePresence } from "motion/react";
-import Link from "next/link";
 import {
   Check,
   Plus,
@@ -155,7 +154,6 @@ function InlineTaskItem({
   );
   const {
     data: directoryPeople = [],
-    isError: directoryError,
     isLoading: directoryLoading,
   } = useWorkspaceDirectorySearch(mentionFilter, mentionOpen && !readOnly);
   const directoryMatches = directoryPeople.filter((person) => {
@@ -323,14 +321,6 @@ function InlineTaskItem({
                   </CommandGroup>
                 )}
               </CommandList>
-              {directoryError && (
-                <Link
-                  href="/settings"
-                  className="block px-3 py-2 text-xs text-accent hover:underline border-t border-rule"
-                >
-                  Connect Google Workspace
-                </Link>
-              )}
             </Command>
           </div>
         )}
