@@ -108,7 +108,9 @@ export function InviteForm({
       if (!res.ok) {
         setInviteState("error");
         setInviteMessage(
-          `${email}: ${data.error || "Failed to send invitation."}`,
+          data.code === "INVITE_EMAIL_UNAVAILABLE"
+            ? `${email}: Email is not set up here. Ask your administrator to invite them.`
+            : `${email}: ${data.error || "Failed to send invitation."}`,
         );
         setInviteLinks(links);
         if (sent > 0) await onInvited?.();
