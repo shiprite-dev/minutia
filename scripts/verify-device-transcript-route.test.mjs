@@ -456,6 +456,8 @@ test("a valid transcript from a signed-in member is saved as a completed device 
   const write = completedWrite();
   assert.ok(write, "the meeting row is updated to completed");
   const row = write.row;
+  assert.ok("transcription_error_code" in row, "a device transcript clears an earlier failure code");
+  assert.equal(row.transcription_error_code, null);
   assert.equal(row.transcription_provider, "device");
   assert.equal(row.transcription_model, "parakeet-tdt-0.6b-v3-coreml");
   assert.equal(row.transcript_diarized, true);

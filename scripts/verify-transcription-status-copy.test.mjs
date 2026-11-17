@@ -252,3 +252,10 @@ test("new copy stays plain: no dashes, no plan or pricing words", () => {
   assert.doesNotMatch(copy, /[\u2013\u2014]/);
   assert.doesNotMatch(copy, /\b(plan|pricing|paid|upgrade|premium|cloud|hosted|AI)\b/i);
 });
+
+test("a stored configuration failure offers a retry beside contacting the administrator", () => {
+  const stored = view("needs_admin", { retryable: true });
+  assert.equal(stored.primary.label, "Contact administrator");
+  assert.equal(stored.secondary?.label, "Retry transcription");
+  assert.equal(view("needs_admin").secondary, undefined, "a failure that just happened offers no retry");
+});

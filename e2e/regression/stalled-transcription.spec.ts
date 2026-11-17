@@ -104,7 +104,7 @@ async function openMeeting(page: Page, seriesId: string, meetingId: string) {
 }
 
 test.describe("Stalled transcription", () => {
-  test("a recording the desktop app saved on an unconfigured workspace asks for an administrator", async ({
+  test("a recording the desktop app saved on an unconfigured workspace asks for an administrator and can be retried once it is fixed", async ({
     page,
     request,
   }) => {
@@ -131,6 +131,28 @@ test.describe("Stalled transcription", () => {
       await expect(
         page.getByText("Recording saved. Preparing transcription…"),
       ).toHaveCount(0);
+
+      // The stored code may be stale (an admin added a key since), so a retry
+      // is offered. A retry that fails the same way again offers none.
+      const transcribeCalls: string[] = [];
+      await page.route("**/api/meetings/*/transcribe", (route) => {
+        transcribeCalls.push(new URL(route.request().url()).pathname);
+        return route.fulfill({
+          status: 503,
+          contentType: "application/json",
+          body: JSON.stringify({
+            error: "Transcription is not configured.",
+            code: "TRANSCRIPTION_UNCONFIGURED",
+          }),
+        });
+      });
+      await region
+        .getByRole("button", { name: "Retry transcription", exact: true })
+        .click();
+      await expect.poll(() => transcribeCalls).toEqual([
+        `/api/meetings/${fixture.meetingId}/transcribe`,
+      ]);
+      await expect(region.getByText(ADMIN_HELP)).toBeVisible();
       await expect(
         region.getByRole("button", {
           name: "Retry transcription",
@@ -185,6 +207,60 @@ test.describe("Stalled transcription", () => {
         `/api/meetings/${fixture.meetingId}/transcribe`,
       ]);
     } finally {
+      await deleteSeries(request, fixture.seriesId);
+    }
+  });
+
+  test("a participant who does not run the series cannot rewrite why transcription failed", async ({
+    request,
+  }) => {
+    test.skip(!HAS_SERVICE_ROLE, "Requires service role for isolated fixtures");
+    const fixture = await createStuckMeeting(request, null);
+    const email = `stall-participant-${Date.now()}@example.com`;
+    const created = await request.post(`${SUPABASE_URL}/auth/v1/admin/users`, {
+      headers: serviceHeaders(),
+      data: { email, password: "password123", email_confirm: true },
+    });
+    expect(created.ok()).toBeTruthy();
+    const userId = ((await created.json()).id) as string;
+
+    try {
+      await rest(request, "series_participants", {
+        method: "POST",
+        data: { series_id: fixture.seriesId, user_id: userId, role: "participant" },
+      });
+      const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+      const token = await request.post(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
+        headers: { apikey: anonKey, "Content-Type": "application/json" },
+        data: { email, password: "password123" },
+      });
+      expect(token.ok()).toBeTruthy();
+      const accessToken = (await token.json()).access_token as string;
+
+      const update = await request.patch(
+        `${SUPABASE_URL}/rest/v1/meetings?id=eq.${fixture.meetingId}`,
+        {
+          headers: {
+            apikey: anonKey,
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+            Prefer: "return=minimal",
+          },
+          data: { title: "Renamed by a participant", transcription_error_code: "no_api_key" },
+        },
+      );
+      expect(update.ok(), await update.text()).toBeTruthy();
+
+      const [row] = await rest(
+        request,
+        `meetings?id=eq.${fixture.meetingId}&select=title,transcription_error_code`,
+      );
+      expect(row.title).toBe("Renamed by a participant");
+      expect(row.transcription_error_code).toBeNull();
+    } finally {
+      await request.delete(`${SUPABASE_URL}/auth/v1/admin/users/${userId}`, {
+        headers: serviceHeaders(),
+      });
       await deleteSeries(request, fixture.seriesId);
     }
   });

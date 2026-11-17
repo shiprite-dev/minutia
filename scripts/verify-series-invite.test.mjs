@@ -119,10 +119,24 @@ export async function createClient() {
 fs.writeFileSync(
   path.join(stubDir, "service-role.mjs"),
   `
+// Postgres ILIKE: _ and % are wildcards unless escaped with a backslash.
+function likeToRegExp(pattern) {
+  const literal = (c) => (/[a-z0-9@-]/i.test(c) ? c : "[" + c + "]");
+  let out = "";
+  for (let i = 0; i < pattern.length; i++) {
+    const c = pattern[i];
+    if (c === String.fromCharCode(92)) out += literal(pattern[++i]);
+    else if (c === "_") out += ".";
+    else if (c === "%") out += ".*";
+    else out += literal(c);
+  }
+  return new RegExp("^" + out + "$", "i");
+}
 function read(q) {
   const rows = globalThis.__S.tables[q.table] ?? [];
   const row = rows.find((r) =>
-    Object.entries(q.filters).every(([k, v]) => String(r[k]).toLowerCase() === String(v).toLowerCase())
+    Object.entries(q.filters).every(([k, v]) => String(r[k]).toLowerCase() === String(v).toLowerCase()) &&
+    Object.entries(q.patterns ?? {}).every(([k, v]) => likeToRegExp(v).test(String(r[k])))
   );
   return { data: row ?? null, error: null };
 }
@@ -134,7 +148,7 @@ export function createServiceRoleClient() {
       const builder = {
         select() { return builder; },
         eq(k, v) { q.filters[k] = v; return builder; },
-        ilike(k, v) { q.filters[k] = v; return builder; },
+        ilike(k, v) { (q.patterns ??= {})[k] = v; return builder; },
         async single() { return read(q); },
         async maybeSingle() { return read(q); },
         async upsert(row, opts) { S.writes.push({ table, row, opts }); return { error: null }; },
@@ -160,6 +174,7 @@ fs.writeFileSync(
   path.join(stubDir, "email.mjs"),
   `
 export function escapeHtml(value) { return String(value); }
+export async function isEmailConfigured() { return !globalThis.__S.emailFails; }
 export async function sendMail(message) {
   if (globalThis.__S.emailFails) throw new Error("Email is not configured.");
   globalThis.__S.mail.push(message);
@@ -393,6 +408,9 @@ test("a series owner never receives the accept link when email is unavailable", 
   assert.equal(res.status, 503);
   assert.equal(res.body.code, "INVITE_EMAIL_UNAVAILABLE");
   assert.ok(!("acceptUrl" in res.body), "the raw accept link is admin-only");
+  assert.equal(S.links.length, 0, "no account is created before email is known to work");
+  assert.equal(S.writes.length, 0, "nothing is provisioned before email is known to work");
+  assert.equal(S.mail.length, 0);
   assert.ok(!JSON.stringify(res.body).includes("/auth/v1/verify"));
 });
 
@@ -423,4 +441,14 @@ test("an org admin can still add an existing user from elsewhere directly", asyn
   assert.equal(res.status, 200, JSON.stringify(res.body));
   assert.equal(writesTo("organization_members")[0].row.user_id, OUTSIDER);
   assert.equal(writesTo("series_participants")[0].row.user_id, OUTSIDER);
+});
+
+test("an email with LIKE wildcards matches only that exact user", async () => {
+  reset({ caller: ADMIN });
+  const lookalike = "10000000-0000-0000-0000-000000000007";
+  S.tables.profiles.push({ id: lookalike, email: "axb@example.com", current_organization_id: ORG_B, role: "user" });
+  const res = await invite({ email: "a_b@example.com", series_id: SERIES_A });
+  assert.equal(res.status, 200, JSON.stringify(res.body));
+  assert.equal(S.links.length, 1, "a_b@ is a new user, not axb@");
+  assert.ok(!S.writes.some((w) => w.row.user_id === lookalike));
 });
