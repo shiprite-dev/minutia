@@ -107,7 +107,7 @@ export function micErrorMessage(err: unknown): string {
       return "Microphone access was denied. Allow it for this site in your browser, then press Record again.";
     case "NotReadableError":
     case "AbortError":
-      return "Your microphone is in use by another app. Close it (Zoom, the Minutia companion, another tab), then press Record again.";
+      return "Your microphone is in use by another app. Close it (Zoom, the Minutia Mac app, another tab), then press Record again.";
     case "NotFoundError":
     case "OverconstrainedError":
       return "No microphone was found. Connect one, then press Record again.";

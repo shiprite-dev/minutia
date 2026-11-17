@@ -72,7 +72,7 @@ export async function POST() {
 
   if (error || !data.properties?.hashed_token) {
     return NextResponse.json(
-      { error: "Failed to authorize the companion app" },
+      { error: "Failed to authorize the Mac app" },
       { status: 500 }
     );
   }

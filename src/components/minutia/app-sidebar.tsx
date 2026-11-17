@@ -180,7 +180,7 @@ export function AppSidebar({ profile, organizations }: AppSidebarProps) {
       </SidebarContent>
 
       <SidebarFooter className="border-t border-rule px-3 py-4">
-        {currentOrganization && (
+        {currentOrganization && currentOrganization.memberCount > 1 && (
           <div className="mb-3 px-2">
             <label className="mb-1.5 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.1em] text-ink-4">
               <Building2 className="size-3" />

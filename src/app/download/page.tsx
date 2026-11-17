@@ -161,7 +161,7 @@ export default async function DownloadPage() {
                 Start capturing on the web today.
               </h2>
               <p className="mt-4 text-ink-2">
-                The Mac companion is on the way. Minutia runs in your browser
+                The Mac app is on the way. Minutia runs in your browser
                 right now, and the desktop app slots in the moment it ships.
               </p>
               <div className="mt-8">

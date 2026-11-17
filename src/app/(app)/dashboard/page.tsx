@@ -862,9 +862,9 @@ function IssueRow({
     >
       <motion.div
         ref={ref}
-        initial={{ opacity: 0, x: 20 }}
-        animate={{ opacity: 1, x: 0 }}
-        transition={{ delay: index * 0.06, duration: 0.32, ease: [0.2, 0.8, 0.2, 1] }}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: Math.min(index, 5) * 0.06, duration: 0.32, ease: [0.2, 0.8, 0.2, 1] }}
         data-focused={focused || undefined}
         aria-label={`${issue.title}, ${STATUS_CONFIG[issue.status].label}${overdue ? ", overdue" : ""}`}
         className={cn(

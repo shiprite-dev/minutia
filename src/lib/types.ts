@@ -58,6 +58,7 @@ export interface OrganizationOption {
   name: string;
   slug: string;
   role: OrganizationRole;
+  memberCount: number;
 }
 
 export interface OrganizationInvitation {
@@ -152,6 +153,7 @@ export interface GoogleCalendarAgendaItem {
 }
 
 export interface GoogleCalendarStatus {
+  configured: boolean;
   connected: boolean;
   directoryConnected: boolean;
   googleEmail: string | null;
