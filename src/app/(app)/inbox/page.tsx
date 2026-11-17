@@ -150,6 +150,15 @@ export default function InboxPage() {
   const read = (notifications ?? []).filter((n) => n.read);
   const hasUnread = unread.length > 0;
 
+  if (failed.length > 0) {
+    return (
+      <div className="mx-auto max-w-2xl px-4 py-8 sm:px-6 lg:px-8">
+        <h1 className="font-display text-2xl font-semibold text-ink">Inbox</h1>
+        <LoadError failed={failed} />
+      </div>
+    );
+  }
+
   if (isLoading) {
     return (
       <div className="mx-auto max-w-2xl px-4 py-8 sm:px-6 lg:px-8">
@@ -159,15 +168,6 @@ export default function InboxPage() {
           <div className="h-16 bg-paper-2 rounded-lg" />
           <div className="h-16 bg-paper-2 rounded-lg" />
         </div>
-      </div>
-    );
-  }
-
-  if (failed.length > 0) {
-    return (
-      <div className="mx-auto max-w-2xl px-4 py-8 sm:px-6 lg:px-8">
-        <h1 className="font-display text-2xl font-semibold text-ink">Inbox</h1>
-        <LoadError onRetry={() => notificationsQuery.refetch()} />
       </div>
     );
   }

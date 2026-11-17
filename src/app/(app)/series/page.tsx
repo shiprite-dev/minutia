@@ -32,7 +32,8 @@ function formatDate(date: Date | string): string {
 export default function SeriesListPage() {
   const seriesQuery = useSeries();
   const { data: seriesList, isLoading } = seriesQuery;
-  const failed = failedQueries(seriesQuery).length > 0;
+  const failedList = failedQueries(seriesQuery);
+  const failed = failedList.length > 0;
   const [dialogOpen, setDialogOpen] = React.useState(false);
   const [activeSeriesId, setActiveSeriesId] = React.useState<string | null>(
     null
@@ -77,7 +78,7 @@ export default function SeriesListPage() {
           </div>
         )}
 
-        {mounted && failed && <LoadError onRetry={() => seriesQuery.refetch()} />}
+        {mounted && failed && <LoadError failed={failedList} />}
 
         {/* Empty state */}
         {mounted && !isLoading && seriesList && seriesList.length === 0 && (

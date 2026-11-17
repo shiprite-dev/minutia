@@ -1,5 +1,6 @@
 "use client";
 
+import { localDay } from "@/lib/date-utils";
 import { shouldIgnoreGlobalKey } from "@/lib/keyboard";
 import { LoadError, failedQueries } from "@/components/minutia/load-error";
 import * as React from "react";
@@ -67,7 +68,7 @@ const priorityDotColor: Record<Priority, string> = {
 // ---------------------------------------------------------------------------
 
 function formatDate(date: Date | string): string {
-  return new Date(date).toLocaleDateString("en-US", {
+  return localDay(date).toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
     year: "numeric",
@@ -235,10 +236,15 @@ function InlineEditText({
 
 const NOT_FOUND_CODES = ["PGRST116", "22P02"];
 
-function historyDepth(): number {
-  const nav = (window as unknown as { navigation?: { canGoBack: boolean } }).navigation;
-  if (nav) return nav.canGoBack ? 1 : 0;
-  return window.history.length - 1;
+function cameFromThisApp(): boolean {
+  try {
+    return (
+      !!document.referrer &&
+      new URL(document.referrer).origin === window.location.origin
+    );
+  } catch {
+    return false;
+  }
 }
 
 interface IssueDetailContentProps {
@@ -248,6 +254,11 @@ interface IssueDetailContentProps {
 export function IssueDetailContent({ issueId }: IssueDetailContentProps) {
   const router = useRouter();
   const queryClient = useQueryClient();
+  queryClient.setQueryDefaults(issueKeys.detail(issueId), {
+    retry: (count, error) =>
+      count < 3 &&
+      !NOT_FOUND_CODES.includes((error as { code?: string }).code ?? ""),
+  });
   const issueQuery = useIssue(issueId);
   const { data: issue, isLoading, isError } = issueQuery;
   const loadFailed =
@@ -277,7 +288,7 @@ export function IssueDetailContent({ issueId }: IssueDetailContentProps) {
           break;
         case "Escape":
           e.preventDefault();
-          if (historyDepth() > 0) router.back();
+          if (cameFromThisApp()) router.back();
           else router.push("/dashboard");
           break;
         case "r":
@@ -310,6 +321,14 @@ export function IssueDetailContent({ issueId }: IssueDetailContentProps) {
     if (showUpdateForm) updateInputRef.current?.focus();
   }, [showUpdateForm]);
 
+  if (loadFailed) {
+    return (
+      <div className="min-h-full bg-paper">
+        <LoadError failed={failedQueries(issueQuery)} />
+      </div>
+    );
+  }
+
   // Loading skeleton
   if (isLoading) {
     return (
@@ -332,14 +351,6 @@ export function IssueDetailContent({ issueId }: IssueDetailContentProps) {
             <Skeleton className="h-16 w-full" />
           </div>
         </div>
-      </div>
-    );
-  }
-
-  if (loadFailed) {
-    return (
-      <div className="min-h-full bg-paper">
-        <LoadError onRetry={() => issueQuery.refetch()} />
       </div>
     );
   }
@@ -771,7 +782,7 @@ function TimelineUpdateNode({
       animate={{ opacity: 1, y: 0 }}
       transition={{
         duration: 0.4,
-        delay: Math.min(index, 8) * 0.09,
+        delay: Math.min(index, 6) * 0.09,
         ease: [0.2, 0.8, 0.2, 1],
       }}
       className="relative pl-8 pb-8"

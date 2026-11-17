@@ -69,43 +69,59 @@ test.describe("daily UX batch 1", () => {
     await expect(rows.first().getByLabel(`Issue key ${key}`)).toBeVisible();
   });
 
-  test.describe("an item due today", () => {
-    test.use({ timezoneId: "Asia/Tokyo" });
+  for (const [timezoneId, now] of [
+    ["Asia/Tokyo", "2026-11-18T10:00:00Z"],
+    ["America/Los_Angeles", "2026-11-18T20:00:00Z"],
+  ] as const) {
+    test.describe(`an item due today in ${timezoneId}`, () => {
+      test.use({ timezoneId });
 
-    test("is not counted overdue anywhere in Tokyo time", async ({
-      page,
-      request,
-    }) => {
-      await page.clock.setFixedTime(new Date("2026-11-18T10:00:00Z"));
-      await gotoDashboard(page);
-      const hero = widgetWithText(page, "Open items across your series");
-      const overdueCount = async () => {
-        const text =
-          (await hero
-            .getByText(/\d+ overdue/)
-            .textContent({ timeout: 1000 })
-            .catch(() => null)) ?? "0";
-        return Number(text.match(/\d+/)?.[0] ?? 0);
-      };
-      const before = await overdueCount();
+      test("reads Due today, is not counted overdue, and shows the right dates", async ({
+        page,
+        request,
+      }) => {
+        await page.clock.setFixedTime(new Date(now));
+        await gotoDashboard(page);
+        const hero = widgetWithText(page, "Open items across your series");
+        const overdueCount = async () => {
+          const text =
+            (await hero
+              .getByText(/\d+ overdue/)
+              .textContent({ timeout: 1000 })
+              .catch(() => null)) ?? "0";
+          return Number(text.match(/\d+/)?.[0] ?? 0);
+        };
+        const before = await overdueCount();
 
-      const title = `Due today Tokyo ${Date.now()}`;
-      const { id } = await createDashboardIssue(request, title, {
-        due_date: "2026-11-18",
+        const stamp = Date.now();
+        const today = await createDashboardIssue(request, `Due today ${stamp}`, {
+          due_date: "2026-11-18",
+        });
+        const later = await createDashboardIssue(request, `Due later ${stamp}`, {
+          due_date: "2026-12-05",
+        });
+        try {
+          await page.reload();
+          await waitForApp(page);
+          const row = page.locator(rowsSelector).filter({ hasText: today.title });
+          await expect(row).toBeVisible();
+          await expect(row).toContainText("Due today");
+          await expect(row).not.toHaveAttribute("aria-label", /overdue/);
+          expect(await overdueCount()).toBe(before);
+          await expect(
+            page.locator(rowsSelector).filter({ hasText: later.title })
+          ).toContainText("Due Dec 5");
+
+          await page.goto(`/issues/${today.id}`);
+          await waitForApp(page);
+          await expect(page.getByRole("button", { name: "Due date" })).toContainText("Nov 18, 2026");
+        } finally {
+          await deleteIssue(request, today.id);
+          await deleteIssue(request, later.id);
+        }
       });
-      try {
-        await page.reload();
-        await waitForApp(page);
-        const row = page.locator(rowsSelector).filter({ hasText: title });
-        await expect(row).toBeVisible();
-        await expect(row).toContainText("Due today");
-        await expect(row).not.toHaveAttribute("aria-label", /overdue/);
-        expect(await overdueCount()).toBe(before);
-      } finally {
-        await deleteIssue(request, id);
-      }
     });
-  });
+  }
 
   test("the board labels say what they show", async ({ page }) => {
     await gotoDashboard(page);
