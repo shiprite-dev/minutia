@@ -151,6 +151,9 @@ jobs:
       - name: Verify optimistic cache + pending-delete core
         run: pnpm test:optimistic
 
+      - name: Verify meeting polling cadence
+        run: pnpm test:meeting-polling
+
       - name: Audio segment contracts
         run: pnpm test:audio-segments
 
