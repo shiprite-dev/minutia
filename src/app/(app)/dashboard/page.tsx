@@ -868,7 +868,7 @@ function IssueRow({
         data-focused={focused || undefined}
         aria-label={`${issue.title}, ${STATUS_CONFIG[issue.status].label}${overdue ? ", overdue" : ""}`}
         className={cn(
-          "group flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg px-3 py-2.5 transition-colors outline-none",
+          "group/row flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg px-3 py-2.5 transition-colors outline-none",
           "focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-paper",
           focused ? "bg-paper-2 ring-1 ring-accent/30" : "hover:bg-paper-2"
         )}
@@ -880,7 +880,7 @@ function IssueRow({
             {...listeners}
             aria-roledescription="sortable issue"
             aria-label={`Drag to reorder ${issue.title}`}
-            className="shrink-0 cursor-grab touch-none text-ink-4 opacity-0 transition-opacity group-hover:opacity-100 hover:text-ink"
+            className="shrink-0 cursor-grab touch-none text-ink-4 opacity-0 transition-opacity group-hover/row:opacity-100 hover:text-ink"
           >
             <GripVertical className="size-4" />
           </button>
@@ -889,7 +889,7 @@ function IssueRow({
         <IssueKey issue={issue} className="h-5 px-1.5 text-[10px]" />
         <PrefetchIssueLink
           issueId={issue.id}
-          className="flex-1 min-w-0 text-sm font-medium text-ink group-hover:text-accent transition-colors truncate basis-[120px]"
+          className="flex-1 min-w-0 text-sm font-medium text-ink group-hover/row:text-accent transition-colors truncate basis-[120px]"
         >
           {highlightMatch(issue.title, highlightQuery)}
         </PrefetchIssueLink>
@@ -1079,9 +1079,9 @@ function SeriesWidget({
           <Link
             key={series.id}
             href={`/series/${series.id}`}
-            className="flex items-center gap-3 rounded-lg px-3 py-2.5 hover:bg-paper-2 transition-colors group min-w-0"
+            className="flex items-center gap-3 rounded-lg px-3 py-2.5 hover:bg-paper-2 transition-colors group/row min-w-0"
           >
-            <Calendar className="size-4 text-ink-4 group-hover:text-accent transition-colors" />
+            <Calendar className="size-4 text-ink-4 group-hover/row:text-accent transition-colors" />
             <span className="flex-1 min-w-0 text-sm text-ink transition-colors break-words">{series.name}</span>
             {series.open_issues_count > 0 && (
               <span className="text-xs text-accent font-medium tabular-nums">
