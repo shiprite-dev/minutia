@@ -342,7 +342,7 @@ test.describe("Setup screen polish", () => {
     expect(landed.pathname + landed.search).toBe(next);
   });
 
-  for (const [kind, evil] of [["absoluteUrl", "https://evil.example"], ["protocolRelative", "//evil.example"], ["backslash", "/\\evil.example"]]) {
+  for (const [kind, evil] of [["absoluteUrl", "https://evil.example"], ["protocolRelative", "//evil.example"], ["backslash", "/\\evil.example"], ["dotSegments", "/.//evil.com"], ["backslashHost", "/\\evil.com"]]) {
     test(`unsafeNext_${kind}_landsOnTheDashboard`, async ({ page, baseURL }) => {
       await openSetup(page, `/dashboard?next=${encodeURIComponent(evil)}`);
       await page.getByTestId("setup-screen").getByLabel("What should we call you?").fill("Jamie");

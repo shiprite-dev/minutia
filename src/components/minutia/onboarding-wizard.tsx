@@ -22,16 +22,26 @@ interface OnboardingWizardProps {
 
 const SAVE_TIMEOUT_MS = 10_000;
 
+function isLocalPath(path: string) {
+  return path.startsWith("/") && !path.startsWith("//") && !path.startsWith("/\\");
+}
+
 function destinationAfterSetup(next: string | null) {
   const origin = window.location.origin;
-  const requested = next ? new URL(next, origin) : null;
-  if (requested && requested.origin === origin) {
-    return requested.pathname + requested.search + requested.hash;
+  try {
+    const requested = next ? new URL(next, origin) : null;
+    if (requested?.origin === origin) {
+      const path = requested.pathname + requested.search + requested.hash;
+      if (isLocalPath(path)) return path;
+    }
+  } catch {
+    return "/";
   }
   const here = new URL(window.location.href);
   if (here.searchParams.has("gcal")) return "/";
   here.searchParams.delete("next");
-  return here.pathname + here.search + here.hash;
+  const path = here.pathname + here.search + here.hash;
+  return isLocalPath(path) ? path : "/";
 }
 
 function SetupRow({
