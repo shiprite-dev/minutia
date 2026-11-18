@@ -471,21 +471,28 @@ test.describe("Organization RBAC and workspace routes", () => {
     }
   });
 
-  test("sidebar shows the current workspace without a workspace switcher", async ({
+  test("sidebar of a workspace with a teammate shows the current workspace without a switcher", async ({
     page,
     request,
   }) => {
     const orgId = await getCurrentOrgId(request);
+    const teammateId = await createAuthUser(request, `sidebar-teammate-${Date.now()}@example.com`);
 
-    const orgRes = await request.get(
-      `${SUPABASE_URL}/rest/v1/organizations?id=eq.${orgId}&select=name`,
-      { headers: serviceHeaders() }
-    );
-    expect(orgRes.ok()).toBeTruthy();
-    const organizations = await orgRes.json();
+    try {
+      await upsertMembership(request, orgId, teammateId, "member");
+      const orgRes = await request.get(
+        `${SUPABASE_URL}/rest/v1/organizations?id=eq.${orgId}&select=name`,
+        { headers: serviceHeaders() }
+      );
+      expect(orgRes.ok()).toBeTruthy();
+      const organizations = await orgRes.json();
 
-    await page.goto("/settings");
-    await expect(page.getByText(organizations[0].name)).toBeVisible();
-    await expect(page.getByLabel("Organization")).toHaveCount(0);
+      await page.goto("/settings");
+      const sidebar = page.locator("[data-sidebar='sidebar']").first();
+      await expect(sidebar.getByText(organizations[0].name)).toBeVisible();
+      await expect(page.getByLabel("Organization")).toHaveCount(0);
+    } finally {
+      await deleteAuthUser(request, teammateId);
+    }
   });
 });

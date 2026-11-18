@@ -65,7 +65,7 @@ export default function LandingPage() {
             href="/download"
             className="inline-flex items-center gap-1 font-medium text-accent hover:text-accent-hover"
           >
-            Get the macOS companion
+            Get the Mac app
             <ArrowRight className="size-3.5" />
           </Link>
         </p>

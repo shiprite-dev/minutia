@@ -21,6 +21,7 @@ export async function GET() {
   const scopes = Array.isArray(data?.scopes) ? data.scopes : [];
 
   return NextResponse.json({
+    configured: Boolean(process.env.GOOGLE_CLIENT_ID),
     connected: scopes.includes(GOOGLE_CALENDAR_SCOPE),
     directoryConnected: scopes.includes(GOOGLE_DIRECTORY_SCOPE),
     googleEmail: data?.google_email ?? null,

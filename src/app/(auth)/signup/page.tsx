@@ -72,10 +72,7 @@ function SignUpForm() {
       setFormState("error");
       setErrorMessage(error.message);
     } else if (data.session) {
-      // Auto-confirmed signup (email confirmation disabled): new accounts still
-      // get the onboarding confirmation beat via the ?confirmed=1 marker.
-      const sep = nextPath.includes("?") ? "&" : "?";
-      window.location.replace(`${nextPath}${sep}confirmed=1`);
+      window.location.replace(nextPath);
     } else {
       setFormState("sent");
     }
