@@ -56,13 +56,13 @@ export function WidgetShell({
         transition,
         zIndex: isDragging ? 20 : undefined,
       }}
-      className={cn("widget-cell group", isDragging && "is-dragging", className)}
+      className={cn("widget-cell group/widget", isDragging && "is-dragging", className)}
     >
       <div className="widget-card-content relative h-full rounded-xl bg-card p-6 min-w-0 shadow-[var(--shadow-raised)] transition-shadow duration-[var(--duration-base)]">
         <div
           className={cn(
             "absolute top-2.5 right-2.5 z-10 flex items-center gap-1 opacity-0 pointer-events-none transition-opacity",
-            "group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto"
+            "group-hover/widget:opacity-100 group-hover/widget:pointer-events-auto group-focus-within/widget:opacity-100 group-focus-within/widget:pointer-events-auto"
           )}
         >
           <HintTooltip label="Drag to reorder this widget.">

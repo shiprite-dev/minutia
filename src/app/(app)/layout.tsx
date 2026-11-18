@@ -27,18 +27,15 @@ export default async function AppLayout({
   if (user) {
     signupName = user.user_metadata?.full_name ?? user.user_metadata?.name ?? null;
     setupCompleted = user.user_metadata?.setup_completed === true;
-    const { data } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("id", user.id)
-      .single();
+    const [{ data }, { data: memberships }] = await Promise.all([
+      supabase.from("profiles").select("*").eq("id", user.id).single(),
+      supabase
+        .from("organization_members")
+        .select("role, organizations(id, name, slug, organization_members(count))")
+        .eq("user_id", user.id)
+        .order("joined_at", { ascending: true }),
+    ]);
     profile = data;
-
-    const { data: memberships } = await supabase
-      .from("organization_members")
-      .select("role, organizations(id, name, slug, organization_members(count))")
-      .eq("user_id", user.id)
-      .order("joined_at", { ascending: true });
 
     organizations = (memberships ?? [])
       .flatMap((membership) => {
