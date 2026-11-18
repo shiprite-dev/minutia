@@ -32,8 +32,18 @@ test.describe("Diarized transcript", () => {
     await expect(
       page.getByRole("button", { name: "Rename Speaker B, currently Mike Ross" }).first()
     ).toBeVisible();
-    await expect(page.getByText("We still need the migration reviewed.")).toBeVisible();
-    await expect(page.getByText("I will take the migration review.")).toBeVisible();
+    const turnBy = (speaker: string, line: string) =>
+      page
+        .locator("div")
+        .filter({ has: page.getByRole("button", { name: speaker, exact: true }) })
+        .filter({ has: page.getByText(line, { exact: true }) })
+        .last();
+    await expect(
+      turnBy("Rename Speaker A, currently Sarah Lee", "We still need the migration reviewed.")
+    ).toBeVisible();
+    await expect(
+      turnBy("Rename Speaker B, currently Mike Ross", "I will take the migration review.")
+    ).toBeVisible();
 
     // The self-assignment in the transcript surfaces as an owner-attributed
     // suggestion, already open in the log's review group with no click.
