@@ -297,15 +297,15 @@ test.describe("Series Detail Page", () => {
     await expect(page.getByText("Platform Standup #4")).toBeVisible();
   });
 
-  test("loads live series meetings for realtime timeline freshness", async ({
+  test("the timeline lists every meeting from the series detail alone", async ({
     page,
   }) => {
-    const seriesMeetingRequests: string[] = [];
+    const seriesMeetingListRequests: string[] = [];
 
     await page.route("**/rest/v1/meetings?**", async (route, request) => {
       const decodedUrl = decodeURIComponent(request.url());
       if (decodedUrl.includes(`series_id=eq.${SERIES.platformStandup}`)) {
-        seriesMeetingRequests.push(decodedUrl);
+        seriesMeetingListRequests.push(decodedUrl);
       }
       await route.continue();
     });
@@ -313,11 +313,8 @@ test.describe("Series Detail Page", () => {
     await gotoSeriesDetail(page);
 
     await expect(page.getByText("Platform Standup #1")).toBeVisible();
-    expect(seriesMeetingRequests).toHaveLength(1);
-    expect(seriesMeetingRequests[0]).toContain(
-      `series_id=eq.${SERIES.platformStandup}`
-    );
-    expect(seriesMeetingRequests[0]).toContain("order=date.desc");
+    await expect(page.getByText("Platform Standup #4")).toBeVisible();
+    expect(seriesMeetingListRequests).toHaveLength(0);
   });
 
   test("open issues section lists active issues", async ({ page }) => {
