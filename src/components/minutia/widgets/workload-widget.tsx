@@ -176,12 +176,12 @@ export function WorkloadWidget({
                 {visible.map((issue) => (
                   <div
                     key={issue.id}
-                    className="group flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg px-3 py-2.5 hover:bg-paper-2 transition-colors"
+                    className="group/row flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg px-3 py-2.5 hover:bg-paper-2 transition-colors"
                   >
                     <CategoryBadge category={issue.category} size="sm" />
                     <PrefetchIssueLink
                       issueId={issue.id}
-                      className="flex-1 min-w-0 text-sm font-medium text-ink group-hover:text-accent transition-colors truncate basis-[120px]"
+                      className="flex-1 min-w-0 text-sm font-medium text-ink group-hover/row:text-accent transition-colors truncate basis-[120px]"
                     >
                       {issue.title}
                     </PrefetchIssueLink>
