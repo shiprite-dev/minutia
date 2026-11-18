@@ -151,6 +151,7 @@ test("signing in with Google and granting calendar shows the calendar connected"
   const res = await signInWithGoogle(["openid", "email", CALENDAR]);
   assert.equal(res.location, "https://app.example.com/");
   assert.deepEqual(await settingsShows(), {
+    configured: true,
     connected: true,
     directoryConnected: false,
     googleEmail: "solo@corp.example.com",

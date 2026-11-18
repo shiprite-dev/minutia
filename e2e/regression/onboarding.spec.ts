@@ -1,20 +1,16 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 import { waitForApp } from "./seed-data";
 
 const SUPABASE_URL = process.env.SUPABASE_URL ?? "http://127.0.0.1:54321";
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
 const TEST_USER_ID = "00000000-0000-0000-0000-000000000001";
-const ONBOARDING_PASSWORD = "password123";
+const PASSWORD = "password123";
+const CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar.readonly";
 
-type OnboardingState = {
-  userId: string;
-  email: string;
-  orgId: string;
-  cookieValue: string;
-};
+type NewUser = { userId: string; email: string; cookieValue: string };
 
-function supabaseHeaders(prefer = "return=minimal") {
+function serviceHeaders(prefer = "return=minimal") {
   return {
     apikey: SERVICE_KEY,
     Authorization: `Bearer ${SERVICE_KEY}`,
@@ -23,340 +19,601 @@ function supabaseHeaders(prefer = "return=minimal") {
   };
 }
 
-async function getSeedWorkspaceId() {
-  const response = await fetch(
-    `${SUPABASE_URL}/rest/v1/profiles?id=eq.${TEST_USER_ID}&select=current_organization_id`,
-    { headers: supabaseHeaders("return=representation") }
-  );
-  expect(response.ok).toBeTruthy();
-
-  const rows = await response.json();
-  const orgId = rows[0]?.current_organization_id;
-  expect(orgId).toBeTruthy();
-  return orgId as string;
+async function rest(path: string, init: RequestInit = {}) {
+  const response = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+    ...init,
+    headers: { ...serviceHeaders("return=representation"), ...init.headers },
+  });
+  expect(response.ok, `${init.method ?? "GET"} ${path}`).toBeTruthy();
+  const text = await response.text();
+  return text ? JSON.parse(text) : null;
 }
 
-async function createOnboardingAuthState(): Promise<OnboardingState> {
-  const userId = randomUUID();
-  const email = `onboarding-${userId}@example.com`;
-  const orgId = await getSeedWorkspaceId();
-  const authHeaders = {
-    apikey: SERVICE_KEY,
-    Authorization: `Bearer ${SERVICE_KEY}`,
-    "Content-Type": "application/json",
-  };
-
-  const invitation = await fetch(`${SUPABASE_URL}/rest/v1/organization_invitations`, {
+async function setHostedMode(enabled: boolean) {
+  await rest("instance_config?on_conflict=key", {
     method: "POST",
-    headers: supabaseHeaders(),
+    headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
     body: JSON.stringify({
-      organization_id: orgId,
-      email,
-      role: "member",
-      status: "pending",
-      invited_by: TEST_USER_ID,
+      key: "hosted_mode",
+      value: enabled ? "true" : "false",
     }),
   });
-  expect(invitation.ok).toBeTruthy();
+}
 
-  const createUser = await fetch(`${SUPABASE_URL}/auth/v1/admin/users`, {
-    method: "POST",
-    headers: authHeaders,
-    body: JSON.stringify({
-      id: userId,
-      email,
-      password: ONBOARDING_PASSWORD,
-      email_confirm: true,
-      user_metadata: { name: "Test User" },
-    }),
-  });
-  expect(createUser.ok).toBeTruthy();
-
-  const profile = await fetch(`${SUPABASE_URL}/rest/v1/profiles`, {
-    method: "POST",
-    headers: supabaseHeaders("resolution=merge-duplicates,return=minimal"),
-    body: JSON.stringify({
-      id: userId,
-      email,
-      name: "Test User",
-      has_completed_onboarding: false,
-    }),
-  });
-  expect(profile.ok).toBeTruthy();
-
-  const currentOrg = await fetch(
-    `${SUPABASE_URL}/rest/v1/profiles?id=eq.${userId}&select=current_organization_id`,
-    { headers: supabaseHeaders("return=representation") }
+async function workspaceOf(userId: string): Promise<string> {
+  const [profile] = await rest(
+    `profiles?id=eq.${userId}&select=current_organization_id`,
   );
-  expect(currentOrg.ok).toBeTruthy();
-  const currentOrgRows = await currentOrg.json();
-  expect(currentOrgRows[0]?.current_organization_id).toBe(orgId);
+  return profile.current_organization_id;
+}
 
-  const token = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
-    method: "POST",
-    headers: {
-      apikey: SERVICE_KEY,
-      "Content-Type": "application/json",
+async function createUser(
+  metadata: Record<string, string> | ((emailPrefix: string) => Record<string, string>),
+  options: { solo: boolean; inviteTo?: string; role?: "admin" | "member"; emailPrefix?: string },
+): Promise<NewUser> {
+  const userId = randomUUID();
+  const emailPrefix = options.emailPrefix ?? `setup-${userId.slice(0, 8)}`;
+  const email = `${emailPrefix}@example.com`;
+
+  if (!options.solo) {
+    await rest("organization_invitations", {
+      method: "POST",
+      body: JSON.stringify({
+        organization_id: options.inviteTo ?? (await workspaceOf(TEST_USER_ID)),
+        email,
+        role: options.role ?? "member",
+        status: "pending",
+        invited_by: TEST_USER_ID,
+      }),
+    });
+  }
+
+  if (options.solo) await setHostedMode(true);
+  try {
+    const created = await fetch(`${SUPABASE_URL}/auth/v1/admin/users`, {
+      method: "POST",
+      headers: serviceHeaders(),
+      body: JSON.stringify({
+        id: userId,
+        email,
+        password: PASSWORD,
+        email_confirm: true,
+        user_metadata: typeof metadata === "function" ? metadata(emailPrefix) : metadata,
+      }),
+    });
+    expect(created.ok).toBeTruthy();
+  } finally {
+    if (options.solo) await setHostedMode(false);
+  }
+
+  const token = await fetch(
+    `${SUPABASE_URL}/auth/v1/token?grant_type=password`,
+    {
+      method: "POST",
+      headers: { apikey: SERVICE_KEY, "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password: PASSWORD }),
     },
-    body: JSON.stringify({
-      email,
-      password: ONBOARDING_PASSWORD,
-    }),
-  });
+  );
   expect(token.ok).toBeTruthy();
-
   const session = await token.json();
 
   return {
     userId,
     email,
-    orgId,
     cookieValue: `base64-${Buffer.from(JSON.stringify(session)).toString("base64")}`,
   };
 }
 
-async function deleteOnboardingUser(state: OnboardingState) {
-  await fetch(
-    `${SUPABASE_URL}/rest/v1/organization_invitations?organization_id=eq.${state.orgId}&email=eq.${state.email}`,
-    { method: "DELETE", headers: supabaseHeaders() }
+async function deleteUser(user: NewUser) {
+  const [profile] = await rest(
+    `profiles?id=eq.${user.userId}&select=current_organization_id`,
   );
-
-  await fetch(`${SUPABASE_URL}/auth/v1/admin/users/${state.userId}`, {
+  await rest(`organization_invitations?email=eq.${user.email}`, {
     method: "DELETE",
-    headers: {
-      apikey: SERVICE_KEY,
-      Authorization: `Bearer ${SERVICE_KEY}`,
+  });
+  if (profile?.current_organization_id) {
+    await fetch(
+      `${SUPABASE_URL}/rest/v1/organizations?id=eq.${profile.current_organization_id}&created_by=eq.${user.userId}`,
+      { method: "DELETE", headers: serviceHeaders() },
+    );
+  }
+  await fetch(`${SUPABASE_URL}/auth/v1/admin/users/${user.userId}`, {
+    method: "DELETE",
+    headers: serviceHeaders(),
+  });
+}
+
+async function signIn(page: Page, user: NewUser, baseURL: string | undefined) {
+  await page.context().addCookies([
+    {
+      name: "sb-127-auth-token",
+      value: user.cookieValue,
+      url: new URL(baseURL ?? "http://localhost:3000").origin,
+      expires: Math.floor(Date.now() / 1000) + 60 * 60,
+      sameSite: "Lax",
     },
+  ]);
+}
+
+async function grantCalendar(user: NewUser) {
+  await rest("google_oauth_tokens", {
+    method: "POST",
+    body: JSON.stringify({
+      user_id: user.userId,
+      access_token: "x",
+      refresh_token: "x",
+      token_iv: "x",
+      refresh_iv: "x",
+      token_expiry: new Date(Date.now() + 3600_000).toISOString(),
+      google_email: user.email,
+      scopes: [CALENDAR_SCOPE],
+    }),
   });
 }
 
-async function setOnboardingFlag(
-  request: Parameters<Parameters<typeof test>[2]>[0]["request"],
-  state: OnboardingState,
-  value: boolean
-) {
-  const response = await request.patch(
-    `${SUPABASE_URL}/rest/v1/profiles?id=eq.${state.userId}`,
-    { headers: supabaseHeaders(), data: { has_completed_onboarding: value } }
-  );
-  expect(response.ok()).toBeTruthy();
-
-  await expect
-    .poll(async () => {
-      const current = await request.get(
-        `${SUPABASE_URL}/rest/v1/profiles?id=eq.${state.userId}&select=has_completed_onboarding`,
-        { headers: supabaseHeaders() }
-      );
-      expect(current.ok()).toBeTruthy();
-      const rows = await current.json();
-      return rows[0]?.has_completed_onboarding;
-    })
-    .toBe(value);
-}
-
-async function deleteOnboardingSeries(
-  request: Parameters<Parameters<typeof test>[2]>[0]["request"],
-  state: OnboardingState,
-) {
-  await request.delete(
-    `${SUPABASE_URL}/rest/v1/meeting_series?owner_id=eq.${state.userId}`,
-    { headers: supabaseHeaders() }
+function stubGoogleReturn(page: Page, location: string) {
+  return page.route("**/api/auth/google", (route) =>
+    route.fulfill({ status: 302, headers: { location } }),
   );
 }
 
-test.describe("Onboarding wizard", () => {
+function setGoogleConfigured(page: Page, configured: boolean) {
+  return page.route("**/api/calendar/status", async (route) => {
+    const response = await route.fetch();
+    await route.fulfill({ response, json: { ...(await response.json()), configured } });
+  });
+}
+
+async function openSetup(page: Page) {
+  await page.goto("/dashboard", { waitUntil: "domcontentloaded" });
+  await waitForApp(page);
+  await expect(page.getByTestId("setup-screen")).toBeVisible({
+    timeout: 15000,
+  });
+}
+
+test.describe("First-run setup", () => {
   test.describe.configure({ mode: "serial" });
-  let state: OnboardingState | null = null;
+  test.skip(!SERVICE_KEY, "Requires the service role to create fresh accounts");
 
-  test.beforeEach(async ({ page, baseURL }) => {
-    state = await createOnboardingAuthState();
-    const appOrigin = new URL(baseURL ?? "http://localhost:3000").origin;
-    await page.context().addCookies([
-      {
-        name: "sb-127-auth-token",
-        value: state.cookieValue,
-        url: appOrigin,
-        expires: Math.floor(Date.now() / 1000) + 60 * 60,
-        httpOnly: false,
-        secure: false,
-        sameSite: "Lax",
-      },
-    ]);
-    await page.goto("/dashboard", { waitUntil: "domcontentloaded" });
-    await waitForApp(page);
-    await expect(page.getByText("Welcome to Minutia")).toBeVisible({ timeout: 15000 });
+  let user: NewUser | null = null;
+  let inviter: NewUser | null = null;
+
+  test.afterEach(async ({ page }) => {
+    await page.unrouteAll({ behavior: "ignoreErrors" });
+    if (user) await deleteUser(user);
+    if (inviter) await deleteUser(inviter);
+    user = null;
+    inviter = null;
   });
 
-  test.afterEach(async ({ request }) => {
-    if (!state) return;
-    await setOnboardingFlag(request, state, true);
-    await deleteOnboardingSeries(request, state);
-    await deleteOnboardingUser(state);
-    state = null;
-  });
-
-  test("shows onboarding wizard for new users", async ({ page }) => {
-    await expect(page.getByText("Welcome to Minutia")).toBeVisible();
-    await expect(page.getByLabel("What should we call you?")).toBeVisible();
-    await expect(page.getByRole("button", { name: "Continue" })).toBeVisible();
-    await expect(page.getByText("Skip setup")).toBeVisible();
-  });
-
-  test("step 1 pre-fills existing name", async ({ page }) => {
-    const nameInput = page.getByLabel("What should we call you?");
-    await expect(nameInput).toHaveValue("Test User");
-  });
-
-  test("empty name cannot continue", async ({ page }) => {
-    const nameInput = page.getByLabel("What should we call you?");
-    const continueButton = page.getByRole("button", { name: "Continue" });
-    await nameInput.fill("");
-    await expect(nameInput).toHaveValue("");
-
-    if (await continueButton.isEnabled()) {
-      await continueButton.click();
-    }
-
-    await expect(page.getByText("Welcome to Minutia")).toBeVisible();
-    await expect(page.getByText("Create your first series")).not.toBeVisible();
-  });
-
-  test("step 1 advances to step 2 on Continue", async ({ page }) => {
-    await page.getByRole("button", { name: "Continue" }).click();
-    await expect(page.getByText("Create your first series")).toBeVisible();
-    await expect(page.getByLabel("Meeting name")).toBeVisible();
-    await expect(page.getByText("How often?")).toBeVisible();
-  });
-
-  test("step 2 has cadence pills and attendees field", async ({ page }) => {
-    await page.getByRole("button", { name: "Continue" }).click();
-    await expect(page.getByText("Weekly", { exact: true })).toBeVisible();
-    await expect(page.getByText("Biweekly", { exact: true })).toBeVisible();
-    await expect(page.getByText("Monthly", { exact: true })).toBeVisible();
-    await expect(
-      page.getByLabel("Attendees", { exact: false })
-    ).toBeVisible();
-  });
-
-  test("step 2 create series is disabled without name", async ({ page }) => {
-    await page.getByRole("button", { name: "Continue" }).click();
-    await expect(
-      page.getByRole("button", { name: "Create series" })
-    ).toBeDisabled();
-  });
-
-  test("step 2 skip for now advances to step 3", async ({ page }) => {
-    await page.getByRole("button", { name: "Continue" }).click();
-    await page.getByRole("button", { name: "Skip for now" }).click();
-    await expect(page.getByText("You're all set")).toBeVisible();
-  });
-
-  test("step 3 shows feature tour items", async ({ page }) => {
-    await page.getByRole("button", { name: "Continue" }).click();
-    await page.getByRole("button", { name: "Skip for now" }).click();
-    await expect(page.getByText("OIL Board")).toBeVisible();
-    await expect(page.getByText("Live Capture")).toBeVisible();
-    await expect(page.getByText("Pre-Meeting Brief")).toBeVisible();
-    await expect(page.getByText("Keyboard First")).toBeVisible();
-  });
-
-  test("skip setup goes directly to dashboard", async ({ page }) => {
-    await page.getByText("Skip setup").click();
-    await page.waitForURL("**/dashboard");
-    await waitForApp(page);
-    // A freshly-onboarded user belongs to no series yet, so the dashboard shows
-    // the first-run empty state rather than the widget board.
-    await expect(
-      page.getByText("Every good log starts with one meeting.")
-    ).toBeVisible();
-    await expect(
-      page.getByRole("button", { name: "Create your first series" })
-    ).toBeVisible();
-  });
-
-  test("completing onboarding does not show wizard on next visit", async ({
+  test("a new solo user finishes setup in one screen and lands on the dashboard", async ({
     page,
+    baseURL,
   }) => {
-    await page.getByText("Skip setup").click();
-    await page.waitForURL("**/dashboard");
+    user = await createUser({}, { solo: true });
+    await signIn(page, user, baseURL);
+    await setGoogleConfigured(page, true);
+    await openSetup(page);
+
+    const setup = page.getByTestId("setup-screen");
+    await expect(
+      setup.getByRole("heading", { name: "Welcome to Minutia" }),
+    ).toBeVisible();
+    await expect(setup.getByText("Google Calendar", { exact: true })).toBeVisible();
+    await expect(
+      setup.getByRole("link", { name: "Download for Mac" }),
+    ).toHaveAttribute("href", "/download");
+    await expect(
+      setup.getByText(
+        "Records your meetings and transcribes them on your Mac.",
+      ),
+    ).toBeVisible();
+    await expect(setup.getByText(/attendee/i)).toHaveCount(0);
+    await expect(setup.getByText(/your team/i)).toHaveCount(0);
+
+    await expect(page).toHaveURL(/\/dashboard$/);
+    await setup.getByLabel("What should we call you?").fill("Jamie");
+    await setup.getByRole("button", { name: "Continue" }).click();
+
+    await page.waitForURL(/\/(dashboard)?$/);
+    expect(new URL(page.url()).search).toBe("");
     await waitForApp(page);
+    await expect(
+      page.getByText("Every good log starts with one meeting."),
+    ).toBeVisible();
+    await expect(
+      page.getByText("We recommend you start the tour first."),
+    ).toHaveCount(0);
+
+    await expect(
+      page.locator("[data-sidebar='sidebar']").first().getByText("Jamie", { exact: true }),
+    ).toBeVisible();
+
+    await page.goto("/admin/users", { waitUntil: "domcontentloaded" });
+    await waitForApp(page);
+    await expect(page.getByText("Jamie's workspace").first()).toBeVisible({
+      timeout: 20000,
+    });
+
+    await page.goto("/dashboard", { waitUntil: "domcontentloaded" });
+    await page.reload();
+    await waitForApp(page);
+    await expect(page.getByTestId("setup-screen")).toHaveCount(0);
+    await expect(
+      page.getByText("We recommend you start the tour first."),
+    ).toHaveCount(0);
+  });
+
+  test("a new user connects calendar from setup", async ({ page, baseURL }) => {
+    user = await createUser({ full_name: "Jamie Rivera" }, { solo: true });
+    await signIn(page, user, baseURL);
+    await setGoogleConfigured(page, true);
+    await openSetup(page);
+
+    const setup = page.getByTestId("setup-screen");
+    await expect(
+      setup.getByRole("heading", { name: "Welcome to Minutia, Jamie Rivera" }),
+    ).toBeVisible();
+    await expect(setup.getByLabel("What should we call you?")).toHaveCount(0);
+    await expect(setup.getByRole("link", { name: "Connect Google Calendar" })).toBeVisible();
+    // Stands in for the Google consent round trip: the grant lands, then the callback returns to the app.
+    await grantCalendar(user);
+    await stubGoogleReturn(page, "/settings?gcal=connected");
+    const connectRequest = page.waitForRequest(
+      (request) => new URL(request.url()).pathname === "/api/auth/google",
+    );
+    await setup.getByRole("link", { name: "Connect Google Calendar" }).click();
+    await connectRequest;
+    await page.waitForURL(/\/settings\?gcal=connected$/);
+    await waitForApp(page);
+    await expect(setup.getByText("Google Calendar connected")).toBeVisible();
+    await expect(
+      setup.getByRole("link", { name: "Connect Google Calendar" }),
+    ).toHaveCount(0);
+
+    await setup.getByRole("button", { name: "Continue" }).click();
+    await page.waitForURL(/\/(dashboard)?$/);
+    await waitForApp(page);
+    await expect(
+      page.locator("[data-sidebar='sidebar']").first().getByText("Jamie Rivera", { exact: true }),
+    ).toBeVisible();
+  });
+
+  test("the sidebar of a one-person workspace hides the organization block", async ({
+    page,
+    baseURL,
+  }) => {
+    user = await createUser({ name: "Jamie" }, { solo: true });
+    await signIn(page, user, baseURL);
+    await openSetup(page);
+    await page
+      .getByTestId("setup-screen")
+      .getByRole("button", { name: "Skip" })
+      .click();
+    await page.waitForURL(/\/(dashboard)?$/);
+    await waitForApp(page);
+
+    const sidebar = page.locator("[data-sidebar='sidebar']").first();
+    await expect(sidebar.getByText("Jamie", { exact: true })).toBeVisible();
+    await expect(sidebar.getByText("Organization")).toHaveCount(0);
+    await expect(sidebar.getByText("Jamie's workspace")).toHaveCount(0);
+  });
+
+  test("an invited teammate sees the organization block after setup", async ({
+    page,
+    baseURL,
+  }) => {
+    user = await createUser({ name: "Teammate" }, { solo: false });
+    await signIn(page, user, baseURL);
+    await openSetup(page);
+    await page
+      .getByTestId("setup-screen")
+      .getByRole("button", { name: "Continue" })
+      .click();
+    await page.waitForURL(/\/(dashboard)?$/);
+    await waitForApp(page);
+
+    await expect(
+      page
+        .locator("[data-sidebar='sidebar']")
+        .first()
+        .getByText("Organization"),
+    ).toBeVisible();
+  });
+
+  test("on a self-host without Google OAuth the setup screen has no calendar row and still finishes", async ({
+    page,
+    baseURL,
+  }) => {
+    user = await createUser({ name: "Jamie" }, { solo: true });
+    await signIn(page, user, baseURL);
+    await setGoogleConfigured(page, false);
+    await openSetup(page);
+
+    const setup = page.getByTestId("setup-screen");
+    await expect(setup.getByRole("link", { name: "Download for Mac" })).toBeVisible();
+    await expect(setup.getByText("Google Calendar", { exact: true })).toHaveCount(0);
+    await expect(setup.getByRole("link", { name: "Connect Google Calendar" })).toHaveCount(0);
+
+    await setup.getByRole("button", { name: "Continue" }).click();
+    await page.waitForURL(/\/(dashboard)?$/);
+    await waitForApp(page);
+    await expect(page.getByText("Every good log starts with one meeting.")).toBeVisible();
+  });
+
+  test("a user who cancels Google consent returns to setup with Connect still offered", async ({
+    page,
+    baseURL,
+  }) => {
+    user = await createUser({ name: "Jamie" }, { solo: true });
+    await signIn(page, user, baseURL);
+    await setGoogleConfigured(page, true);
+    await openSetup(page);
+    await stubGoogleReturn(page, "/settings?gcal=error");
+
+    const setup = page.getByTestId("setup-screen");
+    await setup.getByRole("link", { name: "Connect Google Calendar" }).click();
+    await page.waitForURL(/\/settings\?gcal=error$/);
+    await waitForApp(page);
+
+    await expect(setup.getByRole("link", { name: "Connect Google Calendar" })).toBeVisible();
+    await expect(setup.getByText("Google Calendar connected")).toHaveCount(0);
+  });
+
+  test("a user whose calendar is already connected sees it connected with no button", async ({
+    page,
+    baseURL,
+  }) => {
+    user = await createUser({ name: "Jamie" }, { solo: true });
+    await grantCalendar(user);
+    await signIn(page, user, baseURL);
+    await setGoogleConfigured(page, true);
+    await openSetup(page);
+
+    const setup = page.getByTestId("setup-screen");
+    await expect(setup.getByText("Google Calendar connected")).toBeVisible();
+    await expect(setup.getByRole("link", { name: "Connect Google Calendar" })).toHaveCount(0);
+  });
+
+  test("a user cannot continue with an empty name and a very long name is capped", async ({
+    page,
+    baseURL,
+  }) => {
+    user = await createUser({}, { solo: true });
+    await signIn(page, user, baseURL);
+    await openSetup(page);
+
+    const setup = page.getByTestId("setup-screen");
+    const nameField = setup.getByLabel("What should we call you?");
+    const continueButton = setup.getByRole("button", { name: "Continue" });
+    await expect(continueButton).toBeDisabled();
+    await nameField.fill("   ");
+    await expect(continueButton).toBeDisabled();
+
+    const longName = "Jamie ".repeat(40);
+    const cappedName = longName.slice(0, 100);
+    await nameField.fill(longName);
+    await expect(nameField).toHaveValue(cappedName);
+    await continueButton.click();
+
+    await page.waitForURL(/\/(dashboard)?$/);
+    await waitForApp(page);
+    await expect(
+      page.locator("[data-sidebar='sidebar']").first().getByText(cappedName.trim(), { exact: true }),
+    ).toBeVisible();
+  });
+
+  test("reloading mid-setup shows the same setup screen and saves nothing", async ({
+    page,
+    baseURL,
+  }) => {
+    user = await createUser({}, { solo: true });
+    await signIn(page, user, baseURL);
+    await openSetup(page);
+
+    await page.getByTestId("setup-screen").getByLabel("What should we call you?").fill("Jamie");
+    await page.reload();
+    await waitForApp(page);
+
+    const setup = page.getByTestId("setup-screen");
+    await expect(setup.getByRole("heading", { name: "Welcome to Minutia" })).toBeVisible();
+    await expect(setup.getByLabel("What should we call you?")).toHaveValue("");
+    await expect(setup.getByRole("button", { name: "Continue" })).toBeDisabled();
+  });
+
+  test("a user who skips setup never sees it again after reload", async ({ page, baseURL }) => {
+    user = await createUser({}, { solo: true });
+    await signIn(page, user, baseURL);
+    await openSetup(page);
+
+    await page.getByTestId("setup-screen").getByRole("button", { name: "Skip" }).click();
+    await page.waitForURL(/\/(dashboard)?$/);
+    await waitForApp(page);
+    await expect(page.getByText("Every good log starts with one meeting.")).toBeVisible();
 
     await page.reload();
     await waitForApp(page);
-    await expect(page.getByText("Welcome to Minutia")).not.toBeVisible();
+    await expect(page.getByText("Every good log starts with one meeting.")).toBeVisible();
+    await expect(page.getByTestId("setup-screen")).toHaveCount(0);
+  });
+
+  test("a slow then failed save shows progress and an error, and Continue works on retry", async ({
+    page,
+    baseURL,
+  }) => {
+    user = await createUser({}, { solo: true });
+    await signIn(page, user, baseURL);
+    await openSetup(page);
+
+    let failNext = true;
+    await page.route("**/rest/v1/profiles**", async (route) => {
+      if (route.request().method() !== "PATCH" || !failNext) return route.continue();
+      failNext = false;
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      await route.fulfill({
+        status: 500,
+        contentType: "application/json",
+        body: JSON.stringify({ message: "upstream timeout", code: "XX000" }),
+      });
+    });
+
+    const setup = page.getByTestId("setup-screen");
+    await setup.getByLabel("What should we call you?").fill("Jamie");
+    await setup.getByRole("button", { name: "Continue" }).click();
+
+    await expect(setup.getByRole("button", { name: "Finishing..." })).toBeDisabled();
+    await expect(page.locator("[data-sonner-toast]").first()).toBeVisible();
+    const continueButton = setup.getByRole("button", { name: "Continue" });
+    await expect(continueButton).toBeEnabled();
+
+    await continueButton.click();
+    await page.waitForURL(/\/(dashboard)?$/);
+    await waitForApp(page);
     await expect(
-      page.getByText("Every good log starts with one meeting.")
+      page.locator("[data-sidebar='sidebar']").first().getByText("Jamie", { exact: true }),
     ).toBeVisible();
   });
 
-  test("full flow: name, create series, complete", async ({ page }) => {
-    await expect(page.getByText("Welcome to Minutia")).toBeVisible();
-    await page.getByRole("button", { name: "Continue" }).click();
+  test("a user finishes setup with the keyboard alone", async ({ page, baseURL }) => {
+    user = await createUser({}, { solo: true });
+    await signIn(page, user, baseURL);
+    await openSetup(page);
 
-    await page.getByLabel("Meeting name").fill("E2E Onboarding Series");
-    await page.getByRole("button", { name: "Create series" }).click();
+    await expect(page.getByTestId("setup-screen").getByLabel("What should we call you?")).toBeFocused();
+    await page.keyboard.type("Jamie");
+    await page.keyboard.press("Enter");
 
-    await expect(page.getByText("You're all set")).toBeVisible();
-    await page.getByRole("button", { name: "Start tracking" }).click();
-
-    await page.waitForURL("**/series/**");
+    await page.waitForURL(/\/(dashboard)?$/);
     await waitForApp(page);
-    await expect(page.getByText("E2E Onboarding Series")).toBeVisible();
-  });
-});
-
-test.describe("Onboarding wizard, post-signup confirmation beat", () => {
-  test.describe.configure({ mode: "serial" });
-  let state: OnboardingState | null = null;
-
-  test.beforeEach(async ({ page, baseURL }) => {
-    state = await createOnboardingAuthState();
-    const appOrigin = new URL(baseURL ?? "http://localhost:3000").origin;
-    await page.context().addCookies([
-      {
-        name: "sb-127-auth-token",
-        value: state.cookieValue,
-        url: appOrigin,
-        expires: Math.floor(Date.now() / 1000) + 60 * 60,
-        httpOnly: false,
-        secure: false,
-        sameSite: "Lax",
-      },
-    ]);
+    await expect(
+      page.locator("[data-sidebar='sidebar']").first().getByText("Jamie", { exact: true }),
+    ).toBeVisible();
   });
 
-  test.afterEach(async ({ request }) => {
-    if (!state) return;
-    await setOnboardingFlag(request, state, true);
-    await deleteOnboardingSeries(request, state);
-    await deleteOnboardingUser(state);
-    state = null;
-  });
-
-  test("a fresh ?confirmed=1 arrival shows the confirmation beat, then the name step", async ({
+  test("an admin invitee finishing setup never renames the inviter's workspace", async ({
     page,
+    baseURL,
   }) => {
-    await page.goto("/dashboard?confirmed=1", { waitUntil: "domcontentloaded" });
-    // The confirmation beat appears first.
-    await expect(page.getByText("Account confirmed.")).toBeVisible({
-      timeout: 15000,
+    const inviteePrefix = `invitee-${randomUUID().slice(0, 8)}`;
+    inviter = await createUser({ name: inviteePrefix }, { solo: true });
+    const sharedWorkspace = await workspaceOf(inviter.userId);
+    user = await createUser({}, {
+      solo: false,
+      inviteTo: sharedWorkspace,
+      role: "admin",
+      emailPrefix: inviteePrefix,
     });
-    // It auto-collapses into the existing name-collection step.
-    await expect(page.getByText("Welcome to Minutia")).toBeVisible({
-      timeout: 15000,
-    });
-    await expect(page.getByLabel("What should we call you?")).toBeVisible();
-    // The param is stripped so a refresh does not replay the beat.
-    await expect(page).toHaveURL(/\/dashboard$/);
+    await signIn(page, user, baseURL);
+    await openSetup(page);
+
+    await page.getByTestId("setup-screen").getByLabel("What should we call you?").fill("Bob");
+    await page.getByTestId("setup-screen").getByRole("button", { name: "Continue" }).click();
+    await page.waitForURL(/\/(dashboard)?$/);
+    await waitForApp(page);
+
+    const sidebar = page.locator("[data-sidebar='sidebar']").first();
+    await expect(sidebar.getByText(`${inviteePrefix}'s workspace`)).toBeVisible();
+    await expect(sidebar.getByText("Bob's workspace")).toHaveCount(0);
   });
 
-  test("without the param, the wizard opens directly on the name step (no beat)", async ({
+  test("a failed workspace rename shows an error and Continue succeeds on retry", async ({
     page,
+    baseURL,
   }) => {
-    await page.goto("/dashboard", { waitUntil: "domcontentloaded" });
-    await expect(page.getByText("Welcome to Minutia")).toBeVisible({
-      timeout: 15000,
+    user = await createUser({}, { solo: true });
+    await signIn(page, user, baseURL);
+    await openSetup(page);
+
+    let failNext = true;
+    await page.route("**/rest/v1/organizations**", async (route) => {
+      if (route.request().method() !== "PATCH" || !failNext) return route.continue();
+      failNext = false;
+      await route.fulfill({
+        status: 500,
+        contentType: "application/json",
+        body: JSON.stringify({ message: "upstream timeout", code: "XX000" }),
+      });
     });
-    await expect(page.getByText("Account confirmed.")).not.toBeVisible();
+
+    const setup = page.getByTestId("setup-screen");
+    await setup.getByLabel("What should we call you?").fill("Jamie");
+    await setup.getByRole("button", { name: "Continue" }).click();
+
+    await expect(page.locator("[data-sonner-toast]").first()).toBeVisible();
+    await expect(setup.getByRole("button", { name: "Continue" })).toBeEnabled();
+    await setup.getByRole("button", { name: "Continue" }).click();
+
+    await page.waitForURL(/\/(dashboard)?$/);
+    await page.goto("/admin/users", { waitUntil: "domcontentloaded" });
+    await waitForApp(page);
+    await expect(page.getByText("Jamie's workspace").first()).toBeVisible({ timeout: 20000 });
+  });
+
+  test("a cancelled Google consent shows a note and keeps the typed name", async ({
+    page,
+    baseURL,
+  }) => {
+    user = await createUser({}, { solo: true });
+    await signIn(page, user, baseURL);
+    await setGoogleConfigured(page, true);
+    await openSetup(page);
+    await stubGoogleReturn(page, "/settings?gcal=error");
+
+    const setup = page.getByTestId("setup-screen");
+    await setup.getByLabel("What should we call you?").fill("Jamie");
+    await setup.getByRole("link", { name: "Connect Google Calendar" }).click();
+    await page.waitForURL(/\/settings\?gcal=error$/);
+    await waitForApp(page);
+
+    await expect(setup.getByText("Google Calendar was not connected.")).toBeVisible();
+    await expect(setup.getByRole("heading", { name: "Welcome to Minutia, Jamie" })).toBeVisible();
+    await expect(setup.getByRole("link", { name: "Connect Google Calendar" })).toBeVisible();
+  });
+
+  test("the tour is not offered on another browser after setup", async ({ page, baseURL }) => {
+    user = await createUser({}, { solo: true });
+    await signIn(page, user, baseURL);
+    await openSetup(page);
+
+    await page.getByTestId("setup-screen").getByLabel("What should we call you?").fill("Jamie");
+    await page.getByTestId("setup-screen").getByRole("button", { name: "Continue" }).click();
+    await page.waitForURL(/\/(dashboard)?$/);
+    await waitForApp(page);
+    await expect(page.getByText("Every good log starts with one meeting.")).toBeVisible();
+
+    await page.evaluate(() => localStorage.clear());
+    await page.reload();
+    await waitForApp(page);
+    await expect(page.getByText("Every good log starts with one meeting.")).toBeVisible();
+    await expect(page.getByText("We recommend you start the tour first.")).toHaveCount(0);
+  });
+
+  test("the subtitle counts one step when the calendar is unavailable", async ({
+    page,
+    baseURL,
+  }) => {
+    user = await createUser({ name: "Jamie" }, { solo: true });
+    await signIn(page, user, baseURL);
+    await setGoogleConfigured(page, false);
+    await openSetup(page);
+
+    const setup = page.getByTestId("setup-screen");
+    await expect(setup.getByText("One optional step and you are ready.")).toBeVisible();
+    await expect(setup.getByText(/Two optional steps/)).toHaveCount(0);
+  });
+
+  test("a user whose chosen name equals their email prefix is not asked again", async ({
+    page,
+    baseURL,
+  }) => {
+    user = await createUser((emailPrefix) => ({ name: emailPrefix }), { solo: true });
+    await signIn(page, user, baseURL);
+    await openSetup(page);
+
+    const setup = page.getByTestId("setup-screen");
+    const prefix = user.email.split("@")[0];
+    await expect(setup.getByRole("heading", { name: `Welcome to Minutia, ${prefix}` })).toBeVisible();
+    await expect(setup.getByLabel("What should we call you?")).toHaveCount(0);
   });
 });

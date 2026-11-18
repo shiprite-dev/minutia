@@ -20,7 +20,7 @@ const HAS_SERVICE_ROLE = !!process.env.SUPABASE_SERVICE_ROLE_KEY;
 const TEST_USER_ID = "00000000-0000-0000-0000-000000000001";
 
 const PROMPT_COPY =
-  "For the best experience, download and install the companion app.";
+  "For the best experience, download and install the Mac app.";
 const DOWNLOAD_URL = "/download";
 
 function serviceHeaders(prefer = "return=representation") {
@@ -184,12 +184,12 @@ test.describe("companion handshake", () => {
 
       await expect(page.getByText(PROMPT_COPY)).toBeVisible();
       await expect(
-        page.getByRole("link", { name: "Download for macOS" })
+        page.getByRole("link", { name: "Download for Mac" })
       ).toHaveAttribute("href", DOWNLOAD_URL);
 
       // Dismiss hides it immediately.
       await page
-        .getByRole("button", { name: "Dismiss companion app prompt" })
+        .getByRole("button", { name: "Dismiss Mac app prompt" })
         .click();
       await expect(page.getByText(PROMPT_COPY)).toHaveCount(0);
 
@@ -215,7 +215,7 @@ test.describe("companion handshake", () => {
     );
     await waitForApp(page);
     await expect(
-      page.getByText("Authorize the Minutia companion app on Test Mac?")
+      page.getByText("Authorize the Minutia Mac app on Test Mac?")
     ).toBeVisible();
 
     await page.getByRole("button", { name: "Approve" }).click();
@@ -265,7 +265,7 @@ test.describe("companion handshake", () => {
       // The existing next/redirect handling returns to the authorize page with
       // the device and state query intact.
       await expect(
-        page.getByText("Authorize the Minutia companion app on Test Mac?")
+        page.getByText("Authorize the Minutia Mac app on Test Mac?")
       ).toBeVisible({ timeout: 15_000 });
       const returned = new URL(page.url());
       expect(returned.pathname).toBe("/companion/authorize");
