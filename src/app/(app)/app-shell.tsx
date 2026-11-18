@@ -21,6 +21,8 @@ interface AppShellProps {
   organizations: OrganizationOption[];
   signupName: string | null;
   setupCompleted: boolean;
+  calendarConfigured: boolean;
+  showMacApp: boolean;
   children: ReactNode;
 }
 
@@ -29,6 +31,8 @@ export function AppShell({
   organizations,
   signupName,
   setupCompleted,
+  calendarConfigured,
+  showMacApp,
   children,
 }: AppShellProps) {
   const shellRef = React.useRef<HTMLDivElement>(null);
@@ -66,6 +70,8 @@ export function AppShell({
         <OnboardingWizard
           profile={profile}
           signupName={signupName}
+          calendarConfigured={calendarConfigured}
+          showMacApp={showMacApp}
           workspace={organizations.find((o) => o.id === profile.current_organization_id)}
         />
       </div>

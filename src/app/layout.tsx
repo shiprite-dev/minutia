@@ -14,7 +14,7 @@ const hyperlegible = localFont({
 const fraunces = localFont({
   src: "./fonts/Fraunces-Variable.woff2",
   variable: "--font-fraunces",
-  display: "swap",
+  display: "optional",
 });
 
 const jetbrains = localFont({

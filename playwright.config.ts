@@ -68,6 +68,7 @@ export default defineConfig({
     // The checkout URL is an unreachable dummy: auth is checked before any
     // server-to-server call, so the 401 fires without ever hitting the proxy.
     env: {
+      GOOGLE_CLIENT_ID: "e2e-google-client",
       UPGRADE_SIGNING_SECRET: "e2e-test-secret",
       UPGRADE_CHECKOUT_URL: "http://127.0.0.1:9/checkout",
     },
