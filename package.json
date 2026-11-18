@@ -96,6 +96,7 @@
     "test:finishing": "node --test scripts/verify-finishing.test.mjs",
     "test:companion-status": "node --test scripts/verify-companion-status.test.mjs",
     "test:optimistic": "node --test scripts/verify-optimistic.test.mjs",
+    "test:meeting-polling": "node --test scripts/verify-meeting-polling.test.mjs",
     "test:summary-flow": "node --test scripts/verify-summary-flow.test.mjs",
     "eval:recap-structure": "node scripts/eval-recap-structure.mjs",
     "test:word-pacer": "node --test scripts/verify-word-pacer.test.mjs",

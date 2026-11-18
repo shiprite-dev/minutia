@@ -8,6 +8,7 @@ import {
   deleteIssue,
   HAS_SERVICE_ROLE,
   openWidgetPicker,
+  outstandingWidget,
   widgetWithText,
 } from "./dashboard-helpers";
 
@@ -60,6 +61,21 @@ async function expectResponsiveCard(locator: Locator, expectedColSpan: string) {
       })
     )
     .toBe(false);
+}
+
+async function expectOnlyHoveredTitleHighlights(page: Page, card: Locator) {
+  const titles = card.locator('a[href^="/issues/"]');
+  await expect.poll(() => titles.count()).toBeGreaterThanOrEqual(2);
+  const color = (l: Locator) => l.evaluate((el) => getComputedStyle(el).color);
+  const restColor = await color(titles.nth(1));
+
+  await card.hover({ position: { x: 4, y: 4 } });
+  await expect.poll(() => color(titles.nth(0))).toBe(restColor);
+  await expect.poll(() => color(titles.nth(1))).toBe(restColor);
+
+  await titles.nth(0).hover();
+  await expect.poll(() => color(titles.nth(0))).not.toBe(restColor);
+  await expect.poll(() => color(titles.nth(1))).toBe(restColor);
 }
 
 test.describe("Widget system", () => {
@@ -415,6 +431,16 @@ test.describe("Widget system", () => {
     await expect(showAll).toBeVisible();
     await showAll.click();
     await expect(workload.getByRole("button", { name: "Show less" }).first()).toBeVisible();
+  });
+
+  test("hovering one item highlights only that item in each list widget", async ({ page }) => {
+    await expectOnlyHoveredTitleHighlights(page, outstandingWidget(page));
+
+    await addWidget(page, /Workload.*Open items/);
+    await expectOnlyHoveredTitleHighlights(page, widgetWithText(page, "Workload"));
+
+    await addWidget(page, /Meeting Triage/);
+    await expectOnlyHoveredTitleHighlights(page, widgetWithText(page, "Meeting triage"));
   });
 
   test("reset button restores default widgets", async ({ page }) => {
