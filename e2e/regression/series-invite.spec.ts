@@ -141,7 +141,7 @@ test.describe("Invite colleagues from a series", () => {
         await waitForApp(invitee);
         await invitee
           .getByTestId("setup-screen")
-          .getByRole("button", { name: "Skip" })
+          .getByRole("button", { name: "Continue" })
           .click();
         await expect(invitee.getByTestId("setup-screen")).toHaveCount(0);
         await invitee.goto("/series");

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import type { OrganizationOption } from "@/lib/types";
 import { AppShell } from "./app-shell";
@@ -53,12 +54,16 @@ export default async function AppLayout({
       });
   }
 
+  const showMacApp = /Macintosh/.test((await headers()).get("user-agent") ?? "");
+
   return (
     <AppShell
       profile={profile}
       organizations={organizations}
       signupName={signupName}
       setupCompleted={setupCompleted}
+      calendarConfigured={Boolean(process.env.GOOGLE_CLIENT_ID)}
+      showMacApp={showMacApp}
     >
       {children}
     </AppShell>
