@@ -3,7 +3,8 @@
 import * as React from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useMutation } from "@tanstack/react-query";
-import { CalendarDays, Check, Laptop } from "lucide-react";
+import { CalendarDays, Check, CircleAlert, Laptop } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,15 +16,59 @@ interface OnboardingWizardProps {
   profile: Profile;
   signupName: string | null;
   workspace: OrganizationOption | undefined;
+  calendarConfigured: boolean;
+  showMacApp: boolean;
+}
+
+const SAVE_TIMEOUT_MS = 10_000;
+
+function destinationAfterSetup(next: string | null) {
+  const origin = window.location.origin;
+  const requested = next ? new URL(next, origin) : null;
+  if (requested && requested.origin === origin) {
+    return requested.pathname + requested.search + requested.hash;
+  }
+  const here = new URL(window.location.href);
+  if (here.searchParams.has("gcal")) return "/";
+  here.searchParams.delete("next");
+  return here.pathname + here.search + here.hash;
+}
+
+function SetupRow({
+  icon,
+  title,
+  note,
+  action,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  note: React.ReactNode;
+  action: React.ReactNode;
+}) {
+  return (
+    <li className="flex items-start gap-4 p-4">
+      <span className="mt-0.5 shrink-0 text-ink-3">{icon}</span>
+      <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-4 gap-y-3">
+        <div className="min-w-0 flex-1 basis-40">
+          <p className="text-sm font-medium text-ink">{title}</p>
+          {note}
+        </div>
+        {action}
+      </div>
+    </li>
+  );
 }
 
 export function OnboardingWizard({
   profile,
   signupName,
   workspace,
+  calendarConfigured,
+  showMacApp,
 }: OnboardingWizardProps) {
   const router = useRouter();
-  const calendarCancelled = useSearchParams().get("gcal") === "error";
+  const searchParams = useSearchParams();
+  const calendarCancelled = searchParams.get("gcal") === "error";
   const knownName =
     profile.name && profile.name !== profile.email.split("@")[0]
       ? profile.name
@@ -32,48 +77,60 @@ export function OnboardingWizard({
   const { data: calendar } = useGoogleCalendarStatus();
 
   const save = useMutation({
-    mutationFn: async (complete: boolean) => {
-      const supabase = createClient();
-      const finalName = (knownName ?? name).trim();
-      if (finalName && finalName !== profile.name) {
-        const { error } = await supabase
-          .from("profiles")
-          .update({ name: finalName })
-          .eq("id", profile.id);
-        if (error) throw error;
-        if (
-          workspace?.memberCount === 1 &&
-          workspace.name === `${profile.name}'s workspace`
-        ) {
-          const { error: renameError } = await supabase
-            .from("organizations")
-            .update({ name: `${finalName}'s workspace` })
-            .eq("id", workspace.id);
-          if (renameError) throw renameError;
-        }
-      }
-      const { error: metadataError } = await supabase.auth.updateUser({
-        data: {
-          ...(finalName && { name: finalName }),
-          ...(complete && { setup_completed: true }),
-        },
-      });
-      if (metadataError) throw metadataError;
-      if (complete) {
-        const { error: completeError } = await supabase
-          .from("profiles")
-          .update({ has_completed_onboarding: true })
-          .eq("id", profile.id);
-        if (completeError) throw completeError;
-      }
-    },
+    networkMode: "always",
+    mutationFn: (complete: boolean) =>
+      Promise.race([
+        persist(complete),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("timeout")), SAVE_TIMEOUT_MS),
+        ),
+      ]),
+    onError: () =>
+      toast.error("Couldn't save. Check your connection and try again."),
   });
   const pending = save.isPending || save.isSuccess;
+
+  async function persist(complete: boolean) {
+    const supabase = createClient();
+    const finalName =
+      (knownName ?? name).trim() || profile.email.split("@")[0];
+    if (finalName && finalName !== profile.name) {
+      const { error } = await supabase
+        .from("profiles")
+        .update({ name: finalName })
+        .eq("id", profile.id);
+      if (error) throw error;
+      if (
+        workspace?.memberCount === 1 &&
+        workspace.name === `${profile.name}'s workspace`
+      ) {
+        const { error: renameError } = await supabase
+          .from("organizations")
+          .update({ name: `${finalName}'s workspace` })
+          .eq("id", workspace.id);
+        if (renameError) throw renameError;
+      }
+    }
+    const { error: metadataError } = await supabase.auth.updateUser({
+      data: {
+        ...(finalName && { name: finalName }),
+        ...(complete && { setup_completed: true }),
+      },
+    });
+    if (metadataError) throw metadataError;
+    if (complete) {
+      const { error: completeError } = await supabase
+        .from("profiles")
+        .update({ has_completed_onboarding: true })
+        .eq("id", profile.id);
+      if (completeError) throw completeError;
+    }
+  }
 
   function finish() {
     save.mutate(true, {
       onSuccess: () => {
-        router.push("/");
+        router.push(destinationAfterSetup(searchParams.get("next")));
         router.refresh();
       },
     });
@@ -90,7 +147,7 @@ export function OnboardingWizard({
   return (
     <div
       data-testid="setup-screen"
-      className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-paper px-4 py-10"
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-paper px-4 pt-16 pb-10 sm:pt-24"
     >
       <form
         className="w-full max-w-md"
@@ -109,7 +166,7 @@ export function OnboardingWizard({
               : "Welcome to Minutia"}
           </h1>
           <p className="mt-1 text-sm text-ink-3">
-            {calendar?.configured
+            {calendarConfigured
               ? "Two optional steps and you are ready."
               : "One optional step and you are ready."}
           </p>
@@ -133,62 +190,68 @@ export function OnboardingWizard({
         )}
 
         <ul className="mt-8 divide-y divide-rule rounded-2xl border border-rule bg-card">
-          {calendar?.configured && (
-            <li className="flex flex-wrap items-center gap-x-4 gap-y-3 p-4">
-              <CalendarDays className="size-5 shrink-0 text-ink-3" />
-              <div className="min-w-0 flex-1 basis-40">
-                <p className="text-sm font-medium text-ink">Google Calendar</p>
+          {calendarConfigured && (
+            <SetupRow
+              icon={<CalendarDays className="size-5" />}
+              title="Google Calendar"
+              note={
+                calendar?.connected ? (
+                  <p className="text-xs text-ink-3">Google Calendar connected</p>
+                ) : calendarCancelled ? (
+                  <p
+                    role="status"
+                    className="flex items-center gap-1 text-xs text-danger"
+                  >
+                    <CircleAlert aria-hidden className="size-3.5 shrink-0" />
+                    Not connected. Try again?
+                  </p>
+                ) : (
+                  <p className="text-xs text-ink-3">
+                    Brings in your meetings so you never set them up by hand.
+                  </p>
+                )
+              }
+              action={
+                calendar?.connected ? (
+                  <Check aria-hidden className="size-5 text-accent" />
+                ) : (
+                  <Button asChild variant="outline" size="sm">
+                    <a href="/api/auth/google" onClick={connectCalendar}>
+                      Connect Google Calendar
+                    </a>
+                  </Button>
+                )
+              }
+            />
+          )}
+          {showMacApp && (
+            <SetupRow
+              icon={<Laptop className="size-5" />}
+              title="Get the Mac app"
+              note={
                 <p className="text-xs text-ink-3">
-                  {calendar.connected
-                    ? "Google Calendar connected"
-                    : calendarCancelled
-                      ? "Google Calendar was not connected. Try again or skip it for now."
-                      : "Brings in your meetings so you never set them up by hand."}
+                  Records your meetings and transcribes them on your Mac.
                 </p>
-              </div>
-              {calendar.connected ? (
-                <Check aria-hidden className="size-5 text-accent" />
-              ) : (
+              }
+              action={
                 <Button asChild variant="outline" size="sm">
-                  <a href="/api/auth/google" onClick={connectCalendar}>
-                    Connect Google Calendar
+                  <a href="/download" target="_blank" rel="noreferrer">
+                    Download for Mac
                   </a>
                 </Button>
-              )}
-            </li>
+              }
+            />
           )}
-          <li className="flex flex-wrap items-center gap-x-4 gap-y-3 p-4">
-            <Laptop className="size-5 shrink-0 text-ink-3" />
-            <div className="min-w-0 flex-1 basis-40">
-              <p className="text-sm font-medium text-ink">Get the Mac app</p>
-              <p className="text-xs text-ink-3">
-                Records your meetings and transcribes them on your Mac.
-              </p>
-            </div>
-            <Button asChild variant="accent" size="sm">
-              <a href="/download" target="_blank" rel="noreferrer">
-                Download for Mac
-              </a>
-            </Button>
-          </li>
         </ul>
 
         <Button
           type="submit"
           variant="accent"
-          disabled={pending || (!knownName && !name.trim())}
+          disabled={pending}
           className="mt-6 h-11 w-full rounded-xl"
         >
           {pending ? "Finishing..." : "Continue"}
         </Button>
-        <button
-          type="button"
-          onClick={finish}
-          disabled={pending}
-          className="mx-auto mt-3 block text-xs text-ink-4 transition-colors hover:text-ink-3"
-        >
-          Skip
-        </button>
       </form>
     </div>
   );
