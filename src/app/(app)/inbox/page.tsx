@@ -1,5 +1,6 @@
 "use client";
 
+import { LoadError, failedQueries } from "@/components/minutia/load-error";
 import * as React from "react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "motion/react";
@@ -139,13 +140,24 @@ function NotificationItem({
 }
 
 export default function InboxPage() {
-  const { data: notifications, isLoading } = useNotifications();
+  const notificationsQuery = useNotifications();
+  const { data: notifications, isLoading } = notificationsQuery;
+  const failed = failedQueries(notificationsQuery);
   const markAsRead = useMarkAsRead();
   const markAllAsRead = useMarkAllAsRead();
 
   const unread = (notifications ?? []).filter((n) => !n.read);
   const read = (notifications ?? []).filter((n) => n.read);
   const hasUnread = unread.length > 0;
+
+  if (failed.length > 0) {
+    return (
+      <div className="mx-auto max-w-2xl px-4 py-8 sm:px-6 lg:px-8">
+        <h1 className="font-display text-2xl font-semibold text-ink">Inbox</h1>
+        <LoadError failed={failed} />
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (

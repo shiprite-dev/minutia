@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
+import { shouldIgnoreGlobalKey } from "@/lib/keyboard";
 
 const GOTO_MAP: Record<string, string> = {
   o: "/",
@@ -17,8 +18,7 @@ export function GotoShortcuts() {
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
-      const tag = (e.target as HTMLElement).tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      if (shouldIgnoreGlobalKey(e)) return;
       if (e.metaKey || e.ctrlKey || e.altKey) return;
 
       if (pendingG.current) {

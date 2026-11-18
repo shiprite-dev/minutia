@@ -7,7 +7,7 @@ import { CategoryBadge } from "@/components/minutia/category-badge";
 import { PrefetchIssueLink } from "@/components/minutia/prefetch-issue-link";
 import { cn } from "@/lib/utils";
 import type { Issue, IssueStatus, Meeting, MeetingSeries } from "@/lib/types";
-import { daysSince } from "@/lib/date-utils";
+import { daysSince, daysUntil, formatShortDate } from "@/lib/date-utils";
 
 function formatOrdinal(value: number): string {
   const tens = value % 100;
@@ -216,15 +216,11 @@ function TriageRow({
         </span>
       )}
       {issue.due_date && (() => {
-        const due = new Date(issue.due_date);
-        const now = new Date();
-        now.setHours(0, 0, 0, 0);
-        due.setHours(0, 0, 0, 0);
-        const diff = Math.round((due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+        const diff = daysUntil(issue.due_date);
         const overdue = diff < 0;
         const label = overdue
           ? `Overdue ${Math.abs(diff)}d`
-          : `Due ${due.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`;
+          : `Due ${formatShortDate(issue.due_date)}`;
         return (
           <span className={cn("text-xs font-mono tabular-nums shrink-0", overdue ? "text-accent font-medium" : "text-ink-4")}>
             {label}

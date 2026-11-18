@@ -58,8 +58,10 @@ import {
 } from "@/components/ui/empty";
 import { HintTooltip } from "@/components/minutia/hint-tooltip";
 import { cn } from "@/lib/utils";
-import { formatShortDate, daysBetween } from "@/lib/date-utils";
-import { isOpen, isOverdue, byManualOrder } from "@/lib/issue-utils";
+import { formatShortDate, daysBetween, daysUntil } from "@/lib/date-utils";
+import { isOpen, isOverdue, byManualOrder, formatIssueKey } from "@/lib/issue-utils";
+import { shouldIgnoreGlobalKey } from "@/lib/keyboard";
+import { LoadError, failedQueries } from "@/components/minutia/load-error";
 import { isEditableTarget } from "@/components/minutia/command-palette";
 import { useWidgetStore } from "@/lib/stores/widget-store";
 import { useUIStore } from "@/lib/stores/ui-store";
@@ -88,11 +90,7 @@ import type {
 // ---------------------------------------------------------------------------
 
 function formatRelativeDue(date: Date | string): { label: string; overdue: boolean } {
-  const now = new Date();
-  now.setHours(0, 0, 0, 0);
-  const due = new Date(date);
-  due.setHours(0, 0, 0, 0);
-  const diffDays = Math.round((due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+  const diffDays = daysUntil(date);
 
   if (diffDays < 0) {
     const absDays = Math.abs(diffDays);
@@ -145,7 +143,7 @@ function outstandingListSort(a: Issue, b: Issue): number {
 function matchesQuery(issue: Issue, query: string): boolean {
   const needle = query.trim().toLowerCase();
   if (!needle) return true;
-  const key = `MIN-${issue.issue_number}`;
+  const key = formatIssueKey(issue);
   return (
     issue.title.toLowerCase().includes(needle) ||
     key.toLowerCase().includes(needle) ||
@@ -237,7 +235,7 @@ function HeroWidget({
             </p>
             {avgLife > 0 && (
               <p className="text-xs text-ink-4">
-                avg life <span className="font-semibold text-ink-2">{avgLife} days</span>
+                <span className="font-semibold text-ink-2">{avgLife}</span> logged per open item
               </p>
             )}
           </div>
@@ -324,7 +322,7 @@ function NextMeetingWidget({
       <div className="flex items-center gap-2 mb-4">
         <span className="inline-flex items-center gap-1.5 text-xs font-medium text-accent">
           <span className="size-1.5 rounded-full bg-accent animate-pulse" />
-          Next meeting
+          {eventTime ? "Next meeting" : "Latest series"}
         </span>
       </div>
       <h3 className="font-display text-lg font-semibold text-ink mb-1 break-words">
@@ -352,7 +350,7 @@ function NextMeetingWidget({
       )}
       {nextSeries.open_issues_count > 0 && (
         <p className="text-sm text-ink-2 mb-5">
-          <span className="text-accent font-medium"><span className="font-mono">{nextSeries.open_issues_count}</span> items pending</span> from last meeting.
+          <span className="text-accent font-medium"><span className="font-mono">{nextSeries.open_issues_count}</span> open items</span> in this series.
         </p>
       )}
       <div className="flex items-center gap-3">
@@ -450,8 +448,7 @@ function OutstandingWidget({
 
   React.useEffect(() => {
     function handleKey(e: KeyboardEvent) {
-      const tag = (e.target as HTMLElement).tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      if (shouldIgnoreGlobalKey(e)) return;
       // Don't let j/k/arrow nav fight a keyboard drag-reorder in progress.
       if (activeId) return;
 
@@ -1313,9 +1310,13 @@ function WidgetRenderer({
 
 export default function Dashboard() {
   const router = useRouter();
-  const { data: issues, isLoading: issuesLoading } = useIssues();
-  const { data: seriesList, isLoading: seriesLoading } = useSeries();
-  const { data: meetings, isLoading: meetingsLoading } = useAllMeetings();
+  const issuesQuery = useIssues();
+  const seriesQuery = useSeries();
+  const meetingsQuery = useAllMeetings();
+  const { data: issues, isLoading: issuesLoading } = issuesQuery;
+  const { data: seriesList, isLoading: seriesLoading } = seriesQuery;
+  const { data: meetings, isLoading: meetingsLoading } = meetingsQuery;
+  const failed = failedQueries(issuesQuery, seriesQuery, meetingsQuery);
   const { data: allDecisions } = useDecisions(undefined, undefined, true, 5);
   const updateStatus = useUpdateIssueStatus();
   const widgets = useWidgetStore((s) => s.widgets);
@@ -1362,7 +1363,8 @@ export default function Dashboard() {
   };
 
   const widgetIds = React.useMemo(() => widgets.map((w) => w.id), [widgets]);
-  const isFirstRun = !isLoading && (seriesList?.length ?? 0) === 0 && (issues?.length ?? 0) === 0;
+  const isFirstRun =
+    !isLoading && failed.length === 0 && !!seriesList && !!issues && seriesList.length === 0 && issues.length === 0;
 
   return (
     <div className="min-h-screen bg-paper" data-tour="oil-board">
@@ -1379,7 +1381,9 @@ export default function Dashboard() {
             <AddWidgetButton />
           </div>
         )}
-        {isLoading ? (
+        {failed.length > 0 ? (
+          <LoadError failed={failed} />
+        ) : isLoading ? (
           <DashboardSkeleton />
         ) : isFirstRun ? (
           <Empty className="mt-12">

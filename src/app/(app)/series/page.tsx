@@ -4,6 +4,7 @@ import * as React from "react";
 import { AnimatePresence, motion } from "motion/react";
 import Link from "next/link";
 import { useSeries } from "@/lib/hooks/use-series";
+import { LoadError, failedQueries } from "@/components/minutia/load-error";
 import { EmptyState } from "@/components/minutia/empty-state";
 import { CreateSeriesDialog } from "@/components/minutia/create-series-dialog";
 import { MinutiaCadenceIcon } from "@/components/minutia/minutia-icons";
@@ -29,7 +30,10 @@ function formatDate(date: Date | string): string {
 }
 
 export default function SeriesListPage() {
-  const { data: seriesList, isLoading } = useSeries();
+  const seriesQuery = useSeries();
+  const { data: seriesList, isLoading } = seriesQuery;
+  const failedList = failedQueries(seriesQuery);
+  const failed = failedList.length > 0;
   const [dialogOpen, setDialogOpen] = React.useState(false);
   const [activeSeriesId, setActiveSeriesId] = React.useState<string | null>(
     null
@@ -39,7 +43,7 @@ export default function SeriesListPage() {
     () => true,
     () => false
   );
-  const showLoading = !mounted || isLoading;
+  const showLoading = !mounted || (isLoading && !failed);
 
   return (
     <div className="min-h-full bg-paper">
@@ -73,6 +77,8 @@ export default function SeriesListPage() {
             ))}
           </div>
         )}
+
+        {mounted && failed && <LoadError failed={failedList} />}
 
         {/* Empty state */}
         {mounted && !isLoading && seriesList && seriesList.length === 0 && (

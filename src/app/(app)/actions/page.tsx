@@ -1,5 +1,6 @@
 "use client";
 
+import { LoadError, failedQueries } from "@/components/minutia/load-error";
 import * as React from "react";
 import { motion, AnimatePresence, useReducedMotion } from "motion/react";
 import { Check, ChevronDown } from "lucide-react";
@@ -110,7 +111,7 @@ function ActionRow({
     <motion.div
       initial={{ opacity: 0, x: -16 }}
       animate={{ opacity: 1, x: 0 }}
-      transition={{ delay: index * 0.04, duration: 0.28, ease: [0.2, 0.8, 0.2, 1] }}
+      transition={{ delay: Math.min(index, 6) * 0.04, duration: 0.28, ease: [0.2, 0.8, 0.2, 1] }}
       className="group flex h-12 items-center gap-3 rounded-lg px-3 transition-colors hover:bg-paper-2"
     >
       <button
@@ -194,9 +195,13 @@ function ActionsSkeleton() {
 // ---------------------------------------------------------------------------
 
 export default function MyActionsPage() {
-  const { data: issues, isLoading: issuesLoading } = useIssues();
-  const { data: seriesList, isLoading: seriesLoading } = useSeries();
-  const { data: profile, isLoading: profileLoading } = useProfile();
+  const issuesQuery = useIssues();
+  const seriesQuery = useSeries();
+  const profileQuery = useProfile();
+  const { data: issues, isLoading: issuesLoading } = issuesQuery;
+  const { data: seriesList, isLoading: seriesLoading } = seriesQuery;
+  const { data: profile, isLoading: profileLoading } = profileQuery;
+  const failed = failedQueries(issuesQuery, seriesQuery, profileQuery);
   const updateStatus = useUpdateIssueStatus();
 
   // Build series name map
@@ -263,7 +268,7 @@ export default function MyActionsPage() {
   }
 
   const isLoading = issuesLoading || seriesLoading || profileLoading;
-  const isEmpty = !isLoading && myIssues.length === 0;
+  const isEmpty = !isLoading && failed.length === 0 && myIssues.length === 0;
 
   function renderActionRow(issue: Issue, globalIndex: number, done: boolean) {
     return (
@@ -286,7 +291,7 @@ export default function MyActionsPage() {
           <h1 className="font-display text-3xl font-semibold text-ink tracking-tight">
             My Actions
           </h1>
-          {!isLoading && myIssues.length > 0 && (
+          {failed.length === 0 && !isLoading && myIssues.length > 0 && (
             <p className="mt-1.5 text-sm text-ink-2">
               {openCount > 0 && <span>{openCount} OPEN</span>}
               {pendingCount > 0 && (
@@ -305,8 +310,12 @@ export default function MyActionsPage() {
           )}
         </div>
 
+        {failed.length > 0 && (
+          <LoadError failed={failed} />
+        )}
+
         {/* Loading skeleton */}
-        {isLoading && (
+        {failed.length === 0 && isLoading && (
           <div className="mt-8">
             <ActionsSkeleton />
           </div>
@@ -316,7 +325,7 @@ export default function MyActionsPage() {
         {isEmpty && <EmptyState variant="no-actions" />}
 
         {/* Main content */}
-        {!isLoading && !isEmpty && (
+        {failed.length === 0 && !isLoading && !isEmpty && (
           <div className="mt-6 space-y-8">
             {/* Needs Attention */}
             {needsAttention.length > 0 && (

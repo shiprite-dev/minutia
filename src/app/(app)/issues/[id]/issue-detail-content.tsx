@@ -1,5 +1,8 @@
 "use client";
 
+import { localDay } from "@/lib/date-utils";
+import { shouldIgnoreGlobalKey } from "@/lib/keyboard";
+import { LoadError, failedQueries } from "@/components/minutia/load-error";
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
@@ -65,7 +68,7 @@ const priorityDotColor: Record<Priority, string> = {
 // ---------------------------------------------------------------------------
 
 function formatDate(date: Date | string): string {
-  return new Date(date).toLocaleDateString("en-US", {
+  return localDay(date).toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
     year: "numeric",
@@ -231,6 +234,19 @@ function InlineEditText({
 // Issue Detail Content
 // ---------------------------------------------------------------------------
 
+const NOT_FOUND_CODES = ["PGRST116", "22P02"];
+
+function cameFromThisApp(): boolean {
+  try {
+    return (
+      !!document.referrer &&
+      new URL(document.referrer).origin === window.location.origin
+    );
+  } catch {
+    return false;
+  }
+}
+
 interface IssueDetailContentProps {
   issueId: string;
 }
@@ -238,7 +254,16 @@ interface IssueDetailContentProps {
 export function IssueDetailContent({ issueId }: IssueDetailContentProps) {
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { data: issue, isLoading, isError } = useIssue(issueId);
+  queryClient.setQueryDefaults(issueKeys.detail(issueId), {
+    retry: (count, error) =>
+      count < 3 &&
+      !NOT_FOUND_CODES.includes((error as { code?: string }).code ?? ""),
+  });
+  const issueQuery = useIssue(issueId);
+  const { data: issue, isLoading, isError } = issueQuery;
+  const loadFailed =
+    failedQueries(issueQuery).length > 0 &&
+    !NOT_FOUND_CODES.includes((issueQuery.error as { code?: string } | null)?.code ?? "");
   const updateIssue = useUpdateIssue();
   const updateIssueStatus = useUpdateIssueStatus();
   const deleteIssue = useDeleteIssue();
@@ -253,8 +278,7 @@ export function IssueDetailContent({ issueId }: IssueDetailContentProps) {
 
   React.useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
-      const tag = (e.target as HTMLElement).tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      if (shouldIgnoreGlobalKey(e)) return;
       if (e.metaKey || e.ctrlKey || e.altKey) return;
 
       switch (e.key) {
@@ -264,7 +288,8 @@ export function IssueDetailContent({ issueId }: IssueDetailContentProps) {
           break;
         case "Escape":
           e.preventDefault();
-          router.back();
+          if (cameFromThisApp()) router.back();
+          else router.push("/dashboard");
           break;
         case "r":
           if (issue) {
@@ -295,6 +320,14 @@ export function IssueDetailContent({ issueId }: IssueDetailContentProps) {
   React.useEffect(() => {
     if (showUpdateForm) updateInputRef.current?.focus();
   }, [showUpdateForm]);
+
+  if (loadFailed) {
+    return (
+      <div className="min-h-full bg-paper">
+        <LoadError failed={failedQueries(issueQuery)} />
+      </div>
+    );
+  }
 
   // Loading skeleton
   if (isLoading) {
@@ -749,7 +782,7 @@ function TimelineUpdateNode({
       animate={{ opacity: 1, y: 0 }}
       transition={{
         duration: 0.4,
-        delay: index * 0.09,
+        delay: Math.min(index, 6) * 0.09,
         ease: [0.2, 0.8, 0.2, 1],
       }}
       className="relative pl-8 pb-8"

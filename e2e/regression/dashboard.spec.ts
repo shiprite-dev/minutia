@@ -188,7 +188,7 @@ test.describe("OIL Board Dashboard", () => {
   test("next meeting card displays series info", async ({ page }) => {
     await gotoDashboard(page);
 
-    await expect(page.getByText("Next meeting").first()).toBeVisible();
+    await expect(page.getByText("Latest series").first()).toBeVisible();
     await expect(
       page.getByRole("button", { name: "Open series", exact: true })
     ).toBeVisible();
