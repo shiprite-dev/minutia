@@ -33,7 +33,7 @@ export function CompanionAuthorizeClient() {
       const res = await fetch("/api/companion/authorize", { method: "POST" });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        setError(body.error || "Could not authorize the companion app.");
+        setError(body.error || "Could not authorize the Mac app.");
         setStatus("idle");
         return;
       }
@@ -50,7 +50,7 @@ export function CompanionAuthorizeClient() {
         // Fall back to the "Open the Minutia app" anchor below.
       }
     } catch {
-      setError("Could not authorize the companion app.");
+      setError("Could not authorize the Mac app.");
       setStatus("idle");
     }
   }
@@ -60,10 +60,10 @@ export function CompanionAuthorizeClient() {
       <Card className="w-full max-w-md">
         <CardHeader>
           <CardTitle className="font-display text-ink">
-            Authorize the Minutia companion app on {device}?
+            Authorize the Minutia Mac app on {device}?
           </CardTitle>
           <CardDescription className="text-ink-3">
-            This signs the desktop companion app into your account so it can
+            This signs the Mac app into your account so it can
             capture and transcribe your meetings.
           </CardDescription>
         </CardHeader>

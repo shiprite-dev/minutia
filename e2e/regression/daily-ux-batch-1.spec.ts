@@ -11,6 +11,7 @@ import {
 import { SERIES, waitForApp } from "./seed-data";
 
 const SUPABASE_URL = process.env.SUPABASE_URL ?? "http://127.0.0.1:54321";
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const rowsSelector = '[data-testid="widget-outstanding-1"] [aria-label*=","]';
 
 test.describe("daily UX batch 1", () => {
@@ -69,10 +70,7 @@ test.describe("daily UX batch 1", () => {
     await expect(rows.first().getByLabel(`Issue key ${key}`)).toBeVisible();
   });
 
-  for (const [timezoneId, now] of [
-    ["Asia/Tokyo", "2026-11-18T10:00:00Z"],
-    ["America/Los_Angeles", "2026-11-18T20:00:00Z"],
-  ] as const) {
+  for (const timezoneId of ["Asia/Tokyo", "America/Los_Angeles"] as const) {
     test.describe(`an item due today in ${timezoneId}`, () => {
       test.use({ timezoneId });
 
@@ -80,7 +78,13 @@ test.describe("daily UX batch 1", () => {
         page,
         request,
       }) => {
-        await page.clock.setFixedTime(new Date(now));
+        const [y, m, d] = new Intl.DateTimeFormat("en-CA", { timeZone: timezoneId })
+          .format(new Date())
+          .split("-")
+          .map(Number);
+        const laterDate = new Date(Date.UTC(y, m - 1, d + 17));
+        const iso = (dt: Date) => dt.toISOString().slice(0, 10);
+        const todayIso = iso(new Date(Date.UTC(y, m - 1, d)));
         await gotoDashboard(page);
         const hero = widgetWithText(page, "Open items across your series");
         const overdueCount = async () => {
@@ -95,10 +99,10 @@ test.describe("daily UX batch 1", () => {
 
         const stamp = Date.now();
         const today = await createDashboardIssue(request, `Due today ${stamp}`, {
-          due_date: "2026-11-18",
+          due_date: todayIso,
         });
         const later = await createDashboardIssue(request, `Due later ${stamp}`, {
-          due_date: "2026-12-05",
+          due_date: iso(laterDate),
         });
         try {
           await page.reload();
@@ -110,11 +114,11 @@ test.describe("daily UX batch 1", () => {
           expect(await overdueCount()).toBe(before);
           await expect(
             page.locator(rowsSelector).filter({ hasText: later.title })
-          ).toContainText("Due Dec 5");
+          ).toContainText(`Due ${MONTHS[laterDate.getUTCMonth()]} ${laterDate.getUTCDate()}`);
 
           await page.goto(`/issues/${today.id}`);
           await waitForApp(page);
-          await expect(page.getByRole("button", { name: "Due date" })).toContainText("Nov 18, 2026");
+          await expect(page.getByRole("button", { name: "Due date" })).toContainText(`${MONTHS[m - 1]} ${d}, ${y}`);
         } finally {
           await deleteIssue(request, today.id);
           await deleteIssue(request, later.id);
