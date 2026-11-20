@@ -1,6 +1,7 @@
 import { NextResponse, after, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { hasAiAccess } from "@/lib/ai/access";
+import { markSuggestionsPending, recordNotOnPlan } from "@/lib/ai/suggestions-status";
 import {
   extractSuggestions,
   retainAudio,
@@ -184,8 +185,12 @@ export async function POST(
     return respond({ error: "Transcript could not be saved." }, 500);
   }
 
+  const aiAllowed = await hasAiAccess();
+  if (aiAllowed) await markSuggestionsPending(meetingId);
+  else await recordNotOnPlan(meetingId);
+
   after(async () => {
-    const extraction = (await hasAiAccess())
+    const extraction = aiAllowed
       ? await extractSuggestions(supabase, meetingId)
       : { extraction: "skipped" as const, extractionError: null };
     if (extraction.extraction === "failed") {

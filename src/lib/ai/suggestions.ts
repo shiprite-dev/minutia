@@ -4,6 +4,7 @@ import { hasAiConfigured } from "@/lib/ai/config";
 import { getTextFromOpenRouter } from "./ask-series-answer";
 import { callAi } from "./call";
 import { composeMeetingNotes } from "./companion-notes";
+import { recordSuggestionsStatus, suggestionsStatusFor } from "./suggestions-status";
 import {
   buildSeriesContext,
   formatSeriesContextForPrompt,
@@ -156,6 +157,21 @@ export function isExplicitSkip(outcome: GenerateOutcome): boolean {
  * on extraction actually completing (or being explicitly skipped).
  */
 export async function generateMeetingSuggestions(
+  supabase: SupabaseServerClient,
+  meetingId: string
+): Promise<GenerateOutcome> {
+  let outcome: GenerateOutcome;
+  try {
+    outcome = await runGeneration(supabase, meetingId);
+  } catch (err) {
+    await recordSuggestionsStatus(meetingId, { status: "failed", reason: "provider_error" });
+    throw err;
+  }
+  await recordSuggestionsStatus(meetingId, suggestionsStatusFor(outcome));
+  return outcome;
+}
+
+async function runGeneration(
   supabase: SupabaseServerClient,
   meetingId: string
 ): Promise<GenerateOutcome> {

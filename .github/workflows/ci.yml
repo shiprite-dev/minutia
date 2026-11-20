@@ -82,6 +82,9 @@ jobs:
       - name: Verify transcription route contracts
         run: pnpm test:transcription-routes
 
+      - name: Verify suggestions status contracts
+        run: pnpm test:suggestions-status
+
       - name: Device transcript contracts
         run: pnpm test:device-transcript
 

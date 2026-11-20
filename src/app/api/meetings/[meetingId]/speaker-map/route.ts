@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireAiAccess } from "@/lib/ai/access";
 import { hasAiConfigured } from "@/lib/ai/config";
 import { generateMeetingSuggestions } from "@/lib/ai/suggestions";
+import { markSuggestionsPending } from "@/lib/ai/suggestions-status";
 import { userManagesSeries } from "@/lib/series/manage-access";
 import { flattenSegments } from "@/lib/transcription";
 
@@ -82,6 +83,7 @@ export async function PATCH(
   const aiDenied = await requireAiAccess();
   if (!aiDenied && (await hasAiConfigured())) {
     try {
+      await markSuggestionsPending(meetingId);
       await generateMeetingSuggestions(supabase, meetingId);
     } catch (suggestionError) {
       console.error("[speaker-map] context-aware suggestion extraction failed", {

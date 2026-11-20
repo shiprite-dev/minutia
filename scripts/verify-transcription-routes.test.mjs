@@ -50,11 +50,30 @@ fs.writeFileSync(path.join(stubDir, "supabase-server.mjs"), `
 export async function createClient() { return globalThis.__S.supabase; }
 `);
 fs.writeFileSync(path.join(stubDir, "access.mjs"), `
-export async function requireAiAccess() { return null; }
+export async function requireAiAccess() {
+  const denied = globalThis.__S.aiDenied;
+  if (!denied) return null;
+  return { status: denied.status, async json() { return denied.body; } };
+}
+`);
+fs.writeFileSync(path.join(stubDir, "suggestions-status.mjs"), `
+export async function markSuggestionsPending(meetingId) {
+  globalThis.__S.statusCalls.push({ call: "pending", meetingId });
+}
+export async function recordNotOnPlan(meetingId) {
+  globalThis.__S.statusCalls.push({ call: "skipped", reason: "not_on_plan", meetingId });
+}
+`);
+fs.writeFileSync(path.join(stubDir, "ai-config.mjs"), `
+export async function hasAiConfigured() { return true; }
+`);
+fs.writeFileSync(path.join(stubDir, "manage-access.mjs"), `
+export async function userManagesSeries() { return true; }
 `);
 fs.writeFileSync(path.join(stubDir, "suggestions.mjs"), `
 export async function generateMeetingSuggestions() {
   const S = globalThis.__S;
+  S.statusCalls.push({ call: "generate" });
   if (S.extractionThrow) throw S.extractionThrow;
   return S.extraction;
 }
@@ -116,6 +135,7 @@ export function ownsSegmentRow() { return true; }
 // Test-side Supabase double. Chainable; every table write is recorded.
 function buildSupabase() {
   return {
+    auth: { async getUser() { return { data: { user: { id: "u1" } } }; } },
     from(table) {
       const builder = {
         select() { return builder; },
@@ -189,6 +209,9 @@ function stubPlugin() {
         "@/lib/supabase/server": "supabase-server.mjs",
         "@/lib/ai/access": "access.mjs",
         "@/lib/ai/suggestions": "suggestions.mjs",
+        "@/lib/ai/suggestions-status": "suggestions-status.mjs",
+        "@/lib/ai/config": "ai-config.mjs",
+        "@/lib/series/manage-access": "manage-access.mjs",
         "@/lib/audio": "audio.mjs",
         "@/lib/transcription": "transcription.mjs",
         "@/lib/instance-config": "instance-config.mjs",
@@ -218,6 +241,19 @@ await esbuild.build({
   plugins: [stubPlugin()],
 });
 const meetingRoute = await import(pathToFileURL(routeBundle).href);
+
+const suggestionsBundle = path.join(tempDir, "suggestions-route.mjs");
+await esbuild.build({
+  entryPoints: ["src/app/api/meetings/[meetingId]/suggestions/route.ts"],
+  outfile: suggestionsBundle,
+  bundle: true,
+  platform: "node",
+  format: "esm",
+  logLevel: "silent",
+  absWorkingDir: root,
+  plugins: [stubPlugin()],
+});
+const suggestionsRoute = await import(pathToFileURL(suggestionsBundle).href);
 
 const segmentBundle = path.join(tempDir, "segment-route.mjs");
 await esbuild.build({
@@ -273,6 +309,8 @@ function reset(overrides = {}) {
     __pendingSeq: null,
     afterTasks: [],
     downloads: 0,
+    aiDenied: null,
+    statusCalls: [],
   }, overrides);
   globalThis.__S.supabase = buildSupabase();
 }
@@ -607,4 +645,59 @@ test("a JSON body of literal null is treated as an empty body", async () => {
   const res = await callMeetingRoute(null);
   assert.equal(res.status, 200);
   assert.equal(S.providerCalls > 0, true);
+});
+
+// ---------------------------------------------------------------------------
+// Readiness status: "finding action items" is on before extraction begins
+// ---------------------------------------------------------------------------
+
+test("a deferred recording shows finding-action-items before the background extraction starts", async () => {
+  reset();
+  const res = await callMeetingRoute({ defer_extraction: true });
+  assert.equal(res.status, 200);
+  assert.deepEqual(S.statusCalls, [{ call: "pending", meetingId: MEETING_ID }]);
+  await runAfterResponse();
+  assert.deepEqual(S.statusCalls, [{ call: "pending", meetingId: MEETING_ID }, { call: "generate" }]);
+});
+
+test("an inline recording shows finding-action-items before the extraction runs", async () => {
+  reset();
+  const res = await callMeetingRoute({});
+  assert.equal(res.status, 200);
+  assert.deepEqual(S.statusCalls, [{ call: "pending", meetingId: MEETING_ID }, { call: "generate" }]);
+});
+
+test("a recording whose transcript could not be saved never claims action items are being found", async () => {
+  reset({ meeting: null });
+  await callMeetingRoute({});
+  assert.deepEqual(S.statusCalls, []);
+});
+
+test("a plan without AI marks the meeting as skipped for plan, from the recording and the manual review", async () => {
+  const denied = { status: 403, body: { error: "AI features are not enabled for this account.", code: "FEATURE_UNAVAILABLE" } };
+  reset({ aiDenied: denied });
+  const res = await callMeetingRoute({});
+  assert.equal(res.status, 403);
+  assert.deepEqual(S.statusCalls, [{ call: "skipped", reason: "not_on_plan", meetingId: MEETING_ID }]);
+
+  reset({ aiDenied: denied });
+  const res2 = await suggestionsRoute.POST(request({}), { params: Promise.resolve({ meetingId: MEETING_ID }) });
+  assert.equal(res2.status, 403);
+  assert.deepEqual(S.statusCalls, [{ call: "skipped", reason: "not_on_plan", meetingId: MEETING_ID }]);
+});
+
+test("a signed-out or unverifiable denial does not record a plan skip", async () => {
+  reset({ aiDenied: { status: 401, body: { error: "Not authenticated" } } });
+  await callMeetingRoute({});
+  reset({ aiDenied: { status: 403, body: { error: "Unable to verify access. Please try again." } } });
+  const res = await suggestionsRoute.POST(request({}), { params: Promise.resolve({ meetingId: MEETING_ID }) });
+  assert.equal(res.status, 403);
+  assert.deepEqual(S.statusCalls, []);
+});
+
+test("a manual review shows finding-action-items before the AI runs", async () => {
+  reset({ meeting: { id: MEETING_ID, series_id: "s1" } });
+  const res = await suggestionsRoute.POST(request({}), { params: Promise.resolve({ meetingId: MEETING_ID }) });
+  assert.equal(res.status, 200);
+  assert.deepEqual(S.statusCalls, [{ call: "pending", meetingId: MEETING_ID }, { call: "generate" }]);
 });

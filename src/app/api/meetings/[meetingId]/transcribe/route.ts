@@ -1,6 +1,7 @@
 import { NextResponse, after, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { requireAiAccess } from "@/lib/ai/access";
+import { markSuggestionsPending, recordNotOnPlan } from "@/lib/ai/suggestions-status";
 import { MEETING_AUDIO_BUCKET } from "@/lib/audio";
 import { ownsSegmentRow } from "@/lib/audio/segments";
 import {
@@ -121,6 +122,7 @@ export async function POST(
   const aiDenied = await requireAiAccess();
   if (aiDenied) {
     const body = (await aiDenied.json()) as Record<string, unknown>;
+    if (body.code === "FEATURE_UNAVAILABLE") await recordNotOnPlan(meetingId);
     return NextResponse.json({ ...body, request_id: requestId }, { status: aiDenied.status });
   }
 
@@ -542,6 +544,8 @@ export async function POST(
 
     // MIN-121: extraction completed or explicitly skipped gates audio cleanup; a failed
     // extraction retains the audio for a later retry. The transcript stays committed either way.
+
+    await markSuggestionsPending(meetingId);
 
     if (deferExtraction) {
       after(async () => {
