@@ -85,6 +85,9 @@ jobs:
       - name: Verify suggestions status contracts
         run: pnpm test:suggestions-status
 
+      - name: Verify owner matching
+        run: pnpm test:owner-match
+
       - name: Device transcript contracts
         run: pnpm test:device-transcript
 

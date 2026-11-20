@@ -274,7 +274,7 @@ export interface MeetingAiSuggestion {
   // status a status_update would move it to. Null for a plain new_item.
   related_issue_number: number | null;
   suggested_status: IssueStatus | null;
-  status: "pending" | "accepted" | "rejected";
+  status: "pending" | "reviewing" | "accepted" | "rejected";
   ai_model: string | null;
   ai_prompt_version: string | null;
   created_issue_id: string | null;
