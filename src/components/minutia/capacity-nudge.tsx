@@ -98,7 +98,7 @@ export function CapacityNudge({ limit }: { limit: number }) {
               type="button"
               onClick={handleUpgrade}
               disabled={isPending}
-              className="mt-2.5 inline-flex items-center gap-1 text-xs font-medium text-accent transition-colors hover:text-accent-hover disabled:opacity-60 disabled:cursor-default"
+              className="mt-2.5 inline-flex items-center gap-1 text-xs font-medium text-accent-text transition-colors hover:text-accent-hover disabled:opacity-60 disabled:cursor-default"
             >
               {isPending ? "Starting…" : (cta?.label ?? UPSELL_DEFAULT_CTA_LABEL)}
               {!isPending && <ArrowRight className="size-3" />}
@@ -114,7 +114,7 @@ export function CapacityNudge({ limit }: { limit: number }) {
             href={cta.href}
             target="_blank"
             rel="noopener noreferrer"
-            className="mt-2.5 inline-flex items-center gap-1 text-xs font-medium text-accent transition-colors hover:text-accent-hover"
+            className="mt-2.5 inline-flex items-center gap-1 text-xs font-medium text-accent-text transition-colors hover:text-accent-hover"
           >
             {cta.label}
             <ArrowRight className="size-3" />

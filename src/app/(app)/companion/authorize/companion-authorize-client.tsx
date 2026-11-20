@@ -104,7 +104,7 @@ export function CompanionAuthorizeClient() {
 
         {error && (
           <CardContent>
-            <p className="text-sm text-danger" role="alert">
+            <p className="text-sm text-danger-text" role="alert">
               {error}
             </p>
           </CardContent>

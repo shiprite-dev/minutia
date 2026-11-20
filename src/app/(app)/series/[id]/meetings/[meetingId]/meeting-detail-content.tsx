@@ -469,7 +469,7 @@ function CarriedIssueCard({
           issueId={issue.id}
           onClick={(e) => e.stopPropagation()}
           className={cn(
-            "text-sm font-medium transition-all hover:text-accent",
+            "text-sm font-medium transition-all hover:text-accent-text",
             done ? "line-through text-ink-3 hover:text-ink-3" : "text-ink"
           )}
         >
@@ -483,7 +483,7 @@ function CarriedIssueCard({
           {issue.due_date && (
             <span className={cn(
               "text-xs font-mono tabular-nums",
-              !done && new Date(issue.due_date) < new Date() ? "text-accent" : "text-ink-4"
+              !done && new Date(issue.due_date) < new Date() ? "text-accent-text" : "text-ink-4"
             )}>
               {formatShortDate(issue.due_date)}
             </span>
@@ -528,7 +528,7 @@ function CarriedIssueCard({
             className={cn(
               "text-xs font-medium px-2 py-0.5 rounded-full",
               justChanged === "resolved" && "bg-success-soft text-success",
-              justChanged === "in_progress" && "bg-accent-soft text-accent",
+              justChanged === "in_progress" && "bg-accent-soft text-accent-text",
               justChanged === "dropped" && "bg-paper-2 text-ink-3"
             )}
           >
@@ -589,7 +589,7 @@ function CapturedItem({
       <CategoryBadge category={issue.category} size="sm" />
       <PrefetchIssueLink
         issueId={issue.id}
-        className="flex-1 min-w-0 text-sm font-medium text-ink group-hover:text-accent transition-colors truncate"
+        className="flex-1 min-w-0 text-sm font-medium text-ink group-hover:text-accent-text transition-colors truncate"
       >
         {issue.title}
       </PrefetchIssueLink>
@@ -599,7 +599,7 @@ function CapturedItem({
       {issue.due_date && (
         <span className={cn(
           "text-xs font-mono tabular-nums",
-          new Date(issue.due_date) < new Date() ? "text-accent" : "text-ink-4"
+          new Date(issue.due_date) < new Date() ? "text-accent-text" : "text-ink-4"
         )}>
           {formatShortDate(issue.due_date)}
         </span>
@@ -661,7 +661,7 @@ function LogGroupLabel({
   tone?: "default" | "accent";
   aside?: React.ReactNode;
 }) {
-  const color = tone === "accent" ? "text-accent" : "text-ink-4";
+  const color = tone === "accent" ? "text-accent-text" : "text-ink-4";
   return (
     <div className="mb-2 flex items-center gap-2">
       <span className={cn("font-mono text-[11px] font-medium uppercase tracking-wider", color)}>
@@ -1782,7 +1782,7 @@ export function MeetingDetailContent({
                       key={d.id}
                       className="flex items-center gap-3 rounded-lg px-3 py-2.5 hover:bg-paper-2 transition-colors"
                     >
-                      <span className="text-accent text-xs">&#9670;</span>
+                      <span className="text-accent-text text-xs">&#9670;</span>
                       <span className="flex-1 text-sm text-ink">{d.title}</span>
                       <span className="text-[10px] text-ink-4 font-medium uppercase tracking-wider">Decision</span>
                     </div>
@@ -2309,7 +2309,7 @@ export function MeetingDetailContent({
         </div>
 
         <header className="mb-8">
-          <p className="font-mono text-[11px] font-medium uppercase tracking-[0.18em] text-accent">
+          <p className="font-mono text-[11px] font-medium uppercase tracking-[0.18em] text-accent-text">
             Meeting recap
           </p>
           <h1 className="mt-2 font-display text-4xl font-semibold leading-[1.1] tracking-tight text-ink">
@@ -2534,7 +2534,7 @@ export function MeetingDetailContent({
           >
             <div className="flex items-start justify-between gap-4 border-b border-rule px-5 py-4">
               <div>
-                <p className="text-[11px] font-mono uppercase tracking-wider text-accent">
+                <p className="text-[11px] font-mono uppercase tracking-wider text-accent-text">
                   AI notes preview
                 </p>
                 <h3 className="mt-1 font-display text-xl font-semibold text-ink">
@@ -2575,7 +2575,7 @@ export function MeetingDetailContent({
                       {structuredAiPreviewCount} suggested {structuredAiPreviewCount === 1 ? "entry" : "entries"}
                     </p>
                   </div>
-                  <span className="rounded-full bg-accent-soft px-2.5 py-1 text-[11px] font-medium text-accent">
+                  <span className="rounded-full bg-accent-soft px-2.5 py-1 text-[11px] font-medium text-accent-text">
                     Structured draft
                   </span>
                 </div>

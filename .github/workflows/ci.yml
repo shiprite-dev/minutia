@@ -130,6 +130,9 @@ jobs:
       - name: Verify admin health summarizer
         run: pnpm test:admin-health
 
+      - name: Verify readable text colours in light and dark mode
+        run: pnpm test:color-contrast
+
       - name: Verify admin capability model
         run: pnpm test:admin-capabilities
 

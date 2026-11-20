@@ -38,7 +38,7 @@ export default function AdminHealthPage() {
 
   if (isError) {
     return (
-      <p role="alert" className="text-sm text-danger">
+      <p role="alert" className="text-sm text-danger-text">
         Couldn&apos;t load service health. Refresh to retry.
       </p>
     );

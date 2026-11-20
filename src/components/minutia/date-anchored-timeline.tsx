@@ -98,7 +98,7 @@ function MeetingSection({
         {/* Content */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <span className="text-sm font-semibold text-ink group-hover:text-accent transition-colors truncate">
+            <span className="text-sm font-semibold text-ink group-hover:text-accent-text transition-colors truncate">
               {meeting.title}
             </span>
             <ChevronRight
@@ -188,7 +188,7 @@ function MeetingSection({
                               ? "text-ink-3 line-through"
                               : issue.status === "dropped"
                                 ? "text-ink-4 line-through"
-                                : "text-ink group-hover/issue:text-accent"
+                                : "text-ink group-hover/issue:text-accent-text"
                           )}
                         >
                           {issue.title}
@@ -201,7 +201,7 @@ function MeetingSection({
                     <button
                       type="button"
                       onClick={() => setShowAllIssues(true)}
-                      className="mt-1.5 text-xs text-accent hover:underline"
+                      className="mt-1.5 text-xs text-accent-text hover:underline"
                     >
                       Show all {meeting.issues.length} items
                     </button>
@@ -231,7 +231,7 @@ function MeetingSection({
               {/* Link to full meeting */}
               <Link
                 href={`/series/${seriesId}/meetings/${meeting.id}`}
-                className="inline-flex items-center gap-1 text-xs text-accent hover:underline"
+                className="inline-flex items-center gap-1 text-xs text-accent-text hover:underline"
               >
                 Open meeting details
                 <ChevronRight className="size-3" />
@@ -341,7 +341,7 @@ export function DateAnchoredTimeline({
                 >
                   <div className="size-2 rounded-full bg-accent shrink-0 ml-[11px]" />
                   <div className="h-px flex-1 bg-accent/30" />
-                  <span className="text-[10px] font-mono uppercase tracking-wider text-accent font-bold shrink-0 pr-1">
+                  <span className="text-[10px] font-mono uppercase tracking-wider text-accent-text font-bold shrink-0 pr-1">
                     Today
                   </span>
                 </div>
@@ -364,7 +364,7 @@ export function DateAnchoredTimeline({
         <button
           type="button"
           onClick={() => setShowAll(true)}
-          className="mt-3 ml-10 text-xs text-accent hover:underline"
+          className="mt-3 ml-10 text-xs text-accent-text hover:underline"
         >
           View all {sorted.length} meetings
         </button>

@@ -50,11 +50,11 @@ export function StaleItemsWidget({
           <p className="text-[11px] text-ink-4 mb-1">Oldest stale item</p>
           <PrefetchIssueLink
             issueId={oldest.id}
-            className="text-sm font-medium text-ink hover:text-accent transition-colors"
+            className="text-sm font-medium text-ink hover:text-accent-text transition-colors"
           >
             {oldest.title}
           </PrefetchIssueLink>
-          <p className="text-xs font-mono text-accent mt-0.5">
+          <p className="text-xs font-mono text-accent-text mt-0.5">
             {daysSince(oldest.updated_at)}d, no updates
           </p>
         </div>

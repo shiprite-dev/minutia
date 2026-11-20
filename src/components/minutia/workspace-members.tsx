@@ -232,7 +232,7 @@ export function WorkspaceMembers() {
           onInvited={refreshOrgAdmin}
         />
         {invitationMessage && (
-          <p className={cn("text-xs", invitationMessageState === "error" ? "text-danger" : "text-success")}>
+          <p className={cn("text-xs", invitationMessageState === "error" ? "text-danger-text" : "text-success")}>
             {invitationMessage}
           </p>
         )}
@@ -294,7 +294,7 @@ export function WorkspaceMembers() {
             })}
           </div>
           {memberMessage && (
-            <p className={cn("text-xs", memberMessageState === "error" ? "text-danger" : "text-success")}>
+            <p className={cn("text-xs", memberMessageState === "error" ? "text-danger-text" : "text-success")}>
               {memberMessage}
             </p>
           )}

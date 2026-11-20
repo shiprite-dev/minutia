@@ -22,7 +22,7 @@ export default function SeriesDetailError({
   return (
     <div className="flex min-h-[60vh] flex-col items-center justify-center px-4 text-center">
       <div className="flex size-12 items-center justify-center rounded-full bg-danger-soft mb-4">
-        <AlertTriangle className="size-6 text-danger" />
+        <AlertTriangle className="size-6 text-danger-text" />
       </div>
       <h2 className="font-display text-xl font-semibold text-ink mb-2">
         Series not found

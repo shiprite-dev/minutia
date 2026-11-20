@@ -36,7 +36,7 @@ export default function AdminOverviewPage() {
 
   if (isError) {
     return (
-      <p role="alert" className="text-sm text-danger">
+      <p role="alert" className="text-sm text-danger-text">
         Couldn&apos;t load instance overview. Refresh to retry.
       </p>
     );

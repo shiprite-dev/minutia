@@ -128,7 +128,7 @@ function ActionRow({
           "focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-paper",
           checked
             ? "border-success bg-success text-white"
-            : "border-rule-strong text-transparent hover:border-accent hover:text-accent"
+            : "border-rule-strong text-transparent hover:border-accent hover:text-accent-text"
         )}
       >
         <motion.span
@@ -144,7 +144,7 @@ function ActionRow({
         issueId={issue.id}
         className={cn(
           "min-w-0 flex-1 truncate text-sm transition-colors",
-          checked ? "text-ink-4 line-through" : "text-ink group-hover:text-accent"
+          checked ? "text-ink-4 line-through" : "text-ink group-hover:text-accent-text"
         )}
       >
         {issue.title}
@@ -161,7 +161,7 @@ function ActionRow({
           <span
             className={cn(
               "font-mono tabular-nums",
-              overdue && !checked ? "text-accent font-medium" : "text-ink-4"
+              overdue && !checked ? "text-accent-text font-medium" : "text-ink-4"
             )}
           >
             {overdue && !checked ? "Overdue" : formatShortDate(issue.due_date)}
@@ -301,7 +301,7 @@ export default function MyActionsPage() {
                 </span>
               )}
               {overdueCount > 0 && (
-                <span className="text-accent">
+                <span className="text-accent-text">
                   {openCount > 0 || pendingCount > 0 ? " · " : ""}
                   {overdueCount} OVERDUE
                 </span>

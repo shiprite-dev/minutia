@@ -20,7 +20,7 @@ export function CalendarDraftNotice({ count }: { count: number }) {
           role="status"
           className="flex items-start gap-3 rounded-lg border border-accent/30 bg-accent/5 px-4 py-3"
         >
-          <CalendarClock className="size-4 shrink-0 text-accent mt-0.5" aria-hidden="true" />
+          <CalendarClock className="size-4 shrink-0 text-accent-text mt-0.5" aria-hidden="true" />
           <p className="flex-1 text-sm text-ink-2">
             <span className="font-medium text-ink">
               {count} agenda {count === 1 ? "item" : "items"} drafted from this calendar event.

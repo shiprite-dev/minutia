@@ -135,7 +135,7 @@ export function UpgradeConfirmation() {
 
           {phase === "finalizing" && (
             <>
-              <Loader2 className="mt-0.5 size-4 shrink-0 animate-spin text-accent" aria-hidden="true" />
+              <Loader2 className="mt-0.5 size-4 shrink-0 animate-spin text-accent-text" aria-hidden="true" />
               <div>
                 <p className="text-sm font-medium text-ink pr-5">
                   Finalizing your upgrade
@@ -195,7 +195,7 @@ export function UpgradeConfirmation() {
                 <button
                   type="button"
                   onClick={() => window.location.reload()}
-                  className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-accent transition-colors hover:text-accent-hover"
+                  className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-accent-text transition-colors hover:text-accent-hover"
                 >
                   <RefreshCw className="size-3" aria-hidden="true" />
                   Refresh

@@ -123,7 +123,7 @@ export default function ResetPasswordPage() {
         {formState === "success" ? (
           <div className="space-y-4 text-center">
             <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-accent-soft">
-              <LockKeyhole className="h-5 w-5 text-accent" />
+              <LockKeyhole className="h-5 w-5 text-accent-text" />
             </div>
             <p className="font-sans text-sm text-ink-3">{message}</p>
             <Button asChild className="h-10 w-full rounded-[12px] bg-accent font-sans font-medium text-white hover:bg-accent-hover">
@@ -171,13 +171,13 @@ export default function ResetPasswordPage() {
             </div>
 
             {passwordConfirm && !passwordsMatch && (
-              <p className="font-sans text-sm text-danger">
+              <p className="font-sans text-sm text-danger-text">
                 Passwords do not match.
               </p>
             )}
 
             {formState === "error" && message && (
-              <p className="font-sans text-sm text-danger">{message}</p>
+              <p className="font-sans text-sm text-danger-text">{message}</p>
             )}
 
             <Button

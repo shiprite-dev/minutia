@@ -81,7 +81,7 @@ export default async function DownloadPage() {
     <main className="min-h-full bg-paper text-ink font-sans">
       {/* ─── Hero ─── */}
       <section className="mx-auto max-w-3xl px-6 pt-24 pb-20 text-center sm:pt-32 sm:pb-28">
-        <p className="text-xs font-mono uppercase tracking-wider text-accent mb-5">
+        <p className="text-xs font-mono uppercase tracking-wider text-accent-text mb-5">
           Minutia for Mac
         </p>
         <h1 className="font-display text-4xl font-bold leading-tight tracking-tight text-ink sm:text-6xl">
@@ -108,7 +108,7 @@ export default async function DownloadPage() {
             href={DESKTOP_REPO_URL}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex items-center gap-1 text-accent hover:text-accent-hover"
+            className="inline-flex items-center gap-1 text-accent-text hover:text-accent-hover"
           >
             View it on GitHub
             <ExternalLink className="size-3" />
@@ -124,7 +124,7 @@ export default async function DownloadPage() {
         <div className="grid gap-8 sm:grid-cols-3">
           {steps.map((step, i) => (
             <div key={step.title} className="flex gap-4">
-              <div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-accent-soft font-mono text-sm text-accent">
+              <div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-accent-soft font-mono text-sm text-accent-text">
                 {i + 1}
               </div>
               <div>

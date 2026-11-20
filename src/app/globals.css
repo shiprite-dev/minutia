@@ -19,19 +19,21 @@
   --accent:       oklch(0.490 0.220 35);
   --accent-hover: oklch(0.440 0.220 35);
   --accent-soft:  oklch(0.940 0.030 35);
+  --accent-text:  var(--accent);
   --success:      oklch(0.450 0.120 155);
   --success-soft: oklch(0.940 0.030 155);
-  --warn:         oklch(0.520 0.140 85);
+  --warn:         oklch(0.490 0.140 85);
   --warn-soft:    oklch(0.940 0.030 85);
   --danger:       oklch(0.420 0.160 25);
   --danger-soft:  oklch(0.940 0.030 25);
+  --danger-text:  var(--danger);
 
   /* Speaker palette (diarized transcript): same soft/text recipe as
      accent/success/warn, hues spaced away from those semantic colors so a
      speaker chip never reads as brand/success/warning. */
-  --speaker-1:      oklch(0.500 0.130 185);
+  --speaker-1:      oklch(0.470 0.130 185);
   --speaker-1-soft: oklch(0.940 0.030 185);
-  --speaker-2:      oklch(0.500 0.130 230);
+  --speaker-2:      oklch(0.480 0.130 230);
   --speaker-2-soft: oklch(0.940 0.030 230);
   --speaker-3:      oklch(0.500 0.130 270);
   --speaker-3-soft: oklch(0.940 0.030 270);
@@ -54,12 +56,14 @@
   --accent:       oklch(0.585 0.200 35); /* WCAG AA: white text hits 4.61:1 (0.660 was 3.39:1); still clears 4.5:1 as text on paper */
   --accent-hover: oklch(0.535 0.200 35);
   --accent-soft:  oklch(0.200 0.040 35);
+  --accent-text:  oklch(0.640 0.190 35); /* text-only: lighter than the button fill so labels clear 4.5:1 on every dark surface */
   --success:      oklch(0.590 0.120 155);
   --success-soft: oklch(0.200 0.030 155);
   --warn:         oklch(0.600 0.140 85);
   --warn-soft:    oklch(0.200 0.030 85);
   --danger:       oklch(0.580 0.160 25);
   --danger-soft:  oklch(0.200 0.030 25);
+  --danger-text:  oklch(0.640 0.150 25);
 
   --speaker-1:      oklch(0.640 0.140 185);
   --speaker-1-soft: oklch(0.200 0.035 185);
@@ -161,12 +165,14 @@
   --color-accent:       var(--accent);
   --color-accent-hover: var(--accent-hover);
   --color-accent-soft:  var(--accent-soft);
+  --color-accent-text:  var(--accent-text);
   --color-success:      var(--success);
   --color-success-soft: var(--success-soft);
   --color-warn:         var(--warn);
   --color-warn-soft:    var(--warn-soft);
   --color-danger:       var(--danger);
   --color-danger-soft:  var(--danger-soft);
+  --color-danger-text:  var(--danger-text);
 
   --color-speaker-1:      var(--speaker-1);
   --color-speaker-1-soft: var(--speaker-1-soft);

@@ -115,7 +115,7 @@ export function SendMeetingNotesButton({ meetingId, attendees, emphasis = "outli
           <p
             className={
               status === "error"
-                ? "text-sm text-danger"
+                ? "text-sm text-danger-text"
                 : "inline-flex items-center gap-2 text-sm text-success"
             }
           >

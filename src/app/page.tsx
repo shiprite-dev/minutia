@@ -36,7 +36,7 @@ export default function LandingPage() {
     <main className="min-h-full bg-paper text-ink font-sans">
       {/* ─── Hero ─── */}
       <section className="mx-auto max-w-3xl px-6 pt-24 pb-20 text-center sm:pt-32 sm:pb-28">
-        <p className="text-xs font-mono uppercase tracking-wider text-accent mb-5">
+        <p className="text-xs font-mono uppercase tracking-wider text-accent-text mb-5">
           The open-source Outstanding Issues Log for recurring meetings
         </p>
         <h1 className="font-display text-4xl font-bold leading-tight tracking-tight text-ink sm:text-6xl">
@@ -63,7 +63,7 @@ export default function LandingPage() {
           On a Mac?{" "}
           <Link
             href="/download"
-            className="inline-flex items-center gap-1 font-medium text-accent hover:text-accent-hover"
+            className="inline-flex items-center gap-1 font-medium text-accent-text hover:text-accent-hover"
           >
             Get the Mac app
             <ArrowRight className="size-3.5" />
@@ -79,7 +79,7 @@ export default function LandingPage() {
         <div className="grid gap-8 sm:grid-cols-2">
           {features.map((feature) => (
             <div key={feature.title} className="flex gap-4">
-              <div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-accent-soft text-accent">
+              <div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-accent-soft text-accent-text">
                 <Check className="size-4" />
               </div>
               <div>

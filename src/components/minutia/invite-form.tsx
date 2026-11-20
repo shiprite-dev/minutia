@@ -173,7 +173,7 @@ export function InviteForm({
               assign work across your meetings.
             </p>
             {upgradeError && (
-              <p className="text-xs text-danger">
+              <p className="text-xs text-danger-text">
                 Could not start the upgrade. Please try again.
               </p>
             )}
@@ -255,7 +255,7 @@ export function InviteForm({
         <p
           className={cn(
             "text-xs",
-            inviteState === "error" ? "text-danger" : "text-success",
+            inviteState === "error" ? "text-danger-text" : "text-success",
           )}
         >
           {inviteMessage}

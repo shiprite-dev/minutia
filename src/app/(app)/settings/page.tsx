@@ -83,7 +83,7 @@ export default function SettingsPage() {
                   onChange={(e) => setName(e.target.value)}
                 />
                 {name.length > 0 && !isValid && (
-                  <p className="text-xs text-danger">
+                  <p className="text-xs text-danger-text">
                     Name must be between 1 and 100 characters.
                   </p>
                 )}

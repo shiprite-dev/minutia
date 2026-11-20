@@ -424,7 +424,7 @@ export function CsvImportDialog({
 
         {/* Error */}
         {importMutation.isError && (
-          <div className="flex items-center gap-2 text-xs text-danger">
+          <div className="flex items-center gap-2 text-xs text-danger-text">
             <AlertCircle className="size-3.5 shrink-0" />
             {importMutation.error?.message ?? "Import failed"}
           </div>

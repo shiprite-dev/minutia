@@ -44,7 +44,7 @@ function CountBadge({ count, accent }: { count: number; accent?: boolean }) {
     <span
       className={cn(
         "ml-auto text-xs tabular-nums font-medium",
-        accent ? "text-accent" : "text-ink-4"
+        accent ? "text-accent-text" : "text-ink-4"
       )}
     >
       {count}

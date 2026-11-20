@@ -129,7 +129,7 @@ test.describe("Google Calendar event normalization", () => {
 
   test("incremental agenda changes use updatedMin without syncToken or window filters", async () => {
     const originalFetch = globalThis.fetch;
-    let requestedUrl: URL | null = null;
+    let requestedUrl = null as URL | null;
 
     globalThis.fetch = (async (input: RequestInfo | URL) => {
       requestedUrl = new URL(String(input));

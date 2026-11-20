@@ -12,7 +12,7 @@ type Briefing = {
 };
 
 function Stat({ label, value, tone }: { label: string; value: number; tone?: "danger" | "warn" }) {
-  const toneClass = tone === "danger" ? "text-danger" : tone === "warn" ? "text-warn" : "text-ink";
+  const toneClass = tone === "danger" ? "text-danger-text" : tone === "warn" ? "text-warn" : "text-ink";
   return (
     <span className="inline-flex items-baseline gap-1 rounded-full bg-paper px-2.5 py-1 text-xs">
       <span className={`font-semibold ${toneClass}`}>{value}</span>
@@ -60,7 +60,7 @@ export function CarryoverBriefingPanel({
     <section className="rounded-xl border bg-paper-2 p-4">
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          <Sparkles className="size-4 text-accent" />
+          <Sparkles className="size-4 text-accent-text" />
           <h2 className="font-display text-base font-medium text-ink">Carry-over briefing</h2>
         </div>
         {!briefing && (
@@ -75,7 +75,7 @@ export function CarryoverBriefingPanel({
         {issueCount} open {issueCount === 1 ? "item" : "items"} carried from earlier meetings.
       </p>
 
-      {error && <p className="mt-3 text-sm text-danger">{error}</p>}
+      {error && <p className="mt-3 text-sm text-danger-text">{error}</p>}
 
       {briefing && (
         <div className="mt-3">

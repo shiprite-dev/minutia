@@ -80,7 +80,7 @@ export function MeetingTimelineItem({
         className="flex-1 pb-6 group"
       >
         <div className="flex items-center gap-2 mb-0.5">
-          <span className="text-sm font-mono text-ink font-medium group-hover:text-accent transition-colors">
+          <span className="text-sm font-mono text-ink font-medium group-hover:text-accent-text transition-colors">
             M-{sequence}
           </span>
           <span className="text-xs font-mono text-ink-4">

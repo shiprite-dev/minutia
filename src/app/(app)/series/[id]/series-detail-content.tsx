@@ -315,7 +315,7 @@ export function SeriesDetailContent({ seriesId }: SeriesDetailContentProps) {
                 Query this series only. Answers cite the meeting memory that supports them.
               </p>
             </div>
-            <Sparkles className="mt-1 size-4 shrink-0 text-accent" />
+            <Sparkles className="mt-1 size-4 shrink-0 text-accent-text" />
           </div>
 
           <div className="flex flex-col gap-2 sm:flex-row">
@@ -383,7 +383,7 @@ export function SeriesDetailContent({ seriesId }: SeriesDetailContentProps) {
                       <Link
                         key={`${citation.type}-${citation.source_id}`}
                         href={citation.href}
-                        className="rounded-full border border-rule bg-card px-3 py-1 text-xs font-medium text-ink-2 transition-colors hover:border-accent hover:text-accent"
+                        className="rounded-full border border-rule bg-card px-3 py-1 text-xs font-medium text-ink-2 transition-colors hover:border-accent hover:text-accent-text"
                       >
                         {citation.label}
                       </Link>
@@ -531,7 +531,7 @@ function SeriesSettingsDialog({
             <Label htmlFor="edit-name">Name</Label>
             <Input id="edit-name" {...register("name")} aria-invalid={!!errors.name} />
             {errors.name && (
-              <p className="text-xs text-danger">{errors.name.message}</p>
+              <p className="text-xs text-danger-text">{errors.name.message}</p>
             )}
           </div>
 
@@ -603,7 +603,7 @@ function SeriesSettingsDialog({
             </Label>
             {!gcalStatus?.connected ? (
               <p className="text-xs text-ink-3">
-                <a href="/settings" className="text-accent hover:underline">Connect Google Calendar</a> in Settings to link a calendar to this series.
+                <a href="/settings" className="text-accent-text hover:underline">Connect Google Calendar</a> in Settings to link a calendar to this series.
               </p>
             ) : series.gcal_calendar_id && series.gcal_sync_enabled ? (
               <div className="flex items-center gap-2">

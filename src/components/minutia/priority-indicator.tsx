@@ -40,7 +40,7 @@ export function PriorityIndicator({ priority }: PriorityIndicatorProps) {
         <span
           className={cn(
             "text-[10px] font-medium tracking-wider uppercase",
-            priority === "critical" ? "text-accent" : "text-ink"
+            priority === "critical" ? "text-accent-text" : "text-ink"
           )}
         >
           {label}

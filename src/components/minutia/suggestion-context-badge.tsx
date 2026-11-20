@@ -16,7 +16,7 @@ import type { IssueStatus, SuggestionType } from "@/lib/types";
 
 const STATUS_PALETTE: Record<IssueStatus, string> = {
   open: "bg-paper-2 text-ink-2 ring-rule",
-  in_progress: "bg-accent-soft text-accent ring-accent/20",
+  in_progress: "bg-accent-soft text-accent-text ring-accent/20",
   pending: "bg-warn-soft text-warn ring-warn/20",
   resolved: "bg-success-soft text-success ring-success/25",
   dropped: "bg-paper-2 text-ink-3 ring-rule",
@@ -45,7 +45,7 @@ export function SuggestionContextBadge({
     return (
       <span
         aria-label="New item"
-        className={cn(PILL_BASE, "bg-accent-soft text-accent ring-accent/20", className)}
+        className={cn(PILL_BASE, "bg-accent-soft text-accent-text ring-accent/20", className)}
       >
         <Sparkles className="size-3 shrink-0" aria-hidden="true" />
         New
