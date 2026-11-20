@@ -144,6 +144,30 @@ test("a meeting that ended 15 days ago is not listed, one from 13 days ago is", 
   );
 });
 
+test("a meeting that ended exactly 14 days ago is still listed, a millisecond earlier is not", () => {
+  const edge = new Date(now.getTime() - 14 * 86400000);
+  const { meetings } = list([
+    meeting({ meeting_id: "edge", ended_at: edge.toISOString() }),
+    meeting({ meeting_id: "past", ended_at: new Date(edge.getTime() - 1).toISOString() }),
+  ]);
+  assert.deepEqual(
+    meetings.map((m) => m.meeting_id),
+    ["edge"],
+  );
+});
+
+test("an older meeting with no action-item status passes it through as null, never a guess", () => {
+  const one = buildReviewQueue({
+    me: "me-id",
+    now,
+    meetings: [meeting({ suggestions_status: null, suggestions_reason: null, status_at: null })],
+    mode: "meeting",
+  });
+  assert.equal(one.meetings[0].suggestions_status, null);
+  assert.equal(one.meetings[0].suggestions_reason, null);
+  assert.equal(one.meetings[0].status_at, null);
+});
+
 test("a meeting with only web-only items is not listed but is returned when asked for by id", () => {
   const onlyWeb = meeting({
     suggestions: [row({ category: "decision" }), row({ id: "i", category: "info" })],

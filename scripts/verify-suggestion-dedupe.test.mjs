@@ -14,7 +14,7 @@ const stubDir = path.join(tempDir, "stubs");
 fs.mkdirSync(stubDir, { recursive: true });
 
 const stubs = {
-  "service-role.mjs": `export function createServiceRoleClient() { return { from() { return { update() { return { async eq() { return { error: null }; } }; } }; } }; }`,
+  "service-role.mjs": `export function createServiceRoleClient() { return { from() { return { update(row) { return { async eq() { globalThis.__S.statusWrites.push(row); return { error: null }; } }; } }; } }; }`,
   "server.mjs": `export async function createClient() { return null; }`,
   "config.mjs": `export async function hasAiConfigured() { return true; }`,
   "call.mjs": `export async function callAi() { return { data: globalThis.__S.providerData, model: "m1" }; }`,
@@ -127,22 +127,21 @@ function fakeSupabase(rows) {
 
 const suggestion = (title) => ({ category: "action", title });
 const run = async (existing, titles) => {
+  S.statusWrites = [];
   S.providerData = JSON.stringify({ suggestions: titles.map(suggestion) });
   const { client, store } = fakeSupabase(existing);
   const out = await lib.generateMeetingSuggestions(client, MEETING_ID);
   return { out, store };
 };
 
-test("a title differing only in case, spacing and trailing punctuation matches", () => {
-  assert.equal(
-    lib.normalizeSuggestionTitle("  Send  the\tPricing   Draft.  "),
-    "send the pricing draft",
+test("titles normalize the same way on the web and on the Mac, including Japanese punctuation and fullwidth spaces", () => {
+  const cases = JSON.parse(
+    fs.readFileSync(path.join(root, "e2e/fixtures/normalize-title-cases.json"), "utf8"),
   );
-  assert.equal(lib.normalizeSuggestionTitle("Ship it!?"), "ship it");
-  assert.equal(
-    lib.normalizeSuggestionTitle("Book Acme interview"),
-    "book acme interview",
-  );
+  assert.equal(cases.length, 7);
+  for (const { input, expected } of cases) {
+    assert.equal(lib.normalizeSuggestionTitle(input), expected, JSON.stringify(input));
+  }
 });
 
 test("a reviewed title never comes back but a genuinely new one stays", () => {
@@ -244,4 +243,6 @@ test("when every suggestion was already reviewed the list ends empty and ready",
   assert.equal(out.ok, true);
   assert.deepEqual(out.suggestions, []);
   assert.deepEqual(store.inserted, []);
+  assert.equal(S.statusWrites.at(-1).suggestions_status, "ready");
+  assert.equal(S.statusWrites.at(-1).suggestions_reason, null);
 });
