@@ -109,7 +109,6 @@
     "test:transcription-routes": "node --test scripts/verify-transcription-routes.test.mjs",
     "test:suggestions-status": "node --test scripts/verify-suggestions-status.test.mjs",
     "test:owner-match": "node --test scripts/verify-owner-match.test.mjs",
-    "test:suggestion-review-route": "node --test scripts/verify-suggestion-review-route.test.mjs",
     "test:device-transcript": "node --test scripts/verify-device-transcript.test.mjs scripts/verify-device-transcript-route.test.mjs",
     "test:transcription-outcome": "node --test scripts/verify-transcription-outcome.test.mjs",
     "test:instance-config": "node --test scripts/verify-instance-config.test.mjs",

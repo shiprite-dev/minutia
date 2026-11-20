@@ -182,28 +182,35 @@ async function signInToken(email: string): Promise<string> {
   return (await token.json()).access_token;
 }
 
-async function rpcAs(
-  fn: "claim_ai_suggestion" | "release_ai_suggestion",
+async function keepAs(
   accessToken: string | null,
+  meetingId: string,
   suggestionId: string,
+  overrides: Record<string, unknown> = {},
 ) {
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
-  return fetch(`${SUPABASE_URL}/rest/v1/rpc/${fn}`, {
+  return fetch(`${SUPABASE_URL}/rest/v1/rpc/keep_ai_suggestion`, {
     method: "POST",
     headers: {
       apikey: anonKey,
       Authorization: `Bearer ${accessToken ?? anonKey}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ p_suggestion_id: suggestionId }),
+    body: JSON.stringify({
+      p_suggestion_id: suggestionId,
+      p_meeting_id: meetingId,
+      p_title: "Kept directly",
+      p_details: "",
+      p_category: "action",
+      p_owner_name: "",
+      p_issue_owner_name: "",
+      p_owner_user_id: null,
+      p_due_date: null,
+      p_target_status: null,
+      ...overrides,
+    }),
   });
 }
-
-const claimAs = (accessToken: string | null, suggestionId: string) =>
-  rpcAs("claim_ai_suggestion", accessToken, suggestionId);
-
-const secondsAgo = (seconds: number) =>
-  new Date(Date.now() - seconds * 1000).toISOString();
 
 const reviewUrl = (meetingId: string, suggestionId: string) =>
   `/api/meetings/${meetingId}/suggestions/${suggestionId}`;
@@ -422,43 +429,73 @@ test.describe("Keeping AI action items from more than one place", () => {
     });
   });
 
-  test("aKeepThatArrivesWhileAnotherIsStillSaving_isTurnedAway", async ({
+  test("keepingADecision_recordsItWithTheMeetingAndNotOnTheBoard", async ({
     request,
   }) => {
     const { seriesId, meetingId, stamp } = await createMeeting();
     seriesToDelete.push(seriesId);
+    const title = `Move launch to March ${stamp}`;
     const suggestionId = await seedSuggestion(seriesId, meetingId, {
-      title: `Print the agenda ${stamp}`,
+      title,
+      category: "decision",
+      owner_name: "Alice",
+      details: "Vendor cannot ship before then.",
     });
-    const ownerToken = await signInToken("test@example.com");
-
-    const firstClaim = await claimAs(ownerToken, suggestionId);
-    expect(await firstClaim.json()).toBe(true);
-    expect(await (await claimAs(ownerToken, suggestionId)).json()).toBe(false);
 
     const response = await request.patch(reviewUrl(meetingId, suggestionId), {
       data: { action: "accept" },
     });
 
-    expect(response.status()).toBe(409);
-    expect(await response.json()).toMatchObject({
-      code: "already_reviewed",
-      error: "AI suggestion has already been reviewed.",
-    });
+    expect(response.status()).toBe(200);
+    expect((await response.json()).code).toBe("saved");
+    expect(
+      await rest(
+        `decisions?meeting_id=eq.${meetingId}&select=title,rationale,made_by,source,created_by`,
+      ),
+    ).toEqual([
+      {
+        title,
+        rationale: "Vendor cannot ship before then.",
+        made_by: "Alice",
+        source: "ai_suggested",
+        created_by: TEST_USER_ID,
+      },
+    ]);
     expect(await seriesIssues(seriesId)).toEqual([]);
-    expect(await suggestionStatus(suggestionId)).toBe("reviewing");
+    expect(await suggestionStatus(suggestionId)).toBe("accepted");
   });
 
-  test("someoneSignedOut_cannotLockAnItem", async () => {
+  test("someoneSignedOut_cannotKeepAnItem", async () => {
     const { seriesId, meetingId, stamp } = await createMeeting();
     seriesToDelete.push(seriesId);
     const suggestionId = await seedSuggestion(seriesId, meetingId, {
       title: `Water the plants ${stamp}`,
     });
 
-    const response = await claimAs(null, suggestionId);
+    const response = await keepAs(null, meetingId, suggestionId);
 
     expect(response.ok).toBe(false);
+    expect(await seriesIssues(seriesId)).toEqual([]);
+    expect(await suggestionStatus(suggestionId)).toBe("pending");
+  });
+
+  test("aKeepThatFailsHalfway_addsNothingToTheBoard", async () => {
+    const { seriesId, meetingId, stamp } = await createMeeting();
+    seriesToDelete.push(seriesId);
+    const suggestionId = await seedSuggestion(seriesId, meetingId, {
+      title: `Book the train ${stamp}`,
+    });
+
+    const response = await keepAs(
+      await signInToken("test@example.com"),
+      meetingId,
+      suggestionId,
+      { p_title: `Book the train ${stamp}`, p_details: null },
+    );
+
+    expect(response.ok).toBe(false);
+    expect((await response.json()).code).toBe("23502");
+    expect(await seriesIssues(seriesId)).toEqual([]);
     expect(await suggestionStatus(suggestionId)).toBe("pending");
   });
 
@@ -506,103 +543,13 @@ test.describe("Keeping AI action items from more than one place", () => {
     } finally {
       await teammateRequest.dispose();
     }
-    const teammateClaim = await claimAs(
+    const teammateKeep = await keepAs(
       await signInToken(teammate.email),
+      meetingId,
       suggestionId,
     );
-    expect(await teammateClaim.json()).toBe(false);
+    expect(await teammateKeep.json()).toEqual({ code: "not_reviewer" });
     expect(await seriesIssues(seriesId)).toEqual([]);
     expect(await suggestionStatus(suggestionId)).toBe("pending");
-  });
-
-  test("aTeammateWhoDoesNotRunTheSeries_cannotUnlockAKeepInProgress", async () => {
-    const { seriesId, meetingId, stamp } = await createMeeting();
-    seriesToDelete.push(seriesId);
-    const teammate = await createMember("Tom Team");
-    membersToDelete.push(teammate);
-    await addParticipant(seriesId, teammate.userId, "participant");
-    const suggestionId = await seedSuggestion(seriesId, meetingId, {
-      title: `Fix the projector ${stamp}`,
-    });
-    const ownerClaim = await claimAs(
-      await signInToken("test@example.com"),
-      suggestionId,
-    );
-    expect(await ownerClaim.json()).toBe(true);
-
-    await rpcAs(
-      "release_ai_suggestion",
-      await signInToken(teammate.email),
-      suggestionId,
-    );
-
-    expect(await suggestionStatus(suggestionId)).toBe("reviewing");
-  });
-
-  test("aKeepLeftHalfwayByACrashedSave_canBeKeptAgainAfterTwoMinutes", async ({
-    request,
-  }) => {
-    const { seriesId, meetingId, stamp } = await createMeeting();
-    seriesToDelete.push(seriesId);
-    const title = `Call the caterer ${stamp}`;
-    const suggestionId = await seedSuggestion(seriesId, meetingId, {
-      title,
-      status: "reviewing",
-      reviewing_at: secondsAgo(180),
-    });
-
-    const response = await request.patch(reviewUrl(meetingId, suggestionId), {
-      data: { action: "accept" },
-    });
-
-    expect(response.status()).toBe(200);
-    expect((await response.json()).code).toBe("saved");
-    expect((await seriesIssues(seriesId)).map((i) => i.title)).toEqual([title]);
-    expect(await suggestionStatus(suggestionId)).toBe("accepted");
-  });
-
-  test("aKeepStillSavingFromThirtySecondsAgo_isTurnedAway", async ({
-    request,
-  }) => {
-    const { seriesId, meetingId, stamp } = await createMeeting();
-    seriesToDelete.push(seriesId);
-    const suggestionId = await seedSuggestion(seriesId, meetingId, {
-      title: `Reserve parking ${stamp}`,
-      status: "reviewing",
-      reviewing_at: secondsAgo(30),
-    });
-
-    const response = await request.patch(reviewUrl(meetingId, suggestionId), {
-      data: { action: "accept" },
-    });
-
-    expect(response.status()).toBe(409);
-    expect(await response.json()).toMatchObject({
-      code: "already_reviewed",
-      error: "AI suggestion has already been reviewed.",
-    });
-    expect(await seriesIssues(seriesId)).toEqual([]);
-    expect(await suggestionStatus(suggestionId)).toBe("reviewing");
-  });
-
-  test("skippingAKeepLeftHalfwayByACrashedSave_recoversIt", async ({
-    request,
-  }) => {
-    const { seriesId, meetingId, stamp } = await createMeeting();
-    seriesToDelete.push(seriesId);
-    const suggestionId = await seedSuggestion(seriesId, meetingId, {
-      title: `Send the minutes ${stamp}`,
-      status: "reviewing",
-      reviewing_at: secondsAgo(180),
-    });
-
-    const response = await request.patch(reviewUrl(meetingId, suggestionId), {
-      data: { action: "reject" },
-    });
-
-    expect(response.status()).toBe(200);
-    expect((await response.json()).code).toBe("saved");
-    expect(await suggestionStatus(suggestionId)).toBe("rejected");
-    expect(await seriesIssues(seriesId)).toEqual([]);
   });
 });
