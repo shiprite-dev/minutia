@@ -193,15 +193,21 @@ test.describe("companion review queue", () => {
     for (const fn of cleanup.splice(0).reverse()) await fn();
   });
 
-  async function seedQueueMeeting() {
-    const teammate = await createTeammate("Priya Shah");
+  async function teammateNamed(name: string) {
+    const created = await createTeammate(name);
     cleanup.push(async () => {
-      await rest(`organization_invitations?email=eq.${teammate.email}`, { method: "DELETE" });
-      await fetch(`${SUPABASE_URL}/auth/v1/admin/users/${teammate.userId}`, {
+      await rest(`organization_invitations?email=eq.${created.email}`, { method: "DELETE" });
+      await fetch(`${SUPABASE_URL}/auth/v1/admin/users/${created.userId}`, {
         method: "DELETE",
         headers: serviceHeaders("return=minimal"),
       });
     });
+    return created;
+  }
+
+  async function seedQueueMeeting() {
+    const teammate = await teammateNamed("Priya Shah");
+    const nameless = await teammateNamed("");
     const seriesId = randomUUID();
     const meetingId = randomUUID();
     await rest("meeting_series", {
@@ -216,15 +222,17 @@ test.describe("companion review queue", () => {
       }),
     });
     cleanup.push(() => rest(`meeting_series?id=eq.${seriesId}`, { method: "DELETE" }));
-    await rest("series_participants", {
-      method: "POST",
-      body: JSON.stringify({
-        series_id: seriesId,
-        user_id: teammate.userId,
-        role: "participant",
-        invited_by: OWNER_ID,
-      }),
-    });
+    for (const member of [teammate, nameless]) {
+      await rest("series_participants", {
+        method: "POST",
+        body: JSON.stringify({
+          series_id: seriesId,
+          user_id: member.userId,
+          role: "participant",
+          invited_by: OWNER_ID,
+        }),
+      });
+    }
     await rest("meetings", {
       method: "POST",
       body: JSON.stringify({
@@ -263,9 +271,9 @@ test.describe("companion review queue", () => {
           ...fields,
         }),
       });
-    await suggest({ title: "Send the budget", owner_name: "Priya", due_date: "2026-11-25", confidence: 0.92 });
-    await suggest({ title: "Vendor may slip", category: "risk", confidence: 0.7 });
-    await suggest({
+    const [budget] = await suggest({ title: "Send the budget", owner_name: "Priya", due_date: "2026-11-25", confidence: 0.92 });
+    const [vendor] = await suggest({ title: "Vendor may slip", category: "risk", confidence: 0.7 });
+    const [renewed] = await suggest({
       title: "Contract renewed",
       type: "status_update",
       related_issue_number: issue.issue_number,
@@ -275,7 +283,21 @@ test.describe("companion review queue", () => {
     await suggest({ title: "Use Postgres", category: "decision" });
     await suggest({ title: "Budget is tight", category: "info" });
     await suggest({ title: "Rejected already", status: "rejected" });
-    return { teammate, seriesId, meetingId, issue };
+    return { teammate, seriesId, meetingId, issue, rowIds: [budget.id, vendor.id, renewed.id] as string[] };
+  }
+
+  async function listedMeetingIds(request: import("@playwright/test").APIRequestContext, token: string) {
+    const response = await request.get("/api/companion/review-queue", {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    expect(response.status()).toBe(200);
+    return (await response.json()).meetings.map((m: { meeting_id: string }) => m.meeting_id) as string[];
+  }
+
+  function writeFixture(name: string, body: unknown) {
+    if (process.env.UPDATE_FIXTURES !== "1") return;
+    fs.mkdirSync(FIXTURES, { recursive: true });
+    fs.writeFileSync(path.join(FIXTURES, name), `${JSON.stringify(body, null, 2)}\n`);
   }
 
   test("rejects a request without a token", async ({ request }) => {
@@ -311,13 +333,10 @@ test.describe("companion review queue", () => {
       ["Vendor may slip", null, null],
       ["Contract renewed", null, "Renew the contract"],
     ]);
-    expect(entry.members.map((m: { name: string }) => m.name)).toContain("Priya Shah");
+    const [owner] = await rest(`profiles?id=eq.${OWNER_ID}&select=name`);
+    expect(entry.members.map((m: { name: string }) => m.name).sort()).toEqual([owner.name, "Priya Shah"].sort());
 
-    fs.mkdirSync(FIXTURES, { recursive: true });
-    fs.writeFileSync(
-      path.join(FIXTURES, "review-queue-list.json"),
-      `${JSON.stringify({ ...body, meetings: [entry] }, null, 2)}\n`,
-    );
+    writeFixture("review-queue-list.json", { ...body, meetings: [entry] });
   });
 
   test("a teammate who does not run the series reads the meeting read-only and does not get it in their list", async ({ request }) => {
@@ -325,8 +344,8 @@ test.describe("companion review queue", () => {
     const token = await passwordToken(teammate.email, "password123");
     const headers = { Authorization: `Bearer ${token}` };
 
-    const list = await (await request.get("/api/companion/review-queue", { headers })).json();
-    expect(list.meetings.map((m: { meeting_id: string }) => m.meeting_id)).not.toContain(meetingId);
+    expect(await listedMeetingIds(request, await passwordToken("test@example.com", "password123"))).toContain(meetingId);
+    expect(await listedMeetingIds(request, token)).not.toContain(meetingId);
 
     const response = await request.get(`/api/companion/review-queue?meeting=${meetingId}`, { headers });
     expect(response.status()).toBe(200);
@@ -345,22 +364,18 @@ test.describe("companion review queue", () => {
     });
     const ownerBody = await asOwner.json();
     expect(ownerBody.meetings[0].reviewer).toBe(true);
-    fs.mkdirSync(FIXTURES, { recursive: true });
-    fs.writeFileSync(
-      path.join(FIXTURES, "review-queue-meeting.json"),
-      `${JSON.stringify(ownerBody, null, 2)}\n`,
-    );
+    writeFixture("review-queue-meeting.json", ownerBody);
   });
 
   test("a meeting deleted on the web drops out of the list and answers meeting_gone", async ({ request }) => {
     const { meetingId } = await seedQueueMeeting();
     const token = await passwordToken("test@example.com", "password123");
     const headers = { Authorization: `Bearer ${token}` };
+    expect(await listedMeetingIds(request, token)).toContain(meetingId);
 
     await rest(`meetings?id=eq.${meetingId}`, { method: "DELETE" });
 
-    const list = await (await request.get("/api/companion/review-queue", { headers })).json();
-    expect(list.meetings.map((m: { meeting_id: string }) => m.meeting_id)).not.toContain(meetingId);
+    expect(await listedMeetingIds(request, token)).not.toContain(meetingId);
 
     const response = await request.get(`/api/companion/review-queue?meeting=${meetingId}`, { headers });
     expect(response.status()).toBe(404);
@@ -375,5 +390,90 @@ test.describe("companion review queue", () => {
       expect(response.status()).toBe(404);
       expect((await response.json()).code).toBe("meeting_gone");
     }
+  });
+
+  test("afterEveryItemIsKeptOrSkipped_theMeetingLeavesTheMacQueue", async ({ request }) => {
+    const { meetingId, seriesId, rowIds } = await seedQueueMeeting();
+    const token = await passwordToken("test@example.com", "password123");
+    const headers = { Authorization: `Bearer ${token}` };
+    const review = async (id: string, action: "accept" | "reject") => {
+      const response = await request.patch(`/api/meetings/${meetingId}/suggestions/${id}`, {
+        headers,
+        data: { action },
+      });
+      expect(response.status()).toBe(200);
+      expect((await response.json()).code).toBe("saved");
+    };
+    const rowsLeft = async () => {
+      const body = await (await request.get("/api/companion/review-queue", { headers })).json();
+      const entry = body.meetings.find((m: { meeting_id: string }) => m.meeting_id === meetingId);
+      return entry ? entry.rows.map((r: { title: string }) => r.title) : null;
+    };
+
+    await review(rowIds[0], "accept");
+    await review(rowIds[1], "reject");
+    expect(await rowsLeft()).toEqual(["Contract renewed"]);
+
+    await review(rowIds[2], "accept");
+    expect(await rowsLeft()).toBeNull();
+
+    const byId = await (await request.get(`/api/companion/review-queue?meeting=${meetingId}`, { headers })).json();
+    expect(byId.meetings[0].rows).toEqual([]);
+    expect(byId.meetings[0].web_only_count).toBe(2);
+    expect(
+      (await rest(`issues?series_id=eq.${seriesId}&select=title,status&order=created_at`)).map(
+        (i: { title: string; status: string }) => [i.title, i.status],
+      ),
+    ).toEqual([
+      ["Renew the contract", "resolved"],
+      ["Send the budget", "open"],
+    ]);
+  });
+
+  test("aMacTranscriptOnAnInstanceWithoutAI_isReportedNotConfiguredInTheQueue", async ({ request }) => {
+    const aiKeys = await rest("instance_config?key=eq.ai_api_key&select=key");
+    test.skip(
+      !!process.env.AI_API_KEY || !!process.env.OPENROUTER_API_KEY || aiKeys.length > 0,
+      "Needs an instance without an AI key",
+    );
+    const { meetingId } = await seedQueueMeeting();
+    await rest(`meetings?id=eq.${meetingId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ transcription_status: "pending", suggestions_status: null, suggestions_status_at: null }),
+    });
+    const token = await passwordToken("test@example.com", "password123");
+    const headers = { Authorization: `Bearer ${token}` };
+
+    const upload = await request.post(`/api/meetings/${meetingId}/transcript`, {
+      headers,
+      data: {
+        schema_version: 1,
+        source: {
+          kind: "device",
+          engine: "fluidaudio",
+          engine_version: "0.17.7",
+          model: "parakeet-tdt-0.6b-v3-coreml",
+          model_revision: "a0cd34f8",
+          app_version: "0.4.0",
+          compute: "ane",
+        },
+        language: "en",
+        duration_seconds: 4.2,
+        outcome: "speech",
+        segments: [{ speaker: "me", start: 0.2, end: 3.9, text: "I will send the budget on Friday.", confidence: 0.9 }],
+      },
+    });
+    expect(upload.status(), await upload.text()).toBe(200);
+
+    await expect
+      .poll(
+        async () => {
+          const body = await (await request.get(`/api/companion/review-queue?meeting=${meetingId}`, { headers })).json();
+          const [m] = body.meetings;
+          return [m.transcription_status, m.suggestions_status, m.suggestions_reason];
+        },
+        { timeout: 20_000 },
+      )
+      .toEqual(["completed", "skipped", "not_configured"]);
   });
 });

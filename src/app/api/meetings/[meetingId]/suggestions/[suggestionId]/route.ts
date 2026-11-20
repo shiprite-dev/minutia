@@ -152,7 +152,11 @@ export async function PATCH(
     body.owner_user_id || createsIssue
       ? await loadSeriesMembers(suggestion.series_id)
       : [];
-  if (body.owner_user_id && !members.some((m) => m.id === body.owner_user_id)) {
+  if (
+    body.owner_user_id &&
+    body.owner_user_id !== user.id &&
+    !members.some((m) => m.id === body.owner_user_id)
+  ) {
     return refuse(
       400,
       "not_a_member",

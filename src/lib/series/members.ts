@@ -24,8 +24,7 @@ export async function loadSeriesMembers(seriesId: string) {
     .from("profiles")
     .select("id, name")
     .in("id", ids);
-  return (profiles ?? []).map((p) => ({
-    id: p.id as string,
-    name: (p.name as string | null) ?? "",
-  }));
+  return (profiles ?? []).flatMap((p) =>
+    p.name ? [{ id: p.id as string, name: p.name as string }] : [],
+  );
 }

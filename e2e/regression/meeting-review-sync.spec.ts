@@ -220,6 +220,28 @@ async function keepAs(
 const reviewUrl = (meetingId: string, suggestionId: string) =>
   `/api/meetings/${meetingId}/suggestions/${suggestionId}`;
 
+async function requestAs(baseURL: string | undefined, member: Member) {
+  const origin = new URL(baseURL ?? "http://localhost:3000").origin;
+  return playwrightRequest.newContext({
+    baseURL: origin,
+    storageState: {
+      cookies: [
+        {
+          name: "sb-127-auth-token",
+          value: member.cookieValue,
+          domain: new URL(origin).hostname,
+          path: "/",
+          expires: Math.floor(Date.now() / 1000) + 3600,
+          httpOnly: false,
+          secure: false,
+          sameSite: "Lax",
+        },
+      ],
+      origins: [],
+    },
+  });
+}
+
 test.describe("Keeping AI action items from more than one place", () => {
   test.skip(!SERVICE_KEY, "Requires the service role to seed suggestions");
 
@@ -340,6 +362,33 @@ test.describe("Keeping AI action items from more than one place", () => {
     await expect(page.getByText(title, { exact: true })).toBeVisible({
       timeout: 20_000,
     });
+  });
+
+  test("aFacilitatorWithNoNameSet_canStillTakeAnItemThemselves", async ({
+    baseURL,
+  }) => {
+    const { seriesId, meetingId, stamp } = await createMeeting();
+    seriesToDelete.push(seriesId);
+    const facilitator = await createMember("");
+    membersToDelete.push(facilitator);
+    await addParticipant(seriesId, facilitator.userId, "facilitator");
+    const title = `Collect the badges ${stamp}`;
+    const suggestionId = await seedSuggestion(seriesId, meetingId, { title });
+
+    const asFacilitator = await requestAs(baseURL, facilitator);
+    try {
+      const response = await asFacilitator.patch(
+        reviewUrl(meetingId, suggestionId),
+        { data: { action: "accept", owner_user_id: facilitator.userId } },
+      );
+      expect(response.status()).toBe(200);
+      expect((await response.json()).code).toBe("saved");
+    } finally {
+      await asFacilitator.dispose();
+    }
+    expect(await seriesIssues(seriesId)).toEqual([
+      { title, owner_user_id: facilitator.userId, status: "open" },
+    ]);
   });
 
   test("keepingWithSomeoneOutsideTheSeries_isRefusedAndNothingIsAdded", async ({

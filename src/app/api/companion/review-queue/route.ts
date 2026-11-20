@@ -92,7 +92,7 @@ export async function GET(request: NextRequest) {
   const rowSeriesIds = [...new Set(withRows.map((m) => m.series_id))];
   const members = new Map(
     await Promise.all(
-      [...new Set(visible.map((m) => m.series_id))].map(
+      rowSeriesIds.map(
         async (id) => [id, await loadSeriesMembers(id)] as const,
       ),
     ),
