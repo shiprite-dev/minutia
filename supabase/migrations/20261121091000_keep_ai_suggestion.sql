@@ -1,21 +1,3 @@
-create or replace function public.user_manages_suggestion_series(p_series_id uuid)
-returns boolean
-language sql
-stable
-security definer
-set search_path = public
-as $$
-  select exists (
-    select 1 from public.meeting_series
-     where id = p_series_id and owner_id = auth.uid()
-  ) or exists (
-    select 1 from public.series_participants
-     where series_id = p_series_id
-       and user_id = auth.uid()
-       and role in ('owner', 'facilitator')
-  );
-$$;
-
 -- Keeping a suggestion is one transaction: the row lock makes a second keep wait and then see it reviewed,
 -- and any failure after the board write rolls the board write back.
 create or replace function public.keep_ai_suggestion(
@@ -47,13 +29,15 @@ begin
     from public.meeting_ai_suggestions
    where id = p_suggestion_id
      and meeting_id = p_meeting_id
-     and status = 'pending'
    for update;
   if not found then
+    return jsonb_build_object('code', 'suggestion_gone');
+  end if;
+  if v_suggestion.status <> 'pending' then
     return jsonb_build_object('code', 'already_reviewed');
   end if;
 
-  if not public.user_manages_suggestion_series(v_suggestion.series_id) then
+  if not public.user_can_manage_series(v_suggestion.series_id) then
     return jsonb_build_object('code', 'not_reviewer');
   end if;
 
@@ -127,7 +111,5 @@ begin
 end;
 $$;
 
-revoke all on function public.user_manages_suggestion_series(uuid) from public, anon;
 revoke all on function public.keep_ai_suggestion(uuid, uuid, text, text, text, text, text, uuid, date, text) from public, anon;
-grant execute on function public.user_manages_suggestion_series(uuid) to authenticated;
 grant execute on function public.keep_ai_suggestion(uuid, uuid, text, text, text, text, text, uuid, date, text) to authenticated;

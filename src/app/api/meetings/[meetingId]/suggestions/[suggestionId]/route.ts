@@ -1,7 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
-import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { userManagesSeries } from "@/lib/series/manage-access";
 import { matchSeriesMember } from "@/lib/ai/owner-match";
 import { loadSeriesMembers } from "@/lib/series/members";
@@ -24,6 +23,7 @@ const reviewSchema = z.object({
 });
 
 const KEEP_REFUSALS: Record<string, [number, string]> = {
+  suggestion_gone: [404, "AI suggestion not found"],
   already_reviewed: [409, "AI suggestion has already been reviewed."],
   not_reviewer: [
     403,
