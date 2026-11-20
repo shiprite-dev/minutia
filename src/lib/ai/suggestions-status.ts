@@ -50,8 +50,8 @@ export function recordSuggestionsStatus(
   return write(meetingId, s.status, s.reason);
 }
 
-/** Records a plan skip only for someone who manages the meeting's series, so a denied caller cannot write to meetings they do not run. */
-export async function recordNotOnPlan(meetingId: string) {
+/** Records that AI is not available to this account, only for someone who manages the meeting's series, and never over a finished list. */
+export async function recordFeatureUnavailable(meetingId: string) {
   const supabase = await createClient();
   const {
     data: { user },
@@ -59,10 +59,10 @@ export async function recordNotOnPlan(meetingId: string) {
   if (!user) return;
   const { data: meeting } = await supabase
     .from("meetings")
-    .select("series_id")
+    .select("series_id, suggestions_status")
     .eq("id", meetingId)
     .single();
-  if (!meeting || !(await userManagesSeries(meeting.series_id, user.id)))
-    return;
-  await write(meetingId, "skipped", "not_on_plan");
+  if (!meeting || meeting.suggestions_status === "ready") return;
+  if (!(await userManagesSeries(meeting.series_id, user.id))) return;
+  await write(meetingId, "skipped", "feature_unavailable");
 }

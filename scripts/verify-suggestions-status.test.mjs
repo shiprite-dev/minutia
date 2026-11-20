@@ -287,22 +287,32 @@ test("a status write that fails never breaks the recording pipeline", async () =
   assert.equal(S.writes.length, 0);
 });
 
-test("a series manager denied by plan sees the meeting skipped as not on plan", async () => {
+test("a series manager without AI access sees the meeting skipped as feature unavailable", async () => {
   reset();
-  await status.recordNotOnPlan(MEETING_ID);
+  await status.recordFeatureUnavailable(MEETING_ID);
   assert.equal(S.writes.length, 1);
+  assert.equal(lastWrite().id, MEETING_ID);
   assert.equal(lastWrite().row.suggestions_status, "skipped");
-  assert.equal(lastWrite().row.suggestions_reason, "not_on_plan");
+  assert.equal(lastWrite().row.suggestions_reason, "feature_unavailable");
 });
 
 test("a signed-out caller or a non-manager cannot change another meeting's status", async () => {
   reset({ user: null });
-  await status.recordNotOnPlan(MEETING_ID);
+  await status.recordFeatureUnavailable(MEETING_ID);
   reset({ manages: false });
-  await status.recordNotOnPlan(MEETING_ID);
+  await status.recordFeatureUnavailable(MEETING_ID);
   reset({ meetingRow: null });
-  await status.recordNotOnPlan(MEETING_ID);
+  await status.recordFeatureUnavailable(MEETING_ID);
   assert.equal(S.writes.length, 0);
+});
+
+test("a meeting whose action items are already ready keeps them when AI access is later missing", async () => {
+  reset({ meetingRow: { ...MEETING_ROW, suggestions_status: "ready" } });
+  await status.recordFeatureUnavailable(MEETING_ID);
+  assert.deepEqual(S.writes, []);
+  reset({ meetingRow: { ...MEETING_ROW, suggestions_status: "pending" } });
+  await status.recordFeatureUnavailable(MEETING_ID);
+  assert.equal(lastWrite().row.suggestions_status, "skipped");
 });
 
 test("action items found are saved and the meeting ends ready", async () => {
