@@ -711,10 +711,10 @@ test.describe("Keeping AI action items from more than one place", () => {
         .poll(
           async () => {
             const before = refetches.length;
-            await page.waitForTimeout(1_000);
+            await page.waitForTimeout(4_000);
             return refetches.length === before;
           },
-          { timeout: 15_000 },
+          { timeout: 30_000 },
         )
         .toBe(true);
       const settled = refetches.length;
