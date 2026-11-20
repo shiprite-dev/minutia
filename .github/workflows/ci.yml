@@ -88,6 +88,9 @@ jobs:
       - name: Verify suggestions status contracts
         run: pnpm test:suggestions-status
 
+      - name: Verify review queue contracts
+        run: pnpm test:review-queue
+
       - name: Verify owner matching
         run: pnpm test:owner-match
 
