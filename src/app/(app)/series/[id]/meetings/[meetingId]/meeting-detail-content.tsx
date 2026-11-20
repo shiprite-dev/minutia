@@ -710,7 +710,7 @@ export function MeetingDetailContent({
   });
   const { data: seriesIssues } = useIssues(seriesId);
 
-  // MIN-121: resolve an OIL number to its issue link so a context badge
+  // Resolve an OIL number to its issue link so a context badge
   // ("Updates OIL-45", "Duplicate of OIL-67") can deep-link to the item.
   const issueHrefByNumber = React.useMemo(() => {
     const map = new Map<number, string>();
@@ -785,12 +785,14 @@ export function MeetingDetailContent({
   // Load already-extracted suggestions (e.g. the ones the transcription
   // auto-generated) instead of re-running the model. This is what makes the
   // auto-trigger pay off: its output is shown, not silently discarded.
+  const suggestionsRequestRef = React.useRef(0);
   const loadSuggestions = React.useCallback(async (quiet = false) => {
+    const request = ++suggestionsRequestRef.current;
     if (!quiet) setLoadingSuggestions(true);
     try {
       const response = await fetch(`/api/meetings/${meetingId}/suggestions`, { method: "GET" });
       const payload = await response.json().catch(() => ({}));
-      if (response.ok) setAiSuggestions(payload.suggestions ?? []);
+      if (response.ok && request === suggestionsRequestRef.current) setAiSuggestions(payload.suggestions ?? []);
     } catch {
       // Best-effort: the Review button can still trigger generation on demand.
     } finally {
@@ -852,6 +854,39 @@ export function MeetingDetailContent({
     suggestionsLoadedRef.current = true;
     void loadSuggestions();
   }, [participantRole, hasAccess, meeting?.transcript_raw, meeting?.notes_markdown, loadSuggestions]);
+
+  // Syncs with Supabase realtime so reviews made in another app show up here.
+  // A meeting row write reloads the list only when the action-item status was stamped again.
+  const reviewsSuggestions =
+    (participantRole === "owner" || participantRole === "facilitator") && hasAccess && !!meeting;
+  const suggestionsStatusAtRef = React.useRef<string | null>(null);
+  React.useEffect(() => {
+    if (!reviewsSuggestions) return;
+    suggestionsStatusAtRef.current =
+      queryClient.getQueryData<Meeting>(meetingKeys.detail(meetingId))?.suggestions_status_at ?? null;
+    const supabase = createClient();
+    const channel = supabase
+      .channel(`meeting:${meetingId}:ai-suggestions`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "meeting_ai_suggestions", filter: `meeting_id=eq.${meetingId}` },
+        () => void loadSuggestions(true)
+      )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "meetings", filter: `id=eq.${meetingId}` },
+        (payload) => {
+          const stampedAt = (payload.new as { suggestions_status_at?: string | null }).suggestions_status_at ?? null;
+          if (stampedAt === suggestionsStatusAtRef.current) return;
+          suggestionsStatusAtRef.current = stampedAt;
+          void loadSuggestions(true);
+        }
+      )
+      .subscribe();
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [reviewsSuggestions, meetingId, loadSuggestions, queryClient]);
 
   // Auto-flow the recap the moment recording stops and the fast lane is ready
   // (or the final transcript lands for non-webm browsers). Managers only, once.

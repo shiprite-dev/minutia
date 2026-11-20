@@ -319,12 +319,6 @@ test("context-aware prompt instructs the model on past-context reasoning", () =>
   assert.ok(generator.includes("verbatim") && generator.includes("Never guess"));
 });
 
-test("review route applies a status_update to the existing issue with an audit trail", () => {
-  const review = read("src/app/api/meetings/[meetingId]/suggestions/[suggestionId]/route.ts");
-  assert.ok(review.includes("status_update"), "review route must branch on status_update");
-  assert.ok(review.includes("issue_updates"), "accepting a status_update must write an audit row");
-});
-
 test("transcribe route auto-triggers context-aware extraction", () => {
   const transcribe = read("src/app/api/meetings/[meetingId]/transcribe/route.ts");
   const shared = read("src/lib/transcription/after-transcript.ts");

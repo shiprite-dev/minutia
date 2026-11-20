@@ -82,6 +82,21 @@ jobs:
       - name: Verify transcription route contracts
         run: pnpm test:transcription-routes
 
+      - name: Verify suggestion dedupe contracts
+        run: pnpm test:suggestion-dedupe
+
+      - name: Verify suggestions status contracts
+        run: pnpm test:suggestions-status
+
+      - name: Verify review queue contracts
+        run: pnpm test:review-queue
+
+      - name: Verify owner matching
+        run: pnpm test:owner-match
+
+      - name: Verify Mac window sign-in handoff
+        run: pnpm test:web-handoff
+
       - name: Device transcript contracts
         run: pnpm test:device-transcript
 

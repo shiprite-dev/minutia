@@ -181,7 +181,7 @@ export const MEETING_LIST_COLUMNS =
 export const MEETING_DETAIL_COLUMNS =
   MEETING_LIST_COLUMNS +
   ", notes_markdown, raw_notes_markdown, companion_notes_markdown, ai_notes_markdown, recap_markdown, " +
-  "speaker_map, transcription_source";
+  "speaker_map, transcription_source, suggestions_status_at";
 
 export interface Meeting {
   id: string;
@@ -214,6 +214,7 @@ export interface Meeting {
   transcription_provider: string | null;
   transcript_language?: string | null;
   transcription_source?: Record<string, unknown> | null;
+  suggestions_status_at?: string | null;
   transcription_started_at: Date | null;
   transcription_completed_at: Date | null;
   transcription_error_code?: string | null;

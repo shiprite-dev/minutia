@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { hasAiConfigured } from "@/lib/ai/config";
 import { requireAiAccess } from "@/lib/ai/access";
 import { generateMeetingSuggestions } from "@/lib/ai/suggestions";
+import { markSuggestionsPending, recordFeatureUnavailable } from "@/lib/ai/suggestions-status";
 import { userManagesSeries } from "@/lib/series/manage-access";
 
 const requestSchema = z.object({
@@ -62,8 +63,10 @@ export async function POST(
   // is on (NEXT_PUBLIC_FEATURE_GATING=true).
   const aiDenied = await requireAiAccess();
   if (aiDenied) {
+    const denied = await aiDenied.json();
+    if (denied.code === "FEATURE_UNAVAILABLE") await recordFeatureUnavailable(meetingId);
     return NextResponse.json(
-      { error: (await aiDenied.json()).error, request_id: requestId },
+      { error: denied.error, request_id: requestId },
       { status: aiDenied.status }
     );
   }
@@ -96,9 +99,10 @@ export async function POST(
     );
   }
 
-  // MIN-121: context-aware extraction lives in the shared generator so the
+  // Context-aware extraction lives in the shared generator so the
   // transcribe pipeline can reuse it. The series history is what lets the model
   // deduplicate, detect resolutions, and flag contradictions.
+  await markSuggestionsPending(meetingId);
   const outcome = await generateMeetingSuggestions(supabase, meetingId);
   if (!outcome.ok) {
     return NextResponse.json({ error: outcome.error, request_id: requestId }, { status: outcome.status });

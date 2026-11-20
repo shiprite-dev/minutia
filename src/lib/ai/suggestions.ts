@@ -4,6 +4,7 @@ import { hasAiConfigured } from "@/lib/ai/config";
 import { getTextFromOpenRouter } from "./ask-series-answer";
 import { callAi } from "./call";
 import { composeMeetingNotes } from "./companion-notes";
+import { recordSuggestionsStatus, suggestionsStatusFor } from "./suggestions-status";
 import {
   buildSeriesContext,
   formatSeriesContextForPrompt,
@@ -13,7 +14,7 @@ import {
   type SeriesContextClient,
 } from "./context-builder";
 
-// MIN-121: Context-aware item extraction.
+// Context-aware item extraction.
 //
 // Shared by the suggestions route (manual "Review AI suggestions") and the
 // transcribe route (auto-trigger when a recording finishes). It feeds the model
@@ -129,6 +130,22 @@ function formatSeriesContextHeading(contextBlock: string) {
   return ["=== SERIES HISTORY (cross-meeting memory) ===", contextBlock].join("\n");
 }
 
+export function normalizeSuggestionTitle(title: string): string {
+  return title
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, " ")
+    .replace(/[\p{P}\s]+$/u, "");
+}
+
+export function dropAlreadyReviewed<T extends { title: string }>(
+  rows: T[],
+  reviewedTitles: string[]
+): T[] {
+  const reviewed = new Set(reviewedTitles.map(normalizeSuggestionTitle));
+  return rows.filter((row) => !reviewed.has(normalizeSuggestionTitle(row.title)));
+}
+
 export type GenerateFailureCode =
   | "not_found"
   | "skipped_no_content"
@@ -156,6 +173,21 @@ export function isExplicitSkip(outcome: GenerateOutcome): boolean {
  * on extraction actually completing (or being explicitly skipped).
  */
 export async function generateMeetingSuggestions(
+  supabase: SupabaseServerClient,
+  meetingId: string
+): Promise<GenerateOutcome> {
+  let outcome: GenerateOutcome;
+  try {
+    outcome = await runGeneration(supabase, meetingId);
+  } catch (err) {
+    await recordSuggestionsStatus(meetingId, { status: "failed", reason: "provider_error" });
+    throw err;
+  }
+  await recordSuggestionsStatus(meetingId, suggestionsStatusFor(outcome));
+  return outcome;
+}
+
+async function runGeneration(
   supabase: SupabaseServerClient,
   meetingId: string
 ): Promise<GenerateOutcome> {
@@ -232,7 +264,19 @@ export async function generateMeetingSuggestions(
     return { ok: false, status: 502, error: "AI provider returned invalid suggestions.", code: "invalid_suggestions" };
   }
 
-  const normalized = normalizeSuggestions(parsed.suggestions, context.openIssues).map((s) => ({
+  const { data: reviewedRows, error: reviewedError } = await supabase
+    .from("meeting_ai_suggestions")
+    .select("title")
+    .eq("meeting_id", meetingId)
+    .neq("status", "pending");
+  if (reviewedError) {
+    return { ok: false, status: 500, error: "Failed to refresh AI suggestions.", code: "save_failed" };
+  }
+
+  const normalized = dropAlreadyReviewed(
+    normalizeSuggestions(parsed.suggestions, context.openIssues),
+    (reviewedRows ?? []).map((r) => r.title)
+  ).map((s) => ({
     ...s,
     due_date: resolveDueDate(s.due_date, meetingDate),
   }));

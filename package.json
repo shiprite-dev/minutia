@@ -107,12 +107,17 @@
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:debug": "playwright test --debug",
     "test:transcription-routes": "node --test scripts/verify-transcription-routes.test.mjs",
+    "test:suggestion-dedupe": "node --test scripts/verify-suggestion-dedupe.test.mjs",
+    "test:suggestions-status": "node --test scripts/verify-suggestions-status.test.mjs",
+    "test:review-queue": "node --test scripts/verify-review-queue.test.mjs",
+    "test:owner-match": "node --test scripts/verify-owner-match.test.mjs",
     "test:device-transcript": "node --test scripts/verify-device-transcript.test.mjs scripts/verify-device-transcript-route.test.mjs",
     "test:transcription-outcome": "node --test scripts/verify-transcription-outcome.test.mjs",
     "test:instance-config": "node --test scripts/verify-instance-config.test.mjs",
     "test:transcription-status-copy": "node --test scripts/verify-transcription-status-copy.test.mjs",
     "test:transcription-stall": "node --test scripts/verify-transcription-stall.test.mjs",
-    "test:series-invite": "node --test scripts/verify-series-invite.test.mjs"
+    "test:series-invite": "node --test scripts/verify-series-invite.test.mjs",
+    "test:web-handoff": "node --test scripts/verify-web-handoff.test.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

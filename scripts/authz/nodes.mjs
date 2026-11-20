@@ -120,6 +120,8 @@ export const deferredRoutes = {
   "/api/companion/heartbeat": "getUser 401 gate; family executed via GET workspace/members; external-integration / write / query-param-branch route deferred",
   "/api/companion/checkin": "getUser 401 gate; family executed via GET workspace/members; external-integration / write / query-param-branch route deferred",
   "/api/companion/recording": "getUser 401 gate; family executed via GET workspace/members; external-integration / write / query-param-branch route deferred",
+  "/api/companion/review-queue": "getUser 401 gate; family executed via GET workspace/members; external-integration / write / query-param-branch route deferred",
+  "/api/companion/web-session": "Bearer-only mint (cookie callers 401); token freshness, confirmed email and rate limit covered by scripts/verify-web-handoff.test.mjs; write route deferred",
   "/api/meetings/[meetingId]/transcript": "getUser 401 gate; family executed via GET workspace/members; external-integration / write / query-param-branch route deferred",
   "/api/workspace/directory": "getUser 401 gate; family executed via GET workspace/members; external-integration / write / query-param-branch route deferred",
 
@@ -156,6 +158,7 @@ export const deferredRoutes = {
 
   // --- Non-/api route handlers (public, no session authz) -------------------
   "/auth/callback": "public Supabase auth code->session-cookie exchange (authed by OAuth code, not session); redirect flow, deferred",
+  "/auth/companion-session": "public one-time handoff POST -> session-cookie exchange (authed by one-time handoff id + nonce, not session); covered by scripts/verify-web-handoff.test.mjs; redirect flow, deferred",
   "/serwist/[path]": "public PWA service-worker script route (Serwist); static asset, no session authz, deferred",
 };
 

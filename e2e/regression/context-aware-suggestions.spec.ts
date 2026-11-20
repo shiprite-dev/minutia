@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { test, expect, type APIRequestContext } from "@playwright/test";
 import { waitForApp } from "./seed-data";
 
-// MIN-121: context-aware extraction. These cover the moat end to end: badges
+// Context-aware extraction. These cover the moat end to end: badges
 // that tell the cross-meeting story (NEW / UPDATES OIL-x / DUPLICATE OF OIL-x),
 // and the real backend that applies a status_update to the existing OIL item.
 
@@ -316,6 +316,10 @@ test.describe("Context-aware AI suggestions", () => {
         { data: { action: "accept" }, timeout: 20_000 }
       );
       expect(accept.status()).toBe(400);
+      expect(await accept.json()).toMatchObject({
+        code: "cannot_keep_duplicate",
+        error: "A duplicate warning can't be accepted. Dismiss it or open the existing item.",
+      });
 
       // No duplicate item was created behind the warning.
       const dupIssues = await rest(

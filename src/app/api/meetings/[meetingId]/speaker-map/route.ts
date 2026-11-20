@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireAiAccess } from "@/lib/ai/access";
 import { hasAiConfigured } from "@/lib/ai/config";
 import { generateMeetingSuggestions } from "@/lib/ai/suggestions";
+import { markSuggestionsPending } from "@/lib/ai/suggestions-status";
 import { userManagesSeries } from "@/lib/series/manage-access";
 import { flattenSegments } from "@/lib/transcription";
 
@@ -74,7 +75,7 @@ export async function PATCH(
     );
   }
 
-  // MIN-121 extraction is keyed off transcript_raw, so a speaker correction can
+  // Extraction is keyed off transcript_raw, so a speaker correction can
   // change owners/details it picked up. Gated on AI access: the correction above
   // already ran for any manager, this is only the best-effort re-extraction, so a
   // denied or unconfigured instance silently skips it rather than failing the PATCH
@@ -82,6 +83,7 @@ export async function PATCH(
   const aiDenied = await requireAiAccess();
   if (!aiDenied && (await hasAiConfigured())) {
     try {
+      await markSuggestionsPending(meetingId);
       await generateMeetingSuggestions(supabase, meetingId);
     } catch (suggestionError) {
       console.error("[speaker-map] context-aware suggestion extraction failed", {

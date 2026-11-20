@@ -2,33 +2,57 @@ import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { userManagesSeries } from "@/lib/series/manage-access";
+import { matchSeriesMember } from "@/lib/ai/owner-match";
+import { loadSeriesMembers } from "@/lib/series/members";
 
 const reviewSchema = z.object({
   action: z.enum(["accept", "reject"]),
   title: z.string().min(1).max(500).optional(),
   details: z.string().optional(),
-  category: z.enum(["action", "decision", "info", "risk", "blocker"]).optional(),
+  category: z
+    .enum(["action", "decision", "info", "risk", "blocker"])
+    .optional(),
   owner_name: z.string().optional(),
   due_date: z.iso.date().nullable().optional(),
-  // MIN-121: a status_update can be retargeted at review time.
+  // A status_update can be retargeted at review time.
   suggested_status: z
     .enum(["open", "in_progress", "pending", "resolved", "dropped"])
     .nullable()
     .optional(),
+  owner_user_id: z.guid().optional(),
 });
+
+const KEEP_REFUSALS: Record<string, [number, string]> = {
+  suggestion_gone: [404, "AI suggestion not found"],
+  already_reviewed: [409, "AI suggestion has already been reviewed."],
+  not_reviewer: [
+    403,
+    "Only series owners and facilitators can review AI suggestions.",
+  ],
+  cannot_keep_duplicate: [
+    400,
+    "A duplicate warning can't be accepted. Dismiss it or open the existing item.",
+  ],
+  not_linked: [400, "This suggestion is not linked to an existing item."],
+  no_target_status: [400, "This suggestion has no target status to apply."],
+  item_gone: [404, "The referenced item no longer exists."],
+  already_in_state: [409, "The referenced item is already in that status."],
+};
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: Promise<{ meetingId: string; suggestionId: string }> }
+  { params }: { params: Promise<{ meetingId: string; suggestionId: string }> },
 ) {
   const requestId = crypto.randomUUID();
   const { meetingId, suggestionId } = await params;
+  const refuse = (status: number, code: string, error: string) =>
+    NextResponse.json({ error, code, request_id: requestId }, { status });
 
   let body: z.infer<typeof reviewSchema>;
   try {
     body = reviewSchema.parse(await request.json());
   } catch {
-    return NextResponse.json({ error: "Invalid request body", request_id: requestId }, { status: 400 });
+    return refuse(400, "invalid_request", "Invalid request body");
   }
 
   const supabase = await createClient();
@@ -36,7 +60,7 @@ export async function PATCH(
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) {
-    return NextResponse.json({ error: "Not authenticated", request_id: requestId }, { status: 401 });
+    return refuse(401, "not_signed_in", "Not authenticated");
   }
 
   const { data: suggestion, error } = await supabase
@@ -47,22 +71,24 @@ export async function PATCH(
     .single();
 
   if (error || !suggestion) {
-    return NextResponse.json({ error: "AI suggestion not found", request_id: requestId }, { status: 404 });
+    return refuse(404, "suggestion_gone", "AI suggestion not found");
   }
 
   // Accepting a suggestion mutates the OIL (creates an issue/decision, or moves
   // an existing item), so restrict review to those who manage the series.
   if (!(await userManagesSeries(suggestion.series_id, user.id))) {
-    return NextResponse.json(
-      { error: "Only series owners and facilitators can review AI suggestions.", request_id: requestId },
-      { status: 403 }
+    return refuse(
+      403,
+      "not_reviewer",
+      "Only series owners and facilitators can review AI suggestions.",
     );
   }
 
   if (suggestion.status !== "pending") {
-    return NextResponse.json(
-      { error: "AI suggestion has already been reviewed.", request_id: requestId },
-      { status: 409 }
+    return refuse(
+      409,
+      "already_reviewed",
+      "AI suggestion has already been reviewed.",
     );
   }
 
@@ -71,7 +97,8 @@ export async function PATCH(
   const details = body.details ?? suggestion.details ?? "";
   const category = body.category ?? suggestion.category;
   const ownerName = body.owner_name ?? suggestion.owner_name ?? "";
-  const dueDate = body.due_date === undefined ? suggestion.due_date ?? null : body.due_date;
+  const dueDate =
+    body.due_date === undefined ? (suggestion.due_date ?? null) : body.due_date;
 
   if (body.action === "reject") {
     const { data, error: updateError } = await supabase
@@ -86,238 +113,95 @@ export async function PATCH(
         reviewed_at: reviewedAt,
       })
       .eq("id", suggestionId)
+      .eq("status", "pending")
       .select("*")
-      .single();
-
-    if (updateError) {
-      return NextResponse.json(
-        { error: "Failed to reject AI suggestion.", request_id: requestId },
-        { status: 500 }
-      );
-    }
-
-    return NextResponse.json({ suggestion: data, request_id: requestId });
-  }
-
-  // MIN-121: accepting a status_update applies the change to the EXISTING OIL
-  // item the suggestion references, rather than creating a parallel item. This
-  // is the cross-meeting memory paying off: the meeting that resolved a prior
-  // risk closes it on the board, with an AI-authored audit row to prove it.
-  if (suggestion.type === "status_update") {
-    const targetStatus = body.suggested_status ?? suggestion.suggested_status;
-    if (suggestion.related_issue_number == null) {
-      return NextResponse.json(
-        { error: "This suggestion is not linked to an existing item.", request_id: requestId },
-        { status: 400 }
-      );
-    }
-    if (!targetStatus) {
-      return NextResponse.json(
-        { error: "This suggestion has no target status to apply.", request_id: requestId },
-        { status: 400 }
-      );
-    }
-
-    const { data: existing, error: findError } = await supabase
-      .from("issues")
-      .select("id, status")
-      .eq("series_id", suggestion.series_id)
-      .eq("issue_number", suggestion.related_issue_number)
       .maybeSingle();
 
-    if (findError) {
-      return NextResponse.json(
-        { error: "Failed to look up the referenced item.", request_id: requestId },
-        { status: 500 }
-      );
+    if (updateError) {
+      return refuse(500, "save_failed", "Failed to reject AI suggestion.");
     }
-    if (!existing) {
-      return NextResponse.json(
-        { error: "The referenced item no longer exists.", request_id: requestId },
-        { status: 404 }
-      );
-    }
-
-    // The item's status can change between extraction and review (someone else
-    // moved it, or a partial earlier accept already applied this). Re-applying
-    // the same status would write a no-op audit row and could overwrite the
-    // resolution provenance, so refuse it. With this guard, resolved_in_meeting_id
-    // is only ever set on a genuine transition into "resolved".
-    if (existing.status === targetStatus) {
-      return NextResponse.json(
-        { error: "The referenced item is already in that status.", request_id: requestId },
-        { status: 409 }
+    if (!data) {
+      return refuse(
+        409,
+        "already_reviewed",
+        "AI suggestion has already been reviewed.",
       );
     }
 
-    const { error: issueUpdateError } = await supabase
-      .from("issues")
-      .update({
-        status: targetStatus,
-        resolved_in_meeting_id: targetStatus === "resolved" ? meetingId : null,
-      })
-      .eq("id", existing.id);
-
-    if (issueUpdateError) {
-      return NextResponse.json(
-        { error: "Failed to update the referenced item.", request_id: requestId },
-        { status: 500 }
-      );
-    }
-
-    const { error: auditError } = await supabase.from("issue_updates").insert({
-      issue_id: existing.id,
-      meeting_id: meetingId,
-      updated_by: user.id,
-      author_type: "ai",
-      previous_status: existing.status,
-      new_status: targetStatus,
-      note: details || suggestion.source_excerpt || "",
+    return NextResponse.json({
+      suggestion: data,
+      code: "saved",
+      request_id: requestId,
     });
-
-    if (auditError) {
-      return NextResponse.json(
-        { error: "Failed to record the status change.", request_id: requestId },
-        { status: 500 }
-      );
-    }
-
-    const { data, error: markError } = await supabase
-      .from("meeting_ai_suggestions")
-      .update({
-        title,
-        details,
-        category,
-        owner_name: ownerName,
-        due_date: dueDate,
-        suggested_status: targetStatus,
-        status: "accepted",
-        reviewed_at: reviewedAt,
-        created_issue_id: existing.id,
-      })
-      .eq("id", suggestionId)
-      .select("*")
-      .single();
-
-    if (markError) {
-      return NextResponse.json(
-        { error: "Failed to mark AI suggestion accepted.", request_id: requestId },
-        { status: 500 }
-      );
-    }
-
-    return NextResponse.json({ suggestion: data, request_id: requestId });
   }
 
   // A duplicate warning is informational: accepting it would create the very
   // duplicate it flags. The reviewer dismisses it (reject) or opens the
   // existing item instead.
   if (suggestion.type === "duplicate_warning") {
-    return NextResponse.json(
-      {
-        error: "A duplicate warning can't be accepted. Dismiss it or open the existing item.",
-        request_id: requestId,
-      },
-      { status: 400 }
+    return refuse(
+      400,
+      "cannot_keep_duplicate",
+      "A duplicate warning can't be accepted. Dismiss it or open the existing item.",
     );
   }
 
-  if (category === "decision") {
-    const { data: decision, error: decisionError } = await supabase
-      .from("decisions")
-      .insert({
-        meeting_id: meetingId,
-        series_id: suggestion.series_id,
-        title,
-        rationale: details || suggestion.source_excerpt || "",
-        made_by: ownerName,
-        source: "ai_suggested",
-        created_by: user.id,
-      })
-      .select("id")
-      .single();
-
-    if (decisionError || !decision) {
-      return NextResponse.json(
-        { error: "Failed to create decision from AI suggestion.", request_id: requestId },
-        { status: 500 }
-      );
-    }
-
-    const { data, error: updateError } = await supabase
-      .from("meeting_ai_suggestions")
-      .update({
-        title,
-        details,
-        category,
-        owner_name: ownerName,
-        due_date: dueDate,
-        status: "accepted",
-        reviewed_at: reviewedAt,
-        created_decision_id: decision.id,
-      })
-      .eq("id", suggestionId)
-      .select("*")
-      .single();
-
-    if (updateError) {
-      return NextResponse.json(
-        { error: "Failed to mark AI suggestion accepted.", request_id: requestId },
-        { status: 500 }
-      );
-    }
-
-    return NextResponse.json({ suggestion: data, request_id: requestId });
-  }
-
-  const { data: issue, error: issueError } = await supabase
-    .from("issues")
-    .insert({
-      series_id: suggestion.series_id,
-      raised_in_meeting_id: meetingId,
-      title,
-      description: details || suggestion.source_excerpt || "",
-      category,
-      priority: "medium",
-      owner_name: ownerName,
-      owner_user_id: null,
-      due_date: dueDate,
-      status: "open",
-      source: "ai_suggested",
-      ai_confidence: suggestion.confidence,
-    })
-    .select("id")
-    .single();
-
-  if (issueError || !issue) {
-    return NextResponse.json(
-      { error: "Failed to create issue from AI suggestion.", request_id: requestId },
-      { status: 500 }
+  const createsIssue =
+    suggestion.type !== "status_update" && category !== "decision";
+  const members =
+    body.owner_user_id || createsIssue
+      ? await loadSeriesMembers(suggestion.series_id)
+      : [];
+  if (
+    body.owner_user_id &&
+    body.owner_user_id !== user.id &&
+    !members.some((m) => m.id === body.owner_user_id)
+  ) {
+    return refuse(
+      400,
+      "not_a_member",
+      "The owner must be a member of this series.",
     );
   }
 
-  const { data, error: updateError } = await supabase
-    .from("meeting_ai_suggestions")
-    .update({
-      title,
-      details,
-      category,
-      owner_name: ownerName,
-      due_date: dueDate,
-      status: "accepted",
-      reviewed_at: reviewedAt,
-      created_issue_id: issue.id,
-    })
-    .eq("id", suggestionId)
-    .select("*")
-    .single();
+  const ownerUserId = createsIssue
+    ? (body.owner_user_id ?? matchSeriesMember(ownerName, members))
+    : null;
+  const issueOwnerName =
+    members.find((m) => m.id === ownerUserId)?.name || ownerName;
 
-  if (updateError) {
-    return NextResponse.json(
-      { error: "Failed to mark AI suggestion accepted.", request_id: requestId },
-      { status: 500 }
-    );
+  const { data: kept, error: keepError } = await supabase.rpc(
+    "keep_ai_suggestion",
+    {
+      p_suggestion_id: suggestionId,
+      p_meeting_id: meetingId,
+      p_title: title,
+      p_details: details,
+      p_category: category,
+      p_owner_name: ownerName,
+      p_issue_owner_name: issueOwnerName,
+      p_owner_user_id: ownerUserId,
+      p_due_date: dueDate,
+      p_target_status: body.suggested_status ?? null,
+    },
+  );
+  if (keepError || !kept) {
+    return refuse(500, "save_failed", "Failed to save AI suggestion.");
   }
 
-  return NextResponse.json({ suggestion: data, request_id: requestId });
+  const { code, suggestion: saved } = kept as {
+    code: string;
+    suggestion?: unknown;
+  };
+  if (code === "saved") {
+    return NextResponse.json({
+      suggestion: saved,
+      code,
+      request_id: requestId,
+    });
+  }
+  const refusal = KEEP_REFUSALS[code];
+  return refusal
+    ? refuse(refusal[0], code, refusal[1])
+    : refuse(500, "save_failed", "Failed to save AI suggestion.");
 }

@@ -50,12 +50,31 @@ fs.writeFileSync(path.join(stubDir, "supabase-server.mjs"), `
 export async function createClient() { return globalThis.__S.supabase; }
 `);
 fs.writeFileSync(path.join(stubDir, "access.mjs"), `
-export async function requireAiAccess() { return null; }
+export async function requireAiAccess() {
+  const denied = globalThis.__S.aiDenied;
+  if (!denied) return null;
+  return { status: denied.status, async json() { return denied.body; } };
+}
+`);
+fs.writeFileSync(path.join(stubDir, "suggestions-status.mjs"), `
+function record(meetingId, suggestions_status, suggestions_reason) {
+  globalThis.__S.meetingUpdates.push({ table: "meetings", meetingId, row: { suggestions_status, suggestions_reason } });
+}
+export async function markSuggestionsPending(meetingId) { record(meetingId, "pending", null); }
+export async function recordFeatureUnavailable(meetingId) { record(meetingId, "skipped", "feature_unavailable"); }
+`);
+fs.writeFileSync(path.join(stubDir, "ai-config.mjs"), `
+export async function hasAiConfigured() { return true; }
+`);
+fs.writeFileSync(path.join(stubDir, "manage-access.mjs"), `
+export async function userManagesSeries() { return true; }
 `);
 fs.writeFileSync(path.join(stubDir, "suggestions.mjs"), `
 export async function generateMeetingSuggestions() {
   const S = globalThis.__S;
+  S.statusWhenGenerating.push(S.storedMeeting().suggestions_status ?? null);
   if (S.extractionThrow) throw S.extractionThrow;
+  S.meetingUpdates.push({ table: "meetings", row: { suggestions_status: "ready", suggestions_reason: null } });
   return S.extraction;
 }
 export function isExplicitSkip(outcome) {
@@ -80,6 +99,7 @@ export async function transcribeAudio(audio, options = {}) {
   if (S.providerErrorCode) throw new TranscriptionError(S.providerErrorCode, "provider failed");
   return S.providerResult;
 }
+export function flattenSegments(segments, map) { return segments.map((s) => (map[s.speaker] ?? s.speaker) + ": " + s.text).join("\\n"); }
 export async function assembleDiarizedTranscript() { return { transcriptRaw: "", segments: null, speakerMap: null }; }
 export async function chunkAudioBlob(audio) { return [audio]; }
 `);
@@ -116,6 +136,7 @@ export function ownsSegmentRow() { return true; }
 // Test-side Supabase double. Chainable; every table write is recorded.
 function buildSupabase() {
   return {
+    auth: { async getUser() { return { data: { user: { id: "u1" } } }; } },
     from(table) {
       const builder = {
         select() { return builder; },
@@ -189,6 +210,9 @@ function stubPlugin() {
         "@/lib/supabase/server": "supabase-server.mjs",
         "@/lib/ai/access": "access.mjs",
         "@/lib/ai/suggestions": "suggestions.mjs",
+        "@/lib/ai/suggestions-status": "suggestions-status.mjs",
+        "@/lib/ai/config": "ai-config.mjs",
+        "@/lib/series/manage-access": "manage-access.mjs",
         "@/lib/audio": "audio.mjs",
         "@/lib/transcription": "transcription.mjs",
         "@/lib/instance-config": "instance-config.mjs",
@@ -219,6 +243,32 @@ await esbuild.build({
 });
 const meetingRoute = await import(pathToFileURL(routeBundle).href);
 
+const suggestionsBundle = path.join(tempDir, "suggestions-route.mjs");
+await esbuild.build({
+  entryPoints: ["src/app/api/meetings/[meetingId]/suggestions/route.ts"],
+  outfile: suggestionsBundle,
+  bundle: true,
+  platform: "node",
+  format: "esm",
+  logLevel: "silent",
+  absWorkingDir: root,
+  plugins: [stubPlugin()],
+});
+const suggestionsRoute = await import(pathToFileURL(suggestionsBundle).href);
+
+const speakerMapBundle = path.join(tempDir, "speaker-map-route.mjs");
+await esbuild.build({
+  entryPoints: ["src/app/api/meetings/[meetingId]/speaker-map/route.ts"],
+  outfile: speakerMapBundle,
+  bundle: true,
+  platform: "node",
+  format: "esm",
+  logLevel: "silent",
+  absWorkingDir: root,
+  plugins: [stubPlugin()],
+});
+const speakerMapRoute = await import(pathToFileURL(speakerMapBundle).href);
+
 const segmentBundle = path.join(tempDir, "segment-route.mjs");
 await esbuild.build({
   entryPoints: ["src/app/api/meetings/[meetingId]/segments/[seq]/transcribe/route.ts"],
@@ -233,6 +283,8 @@ await esbuild.build({
 const segmentRoute = await import(pathToFileURL(segmentBundle).href);
 
 globalThis.__S = S;
+S.storedMeeting = () =>
+  Object.assign({}, ...S.meetingUpdates.filter((u) => u.table === "meetings" && u.row).map((u) => u.row));
 
 const MEETING_ID = "30000000-0000-0000-0000-000000000003";
 
@@ -273,6 +325,8 @@ function reset(overrides = {}) {
     __pendingSeq: null,
     afterTasks: [],
     downloads: 0,
+    aiDenied: null,
+    statusWhenGenerating: [],
   }, overrides);
   globalThis.__S.supabase = buildSupabase();
 }
@@ -607,4 +661,91 @@ test("a JSON body of literal null is treated as an empty body", async () => {
   const res = await callMeetingRoute(null);
   assert.equal(res.status, 200);
   assert.equal(S.providerCalls > 0, true);
+});
+
+// ---------------------------------------------------------------------------
+// Readiness status: "finding action items" is on before extraction begins
+// ---------------------------------------------------------------------------
+
+const completionWrite = () =>
+  S.meetingUpdates.find((u) => u.table === "meetings" && u.row?.transcription_status === "completed");
+
+test("a deferred recording shows finding-action-items the moment its transcript is saved, then ready", async () => {
+  reset();
+  const res = await callMeetingRoute({ defer_extraction: true });
+  assert.equal(res.status, 200);
+  assert.equal(completionWrite().row.suggestions_status, "pending");
+  assert.equal(completionWrite().row.suggestions_reason, null);
+  assert.ok(Number.isFinite(Date.parse(completionWrite().row.suggestions_status_at)));
+  assert.equal(S.storedMeeting().suggestions_status, "pending");
+  await runAfterResponse();
+  assert.deepEqual(S.statusWhenGenerating, ["pending"]);
+  assert.equal(S.storedMeeting().suggestions_status, "ready");
+});
+
+test("an inline recording shows finding-action-items before the extraction runs", async () => {
+  reset();
+  const res = await callMeetingRoute({});
+  assert.equal(res.status, 200);
+  assert.equal(completionWrite().row.suggestions_status, "pending");
+  assert.deepEqual(S.statusWhenGenerating, ["pending"]);
+  assert.equal(S.storedMeeting().suggestions_status, "ready");
+});
+
+test("a recording whose transcript could not be saved never claims action items are being found", async () => {
+  reset({ meeting: null });
+  await callMeetingRoute({});
+  assert.equal(S.storedMeeting().suggestions_status, undefined);
+  assert.deepEqual(S.statusWhenGenerating, []);
+});
+
+test("an account without AI marks the meeting skipped as feature unavailable, from the recording and the manual review", async () => {
+  const denied = { status: 403, body: { error: "AI features are not enabled for this account.", code: "FEATURE_UNAVAILABLE" } };
+  reset({ aiDenied: denied });
+  const res = await callMeetingRoute({});
+  assert.equal(res.status, 403);
+  assert.deepEqual(S.storedMeeting(), { suggestions_status: "skipped", suggestions_reason: "feature_unavailable" });
+
+  reset({ aiDenied: denied });
+  const res2 = await suggestionsRoute.POST(request({}), { params: Promise.resolve({ meetingId: MEETING_ID }) });
+  assert.equal(res2.status, 403);
+  assert.deepEqual(S.storedMeeting(), { suggestions_status: "skipped", suggestions_reason: "feature_unavailable" });
+});
+
+test("a signed-out or unverifiable denial leaves the meeting's status untouched", async () => {
+  reset({ aiDenied: { status: 401, body: { error: "Not authenticated" } } });
+  const res = await callMeetingRoute({});
+  assert.equal(res.status, 401);
+  assert.deepEqual(S.storedMeeting(), {});
+
+  reset({ aiDenied: { status: 403, body: { error: "Unable to verify access. Please try again." } } });
+  const res2 = await suggestionsRoute.POST(request({}), { params: Promise.resolve({ meetingId: MEETING_ID }) });
+  assert.equal(res2.status, 403);
+  assert.deepEqual(S.storedMeeting(), {});
+});
+
+test("a manual review shows finding-action-items before the AI runs", async () => {
+  reset({ meeting: { id: MEETING_ID, series_id: "s1" } });
+  const res = await suggestionsRoute.POST(request({}), { params: Promise.resolve({ meetingId: MEETING_ID }) });
+  assert.equal(res.status, 200);
+  assert.deepEqual(S.statusWhenGenerating, ["pending"]);
+  assert.equal(S.storedMeeting().suggestions_status, "ready");
+});
+
+test("fixingASpeaker_showsFindingActionItemsAgainBeforeReExtraction", async () => {
+  reset({
+    meeting: {
+      id: MEETING_ID,
+      series_id: "s1",
+      transcript_segments: [{ speaker: "A", text: "Ship it" }],
+      speaker_map: {},
+    },
+  });
+  const res = await speakerMapRoute.PATCH(request({ speaker: "A", attendee: "Priya Shah" }), {
+    params: Promise.resolve({ meetingId: MEETING_ID }),
+  });
+  assert.equal(res.status, 200);
+  assert.equal((await res.json()).transcript_raw, "Priya Shah: Ship it");
+  assert.deepEqual(S.statusWhenGenerating, ["pending"]);
+  assert.equal(S.storedMeeting().suggestions_status, "ready");
 });

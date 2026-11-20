@@ -1,6 +1,7 @@
 import { NextResponse, after, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { hasAiAccess } from "@/lib/ai/access";
+import { recordFeatureUnavailable } from "@/lib/ai/suggestions-status";
 import {
   extractSuggestions,
   retainAudio,
@@ -146,6 +147,7 @@ export async function POST(
     priorSpeakerMap: meeting.speaker_map ?? null,
   });
 
+  const aiAllowed = await hasAiAccess();
   const { error: updateError } = await supabase
     .from("meetings")
     .update({
@@ -161,6 +163,13 @@ export async function POST(
       transcription_completed_at: new Date().toISOString(),
       transcript_language: value.language,
       transcription_source: value.source,
+      ...(aiAllowed
+        ? {
+            suggestions_status: "pending",
+            suggestions_reason: null,
+            suggestions_status_at: new Date().toISOString(),
+          }
+        : {}),
       ...(meeting.audio_duration_seconds == null
         ? { audio_duration_seconds: Math.round(value.duration_seconds) }
         : {}),
@@ -184,8 +193,10 @@ export async function POST(
     return respond({ error: "Transcript could not be saved." }, 500);
   }
 
+  if (!aiAllowed) await recordFeatureUnavailable(meetingId);
+
   after(async () => {
-    const extraction = (await hasAiAccess())
+    const extraction = aiAllowed
       ? await extractSuggestions(supabase, meetingId)
       : { extraction: "skipped" as const, extractionError: null };
     if (extraction.extraction === "failed") {

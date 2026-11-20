@@ -197,6 +197,7 @@ export async function middleware(request: NextRequest) {
     "/download",
     "/accept-invite",
     "/auth/callback",
+    "/auth/companion-session",
     "/reset-password",
     "/share",
     "/setup",

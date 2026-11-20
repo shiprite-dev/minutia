@@ -55,12 +55,21 @@ fs.writeFileSync(
 export async function generateMeetingSuggestions(supabase, meetingId) {
   const S = globalThis.__S;
   S.calls.push("suggestions");
+  S.statusWhenGenerating.push(S.storedMeeting().suggestions_status ?? null);
   S.suggestionCalls.push(meetingId);
   if (S.extractionThrow) throw S.extractionThrow;
   return S.extraction;
 }
 export function isExplicitSkip(outcome) {
   return !outcome.ok && (outcome.code === "skipped_no_content" || outcome.code === "skipped_unconfigured");
+}
+`,
+);
+fs.writeFileSync(
+  path.join(stubDir, "suggestions-status.mjs"),
+  `
+export async function recordFeatureUnavailable(meetingId) {
+  globalThis.__S.writes.push({ table: "meetings", op: "update", meetingId, row: { suggestions_status: "skipped", suggestions_reason: "feature_unavailable" } });
 }
 `,
 );
@@ -92,6 +101,7 @@ function stubPlugin() {
         "@/lib/supabase/server": "supabase-server.mjs",
         "@/lib/ai/access": "access.mjs",
         "@/lib/ai/suggestions": "suggestions.mjs",
+        "@/lib/ai/suggestions-status": "suggestions-status.mjs",
         "@/lib/audio": "audio.mjs",
         "@/lib/instance-config": "instance-config.mjs",
         "next/server": "next-server.mjs",
@@ -338,10 +348,18 @@ function reset(overrides = {}) {
       calls: [],
       afterTasks: [],
       bodyReads: 0,
+      statusWhenGenerating: [],
     },
     overrides,
   );
   S.supabase = buildSupabase();
+  S.storedMeeting = () =>
+    Object.assign(
+      {},
+      ...S.writes
+        .filter((w) => w.table === "meetings" && w.op === "update")
+        .map((w) => w.row),
+    );
 }
 
 function textStream(text) {
@@ -671,17 +689,31 @@ test("a meeting the caller cannot see returns 404", async () => {
   assert.deepEqual(S.writes, []);
 });
 
-test("an account without the AI entitlement still saves the transcript and runs no suggestions", async () => {
+test("onAPlanWithoutAI_theMacUploadMarksTheMeetingSkippedAsFeatureUnavailable", async () => {
   reset({ aiAccess: false });
   const { status, body } = await post();
   assert.equal(status, 200, JSON.stringify(body));
-  assert.ok(completedWrite(), "the transcript is saved");
+  assert.equal(completedWrite().row.transcript_raw, EXPECTED_RAW);
+  assert.equal("suggestions_status" in completedWrite().row, false);
+  assert.equal(S.storedMeeting().suggestions_status, "skipped");
+  assert.equal(S.storedMeeting().suggestions_reason, "feature_unavailable");
   await runAfter();
-  assert.equal(
-    S.suggestionCalls.length,
-    0,
-    "suggestions never run without the entitlement",
-  );
+  assert.deepEqual(S.suggestionCalls, []);
+  assert.equal(S.storedMeeting().suggestions_status, "skipped");
+});
+
+test("aMacTranscriptUpload_showsFindingActionItemsBeforeTheBackgroundExtraction", async () => {
+  reset();
+  const { status } = await post();
+  assert.equal(status, 200);
+  const row = completedWrite().row;
+  assert.equal(row.transcription_status, "completed");
+  assert.equal(row.suggestions_status, "pending");
+  assert.equal(row.suggestions_reason, null);
+  assert.ok(Number.isFinite(Date.parse(row.suggestions_status_at)));
+  assert.deepEqual(S.suggestionCalls, []);
+  await runAfter();
+  assert.deepEqual(S.statusWhenGenerating, ["pending"]);
 });
 
 // ---------------------------------------------------------------------------
