@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { createClient } from "@/lib/supabase/client";
 import { useGoogleCalendarStatus } from "@/lib/hooks/use-google-calendar";
+import { useCreateSeries } from "@/lib/hooks/use-series";
 import type { OrganizationOption, Profile } from "@/lib/types";
 
 interface OnboardingWizardProps {
@@ -17,6 +18,7 @@ interface OnboardingWizardProps {
   signupName: string | null;
   workspace: OrganizationOption | undefined;
   calendarConfigured: boolean;
+  calendarConnected: boolean;
   showMacApp: boolean;
 }
 
@@ -74,6 +76,7 @@ export function OnboardingWizard({
   signupName,
   workspace,
   calendarConfigured,
+  calendarConnected,
   showMacApp,
 }: OnboardingWizardProps) {
   const router = useRouter();
@@ -84,7 +87,17 @@ export function OnboardingWizard({
       ? profile.name
       : signupName;
   const [name, setName] = React.useState("");
+  const [firstSeries, setFirstSeries] = React.useState("");
+  const createdSeriesId = React.useRef<string | null>(null);
+  const seriesSave = React.useRef<Promise<{ id: string }> | null>(null);
+  const [seriesLocked, setSeriesLocked] = React.useState(false);
+  const createSeries = useCreateSeries();
   const { data: calendar } = useGoogleCalendarStatus();
+  const askFirstSeries =
+    !calendarConnected &&
+    workspace?.role === "admin" &&
+    workspace.memberCount === 1 &&
+    !searchParams.get("next");
 
   const save = useMutation({
     networkMode: "always",
@@ -121,6 +134,22 @@ export function OnboardingWizard({
         if (renameError) throw renameError;
       }
     }
+    const seriesName = firstSeries.trim();
+    if (complete && askFirstSeries && (seriesSave.current || seriesName)) {
+      // Reuse an in-flight save: the 10s timeout re-enables Continue without
+      // cancelling the insert, and a second insert would duplicate the series.
+      if (!seriesSave.current) {
+        setSeriesLocked(true);
+        seriesSave.current = createSeries
+          .mutateAsync({ name: seriesName, cadence: "weekly", default_attendees: [] })
+          .catch((error) => {
+            seriesSave.current = null;
+            setSeriesLocked(false);
+            throw error;
+          });
+      }
+      createdSeriesId.current = (await seriesSave.current).id;
+    }
     const { error: metadataError } = await supabase.auth.updateUser({
       data: {
         ...(finalName && { name: finalName }),
@@ -140,7 +169,11 @@ export function OnboardingWizard({
   function finish() {
     save.mutate(true, {
       onSuccess: () => {
-        router.push(destinationAfterSetup(searchParams.get("next")));
+        router.push(
+          createdSeriesId.current
+            ? `/series/${createdSeriesId.current}`
+            : destinationAfterSetup(searchParams.get("next")),
+        );
         router.refresh();
       },
     });
@@ -196,6 +229,27 @@ export function OnboardingWizard({
               autoFocus
               className="h-11 rounded-xl"
             />
+          </div>
+        )}
+
+        {askFirstSeries && (
+          <div className="mt-6 space-y-2">
+            <Label htmlFor="setup-first-series" className="text-ink-2">
+              What is your recurring meeting called?
+            </Label>
+            <Input
+              id="setup-first-series"
+              value={firstSeries}
+              onChange={(e) => setFirstSeries(e.target.value)}
+              placeholder="e.g. Weekly team sync"
+              maxLength={200}
+              disabled={seriesLocked}
+              autoFocus={Boolean(knownName)}
+              className="h-11 rounded-xl"
+            />
+            <p className="text-xs text-ink-3">
+              Optional. We will set it up so you can start it right away.
+            </p>
           </div>
         )}
 

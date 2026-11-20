@@ -20,7 +20,7 @@ const HAS_SERVICE_ROLE = !!process.env.SUPABASE_SERVICE_ROLE_KEY;
 const TEST_USER_ID = "00000000-0000-0000-0000-000000000001";
 
 const PROMPT_COPY =
-  "For the best experience, download and install the Mac app.";
+  "Get the Mac app to record and transcribe your meetings.";
 const DOWNLOAD_URL = "/download";
 
 function serviceHeaders(prefer = "return=representation") {

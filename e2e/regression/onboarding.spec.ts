@@ -570,3 +570,258 @@ test.describe("First-run setup", () => {
     await expect(setup.getByLabel("What should we call you?")).toHaveCount(0);
   });
 });
+
+async function seriesOwnedBy(userId: string) {
+  return rest(`meeting_series?owner_id=eq.${userId}&select=name,cadence&order=created_at`);
+}
+
+const SAVE_ERROR = "Couldn't save. Check your connection and try again.";
+const MEETING_LABEL = "What is your recurring meeting called?";
+
+test.describe("First series from setup", () => {
+  test.describe.configure({ mode: "serial" });
+  test.use({ userAgent: MAC_UA });
+  test.skip(!SERVICE_KEY, "Requires the service role to create fresh accounts");
+
+  let user: NewUser | null = null;
+
+  test.afterEach(async ({ page }) => {
+    await page.unrouteAll({ behavior: "ignoreErrors" });
+    if (user) {
+      await rest(`meeting_series?owner_id=eq.${user.userId}`, { method: "DELETE" });
+      await deleteUser(user);
+    }
+    user = null;
+  });
+
+  test("aSoloUserNamesTheirRecurringMeetingOnSetup_landsInsideThatSeriesReadyToStartIt", async ({
+    page,
+    baseURL,
+  }) => {
+    user = await createUser({}, { solo: true });
+    await signIn(page, user, baseURL);
+    await openSetup(page);
+
+    const setup = page.getByTestId("setup-screen");
+    await setup.getByLabel("What should we call you?").fill("Jamie");
+    await setup.getByLabel(MEETING_LABEL).fill("  Platform weekly  ");
+    await setup.getByLabel(MEETING_LABEL).press("Enter");
+
+    await page.waitForURL(/\/series\/[0-9a-f-]{36}$/);
+    await waitForApp(page);
+    await expect(page.getByRole("heading", { level: 1, name: "Platform weekly", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Start meeting" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Ask this series" })).toHaveCount(0);
+    await expect(page.getByText("AI features are not enabled for this account.")).toHaveCount(0);
+    expect(await seriesOwnedBy(user.userId)).toEqual([{ name: "Platform weekly", cadence: "weekly" }]);
+
+    await page.reload();
+    await waitForApp(page);
+    await expect(page.getByTestId("setup-screen")).toHaveCount(0);
+    await expect(page.getByRole("heading", { level: 1, name: "Platform weekly", exact: true })).toBeVisible();
+    expect(await seriesOwnedBy(user.userId)).toHaveLength(1);
+  });
+
+  test("aSoloUserWhoLeavesTheMeetingNameBlankOrSpaces_landsOnTheBoardWithNoSeriesCreated", async ({
+    page,
+    baseURL,
+  }) => {
+    user = await createUser({ full_name: "Jamie Rivera" }, { solo: true });
+    await signIn(page, user, baseURL);
+    await openSetup(page);
+
+    const setup = page.getByTestId("setup-screen");
+    await setup.getByLabel(MEETING_LABEL).fill("   ");
+    await setup.getByRole("button", { name: "Continue" }).click();
+
+    await page.waitForURL(/\/(dashboard)?$/);
+    await waitForApp(page);
+    await expect(page.getByText("Every good log starts with one meeting.")).toBeVisible();
+    expect(await seriesOwnedBy(user.userId)).toEqual([]);
+  });
+
+  test("aSoloUserWithGoogleCalendarConnected_isNotAskedForAMeetingName", async ({
+    page,
+    baseURL,
+  }) => {
+    user = await createUser({ full_name: "Jamie Rivera" }, { solo: true });
+    await grantCalendar(user);
+    await signIn(page, user, baseURL);
+    await page.route("**/api/calendar/status", () => {});
+    await openSetup(page);
+
+    const setup = page.getByTestId("setup-screen");
+    await expect(setup.getByRole("button", { name: "Continue" })).toBeVisible();
+    await expect(setup.getByLabel(MEETING_LABEL)).toHaveCount(0);
+  });
+
+  test("anInvitedTeammate_isNotAskedForAMeetingName", async ({ page, baseURL }) => {
+    user = await createUser({ full_name: "Sam Teammate" }, { solo: false });
+    await signIn(page, user, baseURL);
+    await openSetup(page);
+
+    await expect(page.getByTestId("setup-screen").getByLabel(MEETING_LABEL)).toHaveCount(0);
+  });
+
+  test("aFailedSeriesSave_keepsWhatTheyTyped_andRetryCreatesExactlyOneSeries", async ({
+    page,
+    baseURL,
+  }) => {
+    user = await createUser({ full_name: "Jamie Rivera" }, { solo: true });
+    await signIn(page, user, baseURL);
+    await openSetup(page);
+
+    let failNext = true;
+    await page.route("**/rest/v1/meeting_series**", (route) => {
+      if (route.request().method() === "POST" && failNext) {
+        failNext = false;
+        return route.fulfill({ status: 500, contentType: "application/json", body: "{}" });
+      }
+      return route.fallback();
+    });
+
+    const setup = page.getByTestId("setup-screen");
+    await setup.getByLabel(MEETING_LABEL).fill("Design crit");
+    await setup.getByRole("button", { name: "Continue" }).click();
+
+    await expect(page.getByText(SAVE_ERROR, { exact: true })).toBeVisible();
+    await expect(setup).toBeVisible();
+    await expect(setup.getByLabel(MEETING_LABEL)).toHaveValue("Design crit");
+    await expect(setup.getByRole("button", { name: "Continue" })).toBeEnabled();
+    expect(await seriesOwnedBy(user.userId)).toEqual([]);
+
+    await setup.getByRole("button", { name: "Continue" }).click();
+    await page.waitForURL(/\/series\/[0-9a-f-]{36}$/);
+    await expect(page.getByRole("heading", { level: 1, name: "Design crit", exact: true })).toBeVisible();
+    expect(await seriesOwnedBy(user.userId)).toEqual([{ name: "Design crit", cadence: "weekly" }]);
+  });
+
+  test("seriesSavedButFinishingSetupFails_retryDoesNotCreateASecondSeries", async ({
+    page,
+    baseURL,
+  }) => {
+    user = await createUser({ full_name: "Jamie Rivera" }, { solo: true });
+    await signIn(page, user, baseURL);
+    await openSetup(page);
+
+    let failNext = true;
+    await page.route("**/rest/v1/profiles**", (route) => {
+      const finishing = (route.request().postData() ?? "").includes("has_completed_onboarding");
+      if (route.request().method() === "PATCH" && finishing && failNext) {
+        failNext = false;
+        return route.fulfill({ status: 500, contentType: "application/json", body: "{}" });
+      }
+      return route.fallback();
+    });
+
+    const setup = page.getByTestId("setup-screen");
+    await setup.getByLabel(MEETING_LABEL).fill("Design crit");
+    await setup.getByRole("button", { name: "Continue" }).click();
+    await expect(page.getByText(SAVE_ERROR, { exact: true })).toBeVisible();
+    await expect(setup).toBeVisible();
+    expect(await seriesOwnedBy(user.userId)).toEqual([{ name: "Design crit", cadence: "weekly" }]);
+
+    await setup.getByRole("button", { name: "Continue" }).click();
+    await page.waitForURL(/\/series\/[0-9a-f-]{36}$/);
+    await expect(page.getByRole("heading", { level: 1, name: "Design crit", exact: true })).toBeVisible();
+    expect(await seriesOwnedBy(user.userId)).toEqual([{ name: "Design crit", cadence: "weekly" }]);
+  });
+
+  test("aSoloUserArrivingFromADeepLink_isNotAskedAndLandsWhereTheLinkPointed", async ({
+    page,
+    baseURL,
+  }) => {
+    user = await createUser({ full_name: "Jamie Rivera" }, { solo: true });
+    await signIn(page, user, baseURL);
+    await page.goto("/dashboard?next=%2Factions", { waitUntil: "domcontentloaded" });
+    await waitForApp(page);
+
+    const setup = page.getByTestId("setup-screen");
+    await expect(setup.getByRole("button", { name: "Continue" })).toBeVisible();
+    await expect(setup.getByLabel(MEETING_LABEL)).toHaveCount(0);
+    await setup.getByRole("button", { name: "Continue" }).click();
+    await page.waitForURL(/\/actions$/);
+    expect(await seriesOwnedBy(user.userId)).toEqual([]);
+  });
+
+  test("aSaveSlowerThanTheTimeout_thenRetry_stillCreatesExactlyOneSeries", async ({
+    page,
+    baseURL,
+  }) => {
+    test.setTimeout(90_000);
+    user = await createUser({ full_name: "Jamie Rivera" }, { solo: true });
+    await signIn(page, user, baseURL);
+    await openSetup(page);
+
+    let delayed = false;
+    await page.route("**/rest/v1/meeting_series**", async (route) => {
+      if (route.request().method() === "POST" && !delayed) {
+        delayed = true;
+        await new Promise((resolve) => setTimeout(resolve, 12_000));
+      }
+      return route.fallback();
+    });
+
+    const setup = page.getByTestId("setup-screen");
+    await setup.getByLabel(MEETING_LABEL).fill("Design crit");
+    await setup.getByRole("button", { name: "Continue" }).click();
+    await expect(page.getByText(SAVE_ERROR, { exact: true })).toBeVisible({ timeout: 15_000 });
+    await expect(setup.getByLabel(MEETING_LABEL)).toBeDisabled();
+
+    await setup.getByRole("button", { name: "Continue" }).click();
+    await page.waitForURL(/\/series\/[0-9a-f-]{36}$/, { timeout: 30_000 });
+    await expect(page.getByRole("heading", { level: 1, name: "Design crit", exact: true })).toBeVisible();
+    expect(await seriesOwnedBy(user.userId)).toEqual([{ name: "Design crit", cadence: "weekly" }]);
+  });
+
+  test("fromTheEmptyBoard_theFirstSeriesIsCreatedRightThereAndOpensInsideIt", async ({
+    page,
+    baseURL,
+  }) => {
+    user = await createUser({ full_name: "Jamie Rivera" }, { solo: true });
+    await signIn(page, user, baseURL);
+    await openSetup(page);
+    await page.getByTestId("setup-screen").getByRole("button", { name: "Continue" }).click();
+    await page.waitForURL(/\/(dashboard)?$/);
+    await waitForApp(page);
+
+    await page.getByRole("button", { name: "Create your first series" }).click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog.getByRole("heading", { name: "Create series" })).toBeVisible();
+    expect(new URL(page.url()).pathname).toBe("/dashboard");
+
+    await dialog.getByLabel("Name").fill("Weekly 1:1");
+    await dialog.getByRole("button", { name: "Create series" }).click();
+
+    await page.waitForURL(/\/series\/[0-9a-f-]{36}$/);
+    await expect(page.getByRole("heading", { level: 1, name: "Weekly 1:1", exact: true })).toBeVisible();
+    expect(await seriesOwnedBy(user.userId)).toEqual([{ name: "Weekly 1:1", cadence: "weekly" }]);
+  });
+
+  test("aSoloWorkspaceOwnerSeesNoAdminLink_whileAnAdminInAWorkspaceWithOthersStillDoes", async ({
+    page,
+    baseURL,
+  }) => {
+    user = await createUser({ full_name: "Jamie Rivera" }, { solo: true });
+    await signIn(page, user, baseURL);
+    await openSetup(page);
+    await page.getByTestId("setup-screen").getByRole("button", { name: "Continue" }).click();
+    await page.waitForURL(/\/(dashboard)?$/);
+    await waitForApp(page);
+    const sidebar = page.locator("[data-sidebar='sidebar']").first();
+    await expect(sidebar.getByRole("link", { name: "Settings" })).toBeVisible();
+    await expect(sidebar.getByRole("link", { name: "Admin" })).toHaveCount(0);
+
+    await deleteUser(user);
+    user = await createUser({ full_name: "Avery Admin" }, { solo: false, role: "admin" });
+    await page.context().clearCookies();
+    await signIn(page, user, baseURL);
+    await openSetup(page);
+    await page.getByTestId("setup-screen").getByRole("button", { name: "Continue" }).click();
+    await page.waitForURL(/\/(dashboard)?$/);
+    await waitForApp(page);
+    await expect(
+      page.locator("[data-sidebar='sidebar']").first().getByRole("link", { name: "Admin" }),
+    ).toBeVisible();
+  });
+});

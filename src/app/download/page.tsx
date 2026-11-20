@@ -166,7 +166,7 @@ export default async function DownloadPage() {
               </p>
               <div className="mt-8">
                 <Link
-                  href="/login?mode=signup"
+                  href="/signup"
                   className="inline-flex items-center gap-2 rounded-md bg-accent px-6 py-3 text-sm font-medium text-paper transition-colors hover:bg-accent-hover"
                 >
                   Get started free

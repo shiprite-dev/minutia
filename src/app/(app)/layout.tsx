@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import type { OrganizationOption } from "@/lib/types";
+import { GOOGLE_CALENDAR_SCOPE } from "@/lib/google-oauth-scopes";
 import { AppShell } from "./app-shell";
 
 export const metadata: Metadata = {
@@ -25,6 +26,7 @@ export default async function AppLayout({
   let organizations: OrganizationOption[] = [];
   let signupName: string | null = null;
   let setupCompleted = false;
+  let calendarConnected = false;
   if (user) {
     signupName = user.user_metadata?.full_name ?? user.user_metadata?.name ?? null;
     setupCompleted = user.user_metadata?.setup_completed === true;
@@ -37,6 +39,15 @@ export default async function AppLayout({
         .order("joined_at", { ascending: true }),
     ]);
     profile = data;
+    if (profile && !profile.has_completed_onboarding) {
+      const { data: token } = await supabase
+        .from("google_oauth_tokens")
+        .select("scopes")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      calendarConnected =
+        Array.isArray(token?.scopes) && token.scopes.includes(GOOGLE_CALENDAR_SCOPE);
+    }
 
     organizations = (memberships ?? [])
       .flatMap((membership) => {
@@ -63,6 +74,7 @@ export default async function AppLayout({
       signupName={signupName}
       setupCompleted={setupCompleted}
       calendarConfigured={Boolean(process.env.GOOGLE_CLIENT_ID)}
+      calendarConnected={calendarConnected}
       showMacApp={showMacApp}
     >
       {children}

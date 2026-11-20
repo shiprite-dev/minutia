@@ -28,7 +28,7 @@ export function CompanionInstallPrompt({ userId }: { userId: string }) {
         className="flex items-center gap-3 rounded-xl border border-rule bg-card px-4 py-3 shadow-[var(--shadow-raised)]"
       >
       <p className="flex-1 text-sm text-ink-2">
-        For the best experience, download and install the Mac app.
+        Get the Mac app to record and transcribe your meetings.
       </p>
       <a
         href="/download"

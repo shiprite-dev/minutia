@@ -227,10 +227,12 @@ export async function middleware(request: NextRequest) {
     return applySecurityHeaders(redirect);
   }
 
-  // Authenticated users hitting the landing page go to the dashboard.
-  if (user && pathname === "/") {
+  // Authenticated users hitting the landing page go to the dashboard; on the
+  // hosted app, signed-out visitors go to sign in (the self-host pitch is for
+  // self-host instances only).
+  if (pathname === "/" && (user || process.env.NEXT_PUBLIC_ENABLE_PUBLIC_SIGNUP === "true")) {
     const url = request.nextUrl.clone();
-    url.pathname = "/dashboard";
+    url.pathname = user ? "/dashboard" : "/login";
     const redirect = NextResponse.redirect(url);
     return applySecurityHeaders(redirect);
   }

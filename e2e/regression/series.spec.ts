@@ -143,13 +143,8 @@ test.describe("Series List Page", () => {
       await dialog.getByRole("button", { name: "Create series" }).click();
 
       await expect(dialog).not.toBeVisible();
-      const card = page
-        .locator('main a[href^="/series/"]')
-        .filter({ hasText: name });
-      await expect(card).toBeVisible();
-
-      await card.click();
-      await expect(page.getByRole("heading", { name }).first()).toBeVisible();
+      await page.waitForURL(/\/series\/[0-9a-f-]{36}$/);
+      await expect(page.getByRole("heading", { level: 1, name: name, exact: true })).toBeVisible();
       createdSeriesId = seriesIdFromUrl(page.url());
 
       await page.getByRole("button", { name: "Series settings" }).click();
@@ -185,16 +180,20 @@ test.describe("Series List Page", () => {
       await dialog.getByRole("button", { name: "Create series" }).click();
 
       await expect(dialog).not.toBeVisible();
+      await page.waitForURL(/\/series\/[0-9a-f-]{36}$/);
+      await expect(page.getByRole("heading", { level: 1, name: name, exact: true })).toBeVisible();
+      createdSeriesId = seriesIdFromUrl(page.url());
+
+      await page.goto("/series");
+      await waitForApp(page);
       const card = page
         .locator('main a[href^="/series/"]')
         .filter({ hasText: name });
       // The persisted series renders its cadence label; "daily" is only accepted
       // if the DB CHECK constraint migration applied.
       await expect(card.getByText("Daily", { exact: true })).toBeVisible();
-
       await card.click();
-      await expect(page.getByRole("heading", { name }).first()).toBeVisible();
-      createdSeriesId = seriesIdFromUrl(page.url());
+      await page.waitForURL(/\/series\/[0-9a-f-]{36}$/);
 
       await page.getByRole("button", { name: "Series settings" }).click();
       const settings = page.locator("[role='dialog']");
