@@ -1,3 +1,4 @@
+import { spawn, spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import {
   test,
@@ -174,6 +175,81 @@ async function seriesIssues(
   );
 }
 
+async function issueOwners(
+  seriesId: string,
+): Promise<{ owner_name: string; owner_user_id: string | null }[]> {
+  return rest(
+    `issues?series_id=eq.${seriesId}&select=owner_name,owner_user_id&order=created_at`,
+  );
+}
+
+async function queuedSuggestionIds(meetingId: string): Promise<string[]> {
+  const response = await fetch(
+    `${process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3000"}/api/companion/review-queue?meeting=${meetingId}`,
+    {
+      headers: {
+        Authorization: `Bearer ${await signInToken("test@example.com")}`,
+      },
+    },
+  );
+  expect(response.status).toBe(200);
+  return (await response.json()).meetings[0].rows.map(
+    (r: { id: string }) => r.id,
+  );
+}
+
+const DB_CONTAINER = "supabase_db_minutia";
+
+function sql(statement: string): string {
+  const result = spawnSync(
+    "docker",
+    [
+      "exec",
+      "-i",
+      DB_CONTAINER,
+      "psql",
+      "-U",
+      "postgres",
+      "-tAq",
+      "-v",
+      "ON_ERROR_STOP=1",
+    ],
+    { input: statement, encoding: "utf8" },
+  );
+  expect(result.status, result.stderr).toBe(0);
+  return result.stdout.trim();
+}
+
+async function holdSuggestionRow(suggestionId: string) {
+  const session = spawn("docker", [
+    "exec",
+    "-i",
+    DB_CONTAINER,
+    "psql",
+    "-U",
+    "postgres",
+    "-tAq",
+    "-v",
+    "ON_ERROR_STOP=1",
+  ]);
+  let output = "";
+  session.stdout.on("data", (chunk) => (output += chunk));
+  session.stderr.on("data", (chunk) => (output += chunk));
+  const printed = (marker: string) =>
+    expect.poll(() => output.includes(marker), { timeout: 10_000 }).toBe(true);
+  session.stdin.write(
+    `begin;\nselect id from public.meeting_ai_suggestions where id = '${suggestionId}' for update;\n\\echo HELD\n`,
+  );
+  await printed("HELD");
+  return {
+    async commit(statement: string) {
+      session.stdin.write(`${statement}\ncommit;\n\\echo DONE\n`);
+      await printed("DONE");
+      session.stdin.end();
+    },
+  };
+}
+
 async function signInToken(email: string): Promise<string> {
   const token = await fetch(
     `${SUPABASE_URL}/auth/v1/token?grant_type=password`,
@@ -255,36 +331,291 @@ test.describe("Keeping AI action items from more than one place", () => {
     for (const member of membersToDelete.splice(0)) await deleteMember(member);
   });
 
-  test("twoKeepsAtTheSameMoment_createOneBoardItem", async ({ request }) => {
+  test("aKeepThatLosesTheRaceWhileWaiting_saysAlreadyReviewedAndAddsNothing", async ({
+    request,
+  }) => {
     const { seriesId, meetingId, stamp } = await createMeeting();
     seriesToDelete.push(seriesId);
     const title = `Send the vendor contract ${stamp}`;
     const suggestionId = await seedSuggestion(seriesId, meetingId, { title });
 
-    const responses = await Promise.all([
-      request.patch(reviewUrl(meetingId, suggestionId), {
-        data: { action: "accept" },
-      }),
-      request.patch(reviewUrl(meetingId, suggestionId), {
-        data: { action: "accept" },
-      }),
-    ]);
-    const results = await Promise.all(
-      responses.map(async (r) => ({
-        status: r.status(),
-        body: await r.json(),
-      })),
+    const lock = await holdSuggestionRow(suggestionId);
+    const keep = request.patch(reviewUrl(meetingId, suggestionId), {
+      data: { action: "accept" },
+    });
+    await expect
+      .poll(
+        () =>
+          sql(
+            "select count(*) from pg_stat_activity where wait_event_type = 'Lock' and query ilike '%keep_ai_suggestion%';",
+          ),
+        { timeout: 10_000 },
+      )
+      .toBe("1");
+    await lock.commit(
+      `update public.meeting_ai_suggestions set status = 'accepted', reviewed_at = now() where id = '${suggestionId}';`,
     );
-    const outcomes = results.map((r) => `${r.status} ${r.body.code}`).sort();
 
-    expect(outcomes).toEqual(["200 saved", "409 already_reviewed"]);
-    const refused = results.find((r) => r.status === 409)!;
-    expect(refused.body.error).toBe("AI suggestion has already been reviewed.");
+    const response = await keep;
+    expect(response.status()).toBe(409);
+    expect(await response.json()).toMatchObject({
+      code: "already_reviewed",
+      error: "AI suggestion has already been reviewed.",
+    });
+    expect(await seriesIssues(seriesId)).toEqual([]);
+    expect(await suggestionStatus(suggestionId)).toBe("accepted");
+  });
+
+  test("keepingWithADueDateFromTheMac_showsThatDateOnTheItem", async ({
+    page,
+  }) => {
+    const { seriesId, meetingId, stamp } = await createMeeting();
+    seriesToDelete.push(seriesId);
+    const title = `File the expense report ${stamp}`;
+    const suggestionId = await seedSuggestion(seriesId, meetingId, {
+      title,
+      due_date: "2026-11-25",
+    });
+
+    const response = await page.request.patch(
+      reviewUrl(meetingId, suggestionId),
+      {
+        data: {
+          action: "accept",
+          owner_user_id: TEST_USER_ID,
+          due_date: "2026-11-27",
+        },
+      },
+    );
+    expect(response.status()).toBe(200);
+    expect(
+      await rest(`issues?series_id=eq.${seriesId}&select=title,due_date`),
+    ).toEqual([{ title, due_date: "2026-11-27" }]);
+
+    await page.goto("/actions");
+    await waitForApp(page);
+    const row = page
+      .getByRole("link", { name: title, exact: true })
+      .locator("xpath=..");
+    await expect(row.getByText("Nov 27", { exact: true })).toBeVisible({
+      timeout: 20_000,
+    });
+    await page.reload();
+    await waitForApp(page);
+    await expect(row.getByText("Nov 27", { exact: true })).toBeVisible({
+      timeout: 20_000,
+    });
+  });
+
+  test("choosingNoDate_clearsTheAIsGuess", async ({ request }) => {
+    const { seriesId, meetingId, stamp } = await createMeeting();
+    seriesToDelete.push(seriesId);
+    const title = `Call the printer ${stamp}`;
+    const suggestionId = await seedSuggestion(seriesId, meetingId, {
+      title,
+      due_date: "2026-11-25",
+    });
+
+    const response = await request.patch(reviewUrl(meetingId, suggestionId), {
+      data: { action: "accept", due_date: null },
+    });
+
+    expect(response.status()).toBe(200);
+    expect(
+      await rest(`issues?series_id=eq.${seriesId}&select=title,due_date`),
+    ).toEqual([{ title, due_date: null }]);
+  });
+
+  test("skippingAnItem_neverPutsItOnTheBoardAndItLeavesTheMacQueue", async ({
+    request,
+  }) => {
+    const { seriesId, meetingId, stamp } = await createMeeting();
+    seriesToDelete.push(seriesId);
+    const skipped = await seedSuggestion(seriesId, meetingId, {
+      title: `Repaint the lobby ${stamp}`,
+    });
+    const kept = await seedSuggestion(seriesId, meetingId, {
+      title: `Fix the door ${stamp}`,
+    });
+    expect((await queuedSuggestionIds(meetingId)).sort()).toEqual(
+      [skipped, kept].sort(),
+    );
+
+    const response = await request.patch(reviewUrl(meetingId, skipped), {
+      data: { action: "reject" },
+    });
+
+    expect(response.status()).toBe(200);
+    expect((await response.json()).code).toBe("saved");
+    expect(await suggestionStatus(skipped)).toBe("rejected");
+    expect(await seriesIssues(seriesId)).toEqual([]);
+    expect(await queuedSuggestionIds(meetingId)).toEqual([kept]);
+  });
+
+  test("skippingAfterAKeepOnTheWeb_saysAlreadyReviewedAndTheItemStays", async ({
+    request,
+  }) => {
+    const { seriesId, meetingId, stamp } = await createMeeting();
+    seriesToDelete.push(seriesId);
+    const title = `Renew the parking permit ${stamp}`;
+    const suggestionId = await seedSuggestion(seriesId, meetingId, { title });
+    expect(
+      (
+        await request.patch(reviewUrl(meetingId, suggestionId), {
+          data: { action: "accept" },
+        })
+      ).status(),
+    ).toBe(200);
+
+    const response = await request.patch(reviewUrl(meetingId, suggestionId), {
+      data: { action: "reject" },
+    });
+
+    expect(response.status()).toBe(409);
+    expect(await response.json()).toMatchObject({
+      code: "already_reviewed",
+      error: "AI suggestion has already been reviewed.",
+    });
     expect((await seriesIssues(seriesId)).map((i) => i.title)).toEqual([title]);
     expect(await suggestionStatus(suggestionId)).toBe("accepted");
   });
 
-  test("keepingAnItemNamedForASeriesMember_assignsThemOnTheBoard", async ({
+  test("keepingAfterASkip_saysAlreadyReviewedAndAddsNothing", async ({
+    request,
+  }) => {
+    const { seriesId, meetingId, stamp } = await createMeeting();
+    seriesToDelete.push(seriesId);
+    const suggestionId = await seedSuggestion(seriesId, meetingId, {
+      title: `Cancel the old plan ${stamp}`,
+    });
+    expect(
+      (
+        await request.patch(reviewUrl(meetingId, suggestionId), {
+          data: { action: "reject" },
+        })
+      ).status(),
+    ).toBe(200);
+
+    const response = await request.patch(reviewUrl(meetingId, suggestionId), {
+      data: { action: "accept" },
+    });
+
+    expect(response.status()).toBe(409);
+    expect((await response.json()).code).toBe("already_reviewed");
+    expect(await seriesIssues(seriesId)).toEqual([]);
+    expect(await suggestionStatus(suggestionId)).toBe("rejected");
+  });
+
+  test("aSaveForAMeetingDeletedOnTheWeb_saysTheListWasUpdated", async ({
+    request,
+  }) => {
+    const { seriesId, meetingId, stamp } = await createMeeting();
+    seriesToDelete.push(seriesId);
+    const title = `Book the room ${stamp}`;
+    const suggestionId = await seedSuggestion(seriesId, meetingId, { title });
+
+    await rest(`meetings?id=eq.${meetingId}`, { method: "DELETE" });
+    const afterMeeting = await request.patch(
+      reviewUrl(meetingId, suggestionId),
+      { data: { action: "accept" } },
+    );
+    expect(afterMeeting.status()).toBe(404);
+    expect(await afterMeeting.json()).toMatchObject({
+      code: "suggestion_gone",
+      error: "AI suggestion not found",
+    });
+    expect(await seriesIssues(seriesId)).toEqual([]);
+
+    await rest(`meeting_series?id=eq.${seriesId}`, { method: "DELETE" });
+    const afterSeries = await request.patch(
+      reviewUrl(meetingId, suggestionId),
+      { data: { action: "accept" } },
+    );
+    expect(afterSeries.status()).toBe(404);
+    expect((await afterSeries.json()).code).toBe("suggestion_gone");
+    expect(
+      await rest(`issues?title=eq.${encodeURIComponent(title)}&select=id`),
+    ).toEqual([]);
+  });
+
+  test("everyRefusalTheMacReadsCarriesItsCode", async ({
+    request,
+    baseURL,
+  }) => {
+    const { seriesId, meetingId, stamp } = await createMeeting();
+    seriesToDelete.push(seriesId);
+    const plain = await seedSuggestion(seriesId, meetingId, {
+      title: `Plain item ${stamp}`,
+    });
+    const unlinked = await seedSuggestion(seriesId, meetingId, {
+      type: "status_update",
+      title: `Unlinked update ${stamp}`,
+      suggested_status: "resolved",
+    });
+    const [issue] = await rest("issues", {
+      method: "POST",
+      body: JSON.stringify({
+        series_id: seriesId,
+        raised_in_meeting_id: meetingId,
+        title: `Linked item ${stamp}`,
+        category: "action",
+      }),
+    });
+    const noTarget = await seedSuggestion(seriesId, meetingId, {
+      type: "status_update",
+      title: `No target ${stamp}`,
+      related_issue_number: issue.issue_number,
+      suggested_status: null,
+    });
+
+    const invalid = await request.patch(reviewUrl(meetingId, plain), {
+      data: { action: "maybe" },
+    });
+    expect([invalid.status(), (await invalid.json()).code]).toEqual([
+      400,
+      "invalid_request",
+    ]);
+
+    const signedOut = await playwrightRequest.newContext({
+      baseURL: new URL(baseURL ?? "http://localhost:3000").origin,
+      storageState: { cookies: [], origins: [] },
+    });
+    try {
+      const response = await signedOut.patch(reviewUrl(meetingId, plain), {
+        data: { action: "accept" },
+      });
+      expect(response.status()).toBe(401);
+      expect(await response.json()).toEqual({ error: "Not authenticated" });
+    } finally {
+      await signedOut.dispose();
+    }
+
+    const notLinked = await request.patch(reviewUrl(meetingId, unlinked), {
+      data: { action: "accept" },
+    });
+    expect(await notLinked.json()).toMatchObject({
+      code: "not_linked",
+      error: "This suggestion is not linked to an existing item.",
+    });
+    expect(notLinked.status()).toBe(400);
+
+    const missingTarget = await request.patch(reviewUrl(meetingId, noTarget), {
+      data: { action: "accept" },
+    });
+    expect(await missingTarget.json()).toMatchObject({
+      code: "no_target_status",
+      error: "This suggestion has no target status to apply.",
+    });
+    expect(missingTarget.status()).toBe(400);
+
+    expect(
+      (await seriesIssues(seriesId)).map((i) => [i.title, i.status]),
+    ).toEqual([[`Linked item ${stamp}`, "open"]]);
+    for (const id of [plain, unlinked, noTarget])
+      expect(await suggestionStatus(id)).toBe("pending");
+  });
+
+  test("keepingAnItemNamedForASeriesMember_showsTheirFullNameOnTheBoard", async ({
     request,
   }) => {
     const { seriesId, meetingId, stamp } = await createMeeting();
@@ -309,6 +640,34 @@ test.describe("Keeping AI action items from more than one place", () => {
     expect((await response.json()).code).toBe("saved");
     expect(await seriesIssues(seriesId)).toEqual([
       { title, owner_user_id: priya.userId, status: "open" },
+    ]);
+    expect(await issueOwners(seriesId)).toEqual([
+      { owner_name: "Priya Shah", owner_user_id: priya.userId },
+    ]);
+  });
+
+  test("aFirstNameSharedByTwoMembers_keepsTheItemUnassigned", async ({
+    request,
+  }) => {
+    const { seriesId, meetingId, stamp } = await createMeeting();
+    seriesToDelete.push(seriesId);
+    for (const name of ["Alex Kim", "Alex Roe"]) {
+      const member = await createMember(name);
+      membersToDelete.push(member);
+      await addParticipant(seriesId, member.userId, "participant");
+    }
+    const suggestionId = await seedSuggestion(seriesId, meetingId, {
+      title: `Update the roadmap ${stamp}`,
+      owner_name: "Alex",
+    });
+
+    const response = await request.patch(reviewUrl(meetingId, suggestionId), {
+      data: { action: "accept" },
+    });
+
+    expect(response.status()).toBe(200);
+    expect(await issueOwners(seriesId)).toEqual([
+      { owner_name: "Alex", owner_user_id: null },
     ]);
   });
 
@@ -528,7 +887,8 @@ test.describe("Keeping AI action items from more than one place", () => {
 
     const response = await keepAs(null, meetingId, suggestionId);
 
-    expect(response.ok).toBe(false);
+    expect(response.status).toBe(401);
+    expect((await response.json()).code).toBe("42501");
     expect(await seriesIssues(seriesId)).toEqual([]);
     expect(await suggestionStatus(suggestionId)).toBe("pending");
   });
@@ -548,9 +908,24 @@ test.describe("Keeping AI action items from more than one place", () => {
     );
 
     expect(response.ok).toBe(false);
-    expect((await response.json()).code).toBe("23502");
     expect(await seriesIssues(seriesId)).toEqual([]);
     expect(await suggestionStatus(suggestionId)).toBe("pending");
+  });
+
+  test("keepingDirectly_anItemThatIsGoneOrAlreadyReviewed_saysWhich", async () => {
+    const { seriesId, meetingId, stamp } = await createMeeting();
+    seriesToDelete.push(seriesId);
+    const suggestionId = await seedSuggestion(seriesId, meetingId, {
+      title: `Sweep the floor ${stamp}`,
+      status: "rejected",
+    });
+    const token = await signInToken("test@example.com");
+
+    const gone = await keepAs(token, meetingId, randomUUID());
+    expect(await gone.json()).toEqual({ code: "suggestion_gone" });
+    const reviewed = await keepAs(token, meetingId, suggestionId);
+    expect(await reviewed.json()).toEqual({ code: "already_reviewed" });
+    expect(await seriesIssues(seriesId)).toEqual([]);
   });
 
   test("aTeammateWhoDoesNotRunTheSeries_cannotKeep", async ({ baseURL }) => {

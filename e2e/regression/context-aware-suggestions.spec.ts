@@ -316,6 +316,10 @@ test.describe("Context-aware AI suggestions", () => {
         { data: { action: "accept" }, timeout: 20_000 }
       );
       expect(accept.status()).toBe(400);
+      expect(await accept.json()).toMatchObject({
+        code: "cannot_keep_duplicate",
+        error: "A duplicate warning can't be accepted. Dismiss it or open the existing item.",
+      });
 
       // No duplicate item was created behind the warning.
       const dupIssues = await rest(
