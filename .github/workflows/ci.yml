@@ -94,6 +94,9 @@ jobs:
       - name: Verify owner matching
         run: pnpm test:owner-match
 
+      - name: Verify Mac window sign-in handoff
+        run: pnpm test:web-handoff
+
       - name: Device transcript contracts
         run: pnpm test:device-transcript
 

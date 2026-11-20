@@ -116,7 +116,8 @@
     "test:instance-config": "node --test scripts/verify-instance-config.test.mjs",
     "test:transcription-status-copy": "node --test scripts/verify-transcription-status-copy.test.mjs",
     "test:transcription-stall": "node --test scripts/verify-transcription-stall.test.mjs",
-    "test:series-invite": "node --test scripts/verify-series-invite.test.mjs"
+    "test:series-invite": "node --test scripts/verify-series-invite.test.mjs",
+    "test:web-handoff": "node --test scripts/verify-web-handoff.test.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
