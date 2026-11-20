@@ -296,6 +296,7 @@ export function useMeetingRecorder(meetingId: string): MeetingRecorder {
   // Cleanup on unmount: stop the mic, never leave a hot stream behind, and
   // suppress any in-flight onstop setState now that we are unmounting.
   React.useEffect(() => {
+    mountedRef.current = true;
     return () => {
       mountedRef.current = false;
       stopTicking();
