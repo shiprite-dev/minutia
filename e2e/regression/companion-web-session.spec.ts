@@ -159,8 +159,8 @@ async function mint(
   });
   expect(response.status(), (await response.text()).slice(0, 300)).toBe(200);
   const body = await response.json();
-  expect(Object.keys(body)).toEqual(["token_hash"]);
-  return body.token_hash as string;
+  expect(Object.keys(body)).toEqual(["handoff_id"]);
+  return body.handoff_id as string;
 }
 
 async function signedOutWindow(browser: Browser, baseURL: string) {
@@ -244,12 +244,12 @@ test.describe("Mac window sign-in handoff", () => {
     baseURL,
   }) => {
     const { nonce, digest } = newNonce();
-    const tokenHash = await mint(api!, account!.session.access_token, digest);
+    const handoffId = await mint(api!, account!.session.access_token, digest);
     const { context, page } = await signedOutWindow(browser, baseURL!);
     contexts.push(context);
 
     await openMacWindow(page, baseURL!, {
-      token_hash: tokenHash,
+      handoff_id: handoffId,
       nonce,
       next: `/series/${account!.seriesId}/meetings/${account!.meetingId}`,
     });
@@ -259,19 +259,19 @@ test.describe("Mac window sign-in handoff", () => {
     await expectOnMeeting(page, account!);
 
     const [row] = await rest(
-      `companion_web_handoffs?user_id=eq.${account!.userId}&select=token_digest,used_at`,
+      `companion_web_handoffs?user_id=eq.${account!.userId}&select=handoff_digest,used_at`,
     );
-    expect(row.token_digest).toBe(
-      createHash("sha256").update(tokenHash).digest("hex"),
+    expect(row.handoff_digest).toBe(
+      createHash("sha256").update(handoffId).digest("hex"),
     );
     expect(row.used_at).not.toBeNull();
   });
 
   test("aUsedHandoffCannotBeReplayed", async ({ browser, baseURL }) => {
     const { nonce, digest } = newNonce();
-    const tokenHash = await mint(api!, account!.session.access_token, digest);
+    const handoffId = await mint(api!, account!.session.access_token, digest);
     const form = {
-      token_hash: tokenHash,
+      handoff_id: handoffId,
       nonce,
       next: `/series/${account!.seriesId}/meetings/${account!.meetingId}`,
     };
@@ -289,13 +289,13 @@ test.describe("Mac window sign-in handoff", () => {
 
   test("aWrongNonceIsRefused", async ({ browser, baseURL }) => {
     const { nonce, digest } = newNonce();
-    const tokenHash = await mint(api!, account!.session.access_token, digest);
+    const handoffId = await mint(api!, account!.session.access_token, digest);
     const next = `/series/${account!.seriesId}/meetings/${account!.meetingId}`;
 
     const wrong = await signedOutWindow(browser, baseURL!);
     contexts.push(wrong.context);
     await openMacWindow(wrong.page, baseURL!, {
-      token_hash: tokenHash,
+      handoff_id: handoffId,
       nonce: newNonce().nonce,
       next,
     });
@@ -304,7 +304,7 @@ test.describe("Mac window sign-in handoff", () => {
     const right = await signedOutWindow(browser, baseURL!);
     contexts.push(right.context);
     await openMacWindow(right.page, baseURL!, {
-      token_hash: tokenHash,
+      handoff_id: handoffId,
       nonce,
       next,
     });
@@ -316,14 +316,14 @@ test.describe("Mac window sign-in handoff", () => {
     baseURL,
   }) => {
     const { nonce, digest } = newNonce();
-    const tokenHash = await mint(api!, account!.session.access_token, digest);
+    const handoffId = await mint(api!, account!.session.access_token, digest);
     const next = `/series/${account!.seriesId}/meetings/${account!.meetingId}`;
     const victim = await signedOutWindow(browser, baseURL!);
     contexts.push(victim.context);
 
     await victim.page.setContent(
       `<form method="POST" action="${new URL("/auth/companion-session", baseURL!).href}">
-        <input name="token_hash" value="${tokenHash}"><input name="nonce" value="${nonce}">
+        <input name="handoff_id" value="${handoffId}"><input name="nonce" value="${nonce}">
         <input name="next" value="${next}"><button>Go</button></form>`,
     );
     await victim.page.getByRole("button", { name: "Go" }).click();
@@ -332,7 +332,7 @@ test.describe("Mac window sign-in handoff", () => {
     const mac = await signedOutWindow(browser, baseURL!);
     contexts.push(mac.context);
     await openMacWindow(mac.page, baseURL!, {
-      token_hash: tokenHash,
+      handoff_id: handoffId,
       nonce,
       next,
     });
@@ -341,11 +341,11 @@ test.describe("Mac window sign-in handoff", () => {
 
   test("aBrowserSessionCannotMintAHandoff", async ({ browser, baseURL }) => {
     const { nonce, digest } = newNonce();
-    const tokenHash = await mint(api!, account!.session.access_token, digest);
+    const handoffId = await mint(api!, account!.session.access_token, digest);
     const signedIn = await signedOutWindow(browser, baseURL!);
     contexts.push(signedIn.context);
     await openMacWindow(signedIn.page, baseURL!, {
-      token_hash: tokenHash,
+      handoff_id: handoffId,
       nonce,
       next: `/series/${account!.seriesId}/meetings/${account!.meetingId}`,
     });
@@ -377,11 +377,11 @@ test.describe("Mac window sign-in handoff", () => {
     baseURL,
   }) => {
     const { digest } = newNonce();
-    const tokenHash = await mint(api!, account!.session.access_token, digest);
+    const handoffId = await mint(api!, account!.session.access_token, digest);
     const { context, page } = await signedOutWindow(browser, baseURL!);
     contexts.push(context);
 
-    await page.goto(`/auth/callback?token_hash=${tokenHash}&type=magiclink`);
+    await page.goto(`/auth/callback?token_hash=${handoffId}&type=magiclink`);
 
     await expect(page).toHaveURL(
       (url) => url.pathname === "/login" && url.search === "?error=auth",
@@ -389,68 +389,81 @@ test.describe("Mac window sign-in handoff", () => {
     expect(await sessionCookies(context)).toEqual([]);
   });
 
-  test("backToBackHandoffs_onlyTheNewestSignInLinkWorks", async ({
+  test("aHandoffIdAloneCannotSignInAtTheSignInServer", async () => {
+    const handoffId = await mint(api!, account!.session.access_token, newNonce().digest);
+
+    const verify = await fetch(`${SUPABASE_URL}/auth/v1/verify`, {
+      method: "POST",
+      headers: { apikey: ANON_KEY, "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "magiclink", token_hash: handoffId }),
+    });
+
+    expect(verify.status).toBe(403);
+    expect(await verify.json()).not.toHaveProperty("access_token");
+  });
+
+  test("aForeignOriginSubmitWithoutFetchMetadataIsRefused", async ({ baseURL }) => {
+    const { nonce, digest } = newNonce();
+    const handoffId = await mint(api!, account!.session.access_token, digest);
+    const next = `/series/${account!.seriesId}/meetings/${account!.meetingId}`;
+
+    const forged = await api!.post("/auth/companion-session", {
+      headers: { Origin: "https://evil.example.com" },
+      form: { handoff_id: handoffId, nonce, next },
+      maxRedirects: 0,
+    });
+
+    expect(forged.status()).toBe(303);
+    expect(forged.headers()["location"]).toBe(`${new URL(baseURL!).origin}/login`);
+    expect(forged.headers()["set-cookie"] ?? "").not.toContain("-auth-token");
+    const [row] = await rest(`companion_web_handoffs?user_id=eq.${account!.userId}&select=used_at`);
+    expect(row.used_at).toBeNull();
+  });
+
+  test("backToBackHandoffsAllWork_andRedeemingOneEndsOtherOutstandingSignInLinks", async ({
     browser,
     baseURL,
   }) => {
     const next = `/series/${account!.seriesId}/meetings/${account!.meetingId}`;
-    const first = newNonce();
-    const second = newNonce();
-    const firstToken = await mint(
-      api!,
-      account!.session.access_token,
-      first.digest,
-    );
-    const secondToken = await mint(
-      api!,
-      account!.session.access_token,
-      second.digest,
-    );
+    const nonces = [newNonce(), newNonce(), newNonce()];
+    const handoffs: string[] = [];
+    for (const n of nonces) handoffs.push(await mint(api!, account!.session.access_token, n.digest));
 
-    const firstWindow = await signedOutWindow(browser, baseURL!);
-    contexts.push(firstWindow.context);
-    await openMacWindow(firstWindow.page, baseURL!, {
-      token_hash: firstToken,
-      nonce: first.nonce,
-      next,
-    });
-    await expectSignedOutOnLogin(firstWindow.page, firstWindow.context);
+    const first = await signedOutWindow(browser, baseURL!);
+    contexts.push(first.context);
+    await openMacWindow(first.page, baseURL!, { handoff_id: handoffs[0], nonce: nonces[0].nonce, next });
+    await expectOnMeeting(first.page, account!);
 
-    const secondWindow = await signedOutWindow(browser, baseURL!);
-    contexts.push(secondWindow.context);
-    await openMacWindow(secondWindow.page, baseURL!, {
-      token_hash: secondToken,
-      nonce: second.nonce,
-      next,
-    });
-    await expectOnMeeting(secondWindow.page, account!);
-
-    const third = newNonce();
-    const thirdToken = await mint(
-      api!,
-      account!.session.access_token,
-      third.digest,
-    );
-    const macSignIn = await secondWindow.context.request.post(
-      "/api/companion/authorize",
-    );
+    const macSignIn = await first.context.request.post("/api/companion/authorize");
     expect(macSignIn.status()).toBe(200);
     const macToken = (await macSignIn.json()).token_hash as string;
-
-    const thirdWindow = await signedOutWindow(browser, baseURL!);
-    contexts.push(thirdWindow.context);
-    await openMacWindow(thirdWindow.page, baseURL!, {
-      token_hash: thirdToken,
-      nonce: third.nonce,
-      next,
-    });
-    await expectSignedOutOnLogin(thirdWindow.page, thirdWindow.context);
-
-    const macVerify = await fetch(`${SUPABASE_URL}/auth/v1/verify`, {
+    const recovery = await fetch(`${SUPABASE_URL}/auth/v1/admin/generate_link`, {
       method: "POST",
-      headers: { apikey: ANON_KEY, "Content-Type": "application/json" },
-      body: JSON.stringify({ type: "magiclink", token_hash: macToken }),
+      headers: serviceHeaders(),
+      body: JSON.stringify({ type: "recovery", email: account!.email }),
     });
-    expect(macVerify.status).toBe(200);
+    expect(recovery.ok).toBeTruthy();
+    const recoveryToken = (await recovery.json()).hashed_token as string;
+
+    const second = await signedOutWindow(browser, baseURL!);
+    contexts.push(second.context);
+    await openMacWindow(second.page, baseURL!, { handoff_id: handoffs[1], nonce: nonces[1].nonce, next });
+    await expectOnMeeting(second.page, account!);
+
+    const verify = async (type: string, token_hash: string) =>
+      (
+        await fetch(`${SUPABASE_URL}/auth/v1/verify`, {
+          method: "POST",
+          headers: { apikey: ANON_KEY, "Content-Type": "application/json" },
+          body: JSON.stringify({ type, token_hash }),
+        })
+      ).status;
+    expect(await verify("magiclink", macToken)).toBe(403);
+    expect(await verify("recovery", recoveryToken)).toBe(403);
+
+    const third = await signedOutWindow(browser, baseURL!);
+    contexts.push(third.context);
+    await openMacWindow(third.page, baseURL!, { handoff_id: handoffs[2], nonce: nonces[2].nonce, next });
+    await expectOnMeeting(third.page, account!);
   });
 });

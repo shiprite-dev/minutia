@@ -158,7 +158,7 @@ export const deferredRoutes = {
 
   // --- Non-/api route handlers (public, no session authz) -------------------
   "/auth/callback": "public Supabase auth code->session-cookie exchange (authed by OAuth code, not session); redirect flow, deferred",
-  "/auth/companion-session": "public one-time handoff POST -> session-cookie exchange (authed by token + nonce, not session); covered by scripts/verify-web-handoff.test.mjs; redirect flow, deferred",
+  "/auth/companion-session": "public one-time handoff POST -> session-cookie exchange (authed by one-time handoff id + nonce, not session); covered by scripts/verify-web-handoff.test.mjs; redirect flow, deferred",
   "/serwist/[path]": "public PWA service-worker script route (Serwist); static asset, no session authz, deferred",
 };
 

@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
@@ -25,8 +26,8 @@ function isRateLimited(userId: string): boolean {
 const notAuthenticated = () =>
   NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
-// Mints a one-time sign-in for the Mac app's own web window. Bearer only: a browser cookie
-// session must never be able to mint a token that signs another browser in.
+// Issues a one-time handoff for the Mac app's own web window. Bearer only: a browser cookie
+// session must never be able to mint a handoff that signs another browser in.
 export async function POST(request: Request) {
   const cookieStore = await cookies();
   if (cookieStore.getAll().some((cookie) => cookie.name.includes("-auth-token"))) {
@@ -66,23 +67,15 @@ export async function POST(request: Request) {
     );
   }
 
-  const { data, error } = await admin.auth.admin.generateLink({
-    type: "magiclink",
-    email: user.email,
-  });
-  const tokenHash = data?.properties?.hashed_token;
-  if (error || !tokenHash) {
-    return NextResponse.json({ error: "Couldn't open the meeting window" }, { status: 500 });
-  }
-
+  const handoffId = randomBytes(32).toString("base64url");
   const { error: insertError } = await admin.from("companion_web_handoffs").insert({
     user_id: user.id,
-    token_digest: sha256Hex(tokenHash),
+    handoff_digest: sha256Hex(handoffId),
     nonce_digest: nonceDigest,
   });
   if (insertError) {
     return NextResponse.json({ error: "Couldn't open the meeting window" }, { status: 500 });
   }
 
-  return NextResponse.json({ token_hash: tokenHash });
+  return NextResponse.json({ handoff_id: handoffId });
 }
