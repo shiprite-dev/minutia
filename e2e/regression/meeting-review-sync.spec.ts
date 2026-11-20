@@ -608,6 +608,42 @@ test.describe("Keeping AI action items from more than one place", () => {
   });
 
   test.describe("with the meeting page open", () => {
+    type Frame = { topic: string; event: string; text: string };
+
+    function watchRealtime(page: Page, meetingId: string) {
+      const frames: Frame[] = [];
+      const topic = `realtime:meeting:${meetingId}:ai-suggestions`;
+      let markJoined: () => void = () => {};
+      const joined = new Promise<void>((resolve) => (markJoined = resolve));
+      page.on("websocket", (socket) => {
+        socket.on("framereceived", ({ payload }) => {
+          const text =
+            typeof payload === "string" ? payload : payload.toString();
+          let message: unknown;
+          try {
+            message = JSON.parse(text);
+          } catch {
+            return;
+          }
+          const [frameTopic, event, body] = Array.isArray(message)
+            ? [message[2], message[3], message[4]]
+            : [
+                (message as { topic: string }).topic,
+                (message as { event: string }).event,
+                (message as { payload: unknown }).payload,
+              ];
+          frames.push({ topic: frameTopic, event, text });
+          if (
+            frameTopic === topic &&
+            event === "phx_reply" &&
+            (body as { status?: string })?.status === "ok"
+          )
+            markJoined();
+        });
+      });
+      return { frames, joined };
+    }
+
     async function openMeetingWithNotes(
       page: Page,
       seriesId: string,
@@ -617,13 +653,16 @@ test.describe("Keeping AI action items from more than one place", () => {
         method: "PATCH",
         body: JSON.stringify({ notes_markdown: "Notes from the call" }),
       });
+      const realtime = watchRealtime(page, meetingId);
       await page.goto(`/series/${seriesId}/meetings/${meetingId}`);
       await waitForApp(page);
+      await realtime.joined;
       await page.evaluate(() => {
         (
           window as unknown as { openedBeforeReview: boolean }
         ).openedBeforeReview = true;
       });
+      return realtime;
     }
 
     const stillSamePage = (page: Page) =>
@@ -666,10 +705,75 @@ test.describe("Keeping AI action items from more than one place", () => {
           timeout: 5_000,
         },
       );
-      await expect(page.getByText(title, { exact: true }).first()).toBeVisible({
-        timeout: 5_000,
-      });
+      await expect(
+        page
+          .getByRole("region", { name: "Items raised" })
+          .getByText(title, { exact: true }),
+      ).toBeVisible({ timeout: 5_000 });
       expect(await stillSamePage(page)).toBe(true);
+    });
+
+    test("aSlowOlderListResponse_neverBringsBackAnItemAlreadyKept", async ({
+      page,
+      baseURL,
+    }) => {
+      const { seriesId, meetingId, stamp } = await createMeeting();
+      seriesToDelete.push(seriesId);
+      const title = `Order the banners ${stamp}`;
+      const suggestionId = await seedSuggestion(seriesId, meetingId, { title });
+      await openMeetingWithNotes(page, seriesId, meetingId);
+      const suggestions = page.getByRole("region", { name: "AI suggestions" });
+      const row = suggestions.locator(`input[value="${title}"]`);
+      await expect(row).toBeVisible({ timeout: 5_000 });
+
+      let release: () => void = () => {};
+      const held = new Promise<void>((resolve) => (release = resolve));
+      let markStale: () => void = () => {};
+      const staleFetched = new Promise<void>(
+        (resolve) => (markStale = resolve),
+      );
+      await page.route(
+        `**/api/meetings/${meetingId}/suggestions`,
+        async (route) => {
+          const stale = await route.fetch();
+          markStale();
+          await held;
+          await route.fulfill({ response: stale });
+        },
+        { times: 1 },
+      );
+      await rest(`meeting_ai_suggestions?id=eq.${suggestionId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ confidence: 0.8 }),
+      });
+      await staleFetched;
+
+      const kept = await fetch(
+        `${baseURL}${reviewUrl(meetingId, suggestionId)}`,
+        {
+          method: "PATCH",
+          headers: {
+            Authorization: `Bearer ${await signInToken("test@example.com")}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ action: "accept" }),
+        },
+      );
+      expect(kept.status).toBe(200);
+      await expect(row).toHaveCount(0, { timeout: 5_000 });
+
+      const staleResponse = page.waitForResponse((r) =>
+        r.url().endsWith(`/api/meetings/${meetingId}/suggestions`),
+      );
+      release();
+      await (await staleResponse).finished();
+      await page.evaluate(
+        () =>
+          new Promise((resolve) =>
+            requestAnimationFrame(() => requestAnimationFrame(resolve)),
+          ),
+      );
+      await expect(row).toHaveCount(0);
     });
 
     test("aReRunOfTheList_updatesThePageWithoutReload", async ({ page }) => {
@@ -720,7 +824,10 @@ test.describe("Keeping AI action items from more than one place", () => {
       });
       await rest(`meetings?id=eq.${meetingId}`, {
         method: "PATCH",
-        body: JSON.stringify({ suggestions_status: "ready" }),
+        body: JSON.stringify({
+          suggestions_status: "ready",
+          suggestions_status_at: new Date().toISOString(),
+        }),
       });
 
       await expect(suggestions.locator(`input[value="${title}"]`)).toHaveCount(
@@ -732,51 +839,57 @@ test.describe("Keeping AI action items from more than one place", () => {
       expect(await stillSamePage(page)).toBe(true);
     });
 
-    test("aDeleteInAnotherMeeting_doesNotRefreshThisPage", async ({ page }) => {
+    test("aDeleteInAnotherMeeting_neverReachesThisPage", async ({ page }) => {
       const mine = await createMeeting();
       const other = await createMeeting();
       seriesToDelete.push(mine.seriesId, other.seriesId);
       await seedSuggestion(mine.seriesId, mine.meetingId, {
         title: `Mine ${mine.stamp}`,
       });
-      await seedSuggestion(other.seriesId, other.meetingId, {
-        title: `Other ${other.stamp}`,
-      });
-      await openMeetingWithNotes(page, mine.seriesId, mine.meetingId);
+      const otherSuggestionId = await seedSuggestion(
+        other.seriesId,
+        other.meetingId,
+        { title: `Other ${other.stamp}` },
+      );
+      const realtime = await openMeetingWithNotes(
+        page,
+        mine.seriesId,
+        mine.meetingId,
+      );
       const suggestions = page.getByRole("region", { name: "AI suggestions" });
       await expect(
         suggestions.locator(`input[value="Mine ${mine.stamp}"]`),
       ).toBeVisible({ timeout: 5_000 });
 
-      const refetches: string[] = [];
-      page.on("request", (request) => {
-        if (
-          request.method() === "GET" &&
-          request.url().includes(`/api/meetings/${mine.meetingId}/suggestions`)
-        )
-          refetches.push(request.url());
-      });
-      await expect
-        .poll(
-          async () => {
-            const before = refetches.length;
-            await page.waitForTimeout(4_000);
-            return refetches.length === before;
-          },
-          { timeout: 30_000 },
-        )
-        .toBe(true);
-      const settled = refetches.length;
-
       await rest(`meeting_ai_suggestions?meeting_id=eq.${other.meetingId}`, {
         method: "DELETE",
       });
-      await page.waitForTimeout(3_000);
+      const sentinel = `Sentinel ${randomUUID()}`;
+      await rest(`meetings?id=eq.${mine.meetingId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ notes_markdown: sentinel }),
+      });
 
-      expect(refetches.length).toBe(settled);
+      await expect
+        .poll(() => realtime.frames.some((f) => f.text.includes(sentinel)), {
+          timeout: 10_000,
+        })
+        .toBe(true);
+      const beforeSentinel = realtime.frames.slice(
+        0,
+        realtime.frames.findIndex((f) => f.text.includes(sentinel)),
+      );
+      expect(
+        beforeSentinel.filter(
+          (f) =>
+            f.text.includes(other.meetingId) ||
+            f.text.includes(otherSuggestionId),
+        ),
+      ).toEqual([]);
       await expect(
         suggestions.locator(`input[value="Mine ${mine.stamp}"]`),
       ).toBeVisible();
+      expect(await stillSamePage(page)).toBe(true);
     });
   });
 });
