@@ -12,7 +12,7 @@ const features = [
   {
     title: "Live capture",
     description:
-      "Capture issues, decisions, and action items as they happen — during the meeting, not after.",
+      "Capture issues, decisions, and action items as they happen: during the meeting, not after.",
   },
   {
     title: "OIL board",
@@ -43,13 +43,13 @@ export default function LandingPage() {
           Stop losing track of meeting outcomes.
         </h1>
         <p className="mt-6 text-lg text-ink-2 sm:text-xl">
-          Minutia is the Outstanding Issues Log for recurring meetings — a
+          Minutia is the Outstanding Issues Log for recurring meetings: a
           durable record of decisions, action items, and follow-ups that never
           disappears into a forgotten doc.
         </p>
         <div className="mt-10 flex items-center justify-center">
           <Link
-            href="/login?mode=signup"
+            href="/signup"
             className="inline-flex items-center gap-2 rounded-md bg-ink px-6 py-3 text-sm font-medium text-paper transition-colors hover:bg-ink-2"
           >
             Get started free
@@ -104,7 +104,7 @@ export default function LandingPage() {
           </p>
           <div className="mt-8">
             <Link
-              href="/login?mode=signup"
+              href="/signup"
               className="inline-flex items-center gap-2 rounded-md bg-accent px-6 py-3 text-sm font-medium text-paper transition-colors hover:bg-accent-hover"
             >
               Get started free

@@ -305,95 +305,97 @@ export function SeriesDetailContent({ seriesId }: SeriesDetailContentProps) {
           </div>
         )}
 
-        <section className="mb-8 rounded-lg bg-card px-4 py-4 shadow-[var(--shadow-raised)]">
-          <div className="mb-3 flex items-start justify-between gap-3">
-            <div>
-              <h2 className="font-display text-lg font-medium text-ink">
-                Ask this series
-              </h2>
-              <p className="mt-1 text-xs text-ink-3">
-                Query this series only. Answers cite the meeting memory that supports them.
-              </p>
+        {sortedMeetings.length > 0 && (
+          <section className="mb-8 rounded-lg bg-card px-4 py-4 shadow-[var(--shadow-raised)]">
+            <div className="mb-3 flex items-start justify-between gap-3">
+              <div>
+                <h2 className="font-display text-lg font-medium text-ink">
+                  Ask this series
+                </h2>
+                <p className="mt-1 text-xs text-ink-3">
+                  Query this series only. Answers cite the meeting memory that supports them.
+                </p>
+              </div>
+              <Sparkles className="mt-1 size-4 shrink-0 text-accent-text" />
             </div>
-            <Sparkles className="mt-1 size-4 shrink-0 text-accent-text" />
-          </div>
 
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <Textarea
-              aria-label="Ask this series question"
-              value={askQuestion}
-              onChange={(event) => setAskQuestion(event.target.value)}
-              onKeyDown={(event) => {
-                if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
-                  event.preventDefault();
-                  void handleAskSeries();
-                }
-              }}
-              placeholder="Ask about decisions, owners, stale risks, or follow-ups..."
-              className="min-h-[72px] flex-1 text-sm"
-            />
-            <Button variant="accent"
-              type="button"
-              onClick={handleAskSeries}
-              disabled={!hasAccess || askingSeries || !askQuestion.trim()}
-              className="sm:self-start"
-            >
-              {askingSeries ? (
-                <Loader2 className="size-3.5 animate-spin" />
-              ) : (
-                <Sparkles className="size-3.5" />
-              )}
-              Ask series
-            </Button>
-          </div>
-
-          {!hasAccess && (
-            <AiUnavailableNotice className="mt-3" />
-          )}
-
-          {askError && (
-            <div className="mt-3 rounded-md border border-warn/30 bg-warn/10 px-3 py-2 text-sm text-ink">
-              {askError}
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Textarea
+                aria-label="Ask this series question"
+                value={askQuestion}
+                onChange={(event) => setAskQuestion(event.target.value)}
+                onKeyDown={(event) => {
+                  if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+                    event.preventDefault();
+                    void handleAskSeries();
+                  }
+                }}
+                placeholder="Ask about decisions, owners, stale risks, or follow-ups..."
+                className="min-h-[72px] flex-1 text-sm"
+              />
+              <Button variant="accent"
+                type="button"
+                onClick={handleAskSeries}
+                disabled={!hasAccess || askingSeries || !askQuestion.trim()}
+                className="sm:self-start"
+              >
+                {askingSeries ? (
+                  <Loader2 className="size-3.5 animate-spin" />
+                ) : (
+                  <Sparkles className="size-3.5" />
+                )}
+                Ask series
+              </Button>
             </div>
-          )}
 
-          {askAnswer && (
-            <div
-              role="region"
-              aria-label="Series answer"
-              className={cn(
-                "mt-4 rounded-md border px-4 py-3",
-                askAnswer.unsupported
-                  ? "border-warn/30 bg-warn/10"
-                  : "border-rule bg-paper"
-              )}
-            >
-              <h3 className="mb-2 text-sm font-semibold text-ink">Series answer</h3>
-              <p className="whitespace-pre-wrap text-sm leading-6 text-ink-2">
-                {askAnswer.answer || "The source context does not prove the answer."}
-              </p>
+            {!hasAccess && (
+              <AiUnavailableNotice className="mt-3" />
+            )}
 
-              {askAnswer.citations.length > 0 && (
-                <div className="mt-3">
-                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-4">
-                    Sources
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    {askAnswer.citations.map((citation) => (
-                      <Link
-                        key={`${citation.type}-${citation.source_id}`}
-                        href={citation.href}
-                        className="rounded-full border border-rule bg-card px-3 py-1 text-xs font-medium text-ink-2 transition-colors hover:border-accent hover:text-accent-text"
-                      >
-                        {citation.label}
-                      </Link>
-                    ))}
+            {askError && (
+              <div className="mt-3 rounded-md border border-warn/30 bg-warn/10 px-3 py-2 text-sm text-ink">
+                {askError}
+              </div>
+            )}
+
+            {askAnswer && (
+              <div
+                role="region"
+                aria-label="Series answer"
+                className={cn(
+                  "mt-4 rounded-md border px-4 py-3",
+                  askAnswer.unsupported
+                    ? "border-warn/30 bg-warn/10"
+                    : "border-rule bg-paper"
+                )}
+              >
+                <h3 className="mb-2 text-sm font-semibold text-ink">Series answer</h3>
+                <p className="whitespace-pre-wrap text-sm leading-6 text-ink-2">
+                  {askAnswer.answer || "The source context does not prove the answer."}
+                </p>
+
+                {askAnswer.citations.length > 0 && (
+                  <div className="mt-3">
+                    <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-4">
+                      Sources
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {askAnswer.citations.map((citation) => (
+                        <Link
+                          key={`${citation.type}-${citation.source_id}`}
+                          href={citation.href}
+                          className="rounded-full border border-rule bg-card px-3 py-1 text-xs font-medium text-ink-2 transition-colors hover:border-accent hover:text-accent-text"
+                        >
+                          {citation.label}
+                        </Link>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              )}
-            </div>
-          )}
-        </section>
+                )}
+              </div>
+            )}
+          </section>
+        )}
 
         {/* Meeting history timeline */}
         <section className="mb-8">

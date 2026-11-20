@@ -30,7 +30,7 @@ const MAC_UA =
 const LINUX_UA =
   "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36";
 const INSTALL_COPY =
-  "For the best experience, download and install the Mac app.";
+  "Get the Mac app to record and transcribe your meetings.";
 
 function serviceHeaders(prefer = "return=representation") {
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";

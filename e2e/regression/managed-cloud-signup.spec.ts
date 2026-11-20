@@ -10,6 +10,18 @@ const serviceHeaders = {
 test.describe("Managed cloud sign-up", () => {
   test.use({ storageState: { cookies: [], origins: [] } });
 
+  test("aSignedOutVisitorOpeningTheAppAddress_landsOnSignIn_notTheSelfHostPage", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    await page.waitForURL(/\/login$/);
+    await expect(page.getByRole("button", { name: "Sign in", exact: true })).toBeVisible();
+
+    await page.getByRole("link", { name: "Create an account", exact: true }).click();
+    await page.waitForURL(/\/signup$/);
+    await expect(page.getByText("Create your account to get started.", { exact: true })).toBeVisible();
+  });
+
   test("login leads with Google and links to a dedicated sign-up screen", async ({
     page,
   }) => {

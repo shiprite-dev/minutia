@@ -70,6 +70,7 @@ import { CapacityNudge } from "@/components/minutia/capacity-nudge";
 import { WidgetCanvas } from "@/components/minutia/widgets/widget-canvas";
 import { AddWidgetButton } from "@/components/minutia/widgets/add-widget";
 import { UpgradeConfirmation } from "@/components/minutia/upgrade-confirmation";
+import { CreateSeriesDialog } from "@/components/minutia/create-series-dialog";
 import { StaleItemsWidget } from "@/components/minutia/widgets/stale-items-widget";
 import { SeriesHealthWidget } from "@/components/minutia/widgets/series-health-widget";
 import { MeetingTriageWidget } from "@/components/minutia/widgets/meeting-triage-widget";
@@ -1309,7 +1310,6 @@ function WidgetRenderer({
 // ---------------------------------------------------------------------------
 
 export default function Dashboard() {
-  const router = useRouter();
   const issuesQuery = useIssues();
   const seriesQuery = useSeries();
   const meetingsQuery = useAllMeetings();
@@ -1365,6 +1365,7 @@ export default function Dashboard() {
   const widgetIds = React.useMemo(() => widgets.map((w) => w.id), [widgets]);
   const isFirstRun =
     !isLoading && failed.length === 0 && !!seriesList && !!issues && seriesList.length === 0 && issues.length === 0;
+  const [creatingSeries, setCreatingSeries] = React.useState(false);
 
   return (
     <div className="min-h-screen bg-paper" data-tour="oil-board">
@@ -1397,7 +1398,7 @@ export default function Dashboard() {
             </EmptyDescription>
             <EmptyContent>
               <Button variant="accent"
-                onClick={() => router.push("/series")}
+                onClick={() => setCreatingSeries(true)}
               >
                 Create your first series
               </Button>
@@ -1417,6 +1418,7 @@ export default function Dashboard() {
           </WidgetCanvas>
         )}
         {!isFirstRun && <QuickAddButton />}
+        <CreateSeriesDialog open={creatingSeries} onOpenChange={setCreatingSeries} />
       </div>
     </div>
   );

@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { motion } from "motion/react";
@@ -34,6 +35,7 @@ export function CreateSeriesDialog({
   open,
   onOpenChange,
 }: CreateSeriesDialogProps) {
+  const router = useRouter();
   const createSeries = useCreateSeries();
 
   const {
@@ -56,9 +58,10 @@ export function CreateSeriesDialog({
   const selectedCadence = watch("cadence");
 
   async function onSubmit(data: CreateSeriesInput) {
-    await createSeries.mutateAsync(data);
+    const series = await createSeries.mutateAsync(data);
     reset();
     onOpenChange(false);
+    router.push(`/series/${series.id}`);
   }
 
   function handleAttendeesChange(e: React.ChangeEvent<HTMLInputElement>) {

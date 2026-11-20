@@ -22,6 +22,7 @@ interface AppShellProps {
   signupName: string | null;
   setupCompleted: boolean;
   calendarConfigured: boolean;
+  calendarConnected: boolean;
   showMacApp: boolean;
   children: ReactNode;
 }
@@ -32,6 +33,7 @@ export function AppShell({
   signupName,
   setupCompleted,
   calendarConfigured,
+  calendarConnected,
   showMacApp,
   children,
 }: AppShellProps) {
@@ -71,6 +73,7 @@ export function AppShell({
           profile={profile}
           signupName={signupName}
           calendarConfigured={calendarConfigured}
+          calendarConnected={calendarConnected}
           showMacApp={showMacApp}
           workspace={organizations.find((o) => o.id === profile.current_organization_id)}
         />

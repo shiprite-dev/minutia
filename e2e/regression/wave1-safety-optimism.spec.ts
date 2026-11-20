@@ -101,14 +101,8 @@ async function createSeriesViaUI(page: Page, name: string) {
   await createDialog.getByRole("radio", { name: "Weekly", exact: true }).click();
   await createDialog.getByRole("button", { name: "Create series" }).click();
   await expect(createDialog).not.toBeVisible();
-
-  const card = page.locator('main a[href^="/series/"]').filter({ hasText: name });
-  await expect(card).toBeVisible();
-  await card.click();
-  // The card title is also an <h2>, so the heading check below is trivially
-  // true even pre-navigation; wait for the URL itself to prove we navigated.
   await page.waitForURL(/\/series\/[^/?#]+$/);
-  await expect(page.getByRole("heading", { name }).first()).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: name, exact: true })).toBeVisible();
 
   const seriesId = page.url().match(/\/series\/([^/?#]+)/)?.[1];
   if (!seriesId) throw new Error("Could not resolve created series id from URL");
