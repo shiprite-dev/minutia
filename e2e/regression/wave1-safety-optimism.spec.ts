@@ -3,7 +3,7 @@ import { test, expect, type APIRequestContext, type Page } from "@playwright/tes
 import { waitForApp } from "./seed-data";
 import { createDashboardIssue, deleteIssue, HAS_SERVICE_ROLE } from "./dashboard-helpers";
 
-// Wave 1 (Safety / Honesty / Optimism) functional journeys.
+// Safety, honesty and optimistic-update functional journeys.
 //
 // Every test here drives the real UI end to end and either creates its own
 // throwaway data (deleted at the end via service role) or is fully
@@ -115,7 +115,7 @@ async function createSeriesViaUI(page: Page, name: string) {
   return seriesId;
 }
 
-test.describe("Wave 1: Safety, Honesty, Optimism", () => {
+test.describe("Safety, honesty, optimistic updates", () => {
   test("delete series: cancel aborts, confirm deletes", async ({ page, request }) => {
     test.skip(!HAS_SERVICE_ROLE, "Requires service role for cleanup safety net");
 

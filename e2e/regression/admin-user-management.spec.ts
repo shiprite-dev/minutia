@@ -230,7 +230,7 @@ test.describe("Admin user management", () => {
     await workspace
       .getByRole("button", { name: `Revoke invitation for ${inviteEmail}` })
       .click();
-    // Revoking is now confirm-gated (Wave 1 safety): confirm the AlertDialog.
+    // Revoking is now confirm-gated: confirm the AlertDialog.
     await page
       .getByRole("alertdialog")
       .getByRole("button", { name: "Revoke", exact: true })
@@ -249,7 +249,7 @@ test.describe("Admin user management", () => {
     await workspace
       .getByRole("button", { name: `Remove ${memberEmail} from workspace` })
       .click();
-    // Removing a member is now confirm-gated (Wave 1 safety): confirm the dialog.
+    // Removing a member is now confirm-gated: confirm the dialog.
     await page
       .getByRole("alertdialog")
       .getByRole("button", { name: "Remove", exact: true })

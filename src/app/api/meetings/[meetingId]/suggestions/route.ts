@@ -96,7 +96,7 @@ export async function POST(
     );
   }
 
-  // MIN-121: context-aware extraction lives in the shared generator so the
+  // context-aware extraction lives in the shared generator so the
   // transcribe pipeline can reuse it. The series history is what lets the model
   // deduplicate, detect resolutions, and flag contradictions.
   const outcome = await generateMeetingSuggestions(supabase, meetingId);

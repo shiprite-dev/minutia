@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 import { STATUS_CONFIG } from "@/lib/constants";
 import type { IssueStatus, SuggestionType } from "@/lib/types";
 
-// MIN-121: the cross-meeting story, told in one glance. Every AI suggestion
+// the cross-meeting story, told in one glance. Every AI suggestion
 // wears a badge that says how it relates to the living OIL:
 //   NEW                       a genuinely new item
 //   UPDATES OIL-45 -> Resolved  this meeting moved an existing item

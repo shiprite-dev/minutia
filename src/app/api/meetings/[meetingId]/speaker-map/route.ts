@@ -74,7 +74,7 @@ export async function PATCH(
     );
   }
 
-  // MIN-121 extraction is keyed off transcript_raw, so a speaker correction can
+  // extraction is keyed off transcript_raw, so a speaker correction can
   // change owners/details it picked up. Gated on AI access: the correction above
   // already ran for any manager, this is only the best-effort re-extraction, so a
   // denied or unconfigured instance silently skips it rather than failing the PATCH

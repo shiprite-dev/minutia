@@ -116,7 +116,7 @@ assert(
   "Enhance route must reuse the shared fence-aware getTextFromOpenRouter so markdown-fenced provider JSON still parses"
 );
 
-// MIN-121: suggestion generation moved into the shared generator so the
+// suggestion generation moved into the shared generator so the
 // transcribe pipeline can reuse it. The route resolves the key and delegates;
 // the provider call + prompt contract now live in src/lib/ai/suggestions.ts.
 const suggestionsRoute = read("src/app/api/meetings/[meetingId]/suggestions/route.ts");

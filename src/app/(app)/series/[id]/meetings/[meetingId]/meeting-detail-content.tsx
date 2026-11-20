@@ -710,7 +710,7 @@ export function MeetingDetailContent({
   });
   const { data: seriesIssues } = useIssues(seriesId);
 
-  // MIN-121: resolve an OIL number to its issue link so a context badge
+  // resolve an OIL number to its issue link so a context badge
   // ("Updates OIL-45", "Duplicate of OIL-67") can deep-link to the item.
   const issueHrefByNumber = React.useMemo(() => {
     const map = new Map<number, string>();

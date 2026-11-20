@@ -155,14 +155,10 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml up
 
 For local development, visit `/setup` first when `instance_config.setup_completed` is false. In production, setup is protected by `MINUTIA_SETUP_TOKEN`.
 
-### Onboarding
+### First run
 
-Minutia has two onboarding layers:
-
-- **Instance setup** is one-time. `/setup` checks environment health, creates the first admin, saves optional instance settings, optionally seeds demo data, and stores completion in `instance_config.setup_completed`.
-- **User onboarding** is per user. Any signed-in user with `profiles.has_completed_onboarding = false` sees the three-step onboarding wizard: confirm display name, optionally create a first meeting series, then review a quick product tour. Completing or skipping it updates only that user's profile.
-
-The current tour is a lightweight checklist inside onboarding, not a persistent guided overlay. Keyboard shortcuts remain available from `?` after onboarding.
+- **Instance setup** happens once. `/setup` checks the environment, creates the first admin, saves optional instance settings, and can seed demo data.
+- **Welcome screen** appears once per person. It asks for a name if we don't have one, offers to connect Google Calendar and get the Mac app, and lets someone setting up a workspace on their own name their recurring meeting so they land inside it, ready to start. Every step is optional. Press `?` anytime for keyboard shortcuts.
 
 ### Troubleshooting
 
@@ -188,7 +184,6 @@ The current tour is a lightweight checklist inside onboarding, not a persistent 
 | AI required | No (opt-in) | Yes (core dependency) | No | No |
 | Calendar required | No | Yes | No | No |
 | Cross-meeting continuity | Core feature | Carry-forward | Manual linking | Manual copy-paste |
-| Price | Free (self-host) | $7-25/seat/mo | Free-$10/seat | Free |
 
 ## AI (opt-in)
 
@@ -221,12 +216,22 @@ Pairing takes one click from the browser: no separate account, no password to ty
 
 ## Roadmap
 
-### Planned
-- Scheduled email digests and pre-meeting nudges (Resend + SMTP)
-- `/api/v1/ingest` REST endpoint for transcript ingestion
-- Drag-to-reorder issue priority
-- PDF export
-- Enterprise SSO (SAML / OIDC)
+Where Minutia is headed, at a high level. Priorities shift with feedback, so [open an issue](https://github.com/shiprite-dev/minutia/issues) if something here matters to you.
+
+**Now: polish what's there**
+- Accessibility: readable contrast in light and dark mode, a high-contrast option, full keyboard and screen reader support
+- A smoother install-to-first-meeting path for new self-hosters and new teammates
+- An activity log so admins can see who changed what
+- Better offline and installable-app behavior on phones and laptops
+
+**Next: close the loop between meetings**
+- Scheduled email digests and a nudge before each meeting, so owners arrive with updates ready
+- Bring transcripts from any note-taking tool into your log through a simple API
+- PDF export for sharing a meeting record outside Minutia
+
+**Later: fit into how bigger teams work**
+- Single sign-on (SAML and OIDC)
+- Google Workspace: attach Drive files and Docs to issues and meetings
 
 ---
 
@@ -257,7 +262,7 @@ Pairing takes one click from the browser: no separate account, no password to ty
 | Auth | Supabase Auth (email/password, Google OAuth) |
 | State | TanStack React Query + Zustand |
 | Animation | Motion v12 |
-| Testing | Playwright (120+ E2E tests) |
+| Testing | Playwright end-to-end journeys (600+ tests) + node:test contract checks |
 
 ### Project Structure
 

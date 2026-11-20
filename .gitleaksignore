@@ -1,0 +1,7 @@
+# Public placeholder values, not secrets:
+# the documented Supabase self-host default SECRET_KEY_BASE in .env.example
+# (scripts/generate-self-host-env.mjs replaces it with a fresh random value),
+# and the published Supabase local-demo anon JWT.
+d5cc53bb38c45f4076aa3e80a7059fd7d329e040:.env.example:generic-api-key:127
+a3bafad5170353a2a355ca5a694bf2a7467469a0:.env.example:generic-api-key:127
+07d00eacb8b7cc73a6891f5298342b68f944e955:e2e/setup/auth.setup.ts:jwt:5

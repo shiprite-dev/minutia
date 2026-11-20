@@ -135,7 +135,11 @@ for (const file of [...sourceFiles("src"), ...sourceFiles("e2e")]) {
 const forbiddenLeaks = [
   [/minutia-(?:ops|cloud|hosted|gtm)\b/i, "a private sibling-repo name"],
   [/control[\s-]plane/i, "the internal 'control plane' architecture term"],
+  [/staging\.getminutia\.com/i, "a private staging hostname"],
+  [/\bmoat\b|\bcompetitors?\b/i, "internal strategy language"],
 ];
+// Committed migrations are immutable, so old ticket references there stay.
+const ticketRef = /\bMIN-\d+\b|\bE[12]\d\b|\bWave \d\b|\bG-TX\b/;
 const scanExtensions = /\.(tsx?|mjs|js|sql|md|ya?ml|sh|css)$/;
 const selfPath = "scripts/verify-oss-boundaries.mjs";
 const trackedFiles = execSync("git ls-files", { encoding: "utf8" })
@@ -149,7 +153,23 @@ for (const file of trackedFiles) {
       !pattern.test(contents),
       `${file} leaks ${label}; keep private-repo details out of the public repo`,
     );
+  }  if (!file.startsWith("supabase/migrations/")) {
+    assert.ok(
+      !ticketRef.test(contents),
+      `${file} leaks an internal ticket or planning reference (${contents.match(ticketRef)?.[0]}); describe the behavior instead`,
+    );
   }
+}
+
+// Internal planning artifacts (plans, specs, backlogs, agent instructions) live
+// in private repos. The public product roadmap belongs in README.md only.
+const internalPlanningPath =
+  /^(docs\/|\.claude\/|CLAUDE\.md$|AGENTS\.md$|GEMINI\.md$|tasks\.json$)|(^|\/)(roadmap|backlog)[^/]*$/i;
+for (const file of execSync("git ls-files", { encoding: "utf8" }).split("\n").filter(Boolean)) {
+  assert.ok(
+    !internalPlanningPath.test(file),
+    `${file} is an internal planning artifact; keep it out of the public repo (the product roadmap lives in README.md)`,
+  );
 }
 
 console.log("OSS self-host integrity verified");
