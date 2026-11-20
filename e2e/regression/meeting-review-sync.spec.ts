@@ -235,13 +235,32 @@ async function holdSuggestionRow(suggestionId: string) {
   let output = "";
   session.stdout.on("data", (chunk) => (output += chunk));
   session.stderr.on("data", (chunk) => (output += chunk));
+  session.on("error", (error) => (output += `spawn failed: ${error.message}`));
   const printed = (marker: string) =>
-    expect.poll(() => output.includes(marker), { timeout: 10_000 }).toBe(true);
-  session.stdin.write(
-    `begin;\nselect id from public.meeting_ai_suggestions where id = '${suggestionId}' for update;\n\\echo HELD\n`,
-  );
-  await printed("HELD");
+    expect
+      .poll(() => output, { timeout: 10_000 })
+      .toMatch(new RegExp(`(^|\\n)${marker}`));
+  const release = () => {
+    session.kill();
+    const pid = output.match(/^PID (\d+)$/m)?.[1];
+    if (pid)
+      spawnSync(
+        "docker",
+        ["exec", "-i", DB_CONTAINER, "psql", "-U", "postgres", "-tAq"],
+        { input: `select pg_terminate_backend(${pid});`, encoding: "utf8" },
+      );
+  };
+  try {
+    session.stdin.write(
+      `select 'PID ' || pg_backend_pid();\nbegin;\nselect id from public.meeting_ai_suggestions where id = '${suggestionId}' for update;\n\\echo HELD\n`,
+    );
+    await printed("HELD");
+  } catch (error) {
+    release();
+    throw error;
+  }
   return {
+    release,
     async commit(statement: string) {
       session.stdin.write(`${statement}\ncommit;\n\\echo DONE\n`);
       await printed("DONE");
@@ -340,21 +359,26 @@ test.describe("Keeping AI action items from more than one place", () => {
     const suggestionId = await seedSuggestion(seriesId, meetingId, { title });
 
     const lock = await holdSuggestionRow(suggestionId);
-    const keep = request.patch(reviewUrl(meetingId, suggestionId), {
-      data: { action: "accept" },
-    });
-    await expect
-      .poll(
-        () =>
-          sql(
-            "select count(*) from pg_stat_activity where wait_event_type = 'Lock' and query ilike '%keep_ai_suggestion%';",
-          ),
-        { timeout: 10_000 },
-      )
-      .toBe("1");
-    await lock.commit(
-      `update public.meeting_ai_suggestions set status = 'accepted', reviewed_at = now() where id = '${suggestionId}';`,
-    );
+    let keep: ReturnType<typeof request.patch> | undefined;
+    try {
+      keep = request.patch(reviewUrl(meetingId, suggestionId), {
+        data: { action: "accept" },
+      });
+      await expect
+        .poll(
+          () =>
+            sql(
+              "select count(*) from pg_stat_activity where wait_event_type = 'Lock' and query ilike '%keep_ai_suggestion%';",
+            ),
+          { timeout: 10_000 },
+        )
+        .toBe("1");
+      await lock.commit(
+        `update public.meeting_ai_suggestions set status = 'accepted', reviewed_at = now() where id = '${suggestionId}';`,
+      );
+    } finally {
+      lock.release();
+    }
 
     const response = await keep;
     expect(response.status()).toBe(409);
@@ -1016,7 +1040,22 @@ test.describe("Keeping AI action items from more than one place", () => {
             markJoined();
         });
       });
-      return { frames, joined };
+      const sentTopics: string[] = [];
+      page.on("websocket", (socket) => {
+        socket.on("framesent", ({ payload }) => {
+          const text =
+            typeof payload === "string" ? payload : payload.toString();
+          try {
+            const message = JSON.parse(text);
+            sentTopics.push(
+              Array.isArray(message) ? message[2] : message.topic,
+            );
+          } catch {
+            return;
+          }
+        });
+      });
+      return { frames, joined, sentTopics };
     }
 
     async function openMeetingWithNotes(
@@ -1149,6 +1188,144 @@ test.describe("Keeping AI action items from more than one place", () => {
           ),
       );
       await expect(row).toHaveCount(0);
+    });
+
+    test("savingNotesOnTheMeeting_doesNotReloadTheActionItemsList", async ({
+      page,
+    }) => {
+      const { seriesId, meetingId, stamp } = await createMeeting();
+      seriesToDelete.push(seriesId);
+      await rest(`meetings?id=eq.${meetingId}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          suggestions_status: "ready",
+          suggestions_status_at: "2026-11-20T09:00:00.000Z",
+        }),
+      });
+      const title = `Keep the list steady ${stamp}`;
+      await seedSuggestion(seriesId, meetingId, { title });
+      const realtime = await openMeetingWithNotes(page, seriesId, meetingId);
+      const suggestions = page.getByRole("region", { name: "AI suggestions" });
+      await expect(suggestions.locator(`input[value="${title}"]`)).toBeVisible({
+        timeout: 5_000,
+      });
+
+      const reloads: Promise<string>[] = [];
+      page.on("request", (request) => {
+        if (
+          request.method() === "GET" &&
+          new URL(request.url()).pathname ===
+            `/api/meetings/${meetingId}/suggestions`
+        )
+          reloads.push(
+            request.response().then(async (r) => (r ? await r.text() : "")),
+          );
+      });
+      const sentinel = `Sentinel ${randomUUID()}`;
+      for (const notes of [`First save ${stamp}`, sentinel]) {
+        await rest(`meetings?id=eq.${meetingId}`, {
+          method: "PATCH",
+          body: JSON.stringify({ notes_markdown: notes }),
+        });
+      }
+      await expect
+        .poll(() => realtime.frames.some((f) => f.text.includes(sentinel)), {
+          timeout: 10_000,
+        })
+        .toBe(true);
+
+      const follower = `Arrives after the notes ${stamp}`;
+      await seedSuggestion(seriesId, meetingId, { title: follower });
+      await expect(
+        suggestions.locator(`input[value="${follower}"]`),
+      ).toBeVisible({ timeout: 5_000 });
+
+      const bodies = await Promise.all(reloads);
+      expect(bodies).toHaveLength(1);
+      expect(bodies[0]).toContain(follower);
+      await expect(
+        suggestions.locator(`input[value="${title}"]`),
+      ).toBeVisible();
+      expect(await stillSamePage(page)).toBe(true);
+    });
+
+    test("aParticipantWhoDoesNotRunTheSeries_isNotSubscribedToReviewUpdates", async ({
+      browser,
+      baseURL,
+    }) => {
+      const { seriesId, meetingId, stamp } = await createMeeting();
+      seriesToDelete.push(seriesId);
+      const participant = await createMember("Pat Participant");
+      membersToDelete.push(participant);
+      await addParticipant(seriesId, participant.userId, "participant");
+      await rest(`profiles?id=eq.${participant.userId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ has_completed_onboarding: true }),
+      });
+      await fetch(`${SUPABASE_URL}/auth/v1/admin/users/${participant.userId}`, {
+        method: "PUT",
+        headers: serviceHeaders(),
+        body: JSON.stringify({
+          user_metadata: { name: "Pat Participant", setup_completed: true },
+        }),
+      });
+      await seedSuggestion(seriesId, meetingId, { title: `Hidden ${stamp}` });
+      const origin = new URL(baseURL ?? "http://localhost:3000").origin;
+      const context = await browser.newContext({
+        baseURL: origin,
+        storageState: {
+          cookies: [
+            {
+              name: "sb-127-auth-token",
+              value: participant.cookieValue,
+              domain: new URL(origin).hostname,
+              path: "/",
+              expires: Math.floor(Date.now() / 1000) + 3600,
+              httpOnly: false,
+              secure: false,
+              sameSite: "Lax",
+            },
+          ],
+          origins: [],
+        },
+      });
+      try {
+        const participantPage = await context.newPage();
+        const realtime = watchRealtime(participantPage, meetingId);
+        await participantPage.goto(`/series/${seriesId}/meetings/${meetingId}`);
+        await waitForApp(participantPage);
+        await expect(
+          participantPage.getByRole("heading", {
+            level: 1,
+            name: `Review sync session ${stamp}`,
+            exact: true,
+          }),
+        ).toBeVisible({ timeout: 20_000 });
+        await expect
+          .poll(
+            () =>
+              realtime.frames.some(
+                (f) =>
+                  f.topic === `realtime:meeting:${meetingId}:changes` &&
+                  f.event === "system",
+              ),
+            { timeout: 10_000 },
+          )
+          .toBe(true);
+
+        expect(
+          realtime.sentTopics.filter(
+            (t) => t === `realtime:meeting:${meetingId}:ai-suggestions`,
+          ),
+        ).toEqual([]);
+        expect(
+          realtime.frames.filter(
+            (f) => f.topic === `realtime:meeting:${meetingId}:ai-suggestions`,
+          ),
+        ).toEqual([]);
+      } finally {
+        await context.close();
+      }
     });
 
     test("aReRunOfTheList_updatesThePageWithoutReload", async ({ page }) => {

@@ -857,10 +857,13 @@ export function MeetingDetailContent({
 
   // Syncs with Supabase realtime so reviews made in another app show up here.
   // A meeting row write reloads the list only when the action-item status was stamped again.
-  const reviewsSuggestions = (participantRole === "owner" || participantRole === "facilitator") && hasAccess;
-  const suggestionsStatusAtRef = React.useRef<string | null | undefined>(undefined);
+  const reviewsSuggestions =
+    (participantRole === "owner" || participantRole === "facilitator") && hasAccess && !!meeting;
+  const suggestionsStatusAtRef = React.useRef<string | null>(null);
   React.useEffect(() => {
     if (!reviewsSuggestions) return;
+    suggestionsStatusAtRef.current =
+      queryClient.getQueryData<Meeting>(meetingKeys.detail(meetingId))?.suggestions_status_at ?? null;
     const supabase = createClient();
     const channel = supabase
       .channel(`meeting:${meetingId}:ai-suggestions`)
@@ -883,7 +886,7 @@ export function MeetingDetailContent({
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [reviewsSuggestions, meetingId, loadSuggestions]);
+  }, [reviewsSuggestions, meetingId, loadSuggestions, queryClient]);
 
   // Auto-flow the recap the moment recording stops and the fast lane is ready
   // (or the final transcript lands for non-webm browsers). Managers only, once.
