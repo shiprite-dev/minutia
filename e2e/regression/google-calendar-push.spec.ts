@@ -152,8 +152,8 @@ test.describe("Google Calendar push notifications", () => {
 
   test("creates an Events watch request with token, webhook address, and ttl", async () => {
     const originalFetch = globalThis.fetch;
-    let requestedUrl: URL | null = null;
-    let requestedBody: Record<string, unknown> | null = null;
+    let requestedUrl = null as URL | null;
+    let requestedBody = null as Record<string, unknown> | null;
 
     globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
       requestedUrl = new URL(String(input));
