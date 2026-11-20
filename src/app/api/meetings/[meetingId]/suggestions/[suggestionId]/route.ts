@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { userManagesSeries } from "@/lib/series/manage-access";
 import { matchSeriesMember } from "@/lib/ai/owner-match";
+import { isOpenForReview } from "@/lib/ai/review-claim";
 
 const reviewSchema = z.object({
   action: z.enum(["accept", "reject"]),
@@ -97,7 +98,7 @@ export async function PATCH(
     );
   }
 
-  if (suggestion.status !== "pending") {
+  if (!isOpenForReview(suggestion)) {
     return refuse(
       409,
       "already_reviewed",
@@ -114,7 +115,7 @@ export async function PATCH(
     body.due_date === undefined ? (suggestion.due_date ?? null) : body.due_date;
 
   if (body.action === "reject") {
-    const { data, error: updateError } = await supabase
+    const rejectUpdate = supabase
       .from("meeting_ai_suggestions")
       .update({
         title,
@@ -123,10 +124,16 @@ export async function PATCH(
         owner_name: ownerName,
         due_date: dueDate,
         status: "rejected",
+        reviewing_at: null,
         reviewed_at: reviewedAt,
       })
       .eq("id", suggestionId)
-      .eq("status", "pending")
+      .eq("status", suggestion.status);
+    const { data, error: updateError } = await (
+      suggestion.reviewing_at
+        ? rejectUpdate.eq("reviewing_at", suggestion.reviewing_at)
+        : rejectUpdate
+    )
       .select("*")
       .maybeSingle();
 
@@ -159,8 +166,13 @@ export async function PATCH(
     );
   }
 
-  const members = await loadSeriesMembers(suggestion.series_id);
-  if (body.owner_user_id && !members.some((m) => m.id === body.owner_user_id)) {
+  let membersLoad: ReturnType<typeof loadSeriesMembers> | undefined;
+  const seriesMembers = () =>
+    (membersLoad ??= loadSeriesMembers(suggestion.series_id));
+  if (
+    body.owner_user_id &&
+    !(await seriesMembers()).some((m) => m.id === body.owner_user_id)
+  ) {
     return refuse(
       400,
       "not_a_member",
@@ -187,12 +199,13 @@ export async function PATCH(
 
   const userId = user.id;
   let saved = false;
+  let landed = false;
   try {
     const response = await keep();
     saved = response.ok;
     return response;
   } finally {
-    if (!saved)
+    if (!saved && !landed)
       await supabase.rpc("release_ai_suggestion", {
         p_suggestion_id: suggestionId,
       });
@@ -271,6 +284,7 @@ export async function PATCH(
           "Failed to update the referenced item.",
         );
       }
+      landed = true;
 
       const { error: auditError } = await supabase
         .from("issue_updates")
@@ -302,10 +316,12 @@ export async function PATCH(
           due_date: dueDate,
           suggested_status: targetStatus,
           status: "accepted",
+          reviewing_at: null,
           reviewed_at: reviewedAt,
           created_issue_id: existing.id,
         })
         .eq("id", suggestionId)
+        .eq("status", "reviewing")
         .select("*")
         .single();
 
@@ -346,6 +362,7 @@ export async function PATCH(
           "Failed to create decision from AI suggestion.",
         );
       }
+      landed = true;
 
       const { data, error: updateError } = await supabase
         .from("meeting_ai_suggestions")
@@ -356,10 +373,12 @@ export async function PATCH(
           owner_name: ownerName,
           due_date: dueDate,
           status: "accepted",
+          reviewing_at: null,
           reviewed_at: reviewedAt,
           created_decision_id: decision.id,
         })
         .eq("id", suggestionId)
+        .eq("status", "reviewing")
         .select("*")
         .single();
 
@@ -378,6 +397,7 @@ export async function PATCH(
       });
     }
 
+    const members = await seriesMembers();
     const ownerUserId =
       body.owner_user_id ?? matchSeriesMember(ownerName, members);
     const issueOwnerName =
@@ -409,6 +429,7 @@ export async function PATCH(
         "Failed to create issue from AI suggestion.",
       );
     }
+    landed = true;
 
     const { data, error: updateError } = await supabase
       .from("meeting_ai_suggestions")
@@ -419,10 +440,12 @@ export async function PATCH(
         owner_name: ownerName,
         due_date: dueDate,
         status: "accepted",
+        reviewing_at: null,
         reviewed_at: reviewedAt,
         created_issue_id: issue.id,
       })
       .eq("id", suggestionId)
+      .eq("status", "reviewing")
       .select("*")
       .single();
 

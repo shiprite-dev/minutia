@@ -275,6 +275,7 @@ export interface MeetingAiSuggestion {
   related_issue_number: number | null;
   suggested_status: IssueStatus | null;
   status: "pending" | "reviewing" | "accepted" | "rejected";
+  reviewing_at: string | null;
   ai_model: string | null;
   ai_prompt_version: string | null;
   created_issue_id: string | null;

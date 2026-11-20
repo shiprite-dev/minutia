@@ -182,9 +182,13 @@ async function signInToken(email: string): Promise<string> {
   return (await token.json()).access_token;
 }
 
-async function claimAs(accessToken: string | null, suggestionId: string) {
+async function rpcAs(
+  fn: "claim_ai_suggestion" | "release_ai_suggestion",
+  accessToken: string | null,
+  suggestionId: string,
+) {
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
-  return fetch(`${SUPABASE_URL}/rest/v1/rpc/claim_ai_suggestion`, {
+  return fetch(`${SUPABASE_URL}/rest/v1/rpc/${fn}`, {
     method: "POST",
     headers: {
       apikey: anonKey,
@@ -194,6 +198,12 @@ async function claimAs(accessToken: string | null, suggestionId: string) {
     body: JSON.stringify({ p_suggestion_id: suggestionId }),
   });
 }
+
+const claimAs = (accessToken: string | null, suggestionId: string) =>
+  rpcAs("claim_ai_suggestion", accessToken, suggestionId);
+
+const secondsAgo = (seconds: number) =>
+  new Date(Date.now() - seconds * 1000).toISOString();
 
 const reviewUrl = (meetingId: string, suggestionId: string) =>
   `/api/meetings/${meetingId}/suggestions/${suggestionId}`;
@@ -503,5 +513,96 @@ test.describe("Keeping AI action items from more than one place", () => {
     expect(await teammateClaim.json()).toBe(false);
     expect(await seriesIssues(seriesId)).toEqual([]);
     expect(await suggestionStatus(suggestionId)).toBe("pending");
+  });
+
+  test("aTeammateWhoDoesNotRunTheSeries_cannotUnlockAKeepInProgress", async () => {
+    const { seriesId, meetingId, stamp } = await createMeeting();
+    seriesToDelete.push(seriesId);
+    const teammate = await createMember("Tom Team");
+    membersToDelete.push(teammate);
+    await addParticipant(seriesId, teammate.userId, "participant");
+    const suggestionId = await seedSuggestion(seriesId, meetingId, {
+      title: `Fix the projector ${stamp}`,
+    });
+    const ownerClaim = await claimAs(
+      await signInToken("test@example.com"),
+      suggestionId,
+    );
+    expect(await ownerClaim.json()).toBe(true);
+
+    await rpcAs(
+      "release_ai_suggestion",
+      await signInToken(teammate.email),
+      suggestionId,
+    );
+
+    expect(await suggestionStatus(suggestionId)).toBe("reviewing");
+  });
+
+  test("aKeepLeftHalfwayByACrashedSave_canBeKeptAgainAfterTwoMinutes", async ({
+    request,
+  }) => {
+    const { seriesId, meetingId, stamp } = await createMeeting();
+    seriesToDelete.push(seriesId);
+    const title = `Call the caterer ${stamp}`;
+    const suggestionId = await seedSuggestion(seriesId, meetingId, {
+      title,
+      status: "reviewing",
+      reviewing_at: secondsAgo(180),
+    });
+
+    const response = await request.patch(reviewUrl(meetingId, suggestionId), {
+      data: { action: "accept" },
+    });
+
+    expect(response.status()).toBe(200);
+    expect((await response.json()).code).toBe("saved");
+    expect((await seriesIssues(seriesId)).map((i) => i.title)).toEqual([title]);
+    expect(await suggestionStatus(suggestionId)).toBe("accepted");
+  });
+
+  test("aKeepStillSavingFromThirtySecondsAgo_isTurnedAway", async ({
+    request,
+  }) => {
+    const { seriesId, meetingId, stamp } = await createMeeting();
+    seriesToDelete.push(seriesId);
+    const suggestionId = await seedSuggestion(seriesId, meetingId, {
+      title: `Reserve parking ${stamp}`,
+      status: "reviewing",
+      reviewing_at: secondsAgo(30),
+    });
+
+    const response = await request.patch(reviewUrl(meetingId, suggestionId), {
+      data: { action: "accept" },
+    });
+
+    expect(response.status()).toBe(409);
+    expect(await response.json()).toMatchObject({
+      code: "already_reviewed",
+      error: "AI suggestion has already been reviewed.",
+    });
+    expect(await seriesIssues(seriesId)).toEqual([]);
+    expect(await suggestionStatus(suggestionId)).toBe("reviewing");
+  });
+
+  test("skippingAKeepLeftHalfwayByACrashedSave_recoversIt", async ({
+    request,
+  }) => {
+    const { seriesId, meetingId, stamp } = await createMeeting();
+    seriesToDelete.push(seriesId);
+    const suggestionId = await seedSuggestion(seriesId, meetingId, {
+      title: `Send the minutes ${stamp}`,
+      status: "reviewing",
+      reviewing_at: secondsAgo(180),
+    });
+
+    const response = await request.patch(reviewUrl(meetingId, suggestionId), {
+      data: { action: "reject" },
+    });
+
+    expect(response.status()).toBe(200);
+    expect((await response.json()).code).toBe("saved");
+    expect(await suggestionStatus(suggestionId)).toBe("rejected");
+    expect(await seriesIssues(seriesId)).toEqual([]);
   });
 });

@@ -88,6 +88,9 @@ jobs:
       - name: Verify owner matching
         run: pnpm test:owner-match
 
+      - name: Verify suggestion review route
+        run: pnpm test:suggestion-review-route
+
       - name: Device transcript contracts
         run: pnpm test:device-transcript
 
