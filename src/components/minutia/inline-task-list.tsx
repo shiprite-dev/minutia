@@ -329,7 +329,7 @@ function InlineTaskItem({
       {/* Open detail */}
       <PrefetchIssueLink
         issueId={issue.id}
-        className="shrink-0 flex items-center justify-center size-6 rounded-full text-ink-4 hover:text-accent hover:bg-paper-3 transition-colors opacity-0 group-hover:opacity-100"
+        className="shrink-0 flex items-center justify-center size-6 rounded-full text-ink-4 hover:text-accent-text hover:bg-paper-3 transition-colors opacity-0 group-hover:opacity-100"
         aria-label="Open issue detail"
       >
         <ExternalLink className="size-3" />
@@ -339,7 +339,7 @@ function InlineTaskItem({
       {issue.source === "calendar_auto_draft" && (
         <span
           title="Auto-drafted from a calendar event"
-          className="text-[10px] font-medium px-2 py-0.5 rounded-full shrink-0 bg-accent/10 text-accent"
+          className="text-[10px] font-medium px-2 py-0.5 rounded-full shrink-0 bg-accent/10 text-accent-text"
         >
           Draft
         </span>

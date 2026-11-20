@@ -220,7 +220,7 @@ function HeroWidget({
         {overdueCount > 0 && (
           <>
             <span className="text-ink-4">·</span>
-            <span className="text-accent font-medium">{overdueCount} overdue</span>
+            <span className="text-accent-text font-medium">{overdueCount} overdue</span>
           </>
         )}
         <span className="text-ink-4">·</span>
@@ -268,7 +268,7 @@ function HeroWidget({
                   </div>
                   <span className={cn(
                     "text-[10px] font-mono tabular-nums",
-                    isLast ? "text-accent font-medium" : "text-ink-4"
+                    isLast ? "text-accent-text font-medium" : "text-ink-4"
                   )}>
                     M-{m.sequence_number}
                   </span>
@@ -320,7 +320,7 @@ function NextMeetingWidget({
   return (
     <WidgetShell id={id} index={widgetIndex}>
       <div className="flex items-center gap-2 mb-4">
-        <span className="inline-flex items-center gap-1.5 text-xs font-medium text-accent">
+        <span className="inline-flex items-center gap-1.5 text-xs font-medium text-accent-text">
           <span className="size-1.5 rounded-full bg-accent animate-pulse" />
           {eventTime ? "Next meeting" : "Latest series"}
         </span>
@@ -350,7 +350,7 @@ function NextMeetingWidget({
       )}
       {nextSeries.open_issues_count > 0 && (
         <p className="text-sm text-ink-2 mb-5">
-          <span className="text-accent font-medium"><span className="font-mono">{nextSeries.open_issues_count}</span> open items</span> in this series.
+          <span className="text-accent-text font-medium"><span className="font-mono">{nextSeries.open_issues_count}</span> open items</span> in this series.
         </p>
       )}
       <div className="flex items-center gap-3">
@@ -708,7 +708,7 @@ function OutstandingWidget({
                     <MinutiaCadenceIcon cadence={series.cadence} className="size-4 shrink-0 text-ink" />
                     <Link
                       href={`/series/${series.id}`}
-                      className="text-sm font-semibold text-ink hover:text-accent transition-colors"
+                      className="text-sm font-semibold text-ink hover:text-accent-text transition-colors"
                     >
                       {series.name}
                     </Link>
@@ -748,14 +748,14 @@ function OutstandingWidget({
                             next.add(series.id);
                             return next;
                           })}
-                          className="text-xs font-medium text-ink-3 hover:text-accent transition-colors cursor-pointer"
+                          className="text-xs font-medium text-ink-3 hover:text-accent-text transition-colors cursor-pointer"
                         >
                           +{hiddenCount} more
                         </button>
                         <span className="text-ink-4">·</span>
                         <Link
                           href={`/series/${series.id}`}
-                          className="text-xs font-medium text-ink-3 hover:text-accent transition-colors"
+                          className="text-xs font-medium text-ink-3 hover:text-accent-text transition-colors"
                         >
                           View series
                         </Link>
@@ -769,7 +769,7 @@ function OutstandingWidget({
                           next.delete(series.id);
                           return next;
                         })}
-                        className="text-xs font-medium text-ink-3 hover:text-accent transition-colors pl-3 pt-1 cursor-pointer"
+                        className="text-xs font-medium text-ink-3 hover:text-accent-text transition-colors pl-3 pt-1 cursor-pointer"
                       >
                         Show less
                       </button>
@@ -886,7 +886,7 @@ function IssueRow({
         <IssueKey issue={issue} className="h-5 px-1.5 text-[10px]" />
         <PrefetchIssueLink
           issueId={issue.id}
-          className="flex-1 min-w-0 text-sm font-medium text-ink group-hover/row:text-accent transition-colors truncate basis-[120px]"
+          className="flex-1 min-w-0 text-sm font-medium text-ink group-hover/row:text-accent-text transition-colors truncate basis-[120px]"
         >
           {highlightMatch(issue.title, highlightQuery)}
         </PrefetchIssueLink>
@@ -926,7 +926,7 @@ function IssueRow({
             {issue.due_date ? (() => {
               const rel = formatRelativeDue(issue.due_date);
               return (
-                <span className={cn("text-xs font-mono tabular-nums", rel.overdue ? "text-accent font-medium" : "text-ink-4")}>
+                <span className={cn("text-xs font-mono tabular-nums", rel.overdue ? "text-accent-text font-medium" : "text-ink-4")}>
                   {rel.label}
                 </span>
               );
@@ -1029,7 +1029,7 @@ function DecisionsWidget({
                 key={d.id}
                 className="flex items-start gap-2.5 rounded-lg px-3 py-2 hover:bg-paper-2 transition-colors"
               >
-                <span className="text-accent text-xs mt-0.5 shrink-0">&#9670;</span>
+                <span className="text-accent-text text-xs mt-0.5 shrink-0">&#9670;</span>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm text-ink truncate">{d.title}</p>
                   {series && (
@@ -1067,7 +1067,7 @@ function SeriesWidget({
     <WidgetShell id={id} index={widgetIndex}>
       <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
         <h3 className="font-display text-base font-semibold text-ink">Your series</h3>
-        <Link href="/series" className="text-xs text-ink-3 hover:text-accent transition-colors">
+        <Link href="/series" className="text-xs text-ink-3 hover:text-accent-text transition-colors">
           View all
         </Link>
       </div>
@@ -1078,10 +1078,10 @@ function SeriesWidget({
             href={`/series/${series.id}`}
             className="flex items-center gap-3 rounded-lg px-3 py-2.5 hover:bg-paper-2 transition-colors group/row min-w-0"
           >
-            <Calendar className="size-4 text-ink-4 group-hover/row:text-accent transition-colors" />
+            <Calendar className="size-4 text-ink-4 group-hover/row:text-accent-text transition-colors" />
             <span className="flex-1 min-w-0 text-sm text-ink transition-colors break-words">{series.name}</span>
             {series.open_issues_count > 0 && (
-              <span className="text-xs text-accent font-medium tabular-nums">
+              <span className="text-xs text-accent-text font-medium tabular-nums">
                 {series.open_issues_count} open
               </span>
             )}
@@ -1090,7 +1090,7 @@ function SeriesWidget({
         {seriesList.length > SERIES_PREVIEW_LIMIT && (
           <Link
             href="/series"
-            className="block rounded-lg px-3 py-2 text-xs text-ink-4 hover:text-accent transition-colors"
+            className="block rounded-lg px-3 py-2 text-xs text-ink-4 hover:text-accent-text transition-colors"
           >
             +{seriesList.length - SERIES_PREVIEW_LIMIT} more
           </Link>
@@ -1115,7 +1115,7 @@ function ItemUsageCounter() {
       className={cn(
         "text-xs font-mono tabular-nums transition-colors",
         atLimit
-          ? "text-accent font-medium"
+          ? "text-accent-text font-medium"
           : near
             ? "text-warn font-medium"
             : "text-ink-4"

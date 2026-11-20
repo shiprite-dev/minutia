@@ -148,7 +148,7 @@ function MiniCalendar({
                 "relative h-8 w-full rounded-md text-xs font-medium transition-colors",
                 "hover:bg-paper-3 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent",
                 isSelected && "bg-accent text-white hover:bg-accent-hover",
-                isToday && !isSelected && "text-accent font-bold",
+                isToday && !isSelected && "text-accent-text font-bold",
                 !isToday && !isSelected && "text-ink-2"
               )}
             >
@@ -241,7 +241,7 @@ function DayAgenda({
                         className={cn(
                           "inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full font-medium",
                           event.meetingStatus === "live"
-                            ? "bg-accent-soft text-accent"
+                            ? "bg-accent-soft text-accent-text"
                             : "bg-paper-3 text-ink-3"
                         )}
                       >
@@ -306,7 +306,7 @@ function DayAgenda({
                         className={cn(
                           "inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full font-medium",
                           meeting.status === "completed" && "bg-success-soft text-success",
-                          meeting.status === "live" && "bg-accent-soft text-accent",
+                          meeting.status === "live" && "bg-accent-soft text-accent-text",
                           meeting.status === "upcoming" && "bg-paper-3 text-ink-3"
                         )}
                       >
@@ -428,7 +428,7 @@ function CalendarEventDetail({
               {event.seriesKind === "recurring" ? "Recurring series" : "Ad hoc series"}
             </span>
             {isLive && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-accent-soft px-2 py-1 text-[10px] font-medium text-accent">
+              <span className="inline-flex items-center gap-1 rounded-full bg-accent-soft px-2 py-1 text-[10px] font-medium text-accent-text">
                 <Radio className="size-3" />
                 Meeting in progress
               </span>
@@ -467,7 +467,7 @@ function CalendarEventDetail({
                   href={event.meetingUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="mt-0.5 block break-all text-xs text-accent hover:underline"
+                  className="mt-0.5 block break-all text-xs text-accent-text hover:underline"
                 >
                   {event.meetingUrl}
                 </a>
@@ -676,7 +676,7 @@ export function CalendarSidebar() {
             aria-label="Calendar sidebar"
           >
             <div className="flex h-12 shrink-0 items-center gap-2 border-b border-rule px-4">
-              <Calendar className="size-4 text-accent" />
+              <Calendar className="size-4 text-accent-text" />
               <h2 className="text-sm font-semibold text-ink">Calendar</h2>
             </div>
 
@@ -693,7 +693,7 @@ export function CalendarSidebar() {
         <SheetContent side="bottom" className="max-h-[85vh]">
           <SheetHeader className="pb-0">
             <SheetTitle className="flex items-center gap-2">
-              <Calendar className="size-4 text-accent" />
+              <Calendar className="size-4 text-accent-text" />
               Calendar
             </SheetTitle>
             <SheetDescription className="sr-only">

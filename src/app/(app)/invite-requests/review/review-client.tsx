@@ -76,7 +76,7 @@ export function InviteRequestReviewClient({
             <ShieldCheck className="size-5" />
           </div>
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.08em] text-accent">
+            <p className="text-xs font-semibold uppercase tracking-[0.08em] text-accent-text">
               Workspace access
             </p>
             <h1 className="mt-1 font-display text-2xl font-bold leading-tight text-ink">
@@ -105,7 +105,7 @@ export function InviteRequestReviewClient({
             <p className="text-xs uppercase tracking-[0.08em] text-ink-3">Requested page</p>
             <a
               href={requestedUrl}
-              className="mt-1 block break-all text-sm font-medium text-accent underline underline-offset-4"
+              className="mt-1 block break-all text-sm font-medium text-accent-text underline underline-offset-4"
             >
               {requestedUrl}
             </a>
@@ -151,7 +151,7 @@ export function InviteRequestReviewClient({
 
         <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           {state.kind === "error" ? (
-            <p className="text-sm text-danger">{state.message}</p>
+            <p className="text-sm text-danger-text">{state.message}</p>
           ) : state.kind === "done" ? (
             <p
               className={cn(

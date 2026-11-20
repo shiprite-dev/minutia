@@ -177,7 +177,7 @@ export function CommandPalette() {
                   )
                 }
               >
-                <span className="shrink-0 text-xs leading-none text-accent">&#9670;</span>
+                <span className="shrink-0 text-xs leading-none text-accent-text">&#9670;</span>
                 <span className="truncate">{d.title}</span>
                 <span className="ml-auto shrink-0 text-xs text-muted-foreground">
                   Decision

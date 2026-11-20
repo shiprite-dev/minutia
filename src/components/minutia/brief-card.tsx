@@ -197,7 +197,7 @@ export function BriefCard({
                     <span
                       className={cn(
                         "text-xs font-mono",
-                        isDateOverdue(issue.due_date) ? "text-accent" : "text-ink-3"
+                        isDateOverdue(issue.due_date) ? "text-accent-text" : "text-ink-3"
                       )}
                     >
                       {formatDate(issue.due_date)}

@@ -92,7 +92,7 @@ export function EmptyState({ variant, onAction }: EmptyStateProps) {
             variant="ghost"
             size="sm"
             onClick={onAction}
-            className="mt-5 text-accent hover:text-accent-hover gap-1"
+            className="mt-5 text-accent-text hover:text-accent-hover gap-1"
           >
             {cta}
             <ArrowRight className="size-3.5" />

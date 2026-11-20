@@ -250,7 +250,7 @@ function LoginForm() {
             className="space-y-4 text-center"
           >
             <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-accent-soft">
-              <Mail className="h-5 w-5 text-accent" />
+              <Mail className="h-5 w-5 text-accent-text" />
             </div>
             <div>
               <p className="font-sans text-sm font-medium text-ink">
@@ -275,7 +275,7 @@ function LoginForm() {
         ) : (
           <>
             {oauthFailed && formState !== "error" && (
-              <p role="alert" className="mb-4 font-sans text-sm text-danger">
+              <p role="alert" className="mb-4 font-sans text-sm text-danger-text">
                 Google sign-in was cancelled or failed. Try again, or use your email.
               </p>
             )}
@@ -335,7 +335,7 @@ function LoginForm() {
                   aria-live="assertive"
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
-                  className="font-sans text-sm text-danger"
+                  className="font-sans text-sm text-danger-text"
                 >
                   {errorMessage}
                 </motion.p>
@@ -410,7 +410,7 @@ function LoginForm() {
                 New to Minutia?{" "}
                 <Link
                   href={`/signup${nextPath !== "/" ? `?next=${encodeURIComponent(nextPath)}` : ""}`}
-                  className="inline-flex items-center gap-1 font-medium text-accent underline-offset-4 transition-colors hover:underline"
+                  className="inline-flex items-center gap-1 font-medium text-accent-text underline-offset-4 transition-colors hover:underline"
                 >
                   Create an account
                   <ArrowRight className="h-3.5 w-3.5" />
@@ -438,7 +438,7 @@ function LoginForm() {
                 {inviteMessage && (
                   <p
                     className={`mt-2 font-sans text-xs ${
-                      inviteState === "error" ? "text-danger" : "text-ink-3"
+                      inviteState === "error" ? "text-danger-text" : "text-ink-3"
                     }`}
                   >
                     {inviteMessage}

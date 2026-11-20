@@ -121,7 +121,7 @@ export default function SeriesListPage() {
                   <div className="flex h-full flex-col">
                     {/* Name + cadence */}
                     <div className="flex items-start justify-between gap-2 mb-2">
-                      <h2 className="font-display font-medium text-ink text-base leading-5 group-hover:text-accent group-focus:text-accent transition-colors line-clamp-2">
+                      <h2 className="font-display font-medium text-ink text-base leading-5 group-hover:text-accent-text group-focus:text-accent-text transition-colors line-clamp-2">
                         {series.name}
                       </h2>
                       <Badge
@@ -148,7 +148,7 @@ export default function SeriesListPage() {
                           className={cn(
                             "font-medium",
                             series.open_issues_count > 5
-                              ? "text-accent"
+                              ? "text-accent-text"
                               : "text-ink-3"
                           )}
                         >

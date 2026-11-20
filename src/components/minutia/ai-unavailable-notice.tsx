@@ -38,14 +38,14 @@ export function AiUnavailableNotice({ className }: { className?: string }) {
       className={`flex flex-col rounded-md border border-accent/30 bg-accent/5 px-3 py-2 text-sm text-ink ${className ?? ""}`}
     >
       <div className="flex items-center gap-2">
-        <Sparkles className="size-4 shrink-0 text-accent" />
+        <Sparkles className="size-4 shrink-0 text-accent-text" />
         <span>{AI_UNAVAILABLE_MESSAGE}</span>
         {data?.upgradeEnabled ? (
           <button
             type="button"
             onClick={handleUpgrade}
             disabled={isPending}
-            className="ml-auto shrink-0 font-medium text-accent underline underline-offset-2 hover:text-accent-hover disabled:opacity-60 disabled:cursor-default"
+            className="ml-auto shrink-0 font-medium text-accent-text underline underline-offset-2 hover:text-accent-hover disabled:opacity-60 disabled:cursor-default"
           >
             {isPending ? "Starting…" : (cta?.label ?? AI_NOTICE_DEFAULT_CTA_LABEL)}
           </button>
@@ -54,7 +54,7 @@ export function AiUnavailableNotice({ className }: { className?: string }) {
             href={cta.href}
             target="_blank"
             rel="noopener noreferrer"
-            className="ml-auto shrink-0 font-medium text-accent underline underline-offset-2 hover:text-accent-hover"
+            className="ml-auto shrink-0 font-medium text-accent-text underline underline-offset-2 hover:text-accent-hover"
           >
             {cta.label}
           </a>

@@ -225,7 +225,7 @@ export function QuickAddDialog() {
 
           {error && (
             <div role="alert" className="space-y-2">
-              <p className="text-sm text-destructive">{error}</p>
+              <p className="text-sm text-danger-text">{error}</p>
               {noMeetingSeriesId && (
                 <Button
                   type="button"

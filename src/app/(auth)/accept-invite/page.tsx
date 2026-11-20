@@ -135,9 +135,9 @@ function AcceptInviteForm() {
       <div className="rounded-[20px] border border-rule bg-paper-2 px-8 py-10 shadow-[0_18px_50px_rgba(20,16,12,0.08)]">
         <div className="mb-8">
           <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-[14px] bg-accent-soft">
-            <KeyRound className="h-5 w-5 text-accent" />
+            <KeyRound className="h-5 w-5 text-accent-text" />
           </div>
-          <p className="font-sans text-xs font-extrabold uppercase tracking-[0.12em] text-accent">
+          <p className="font-sans text-xs font-extrabold uppercase tracking-[0.12em] text-accent-text">
             Minutia invite
           </p>
           <h1 className="mt-2 font-display text-3xl font-semibold tracking-tight text-ink">
@@ -159,7 +159,7 @@ function AcceptInviteForm() {
         ) : state === "error" ? (
           <div className="space-y-4">
             <div className="rounded-[14px] border border-danger/25 bg-danger-soft px-4 py-3">
-              <p className="font-sans text-sm font-medium text-danger">
+              <p className="font-sans text-sm font-medium text-danger-text">
                 {errorMessage}
               </p>
             </div>
@@ -228,12 +228,12 @@ function AcceptInviteForm() {
                 className="h-10 rounded-[12px] border-rule bg-paper font-sans text-ink placeholder:text-ink-4 focus-visible:border-accent focus-visible:ring-accent/30"
               />
               {!passwordsMatch && (
-                <p className="font-sans text-xs text-danger">Passwords must match.</p>
+                <p className="font-sans text-xs text-danger-text">Passwords must match.</p>
               )}
             </div>
 
             {errorMessage && (
-              <p className="font-sans text-sm text-danger">{errorMessage}</p>
+              <p className="font-sans text-sm text-danger-text">{errorMessage}</p>
             )}
 
             <div className="rounded-[14px] border border-rule bg-paper px-4 py-3">

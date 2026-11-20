@@ -189,7 +189,7 @@ function ErrorView({
         <p className="mt-2 text-sm text-ink-2">{description}</p>
         <a
           href="/"
-          className="mt-6 inline-flex items-center gap-1 text-sm font-medium text-accent hover:underline"
+          className="mt-6 inline-flex items-center gap-1 text-sm font-medium text-accent-text hover:underline"
         >
           Go to Minutia
           <span aria-hidden="true">&rarr;</span>

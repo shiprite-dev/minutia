@@ -167,7 +167,7 @@ export function OnboardingWizard({
         }}
       >
         <div className="text-center">
-          <span className="inline-flex size-12 items-center justify-center rounded-full bg-accent/10 font-display text-xl font-bold text-accent">
+          <span className="inline-flex size-12 items-center justify-center rounded-full bg-accent/10 font-display text-xl font-bold text-accent-text">
             m
           </span>
           <h1 className="mt-4 font-display text-2xl font-semibold break-words text-ink">
@@ -210,7 +210,7 @@ export function OnboardingWizard({
                 ) : calendarCancelled ? (
                   <p
                     role="status"
-                    className="flex items-center gap-1 text-xs text-danger"
+                    className="flex items-center gap-1 text-xs text-danger-text"
                   >
                     <CircleAlert aria-hidden className="size-3.5 shrink-0" />
                     Not connected. Try again?
@@ -223,7 +223,7 @@ export function OnboardingWizard({
               }
               action={
                 calendar?.connected ? (
-                  <Check aria-hidden className="size-5 text-accent" />
+                  <Check aria-hidden className="size-5 text-accent-text" />
                 ) : (
                   <Button asChild variant="outline" size="sm">
                     <a href="/api/auth/google" onClick={connectCalendar}>

@@ -99,13 +99,13 @@ export function WorkloadWidget({
         {unassignedCount > 0 && (
           <>
             <span className="text-ink-4">·</span>
-            <span className="text-accent font-medium">{unassignedCount} unassigned</span>
+            <span className="text-accent-text font-medium">{unassignedCount} unassigned</span>
           </>
         )}
         {totalOverdue > 0 && (
           <>
             <span className="text-ink-4">·</span>
-            <span className="text-accent font-medium">{totalOverdue} overdue</span>
+            <span className="text-accent-text font-medium">{totalOverdue} overdue</span>
           </>
         )}
       </div>
@@ -118,7 +118,7 @@ export function WorkloadWidget({
               <span
                 className={cn(
                   "w-20 min-w-0 text-sm truncate text-right",
-                  group.name === "Unassigned" ? "text-accent" : "text-ink-2"
+                  group.name === "Unassigned" ? "text-accent-text" : "text-ink-2"
                 )}
               >
                 {group.name}
@@ -155,16 +155,16 @@ export function WorkloadWidget({
                     {group.name.charAt(0).toUpperCase()}
                   </span>
                 ) : (
-                  <span className="inline-flex items-center justify-center size-6 rounded-full bg-accent-soft text-[10px] font-medium text-accent">
+                  <span className="inline-flex items-center justify-center size-6 rounded-full bg-accent-soft text-[10px] font-medium text-accent-text">
                     ?
                   </span>
                 )}
-                <span className={cn("text-sm font-semibold", group.name === "Unassigned" ? "text-accent" : "text-ink")}>
+                <span className={cn("text-sm font-semibold", group.name === "Unassigned" ? "text-accent-text" : "text-ink")}>
                   {group.name}
                 </span>
                 <span className="text-xs text-ink-4">{group.issues.length} items</span>
                 {group.overdueCount > 0 && (
-                  <span className="ml-auto text-xs font-medium text-accent tabular-nums">
+                  <span className="ml-auto text-xs font-medium text-accent-text tabular-nums">
                     {group.overdueCount} overdue
                   </span>
                 )}
@@ -182,7 +182,7 @@ export function WorkloadWidget({
                     <CategoryBadge category={issue.category} size="sm" />
                     <PrefetchIssueLink
                       issueId={issue.id}
-                      className="flex-1 min-w-0 text-sm font-medium text-ink group-hover/row:text-accent transition-colors truncate basis-[120px]"
+                      className="flex-1 min-w-0 text-sm font-medium text-ink group-hover/row:text-accent-text transition-colors truncate basis-[120px]"
                     >
                       {issue.title}
                     </PrefetchIssueLink>
@@ -196,7 +196,7 @@ export function WorkloadWidget({
                     {issue.due_date && (() => {
                       const over = isOverdue(issue);
                       return (
-                        <span className={cn("text-xs font-mono tabular-nums shrink-0", over ? "text-accent font-medium" : "text-ink-4")}>
+                        <span className={cn("text-xs font-mono tabular-nums shrink-0", over ? "text-accent-text font-medium" : "text-ink-4")}>
                           {over ? `Overdue ${Math.abs(daysUntil(issue.due_date))}d` : `Due ${formatShortDate(issue.due_date)}`}
                         </span>
                       );
@@ -207,7 +207,7 @@ export function WorkloadWidget({
                   <button
                     type="button"
                     onClick={() => setExpanded((prev) => new Set(prev).add(group.name))}
-                    className="text-xs font-medium text-ink-3 hover:text-accent transition-colors pl-3 pt-1 cursor-pointer"
+                    className="text-xs font-medium text-ink-3 hover:text-accent-text transition-colors pl-3 pt-1 cursor-pointer"
                   >
                     +{hiddenCount} more · Show all
                   </button>
@@ -222,7 +222,7 @@ export function WorkloadWidget({
                         return next;
                       });
                     }}
-                    className="text-xs font-medium text-ink-3 hover:text-accent transition-colors pl-3 pt-1 cursor-pointer"
+                    className="text-xs font-medium text-ink-3 hover:text-accent-text transition-colors pl-3 pt-1 cursor-pointer"
                   >
                     Show less
                   </button>

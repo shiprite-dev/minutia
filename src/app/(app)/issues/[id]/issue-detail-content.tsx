@@ -537,7 +537,7 @@ export function IssueDetailContent({ issueId }: IssueDetailContentProps) {
                       variant="ghost"
                       size="xs"
                       onClick={() => handleDueDateSelect(undefined)}
-                      className="text-xs text-danger hover:bg-danger-soft hover:text-danger"
+                      className="text-xs text-danger-text hover:bg-danger-soft hover:text-danger-text"
                     >
                       Clear date
                     </Button>
@@ -586,7 +586,7 @@ export function IssueDetailContent({ issueId }: IssueDetailContentProps) {
               <span className="text-ink-3 w-20 shrink-0">Raised in</span>
               <Link
                 href={`/series/${issue.series_id}/meetings/${raisedIn.id}`}
-                className="text-sm text-ink hover:text-accent transition-colors underline underline-offset-2"
+                className="text-sm text-ink hover:text-accent-text transition-colors underline underline-offset-2"
               >
                 {raisedIn.title}
               </Link>
@@ -719,7 +719,7 @@ export function IssueDetailContent({ issueId }: IssueDetailContentProps) {
           {/* Delete */}
           <Button
             variant="outline"
-            className="text-danger border-danger/30 hover:bg-danger-soft text-sm"
+            className="text-danger-text border-danger/30 hover:bg-danger-soft text-sm"
             onClick={handleDelete}
           >
             <Trash2 className="size-3.5" />
@@ -740,7 +740,7 @@ function statusBadgeStyle(status: string): string {
     case "resolved":
       return "text-success bg-success-soft";
     case "in_progress":
-      return "text-accent bg-accent-soft";
+      return "text-accent-text bg-accent-soft";
     case "dropped":
       return "text-ink-3 bg-paper-2";
     default:

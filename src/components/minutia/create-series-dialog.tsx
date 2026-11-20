@@ -94,7 +94,7 @@ export function CreateSeriesDialog({
               className="h-11"
             />
             {errors.name && (
-              <p className="text-xs text-danger">{errors.name.message}</p>
+              <p className="text-xs text-danger-text">{errors.name.message}</p>
             )}
           </div>
 

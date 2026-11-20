@@ -65,7 +65,7 @@ export function SeriesHealthWidget({
                 <span className={cn("size-2 rounded-full", healthDot(resolutionRate))} />
                 <Link
                   href={`/series/${series.id}`}
-                  className="min-w-0 text-sm font-semibold text-ink hover:text-accent transition-colors break-words"
+                  className="min-w-0 text-sm font-semibold text-ink hover:text-accent-text transition-colors break-words"
                 >
                   {series.name}
                 </Link>
@@ -79,7 +79,7 @@ export function SeriesHealthWidget({
                 <span
                   className={cn(
                     "text-xs font-medium tabular-nums",
-                    resolutionRate >= 70 ? "text-success" : resolutionRate >= 40 ? "text-warn" : "text-accent"
+                    resolutionRate >= 70 ? "text-success" : resolutionRate >= 40 ? "text-warn" : "text-accent-text"
                   )}
                 >
                   {resolutionRate}% resolved

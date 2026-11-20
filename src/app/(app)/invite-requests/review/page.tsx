@@ -28,7 +28,7 @@ function ErrorState({ title, body }: { title: string; body: string }) {
     <div className="mx-auto flex w-full max-w-xl flex-1 flex-col justify-center p-4 lg:p-6">
       <div className="rounded-xl border border-rule bg-card p-5 shadow-sm">
         <div className="flex items-start gap-3">
-          <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-paper-2 text-danger">
+          <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-paper-2 text-danger-text">
             <AlertCircle className="size-5" />
           </div>
           <div>

@@ -97,7 +97,7 @@ export function RemindOwnersButton({ seriesId, as = "button" }: RemindOwnersButt
         ) : state === "done" ? (
           <Check className="size-4 text-success" data-icon="inline-start" />
         ) : state === "error" ? (
-          <BellRing className="size-4 text-danger" data-icon="inline-start" />
+          <BellRing className="size-4 text-danger-text" data-icon="inline-start" />
         ) : (
           <Bell className="size-4" data-icon="inline-start" />
         )}

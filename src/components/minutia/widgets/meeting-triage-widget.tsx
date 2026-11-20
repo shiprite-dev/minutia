@@ -99,7 +99,7 @@ export function MeetingTriageWidget({
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mb-3">
             <span className="size-2.5 rounded-sm bg-accent" />
             <span className="text-sm font-semibold text-ink">Carried</span>
-            <span className="text-xs font-mono text-accent">{carried.length}</span>
+            <span className="text-xs font-mono text-accent-text">{carried.length}</span>
             <span className="ml-auto text-[11px] text-ink-4">
               Open for 2+ consecutive meetings
             </span>
@@ -110,7 +110,7 @@ export function MeetingTriageWidget({
                 key={issue.id}
                 issue={issue}
                 badge={
-                  <span className="text-[10px] font-mono text-accent bg-accent-soft px-1.5 py-0.5 rounded">
+                  <span className="text-[10px] font-mono text-accent-text bg-accent-soft px-1.5 py-0.5 rounded">
                     {formatOrdinal(meetingCount(issue))} meeting
                   </span>
                 }
@@ -201,7 +201,7 @@ function TriageRow({
       <CategoryBadge category={issue.category} size="sm" />
       <PrefetchIssueLink
         issueId={issue.id}
-        className="flex-1 min-w-0 text-sm font-medium text-ink group-hover/row:text-accent transition-colors truncate basis-[120px]"
+        className="flex-1 min-w-0 text-sm font-medium text-ink group-hover/row:text-accent-text transition-colors truncate basis-[120px]"
       >
         {issue.title}
       </PrefetchIssueLink>
@@ -222,7 +222,7 @@ function TriageRow({
           ? `Overdue ${Math.abs(diff)}d`
           : `Due ${formatShortDate(issue.due_date)}`;
         return (
-          <span className={cn("text-xs font-mono tabular-nums shrink-0", overdue ? "text-accent font-medium" : "text-ink-4")}>
+          <span className={cn("text-xs font-mono tabular-nums shrink-0", overdue ? "text-accent-text font-medium" : "text-ink-4")}>
             {label}
           </span>
         );

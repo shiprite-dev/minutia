@@ -46,7 +46,7 @@ function notificationIcon(type: NotificationType) {
 function notificationColor(type: NotificationType): string {
   switch (type) {
     case "issue_status_changed":
-      return "text-accent";
+      return "text-accent-text";
     case "issue_assigned":
       return "text-ink";
     case "meeting_starting":
@@ -56,7 +56,7 @@ function notificationColor(type: NotificationType): string {
     case "brief_ready":
       return "text-warn";
     case "share_received":
-      return "text-accent";
+      return "text-accent-text";
     default:
       return "text-ink-3";
   }

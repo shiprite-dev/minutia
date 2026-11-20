@@ -232,9 +232,9 @@ export default function SetupPage() {
                 className={cn(
                   "flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-all",
                   i === step
-                    ? "bg-accent/10 text-accent"
+                    ? "bg-accent/10 text-accent-text"
                     : i < step
-                      ? "bg-accent/5 text-accent/60"
+                      ? "bg-accent/5 text-accent-text/60"
                       : "text-ink-4"
                 )}
               >
@@ -423,7 +423,7 @@ function StepEnvironment({
           transition={{ delay: 0.1, duration: 0.4, ease: [0.2, 0.8, 0.2, 1] }}
           className="inline-flex items-center justify-center size-12 rounded-full bg-accent/10 mb-4"
         >
-          <span className="font-display text-xl font-bold text-accent">m</span>
+          <span className="font-display text-xl font-bold text-accent-text">m</span>
         </motion.div>
         <h2 className="font-display text-xl font-semibold text-ink">
           Instance Setup
@@ -442,8 +442,8 @@ function StepEnvironment({
 
       {error && (
         <div className="rounded-lg border border-danger/20 bg-danger/5 p-3">
-          <p className="text-sm text-danger">{error}</p>
-          <Button variant="ghost" size="sm" onClick={onRetry} className="mt-2 text-danger">
+          <p className="text-sm text-danger-text">{error}</p>
+          <Button variant="ghost" size="sm" onClick={onRetry} className="mt-2 text-danger-text">
             Retry
           </Button>
         </div>
@@ -641,15 +641,15 @@ function StepCreateAdmin({
                 className="h-10 rounded-xl"
               />
               {passwordConfirm && !passwordsMatch && (
-                <p className="text-xs text-danger">Passwords do not match</p>
+                <p className="text-xs text-danger-text">Passwords do not match</p>
               )}
             </div>
           </div>
 
           {error && (
             <div className="flex items-start gap-2 rounded-lg border border-danger/20 bg-danger/5 p-3">
-              <AlertTriangle className="size-4 text-danger mt-0.5 shrink-0" />
-              <p className="text-sm text-danger">{error}</p>
+              <AlertTriangle className="size-4 text-danger-text mt-0.5 shrink-0" />
+              <p className="text-sm text-danger-text">{error}</p>
             </div>
           )}
 
@@ -784,7 +784,7 @@ function StepConfigure({
                 )}
               </Button>
               {smtpTestResult && (
-                <p className={cn("text-xs mt-1.5", smtpTestResult.success ? "text-success" : "text-danger")}>
+                <p className={cn("text-xs mt-1.5", smtpTestResult.success ? "text-success" : "text-danger-text")}>
                   {smtpTestResult.message}
                 </p>
               )}
@@ -887,7 +887,7 @@ function StepAi({
                 className={cn(
                   "flex-1 rounded-lg border px-3 py-2 text-sm font-medium transition-all",
                   provider === p
-                    ? "border-accent bg-accent/10 text-accent"
+                    ? "border-accent bg-accent/10 text-accent-text"
                     : "border-rule bg-transparent text-ink-3 hover:border-ink-4"
                 )}
               >
@@ -1013,7 +1013,7 @@ function StepReady({
           type="checkbox"
           checked={seedDemo}
           onChange={(e) => onSeedDemoChange(e.target.checked)}
-          className="mt-0.5 size-4 rounded border-rule text-accent focus:ring-accent"
+          className="mt-0.5 size-4 rounded border-rule text-accent-text focus:ring-accent"
         />
         <div>
           <p className="text-sm font-medium text-ink">Seed demo data</p>

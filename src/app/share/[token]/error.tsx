@@ -13,7 +13,7 @@ export default function ShareError({
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-paper px-4 text-center">
       <div className="flex size-12 items-center justify-center rounded-full bg-danger-soft mb-4">
-        <AlertTriangle className="size-6 text-danger" />
+        <AlertTriangle className="size-6 text-danger-text" />
       </div>
       <h2 className="font-display text-xl font-semibold text-ink mb-2">
         Share link unavailable

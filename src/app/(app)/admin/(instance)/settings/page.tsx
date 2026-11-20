@@ -432,7 +432,7 @@ export default function AdminSettingsPage() {
                 {testState === "sending" ? "Sending..." : "Send test email"}
               </Button>
               {testMessage && (
-                <p className={cn("text-xs", testMessageState === "error" ? "text-danger" : "text-success")}>
+                <p className={cn("text-xs", testMessageState === "error" ? "text-danger-text" : "text-success")}>
                   {testMessage}
                 </p>
               )}
@@ -550,7 +550,7 @@ export default function AdminSettingsPage() {
                 <p
                   className={cn(
                     "text-xs",
-                    aiTestMessageState === "error" ? "text-danger" : "text-success"
+                    aiTestMessageState === "error" ? "text-danger-text" : "text-success"
                   )}
                 >
                   {aiTestMessage}
@@ -591,7 +591,7 @@ export default function AdminSettingsPage() {
                   </Button>
                 </div>
                 {retroMessage && (
-                  <p className={cn("text-xs", retroMessageState === "error" ? "text-danger" : "text-success")}>
+                  <p className={cn("text-xs", retroMessageState === "error" ? "text-danger-text" : "text-success")}>
                     {retroMessage}
                   </p>
                 )}
@@ -692,7 +692,7 @@ export default function AdminSettingsPage() {
               <p
                 className={cn(
                   "text-xs",
-                  retentionMessageState === "error" ? "text-danger" : "text-success"
+                  retentionMessageState === "error" ? "text-danger-text" : "text-success"
                 )}
               >
                 {retentionMessage}
@@ -707,7 +707,7 @@ export default function AdminSettingsPage() {
           {saving ? "Saving..." : "Save changes"}
         </Button>
         {saveMessage && (
-          <p className={cn("text-xs", saveState === "error" ? "text-danger" : "text-success")}>
+          <p className={cn("text-xs", saveState === "error" ? "text-danger-text" : "text-success")}>
             {saveMessage}
           </p>
         )}

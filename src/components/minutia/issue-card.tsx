@@ -94,7 +94,7 @@ export function IssueCard({
           <span
             className={cn(
               "text-xs font-mono",
-              overdue ? "text-accent" : "text-ink-3"
+              overdue ? "text-accent-text" : "text-ink-3"
             )}
           >
             {overdue && "Overdue: "}
