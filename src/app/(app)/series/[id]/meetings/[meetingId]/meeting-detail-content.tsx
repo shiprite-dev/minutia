@@ -853,6 +853,27 @@ export function MeetingDetailContent({
     void loadSuggestions();
   }, [participantRole, hasAccess, meeting?.transcript_raw, meeting?.notes_markdown, loadSuggestions]);
 
+  // Syncs with Supabase realtime so reviews made in another app show up here.
+  React.useEffect(() => {
+    const supabase = createClient();
+    const refresh = () => {
+      void loadSuggestions(true);
+      void queryClient.invalidateQueries({ queryKey: meetingKeys.detail(meetingId) });
+    };
+    const channel = supabase
+      .channel(`meeting:${meetingId}:ai-suggestions`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "meeting_ai_suggestions", filter: `meeting_id=eq.${meetingId}` },
+        refresh
+      )
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "meeting_ai_suggestions" }, refresh)
+      .subscribe();
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [meetingId, loadSuggestions, queryClient]);
+
   // Auto-flow the recap the moment recording stops and the fast lane is ready
   // (or the final transcript lands for non-webm browsers). Managers only, once.
   React.useEffect(() => {

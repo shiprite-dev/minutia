@@ -1,5 +1,10 @@
 import { randomUUID } from "node:crypto";
-import { test, expect, request as playwrightRequest } from "@playwright/test";
+import {
+  test,
+  expect,
+  request as playwrightRequest,
+  type Page,
+} from "@playwright/test";
 import { waitForApp } from "./seed-data";
 
 const SUPABASE_URL = process.env.SUPABASE_URL ?? "http://127.0.0.1:54321";
@@ -551,5 +556,101 @@ test.describe("Keeping AI action items from more than one place", () => {
     expect(await teammateKeep.json()).toEqual({ code: "not_reviewer" });
     expect(await seriesIssues(seriesId)).toEqual([]);
     expect(await suggestionStatus(suggestionId)).toBe("pending");
+  });
+
+  test.describe("with the meeting page open", () => {
+    async function openMeetingWithNotes(
+      page: Page,
+      seriesId: string,
+      meetingId: string,
+    ) {
+      await rest(`meetings?id=eq.${meetingId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ notes_markdown: "Notes from the call" }),
+      });
+      await page.goto(`/series/${seriesId}/meetings/${meetingId}`);
+      await waitForApp(page);
+      await page.evaluate(() => {
+        (
+          window as unknown as { openedBeforeReview: boolean }
+        ).openedBeforeReview = true;
+      });
+    }
+
+    const stillSamePage = (page: Page) =>
+      page.evaluate(
+        () =>
+          (window as unknown as { openedBeforeReview?: boolean })
+            .openedBeforeReview,
+      );
+
+    test("aReviewDoneOnTheMac_appearsOnTheMeetingPageWithoutReload", async ({
+      page,
+      baseURL,
+    }) => {
+      const { seriesId, meetingId, stamp } = await createMeeting();
+      seriesToDelete.push(seriesId);
+      const title = `Confirm the catering order ${stamp}`;
+      const suggestionId = await seedSuggestion(seriesId, meetingId, { title });
+      await openMeetingWithNotes(page, seriesId, meetingId);
+      const suggestions = page.getByRole("region", { name: "AI suggestions" });
+      await expect(suggestions.locator(`input[value="${title}"]`)).toBeVisible({
+        timeout: 5_000,
+      });
+
+      const response = await fetch(
+        `${baseURL}${reviewUrl(meetingId, suggestionId)}`,
+        {
+          method: "PATCH",
+          headers: {
+            Authorization: `Bearer ${await signInToken("test@example.com")}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ action: "accept" }),
+        },
+      );
+      expect(response.status).toBe(200);
+
+      await expect(suggestions.locator(`input[value="${title}"]`)).toHaveCount(
+        0,
+        {
+          timeout: 5_000,
+        },
+      );
+      await expect(page.getByText(title, { exact: true }).first()).toBeVisible({
+        timeout: 5_000,
+      });
+      expect(await stillSamePage(page)).toBe(true);
+    });
+
+    test("aReRunOfTheList_updatesThePageWithoutReload", async ({ page }) => {
+      const { seriesId, meetingId, stamp } = await createMeeting();
+      seriesToDelete.push(seriesId);
+      const oldTitle = `Old list item ${stamp}`;
+      const newTitle = `New list item ${stamp}`;
+      await seedSuggestion(seriesId, meetingId, { title: oldTitle });
+      await openMeetingWithNotes(page, seriesId, meetingId);
+      const suggestions = page.getByRole("region", { name: "AI suggestions" });
+      await expect(
+        suggestions.locator(`input[value="${oldTitle}"]`),
+      ).toBeVisible({
+        timeout: 5_000,
+      });
+
+      await rest(`meeting_ai_suggestions?meeting_id=eq.${meetingId}`, {
+        method: "DELETE",
+      });
+      await seedSuggestion(seriesId, meetingId, { title: newTitle });
+
+      await expect(
+        suggestions.locator(`input[value="${newTitle}"]`),
+      ).toBeVisible({
+        timeout: 5_000,
+      });
+      await expect(
+        suggestions.locator(`input[value="${oldTitle}"]`),
+      ).toHaveCount(0);
+      expect(await stillSamePage(page)).toBe(true);
+    });
   });
 });
