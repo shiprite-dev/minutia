@@ -130,6 +130,22 @@ function formatSeriesContextHeading(contextBlock: string) {
   return ["=== SERIES HISTORY (cross-meeting memory) ===", contextBlock].join("\n");
 }
 
+export function normalizeSuggestionTitle(title: string): string {
+  return title
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, " ")
+    .replace(/[\p{P}\s]+$/u, "");
+}
+
+export function dropAlreadyReviewed<T extends { title: string }>(
+  rows: T[],
+  reviewedTitles: string[]
+): T[] {
+  const reviewed = new Set(reviewedTitles.map(normalizeSuggestionTitle));
+  return rows.filter((row) => !reviewed.has(normalizeSuggestionTitle(row.title)));
+}
+
 export type GenerateFailureCode =
   | "not_found"
   | "skipped_no_content"
@@ -248,7 +264,19 @@ async function runGeneration(
     return { ok: false, status: 502, error: "AI provider returned invalid suggestions.", code: "invalid_suggestions" };
   }
 
-  const normalized = normalizeSuggestions(parsed.suggestions, context.openIssues).map((s) => ({
+  const { data: reviewedRows, error: reviewedError } = await supabase
+    .from("meeting_ai_suggestions")
+    .select("title")
+    .eq("meeting_id", meetingId)
+    .neq("status", "pending");
+  if (reviewedError) {
+    return { ok: false, status: 500, error: "Failed to refresh AI suggestions.", code: "save_failed" };
+  }
+
+  const normalized = dropAlreadyReviewed(
+    normalizeSuggestions(parsed.suggestions, context.openIssues),
+    (reviewedRows ?? []).map((r) => r.title)
+  ).map((s) => ({
     ...s,
     due_date: resolveDueDate(s.due_date, meetingDate),
   }));

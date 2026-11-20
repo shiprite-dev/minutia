@@ -188,9 +188,11 @@ function reset(overrides = {}) {
 function generatorClient() {
   return {
     from(table) {
+      let reviewedRead = false;
       const b = {
         select: () => b,
         eq: () => b,
+        neq: () => ((reviewedRead = true), b),
         order: () => b,
         delete: () => b,
         insert: () => b,
@@ -200,7 +202,12 @@ function generatorClient() {
             : { data: null, error: { message: "nf" } },
         async then(resolve) {
           return resolve({
-            data: table === "meeting_ai_suggestions" ? S.insertedRows : null,
+            data:
+              table === "meeting_ai_suggestions"
+                ? reviewedRead
+                  ? []
+                  : S.insertedRows
+                : null,
             error: null,
           });
         },
