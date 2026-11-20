@@ -867,7 +867,7 @@ export function MeetingDetailContent({
         { event: "*", schema: "public", table: "meeting_ai_suggestions", filter: `meeting_id=eq.${meetingId}` },
         refresh
       )
-      .on("postgres_changes", { event: "DELETE", schema: "public", table: "meeting_ai_suggestions" }, refresh)
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "meetings", filter: `id=eq.${meetingId}` }, refresh)
       .subscribe();
     return () => {
       void supabase.removeChannel(channel);

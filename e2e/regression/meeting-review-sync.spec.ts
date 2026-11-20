@@ -652,5 +652,82 @@ test.describe("Keeping AI action items from more than one place", () => {
       ).toHaveCount(0);
       expect(await stillSamePage(page)).toBe(true);
     });
+
+    test("aReRunThatFindsNothing_clearsTheListWithoutReload", async ({
+      page,
+    }) => {
+      const { seriesId, meetingId, stamp } = await createMeeting();
+      seriesToDelete.push(seriesId);
+      const title = `Soon to vanish ${stamp}`;
+      await seedSuggestion(seriesId, meetingId, { title });
+      await openMeetingWithNotes(page, seriesId, meetingId);
+      const suggestions = page.getByRole("region", { name: "AI suggestions" });
+      await expect(suggestions.locator(`input[value="${title}"]`)).toBeVisible({
+        timeout: 5_000,
+      });
+
+      await rest(`meeting_ai_suggestions?meeting_id=eq.${meetingId}`, {
+        method: "DELETE",
+      });
+      await rest(`meetings?id=eq.${meetingId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ suggestions_status: "ready" }),
+      });
+
+      await expect(suggestions.locator(`input[value="${title}"]`)).toHaveCount(
+        0,
+        {
+          timeout: 5_000,
+        },
+      );
+      expect(await stillSamePage(page)).toBe(true);
+    });
+
+    test("aDeleteInAnotherMeeting_doesNotRefreshThisPage", async ({ page }) => {
+      const mine = await createMeeting();
+      const other = await createMeeting();
+      seriesToDelete.push(mine.seriesId, other.seriesId);
+      await seedSuggestion(mine.seriesId, mine.meetingId, {
+        title: `Mine ${mine.stamp}`,
+      });
+      await seedSuggestion(other.seriesId, other.meetingId, {
+        title: `Other ${other.stamp}`,
+      });
+      await openMeetingWithNotes(page, mine.seriesId, mine.meetingId);
+      const suggestions = page.getByRole("region", { name: "AI suggestions" });
+      await expect(
+        suggestions.locator(`input[value="Mine ${mine.stamp}"]`),
+      ).toBeVisible({ timeout: 5_000 });
+
+      const refetches: string[] = [];
+      page.on("request", (request) => {
+        if (
+          request.method() === "GET" &&
+          request.url().includes(`/api/meetings/${mine.meetingId}/suggestions`)
+        )
+          refetches.push(request.url());
+      });
+      await expect
+        .poll(
+          async () => {
+            const before = refetches.length;
+            await page.waitForTimeout(1_000);
+            return refetches.length === before;
+          },
+          { timeout: 15_000 },
+        )
+        .toBe(true);
+      const settled = refetches.length;
+
+      await rest(`meeting_ai_suggestions?meeting_id=eq.${other.meetingId}`, {
+        method: "DELETE",
+      });
+      await page.waitForTimeout(3_000);
+
+      expect(refetches.length).toBe(settled);
+      await expect(
+        suggestions.locator(`input[value="Mine ${mine.stamp}"]`),
+      ).toBeVisible();
+    });
   });
 });
