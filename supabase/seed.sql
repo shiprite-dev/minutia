@@ -192,7 +192,7 @@ ON CONFLICT (id) DO NOTHING;
 UPDATE public.instance_config SET value = 'true' WHERE key = 'setup_completed';
 
 -- ---------------------------------------------------------------------------
--- 10. Diarized transcript fixture (T1 accuracy/diarization E2E)
+-- 10. Diarized transcript fixture (accuracy and diarization E2E)
 -- ---------------------------------------------------------------------------
 -- Dedicated series + meeting, isolated from every other seed row so this
 -- fixture cannot collide with a count-based assertion elsewhere (see

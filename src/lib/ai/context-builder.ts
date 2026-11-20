@@ -1,9 +1,9 @@
-// MIN-121: Series-history context for AI item extraction.
+// Series-history context for AI item extraction.
 //
-// This is the moat. Competitors summarize one meeting in isolation; Minutia
-// feeds the model the living state of the whole series (open OIL items, recent
-// decisions, recent status changes) so it can deduplicate, detect resolutions,
-// follow up on prior items, and flag contradictions.
+// Instead of summarizing one meeting in isolation, Minutia feeds the model
+// the living state of the whole series (open OIL items, recent decisions,
+// recent status changes) so it can deduplicate, detect resolutions, follow up
+// on prior items, and flag contradictions.
 //
 // The module is intentionally dependency-light (no Supabase or Zod imports, a
 // structural client type) so it bundles and unit-tests in isolation. The fetch,

@@ -10,7 +10,7 @@ const reviewSchema = z.object({
   category: z.enum(["action", "decision", "info", "risk", "blocker"]).optional(),
   owner_name: z.string().optional(),
   due_date: z.iso.date().nullable().optional(),
-  // MIN-121: a status_update can be retargeted at review time.
+  // a status_update can be retargeted at review time.
   suggested_status: z
     .enum(["open", "in_progress", "pending", "resolved", "dropped"])
     .nullable()
@@ -99,7 +99,7 @@ export async function PATCH(
     return NextResponse.json({ suggestion: data, request_id: requestId });
   }
 
-  // MIN-121: accepting a status_update applies the change to the EXISTING OIL
+  // accepting a status_update applies the change to the EXISTING OIL
   // item the suggestion references, rather than creating a parallel item. This
   // is the cross-meeting memory paying off: the meeting that resolved a prior
   // risk closes it on the board, with an AI-authored audit row to prove it.

@@ -62,11 +62,11 @@ test("is idempotent when the link already targets the public Supabase base (E2E:
 });
 
 test("origin comes only from NEXT_PUBLIC_SUPABASE_URL, never the link's own host", () => {
-  withSupabaseUrl("https://staging.getminutia.com", () => {
+  withSupabaseUrl("https://staging.example.com", () => {
     const internal = "http://supabase-kong/auth/v1/verify?token=q";
     assert.equal(
       toPublicActionLink(internal),
-      "https://staging.getminutia.com/auth/v1/verify?token=q"
+      "https://staging.example.com/auth/v1/verify?token=q"
     );
   });
 });

@@ -6,7 +6,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import * as esbuild from "esbuild";
 
-// MIN-121: Context-aware auto item extraction with series history.
+// Context-aware auto item extraction with series history.
 //
 // Bundle the pure context-builder logic so node:test can exercise it with a
 // mock Supabase client (repo pattern, see verify-transcription-client). The DB

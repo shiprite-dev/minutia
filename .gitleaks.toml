@@ -1,0 +1,12 @@
+[extend]
+useDefault = true
+
+# Public placeholder values, not secrets. Matched by value so the allowlist
+# survives history rewrites.
+[[allowlists]]
+description = "Documented Supabase self-host default SECRET_KEY_BASE (scripts/generate-self-host-env.mjs replaces it) and the published Supabase local-demo JWTs"
+regexTarget = "match"
+regexes = [
+  '''UpNVntn3cDxHJpq99YMc1T1AQgQpc8kfYTuRgBiYa15BLrx8etQoXz3gZv1/u2oq''',
+  '''eyJpc3MiOiJzdXBhYmFzZS1kZW1vIi''',
+]

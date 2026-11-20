@@ -82,7 +82,9 @@ Scopes: `oil-board`, `series`, `meetings`, `issues`, `auth`, `share`, `settings`
    pnpm lint
    pnpm build
    pnpm test:e2e
+   pnpm test:oss-boundaries
    ```
+   This is a public repository: never commit keys, `.env` files, internal plans or ticket numbers. `test:oss-boundaries` and the CI secret scan block them.
 4. Open a PR with a clear summary of **what** changed and **why**
 5. If your PR includes user-facing changes, update `CHANGELOG.md`
 6. CI must pass before merge

@@ -540,7 +540,7 @@ export async function POST(
       );
     }
 
-    // MIN-121: extraction completed or explicitly skipped gates audio cleanup; a failed
+    // extraction completed or explicitly skipped gates audio cleanup; a failed
     // extraction retains the audio for a later retry. The transcript stays committed either way.
 
     if (deferExtraction) {

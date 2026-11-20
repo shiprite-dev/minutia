@@ -17,7 +17,7 @@ export type TranscriptionStatus =
 export type RecordingState = "idle" | "recording" | "paused" | "stopped";
 export type OrganizationRole = "admin" | "member";
 export type SeriesParticipantRole = "owner" | "facilitator" | "participant";
-// MIN-121: how an AI suggestion relates to the existing OIL.
+// how an AI suggestion relates to the existing OIL.
 export type SuggestionType = "new_item" | "status_update" | "duplicate_warning";
 
 export interface Profile {

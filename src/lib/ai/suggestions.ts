@@ -13,7 +13,7 @@ import {
   type SeriesContextClient,
 } from "./context-builder";
 
-// MIN-121: Context-aware item extraction.
+// Context-aware item extraction.
 //
 // Shared by the suggestions route (manual "Review AI suggestions") and the
 // transcribe route (auto-trigger when a recording finishes). It feeds the model

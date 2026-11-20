@@ -1,7 +1,7 @@
 import { test, expect, type Page } from "@playwright/test";
 import { MEETINGS, SERIES, waitForApp } from "./seed-data";
 
-// T1 accuracy/diarization journey. The seeded meeting has a real diarized
+// Accuracy and diarization journey. The seeded meeting has a real diarized
 // transcript (transcript_diarized=true, speaker_map, transcript_segments) and
 // a self-assignment ("I will take the migration review"). The corresponding
 // meeting_ai_suggestions row is seeded rather than live-extracted, so the

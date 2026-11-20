@@ -57,7 +57,7 @@ async function rowTitles(section: Locator): Promise<string[]> {
   return titles;
 }
 
-test.describe("Wave 2: OIL board drag-to-reorder", () => {
+test.describe("OIL board drag-to-reorder", () => {
   test.skip(!HAS_SERVICE_ROLE, "SUPABASE_SERVICE_ROLE_KEY is required to snapshot/restore issues.sort_order");
 
   test("keyboard drag reorders a series group and the new order persists across reload", async ({
@@ -129,7 +129,7 @@ test.describe("Wave 2: OIL board drag-to-reorder", () => {
   });
 });
 
-test.describe("Wave 2: OIL board owner filter and search", () => {
+test.describe("OIL board owner filter and search", () => {
   test("clicking an owner avatar chip filters to that owner and clears", async ({ page }) => {
     await gotoDashboard(page);
 
@@ -175,7 +175,7 @@ test.describe("Wave 2: OIL board owner filter and search", () => {
   });
 });
 
-test.describe("Wave 2: OIL board drag gating", () => {
+test.describe("OIL board drag gating", () => {
   test("drag handles are hidden while a filter or search narrows the board", async ({ page }) => {
     await gotoDashboard(page);
     await groupBySeries(page);
