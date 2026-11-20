@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { test, expect, type APIRequestContext } from "@playwright/test";
 import { waitForApp } from "./seed-data";
 
-// MIN-121: context-aware extraction. These cover the moat end to end: badges
+// Context-aware extraction. These cover the moat end to end: badges
 // that tell the cross-meeting story (NEW / UPDATES OIL-x / DUPLICATE OF OIL-x),
 // and the real backend that applies a status_update to the existing OIL item.
 
