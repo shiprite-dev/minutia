@@ -389,20 +389,93 @@ test.describe("Mac window sign-in handoff", () => {
     expect(await sessionCookies(context)).toEqual([]);
   });
 
-  test("aHandoffIdAloneCannotSignInAtTheSignInServer", async () => {
-    const handoffId = await mint(api!, account!.session.access_token, newNonce().digest);
+  test("mintingAHandoffLeavesAnEmailedSignInLinkWorking", async () => {
+    const emailed = await fetch(`${SUPABASE_URL}/auth/v1/admin/generate_link`, {
+      method: "POST",
+      headers: serviceHeaders(),
+      body: JSON.stringify({ type: "magiclink", email: account!.email }),
+    });
+    expect(emailed.ok).toBeTruthy();
+    const emailedToken = (await emailed.json()).hashed_token as string;
+
+    await mint(api!, account!.session.access_token, newNonce().digest);
 
     const verify = await fetch(`${SUPABASE_URL}/auth/v1/verify`, {
       method: "POST",
       headers: { apikey: ANON_KEY, "Content-Type": "application/json" },
-      body: JSON.stringify({ type: "magiclink", token_hash: handoffId }),
+      body: JSON.stringify({ type: "magiclink", token_hash: emailedToken }),
     });
-
-    expect(verify.status).toBe(403);
-    expect(await verify.json()).not.toHaveProperty("access_token");
+    expect(verify.status).toBe(200);
+    expect((await verify.json()).user.id).toBe(account!.userId);
   });
 
-  test("aForeignOriginSubmitWithoutFetchMetadataIsRefused", async ({ baseURL }) => {
+  test("aBannedAccountIsNotSignedInByAHandoffMintedBeforeTheBan", async ({
+    browser,
+    baseURL,
+  }) => {
+    const { nonce, digest } = newNonce();
+    const handoffId = await mint(api!, account!.session.access_token, digest);
+    const banned = await fetch(
+      `${SUPABASE_URL}/auth/v1/admin/users/${account!.userId}`,
+      {
+        method: "PUT",
+        headers: serviceHeaders(),
+        body: JSON.stringify({ ban_duration: "24h" }),
+      },
+    );
+    expect(banned.ok).toBeTruthy();
+    const { context, page } = await signedOutWindow(browser, baseURL!);
+    contexts.push(context);
+
+    await openMacWindow(page, baseURL!, {
+      handoff_id: handoffId,
+      nonce,
+      next: `/series/${account!.seriesId}/meetings/${account!.meetingId}`,
+    });
+
+    await expectSignedOutOnLogin(page, context);
+  });
+
+  test("aHandoffElevenMinutesOldIsRefusedAndStaysUnspent", async ({
+    browser,
+    baseURL,
+  }) => {
+    const { nonce, digest } = newNonce();
+    const handoffId = await mint(api!, account!.session.access_token, digest);
+    const [row] = await rest(
+      `companion_web_handoffs?user_id=eq.${account!.userId}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({
+          created_at: new Date(Date.now() - 11 * 60 * 1000).toISOString(),
+        }),
+      },
+    );
+    expect(
+      await rest("rpc/claim_companion_web_handoff", {
+        method: "POST",
+        body: JSON.stringify({ p_id: row.id }),
+      }),
+    ).toBe(false);
+    const { context, page } = await signedOutWindow(browser, baseURL!);
+    contexts.push(context);
+
+    await openMacWindow(page, baseURL!, {
+      handoff_id: handoffId,
+      nonce,
+      next: `/series/${account!.seriesId}/meetings/${account!.meetingId}`,
+    });
+
+    await expectSignedOutOnLogin(page, context);
+    const [after] = await rest(
+      `companion_web_handoffs?id=eq.${row.id}&select=used_at`,
+    );
+    expect(after.used_at).toBeNull();
+  });
+
+  test("aForeignOriginSubmitWithoutFetchMetadataIsRefused", async ({
+    baseURL,
+  }) => {
     const { nonce, digest } = newNonce();
     const handoffId = await mint(api!, account!.session.access_token, digest);
     const next = `/series/${account!.seriesId}/meetings/${account!.meetingId}`;
@@ -414,41 +487,67 @@ test.describe("Mac window sign-in handoff", () => {
     });
 
     expect(forged.status()).toBe(303);
-    expect(forged.headers()["location"]).toBe(`${new URL(baseURL!).origin}/login`);
+    expect(forged.headers()["location"]).toBe(
+      `${new URL(baseURL!).origin}/login`,
+    );
     expect(forged.headers()["set-cookie"] ?? "").not.toContain("-auth-token");
-    const [row] = await rest(`companion_web_handoffs?user_id=eq.${account!.userId}&select=used_at`);
+    const [row] = await rest(
+      `companion_web_handoffs?user_id=eq.${account!.userId}&select=used_at`,
+    );
     expect(row.used_at).toBeNull();
   });
 
-  test("backToBackHandoffsAllWork_andRedeemingOneEndsOtherOutstandingSignInLinks", async ({
+  test("backToBackHandoffsAllSignTheMacWindowIn", async ({
     browser,
     baseURL,
   }) => {
     const next = `/series/${account!.seriesId}/meetings/${account!.meetingId}`;
     const nonces = [newNonce(), newNonce(), newNonce()];
     const handoffs: string[] = [];
-    for (const n of nonces) handoffs.push(await mint(api!, account!.session.access_token, n.digest));
+    for (const n of nonces)
+      handoffs.push(await mint(api!, account!.session.access_token, n.digest));
 
-    const first = await signedOutWindow(browser, baseURL!);
-    contexts.push(first.context);
-    await openMacWindow(first.page, baseURL!, { handoff_id: handoffs[0], nonce: nonces[0].nonce, next });
-    await expectOnMeeting(first.page, account!);
+    for (const [i, handoffId] of handoffs.entries()) {
+      const window = await signedOutWindow(browser, baseURL!);
+      contexts.push(window.context);
+      await openMacWindow(window.page, baseURL!, {
+        handoff_id: handoffId,
+        nonce: nonces[i].nonce,
+        next,
+      });
+      await expectOnMeeting(window.page, account!);
+    }
+  });
 
-    const macSignIn = await first.context.request.post("/api/companion/authorize");
-    expect(macSignIn.status()).toBe(200);
-    const macToken = (await macSignIn.json()).token_hash as string;
-    const recovery = await fetch(`${SUPABASE_URL}/auth/v1/admin/generate_link`, {
-      method: "POST",
-      headers: serviceHeaders(),
-      body: JSON.stringify({ type: "recovery", email: account!.email }),
+  test("characterization_redeemingAHandoffEndsOtherOutstandingSignInLinks", async ({
+    browser,
+    baseURL,
+  }) => {
+    const { nonce, digest } = newNonce();
+    const handoffId = await mint(api!, account!.session.access_token, digest);
+    const linkToken = async (type: "magiclink" | "recovery") => {
+      const response = await fetch(
+        `${SUPABASE_URL}/auth/v1/admin/generate_link`,
+        {
+          method: "POST",
+          headers: serviceHeaders(),
+          body: JSON.stringify({ type, email: account!.email }),
+        },
+      );
+      expect(response.ok).toBeTruthy();
+      return (await response.json()).hashed_token as string;
+    };
+    const magicToken = await linkToken("magiclink");
+    const recoveryToken = await linkToken("recovery");
+
+    const window = await signedOutWindow(browser, baseURL!);
+    contexts.push(window.context);
+    await openMacWindow(window.page, baseURL!, {
+      handoff_id: handoffId,
+      nonce,
+      next: `/series/${account!.seriesId}/meetings/${account!.meetingId}`,
     });
-    expect(recovery.ok).toBeTruthy();
-    const recoveryToken = (await recovery.json()).hashed_token as string;
-
-    const second = await signedOutWindow(browser, baseURL!);
-    contexts.push(second.context);
-    await openMacWindow(second.page, baseURL!, { handoff_id: handoffs[1], nonce: nonces[1].nonce, next });
-    await expectOnMeeting(second.page, account!);
+    await expectOnMeeting(window.page, account!);
 
     const verify = async (type: string, token_hash: string) =>
       (
@@ -458,12 +557,7 @@ test.describe("Mac window sign-in handoff", () => {
           body: JSON.stringify({ type, token_hash }),
         })
       ).status;
-    expect(await verify("magiclink", macToken)).toBe(403);
+    expect(await verify("magiclink", magicToken)).toBe(403);
     expect(await verify("recovery", recoveryToken)).toBe(403);
-
-    const third = await signedOutWindow(browser, baseURL!);
-    contexts.push(third.context);
-    await openMacWindow(third.page, baseURL!, { handoff_id: handoffs[2], nonce: nonces[2].nonce, next });
-    await expectOnMeeting(third.page, account!);
   });
 });

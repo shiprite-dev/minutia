@@ -1,4 +1,4 @@
-import test from "node:test";
+import test, { mock } from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import fs from "node:fs";
@@ -323,14 +323,16 @@ test("aCallerWithNoBearerOrAnInvalidOneIsRefused", async () => {
   assert.equal(S.rows.length, 0);
 });
 
-test("aMacClockAMinuteAheadStillWorks_butAnOldOrFarFutureTokenIsStale", async () => {
+test("aMacClockUpToAMinuteAheadOrATokenUpToFiveMinutesOldWorks_oneSecondPastEitherIsStale", async (t) => {
   reset();
-  for (const offset of [59, -299]) {
-    const response = await mintRoute.POST(mintRequest({ bearer: freshBearer(nowSeconds() + offset) }));
-    assert.equal(response.status, 200, `offset ${offset}`);
+  const now = Date.parse("2026-11-21T12:00:00.000Z");
+  t.mock.timers.enable({ apis: ["Date"], now });
+  const at = (offset) => mintRoute.POST(mintRequest({ bearer: freshBearer(now / 1000 + offset) }));
+  for (const offset of [60, -300]) {
+    assert.equal((await at(offset)).status, 200, `offset ${offset}`);
   }
-  for (const offset of [62, -302]) {
-    const response = await mintRoute.POST(mintRequest({ bearer: freshBearer(nowSeconds() + offset) }));
+  for (const offset of [61, -301]) {
+    const response = await at(offset);
     assert.equal(response.status, 401, `offset ${offset}`);
     assert.deepEqual(await response.json(), { error: "Sign in again to open this meeting.", code: "stale_token" });
   }
@@ -362,6 +364,26 @@ test("theSixthHandoffInTenMinutesIsRateLimited", async () => {
     for (let i = 0; i < 6; i++) statuses.push((await mintRoute.POST(mintRequest({ bearer: freshBearer() }))).status);
     assert.deepEqual(statuses, [200, 200, 200, 200, 200, 429]);
     assert.equal(S.rows.length, 5);
+  } finally {
+    process.env.NODE_ENV = previous;
+  }
+});
+
+test("tenMinutesAfterBeingRateLimited_theMacCanOpenAMeetingAgain", async (t) => {
+  reset({ user: { ...USER, id: "33333333-3333-3333-3333-333333333333" } });
+  const previous = process.env.NODE_ENV;
+  process.env.NODE_ENV = "production";
+  t.mock.timers.enable({ apis: ["Date"], now: Date.parse("2026-11-21T12:00:00.000Z") });
+  try {
+    const mint = async () => (await mintRoute.POST(mintRequest({ bearer: freshBearer() }))).status;
+    const statuses = [];
+    for (let i = 0; i < 6; i++) statuses.push(await mint());
+    assert.deepEqual(statuses, [200, 200, 200, 200, 200, 429]);
+    t.mock.timers.tick(10 * 60 * 1000);
+    assert.equal(await mint(), 429, "still limited at exactly ten minutes");
+    t.mock.timers.tick(1);
+    assert.equal(await mint(), 200);
+    assert.equal(S.rows.length, 6);
   } finally {
     process.env.NODE_ENV = previous;
   }
