@@ -207,6 +207,34 @@ test("a slow tick also refreshes the series so a new live meeting is noticed", (
   cleanup();
 });
 
+const seriesRefreshes = (calls) =>
+  calls.filter((k) => k === JSON.stringify(["series", SERIES])).length;
+
+test("an upcoming meeting refreshes the series every 30s so Start meeting turns into Join live meeting", () => {
+  const { calls, cleanup } = setup({ status: "upcoming" });
+  advance(29_999);
+  assert.equal(seriesRefreshes(calls), 0);
+  advance(1);
+  assert.equal(seriesRefreshes(calls), 1);
+  advance(30_000);
+  assert.equal(seriesRefreshes(calls), 2);
+  cleanup();
+});
+
+test("a completed meeting refreshes the series once per 30s, not twice", () => {
+  const { calls, cleanup } = setup({ status: "completed" });
+  advance(60_000);
+  assert.equal(seriesRefreshes(calls), 2);
+  cleanup();
+});
+
+test("a hidden tab never refreshes the series", () => {
+  const { calls, cleanup } = setup({ status: "upcoming", visibility: "hidden" });
+  advance(90_000);
+  assert.equal(seriesRefreshes(calls), 0);
+  cleanup();
+});
+
 test("a transcript that failed to load is retried by the next tick", () => {
   const { queryClient, calls, cleanup } = setup({ status: "completed" });
   const transcriptKey = JSON.stringify(meetingKeys.transcript(MEETING));
