@@ -944,6 +944,7 @@ export function MeetingDetailContent({
     const inFlight = transcribing || meeting?.transcription_status === "processing";
     if (!inFlight || meetingMissingRef.current) return;
     const id = setInterval(() => {
+      if (document.visibilityState !== "visible") return;
       void queryClient.invalidateQueries({ queryKey: meetingKeys.detail(meetingId) });
     }, 2000);
     return () => clearInterval(id);

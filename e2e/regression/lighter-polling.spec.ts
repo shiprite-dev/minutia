@@ -844,6 +844,7 @@ test.describe("Lighter meeting polling", () => {
         sequence_number: 2,
       });
       try {
+        await page.clock.install();
         await page.goto(`/series/${seriesId}/meetings/${meetingId}`);
         const start = page.getByRole("button", {
           name: "Start meeting",
@@ -854,7 +855,7 @@ test.describe("Lighter meeting polling", () => {
           exact: true,
         });
         await expect(start).toBeVisible();
-        await page.waitForTimeout(3_000);
+        await page.clock.runFor(3_000);
         await expect(start).toBeVisible();
         await expect(join).toHaveCount(0);
 
@@ -862,14 +863,16 @@ test.describe("Lighter meeting polling", () => {
           status: "live",
           sequence_number: 1,
         });
-        await expect(join).toBeVisible({ timeout: 35_000 });
+        await page.clock.runFor(30_000);
+        await expect(join).toBeVisible();
         await expect(start).toHaveCount(0);
 
         await rest(request, `meetings?id=eq.${liveId}`, {
           method: "PATCH",
           data: { status: "completed", completed_at: new Date().toISOString() },
         });
-        await expect(start).toBeVisible({ timeout: 35_000 });
+        await page.clock.runFor(30_000);
+        await expect(start).toBeVisible();
         await expect(join).toHaveCount(0);
       } finally {
         await deleteSeries(request, seriesId);

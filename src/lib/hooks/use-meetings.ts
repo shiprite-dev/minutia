@@ -275,23 +275,24 @@ export function subscribeMeetingRefresh(
     return sinceEnd > JUST_ENDED_MS && !(recorded && sinceEnd < RECORDING_WAIT_MS);
   };
   let timer: number | undefined;
-  let settled = false;
   const schedule = () => {
-    settled = isSettled();
-    timer = window.setTimeout(tick, settled ? SETTLED_POLL_MS : LIVE_POLL_MS);
+    timer = window.setTimeout(tick, isSettled() ? SETTLED_POLL_MS : LIVE_POLL_MS);
   };
   const tick = () => {
     refreshMeeting();
-    // The series detail feeds the page's live-meeting banner; refresh it on
-    // the slow cadence only, where a new live meeting is the likely change.
-    if (settled && visible()) {
-      void queryClient.invalidateQueries({ queryKey: seriesKeys.detail(seriesId), exact: true });
-    }
     schedule();
   };
+  // The series detail feeds the Start/Join label, so it refreshes on its own
+  // slow clock whatever this meeting's cadence.
+  const refreshSeries = () =>
+    void queryClient.invalidateQueries({ queryKey: seriesKeys.detail(seriesId), exact: true });
+  const seriesTimer = window.setInterval(() => {
+    if (visible()) refreshSeries();
+  }, SETTLED_POLL_MS);
   const onVisibilityChange = () => {
     window.clearTimeout(timer);
     if (!visible()) return;
+    refreshSeries();
     if (rowChangedWhileHidden) {
       rowChangedWhileHidden = false;
       refreshMeetingRow();
@@ -328,6 +329,7 @@ export function subscribeMeetingRefresh(
 
   return () => {
     window.clearTimeout(timer);
+    window.clearInterval(seriesTimer);
     unsubscribeMutations();
     document.removeEventListener("visibilitychange", onVisibilityChange);
     void supabase.removeChannel(channel);
