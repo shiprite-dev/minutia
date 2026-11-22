@@ -830,5 +830,107 @@ test.describe("Lighter meeting polling", () => {
         await deleteSeries(request, seriesId);
       }
     });
+
+    test("an upcoming meeting's Start meeting button turns into Join live meeting when someone starts a meeting elsewhere, and back when it ends", async ({
+      page,
+      request,
+    }) => {
+      const seriesId = await createSeries(
+        request,
+        `Start join poll ${randomUUID().slice(0, 6)}`,
+      );
+      const meetingId = await createMeeting(request, seriesId, {
+        status: "upcoming",
+        sequence_number: 2,
+      });
+      try {
+        await blockRealtime(page);
+        await page.clock.install();
+        await page.goto(`/series/${seriesId}/meetings/${meetingId}`);
+        const start = page.getByRole("button", {
+          name: "Start meeting",
+          exact: true,
+        });
+        const join = page.getByRole("button", {
+          name: "Join live meeting",
+          exact: true,
+        });
+        await expect(start).toBeVisible();
+        await page.clock.runFor(3_000);
+        await expect(start).toBeVisible();
+        await expect(join).toHaveCount(0);
+
+        const liveId = await createMeeting(request, seriesId, {
+          status: "live",
+          sequence_number: 1,
+        });
+        await page.clock.runFor(30_000);
+        await expect(join).toBeVisible();
+        await expect(start).toHaveCount(0);
+
+        await rest(request, `meetings?id=eq.${liveId}`, {
+          method: "PATCH",
+          data: { status: "completed", completed_at: new Date().toISOString() },
+        });
+        await page.clock.runFor(30_000);
+        await expect(start).toBeVisible();
+        await expect(join).toHaveCount(0);
+      } finally {
+        await deleteSeries(request, seriesId);
+      }
+    });
+
+    test("a hidden tab makes no meeting requests while a transcript is processing, and shows the transcript within 3s of returning", async ({
+      page,
+      request,
+    }) => {
+      const seriesId = await createSeries(
+        request,
+        `Hidden transcribe poll ${randomUUID().slice(0, 6)}`,
+      );
+      const meetingId = await createMeeting(request, seriesId, {
+        status: "completed",
+        completed_at: new Date(Date.now() - 3_600_000).toISOString(),
+        audio_file_path: "meetings/fixture/audio.webm",
+        transcription_status: "processing",
+        transcription_started_at: new Date().toISOString(),
+      });
+      try {
+        const tracked = trackMeetingRequests(page, meetingId);
+        await page.goto(`/series/${seriesId}/meetings/${meetingId}`);
+        await expect(
+          page.getByText("Polling notes stay readable").first(),
+        ).toBeVisible();
+
+        await setVisibility(page, "hidden");
+        await page.waitForTimeout(1_000);
+        const before = tracked.requests.length;
+        await page.waitForTimeout(6_000);
+        expect(tracked.requests.length).toBe(before);
+
+        await rest(request, `meetings?id=eq.${meetingId}`, {
+          method: "PATCH",
+          data: {
+            transcript_raw: "The transcript that finished while away.",
+            transcription_status: "completed",
+            transcription_completed_at: new Date().toISOString(),
+          },
+        });
+        await expect(
+          page.getByRole("button", { name: /^Transcript/ }),
+        ).toHaveCount(0);
+        await setVisibility(page, "visible");
+        await expect(
+          page.getByRole("button", { name: /^Transcript/ }),
+        ).toBeVisible({ timeout: 3_000 });
+        await openTranscript(page);
+        await expect(transcriptBox(page)).toHaveValue(
+          "The transcript that finished while away.",
+          { timeout: 3_000 },
+        );
+      } finally {
+        await deleteSeries(request, seriesId);
+      }
+    });
   });
 });

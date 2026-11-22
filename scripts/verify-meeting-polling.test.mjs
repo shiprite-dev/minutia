@@ -200,10 +200,45 @@ test("an old meeting that never had a recording settles to the slow cadence", ()
   cleanup();
 });
 
-test("a slow tick also refreshes the series so a new live meeting is noticed", () => {
-  const { calls, cleanup } = setup({ status: "completed" });
+const seriesRefreshes = (calls) =>
+  calls.filter((k) => k === JSON.stringify(["series", SERIES])).length;
+
+test("an upcoming meeting refreshes the series every 30s so Start meeting turns into Join live meeting", () => {
+  const { calls, cleanup } = setup({ status: "upcoming" });
+  advance(29_999);
+  assert.equal(seriesRefreshes(calls), 0);
+  advance(1);
+  assert.equal(seriesRefreshes(calls), 1);
   advance(30_000);
-  assert.ok(calls.includes(JSON.stringify(["series", SERIES])));
+  assert.equal(seriesRefreshes(calls), 2);
+  cleanup();
+});
+
+test("a completed meeting refreshes the series once per 30s, not twice", () => {
+  const { calls, cleanup } = setup({ status: "completed" });
+  advance(60_000);
+  assert.equal(seriesRefreshes(calls), 2);
+  cleanup();
+});
+
+test("returning to a hidden tab refreshes the series at once, then every 30s", () => {
+  const { calls, cleanup } = setup({ status: "upcoming" });
+  document.setVisibility("hidden");
+  advance(45_000);
+  assert.equal(seriesRefreshes(calls), 0);
+  document.setVisibility("visible");
+  assert.equal(seriesRefreshes(calls), 1);
+  advance(29_999);
+  assert.equal(seriesRefreshes(calls), 1);
+  advance(1);
+  assert.equal(seriesRefreshes(calls), 2);
+  cleanup();
+});
+
+test("a hidden tab never refreshes the series", () => {
+  const { calls, cleanup } = setup({ status: "upcoming", visibility: "hidden" });
+  advance(90_000);
+  assert.equal(seriesRefreshes(calls), 0);
   cleanup();
 });
 
@@ -308,7 +343,7 @@ test("a tick is skipped while a mutation is in flight", () => {
 test("cleanup stops the poll, the visibility listener and the channel", () => {
   const { calls, cleanup } = setup({ status: "live" });
   cleanup();
-  advance(10_000);
+  advance(60_000);
   assert.equal(calls.length, 0);
   assert.equal(document.listenerCount(), 0);
   assert.equal(globalThis.__removed.length, 1);
