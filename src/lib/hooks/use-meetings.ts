@@ -286,13 +286,19 @@ export function subscribeMeetingRefresh(
   // slow clock whatever this meeting's cadence.
   const refreshSeries = () =>
     void queryClient.invalidateQueries({ queryKey: seriesKeys.detail(seriesId), exact: true });
-  const seriesTimer = window.setInterval(() => {
-    if (visible()) refreshSeries();
-  }, SETTLED_POLL_MS);
+  let seriesTimer: number | undefined;
+  const scheduleSeries = () => {
+    seriesTimer = window.setTimeout(() => {
+      refreshSeries();
+      scheduleSeries();
+    }, SETTLED_POLL_MS);
+  };
   const onVisibilityChange = () => {
     window.clearTimeout(timer);
+    window.clearTimeout(seriesTimer);
     if (!visible()) return;
     refreshSeries();
+    scheduleSeries();
     if (rowChangedWhileHidden) {
       rowChangedWhileHidden = false;
       refreshMeetingRow();
@@ -325,11 +331,14 @@ export function subscribeMeetingRefresh(
     if (event.action.type === "success" || event.action.type === "error") refreshMeeting();
   });
   document.addEventListener("visibilitychange", onVisibilityChange);
-  if (visible()) schedule();
+  if (visible()) {
+    schedule();
+    scheduleSeries();
+  }
 
   return () => {
     window.clearTimeout(timer);
-    window.clearInterval(seriesTimer);
+    window.clearTimeout(seriesTimer);
     unsubscribeMutations();
     document.removeEventListener("visibilitychange", onVisibilityChange);
     void supabase.removeChannel(channel);

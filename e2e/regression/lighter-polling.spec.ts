@@ -844,6 +844,7 @@ test.describe("Lighter meeting polling", () => {
         sequence_number: 2,
       });
       try {
+        await blockRealtime(page);
         await page.clock.install();
         await page.goto(`/series/${seriesId}/meetings/${meetingId}`);
         const start = page.getByRole("button", {
@@ -915,6 +916,9 @@ test.describe("Lighter meeting polling", () => {
             transcription_completed_at: new Date().toISOString(),
           },
         });
+        await expect(
+          page.getByRole("button", { name: /^Transcript/ }),
+        ).toHaveCount(0);
         await setVisibility(page, "visible");
         await expect(
           page.getByRole("button", { name: /^Transcript/ }),
@@ -922,6 +926,7 @@ test.describe("Lighter meeting polling", () => {
         await openTranscript(page);
         await expect(transcriptBox(page)).toHaveValue(
           "The transcript that finished while away.",
+          { timeout: 3_000 },
         );
       } finally {
         await deleteSeries(request, seriesId);

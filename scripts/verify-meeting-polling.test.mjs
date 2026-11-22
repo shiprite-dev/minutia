@@ -228,7 +228,9 @@ test("returning to a hidden tab refreshes the series at once, then every 30s", (
   assert.equal(seriesRefreshes(calls), 0);
   document.setVisibility("visible");
   assert.equal(seriesRefreshes(calls), 1);
-  advance(30_000);
+  advance(29_999);
+  assert.equal(seriesRefreshes(calls), 1);
+  advance(1);
   assert.equal(seriesRefreshes(calls), 2);
   cleanup();
 });
