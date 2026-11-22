@@ -900,7 +900,6 @@ test.describe("Lighter meeting polling", () => {
         await expect(
           page.getByText("Polling notes stay readable").first(),
         ).toBeVisible();
-        await openTranscript(page);
 
         await setVisibility(page, "hidden");
         await page.waitForTimeout(1_000);
@@ -917,9 +916,12 @@ test.describe("Lighter meeting polling", () => {
           },
         });
         await setVisibility(page, "visible");
+        await expect(
+          page.getByRole("button", { name: /^Transcript/ }),
+        ).toBeVisible({ timeout: 3_000 });
+        await openTranscript(page);
         await expect(transcriptBox(page)).toHaveValue(
           "The transcript that finished while away.",
-          { timeout: 3_000 },
         );
       } finally {
         await deleteSeries(request, seriesId);
